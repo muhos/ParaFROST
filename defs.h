@@ -50,7 +50,7 @@ using std::ifstream;
 #define GBYTE 0x40000000
 #define LIT_LEN 32
 #define BUFFER_SIZE (MBYTE << 3)
-#define MAX_CLAUSE_LEN 0xffffui16
+#define MAX_CLAUSE_LEN 0x0000FFFF
 #define NEG_SIGN 0x00000001
 #define POS_SIGN 0x00000000
 #define HASH_MASK 0x3F

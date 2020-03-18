@@ -30,7 +30,9 @@ static bool eq(T& in, const char* ref) {
 		ref++; in++;
 	}
 	return true;
+
 }
+bool isQuiet(void);
 void parseArguments(int& argc, char** argv);
 void printUsage(int  argc, char** argv, bool verbose = false);
 
@@ -52,6 +54,7 @@ protected:
 	}
 public:
 	// global
+	friend bool isQuiet(void);
 	friend void parseArguments(int& argc, char** argv);
 	friend void printUsage(int  argc, char** argv, bool verbose);
 	// derived methods

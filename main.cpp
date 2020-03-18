@@ -20,21 +20,24 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 int main(int argc, char **argv)
 {             
-	cout << "c |--------------------------------------------------------------------------------------|" << endl;
-	cout << "c |                              ParaFROST SAT Solver                                    |" << endl;
-	cout << "c | Technische Universiteit Eindhoven (TU/e), all rights reserved.                       |" << endl;
-	cout << "c |--------------------------------------------------------------------------------------|" << endl;
+	bool quiet = false;
+	if (argc == 1) { cout << "No input file specified." << endl; exit(EXIT_FAILURE); }
 	try {
-		if (argc == 1) { cout << "No input file specified." << endl; exit(EXIT_FAILURE); }
 		parseArguments(argc, argv);
-		cout << "c | Embedded options: ";
-		for (int i = 0, j = 0; i < options.size(); i++) {
-			if (options[i]->isParsed()) {
-				options[i]->printArgument();
-				if (++j % 4 == 0) cout << "\nc |                   ";
+		if (!isQuiet()) {
+			cout << "c |--------------------------------------------------------------------------------------|" << endl;
+			cout << "c |                              ParaFROST SAT Solver                                    |" << endl;
+			cout << "c | Technische Universiteit Eindhoven (TU/e), all rights reserved.                       |" << endl;
+			cout << "c |--------------------------------------------------------------------------------------|" << endl;
+			cout << "c | Embedded options: ";
+			for (int i = 0, j = 0; i < options.size(); i++) {
+				if (options[i]->isParsed()) {
+					options[i]->printArgument();
+					if (++j % 4 == 0) cout << "\nc |                   ";
+				}
 			}
+			cout << "\nc |--------------------------------------------------------------------------------------|" << endl;
 		}
-		cout << "\nc |--------------------------------------------------------------------------------------|" << endl;
 		string path = argv[1];
 		if (path.find(".cnf") == -1) { cout << "Input file not recognizable." << endl; exit(EXIT_FAILURE); }
 		ParaFROST* pFrost = new ParaFROST(path);
@@ -43,7 +46,6 @@ int main(int argc, char **argv)
 		sig_handler(handler_exit);
 		pFrost->solve();
 		delete pFrost;
-		if (g_pFrost->verbose >= 1) cout << "c |--------------------------------------------------------------------------------------|" << endl;
 		return EXIT_SUCCESS;
 	}
 	catch (MEMOUTEXCEPTION&) {

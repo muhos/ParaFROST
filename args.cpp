@@ -25,6 +25,15 @@ void ARG::insert(ARG* opt) {
     options.push(this);
 }
 
+bool isQuiet(void) 
+{
+    for (int i = 0; i < options.size(); i++) {
+        if (options[i]->arg == "q" && options[i]->isParsed())
+            return true;
+    }
+    return false;
+}
+
 void parseArguments(int& argc, char** argv)
 {
     int i, j;

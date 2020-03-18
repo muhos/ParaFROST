@@ -1593,14 +1593,17 @@ void ParaFROST::wrapUp(const CNF_STATE &status)
 {
 	// print results
 	if (verbose >= 1) printf("c |--------------------------------------------------------------------------------------|\nc |\n");
+	printf("%s: ", path.c_str());
 	if (status == SAT) {
 		if (!quiet_en) printf("c |\n");
 		printf("s SATISFIABLE\n");
+		if (!quiet_en) printf("c |\n");
 		if (model_en) print_model();
 	}
 	else if (status == UNSAT) {
 		if (!quiet_en) printf("c |\n");
 		printf("s UNSATISFIABLE\n");
+		if (!quiet_en) printf("c |\n");
 	}
 	if (perf_en) print_reports();
 }
