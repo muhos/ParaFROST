@@ -25,6 +25,15 @@ void ARG::insert(ARG* opt) {
     options.push(this);
 }
 
+bool isQuiet(void) 
+{
+    for (int i = 0; i < options.size(); i++) {
+        if (options[i]->type == "<bool>" && options[i]->arg == "q" && options[i]->isParsed())
+            return true;
+    }
+    return false;
+}
+
 void parseArguments(int& argc, char** argv)
 {
     int i, j;
@@ -34,7 +43,7 @@ void parseArguments(int& argc, char** argv)
         if (eq(arg, "--") && eq(arg, "help")) {
             if (*arg == '\0')
                 printUsage(argc, argv);
-            else if (eq(arg, "-verb"))
+            else if (eq(arg, "-more"))
                 printUsage(argc, argv, true);
         }
         else {
@@ -54,18 +63,18 @@ void parseArguments(int& argc, char** argv)
 
 void printUsage(int argc, char** argv, bool verbose)
 {
-    cout << "Usage: parafrost [<option> ...][<infile>[.<cnf> or <dimacs>]][<option> ...]" << endl;
+    cout << "c | Usage: parafrost [<option> ...][<infile>.<cnf>][<option> ...]" << endl;
     Sort(options, ARG::ARG_CMP());
     const char* prev_type = NULL;
-    fprintf(stderr, "\nOPTIONS:\n");
+    fprintf(stderr, "c |\nc | OPTIONS:\n");
     for (int i = 0; i < options.size(); i++) {
         const char* type = options[i]->type;
-        if (type != prev_type) fprintf(stderr, "\n");
+        if (type != prev_type) fprintf(stderr, "c |\n");
         options[i]->help(verbose);
         prev_type = options[i]->type;
     }
-    fprintf(stderr, "  -h or --help  Print help message.\n");
-    fprintf(stderr, "  --help-verb   Print verbose help message.\n");
-    fprintf(stderr, "\n");
+    fprintf(stderr, "c |\nc |  -h or --help  Print help message.\n");
+    fprintf(stderr, "c |  --help-more   Print verbose help message.\n");
+    fprintf(stderr, "c |\nc |--------------------------------------------------------------------------------------|\n");
     exit(EXIT_SUCCESS);
 }

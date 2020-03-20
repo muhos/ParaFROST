@@ -177,18 +177,6 @@ public:
 		return false;
 	}
 
-	inline bool resolved(const bool* melted) {
-		if (status() == DELETED) return true;
-		uint32* h = _lits;
-		uint32* e = h + _lits.size();
-		while (h != e) {
-			assert(*h > 0);
-			if (melted[V2IDX(*h)]) return true;
-			h++;
-		}
-		return false;
-	}
-
 	inline void swap_ws() { // swap watched literals
 		uint32 lit0 = *_lits;
 		*_lits = _lits[1];
@@ -237,6 +225,8 @@ public:
 	inline void set_status(const int8_t& status) { assert(status <= ST_MASK); _st = (_st & ST_RST) | status; }
 
 	inline int8_t status() { return (_st & ST_MASK); }
+
+	inline int8_t status() const { return (_st & ST_MASK); }
 
 	inline void init_reason() { _st &= IMP_RST; }
 
@@ -444,7 +434,7 @@ typedef struct
 struct SP {
 	uint32* trail, * free_decs;
 	bool* lock, * seen, * frozen, * pol;
-	int bt_level, max_level;
+	int bt_level, cbt_level;
 	int trail_head, trail_size, trail_offset, numFree;
 	uint32 learnt_lbd;
 	bool max1Found;
@@ -454,7 +444,7 @@ struct SP {
 	}
 	void reset_level() {
 		bt_level = ROOT_LEVEL;
-		max_level = UNDEFINED;
+		cbt_level = UNDEFINED;
 		max1Found = false;
 	}
 };
@@ -494,8 +484,7 @@ struct LEARN {
 	double size_factor_cls;
 	double adjust_start_conf, adjust_conf;
 	double size_inc, adjust_inc;
-	void init(int nClsReduce) {
-		this->nClsReduce = nClsReduce;
+	void init(void) {
 		size_inc = 1.1;
 		adjust_inc = 1.5;
 		adjust_start_conf = 100;
@@ -507,7 +496,6 @@ struct LEARN {
 	}
 };
 /*****************************************************/
-/*****************************************************/
 /*  Name:     ParaFROST                              */
 /*  Usage:    global handler for solver/simplifier   */
 /*  Scope:    host only                              */
@@ -516,41 +504,39 @@ struct LEARN {
 class ParaFROST {
 protected:
 	string path;
-	Vec<OCCUR> occurs;
-	Vec<SCORE> scores;
-	BCNF orgs, bins;
-	LCNF learnts;
-	WT wt;
-	PV* pv;
-	SP* sp;
-	SOL* sol;
-	VAR_HEAP* var_heap;
-	G_REF* source;
-	int* board;
-	uint32* tmp_stack, * simpLearnt;
-	uVector1D learnt_cl, learntLits;
-	vector1D trail_sz;
-	LEARN lrn;
-	CL_PARAM cl_params;
-	Byte* sysMem;
-	size_t sysMem_sz;
 	TIMER* timer;
+	Vec<OCCUR> occurs; Vec<SCORE> scores;
+	WT wt; BCNF orgs, bins; LCNF learnts;
+	VAR_HEAP* var_heap; PV* pv; SP* sp; SOL* sol;
+	G_REF* source; 
+	int* board;	uint32* tmp_stack, * simpLearnt;
+	uVector1D learnt_cl, learntLits; vector1D trail_sz;
+	LEARN lrn; CL_PARAM cl_params; STATS stats;
+	Byte* sysMem; size_t sysMem_sz;
 	double sysMemTot, sysMemCons;
-	STATS stats;
 	int64 maxConflicts, nConflicts;
 	int starts, restarts, R, ref_vars, reductions, marker;
 	BQUEUE<uint32> lbdQ, trailQ; 
 	float lbdSum; 
 	std::ofstream proofFile;
-	bool unit_en;
+	bool intr, units_f;
 public:
 	ParaFROST(const string&);
 	~ParaFROST(void);
 	/* inline helpers */
+	inline void interrupt(void) { intr = true; }
+	inline bool interrupted(void) { return intr; }
 	inline void write_proof(const Byte& byte) { proofFile << byte; }
 	inline void incDL(void) { trail_sz.push(sp->trail_size); }
 	inline int DL(void) const { return trail_sz.size(); }
-	inline double drand(void) const { return ((double)rand() / (double)RAND_MAX); };
+	inline void clHist(const G_REF gc) {
+		B_REF c = (B_REF)gc;
+		for (LIT_POS i = 0; i < c->size(); i++) {
+			assert((*c)[i] > 0);
+			if (ISNEG((*c)[i])) occurs[V2IDX((*c)[i])].ns++;
+			else occurs[V2IDX((*c)[i])].ps++;
+		}
+	}
 	inline void clBumpAct(C_REF c) {
 		c->inc_act(cl_params.cl_inc);
 		if (c->activity() > (float)1e20) {
@@ -559,22 +545,38 @@ public:
 		}
 	}
 	inline void clDecayAct() { cl_params.cl_inc *= (1 / cl_params.cl_decay); }
-	inline void clause_hist(const G_REF gc) {
-		B_REF c = (B_REF)gc;
-		for (LIT_POS i = 0; i < c->size(); i++) {
-			assert((*c)[i] > 0);
-			if (ISNEG((*c)[i])) occurs[V2IDX((*c)[i])].ns++;
-			else occurs[V2IDX((*c)[i])].ps++;
+	inline uint32 calcLBD(uVector1D& c) {
+		marker++;
+		register uint32 lbd = 0;
+		for (LIT_POS i = 0; i < c.size(); i++) {
+			int litLevel = sol->level(V2IDX(c[i]));
+			if (board[litLevel] != marker) { board[litLevel] = marker; lbd++; }
 		}
+		return lbd;
 	}
+	inline uint32 calcLBD(C_REF c) {
+		marker++;
+		register uint32 lbd = 0;
+		for (LIT_POS i = 0; i < c->size(); i++) {
+			int litLevel = sol->level(V2IDX((*c)[i]));
+			if (board[litLevel] != marker) { board[litLevel] = marker; lbd++; }
+		}
+		return lbd;
+	}
+	inline double drand(void) const { return ((double)rand() / (double)RAND_MAX); };
 	inline void init(bool re = true) {
-		nConflicts = maxConflicts = UNKNOWN;
-		marker = ref_vars = UNKNOWN;
-		lbdQ.reset();
-		trailQ.reset();
+		if (SH == 2) {
+			maxConflicts = UNKNOWN;
+			marker = UNKNOWN;
+			reductions = 1;
+			lrn.nClsReduce = nClsReduce;
+			lbdQ.reset();
+			trailQ.reset();
+		}
+		nConflicts = UNKNOWN;
+		ref_vars = UNKNOWN;
 		cnf_stats.n_added_lits = cnf_stats.global_n_gcs = UNKNOWN;
-		reductions = 1;
-		lrn.init(nClsReduce);
+		lrn.init();
 		stats.reset();
 		var_heap->init(var_inc, var_decay);
 		var_heap->build(nOrgVars());
@@ -588,7 +590,6 @@ public:
 	}
 	/******************/
 	void free_mem(void);
-	void CNF_parser(const string&);
 	void CNF_rewriter(const string&);
 	void var_order(void);
 	void hist(BCNF&, bool rst = false);
@@ -602,7 +603,7 @@ public:
 	int simplify(LCNF&);
 	void simplify(void);
 	void solve(void);
-	CNF_STATE BCP_top(void);
+	CNF_STATE CNF_parser(const string&);
 	CNF_STATE search(void);
 	CNF_STATE decide(void);
 	void pumpFrozen(void);
@@ -615,13 +616,11 @@ public:
 	C_REF BCP(void);
 	void enqueue(const uint32&, const int& pLevel = ROOT_LEVEL, const G_REF = NULL);
 	void bt_level(void);
-	void subsume_bin(void);
+	void binSelfsub(void);
 	void simp_learnt(void);
-	bool lSubsume(const uint32&, uint32*, CL_LEN&, const uint32&);
+	bool selfsub(const uint32&, uint32*, CL_LEN&, const uint32&);
 	double luby_seq(double y, int x);
-	uint32 calcLBD(C_REF);
-	uint32 calcLBD(uVector1D& c);
-	void cbtMaxLevel(C_REF);
+	void cbt_level(C_REF);
 	void analyze(C_REF);
 	void cancel_assigns(const int&);
 	void backJump(const int&);
@@ -641,23 +640,21 @@ public:
 	void wrapUp(const CNF_STATE&);
 	/* flags */
 	bool quiet_en, parse_only_en, rewriter_en, perf_en;
-	bool bcp_en, mcv_en, model_en, proof_en, fdp_en, cbt_en;
+	bool mcv_en, model_en, proof_en, fdp_en, cbt_en;
 	int progRate, verbose, seed, timeout;
-	int pdm_rounds, pdm_freq, pdm_threads, pdm_order;
+	int pdm_rounds, pdm_freq, pdm_order;
 	int SH, polarity, restart_base, lbdRestBase, blockRestBase;
 	int nClsReduce, lbdFrozen, lbdMinReduce, lbdMinClSize, incReduceSmall, incReduceBig;
 	int cbt_dist, cbt_conf_max;
 	double var_inc, var_decay;
 	double RF, RB, restart_inc;
-	string restPolicy;
+	string restPolicy, proof_path;
 	/********************************************/
 	/*                Simplifier                */
 	/********************************************/
 protected:
-	uVector1D removed;
-	vector1D mappedVars, reverseVars;
-	SCNF scnf;
-	OT ot;
+	uVector1D removed; vector1D mappedVars, reverseVars;
+	SCNF scnf; OT ot;
 	bool mapped;
 public:
 	/* inline helpers */
@@ -678,7 +675,7 @@ public:
 		assert(d.size());
 		for (LIT_POS l = 0; l < s.size(); l++) d[l] = mapLit(s[l]);
 	}
-	inline void clause_hist(const S_REF c) {
+	inline void clHist(const S_REF c) {
 		assert(c->size());
 		assert(c->status() == ORIGINAL || c->status() == LEARNT);
 		for (LIT_POS i = 0; i < c->size(); i++) {
@@ -746,9 +743,10 @@ public:
 	}
 	/******************/
 	void opt_simp();
-	void hist(SCNF&, bool rst = false);
+	void hist(const SCNF&, bool rst = false);
 	void var_reorder(void);
-	bool warmUp(void);
+	void extractBins(void);
+	bool awaken(void);
 	void cleanSlate(void);
 	void create_ot(bool rst = true);
 	CNF_STATE prop(void);
@@ -756,10 +754,10 @@ public:
 	bool propClause(S_REF c, const uint32&);
 	void attachClause(S_REF, const bool& added = true);
 	void reattachClause(B_REF);
-	void shrinkCNF(bool countVars = false);
+	void shrinkCNF(const bool countVars = false);
 	void _simplify(void);
 	void preprocess(void);
-	void depFreeze(OL&, const uint32&, const int&, const int&);
+	void depFreeze(const OL&, const uint32&, const int&, const int&);
 	void LCVE(void);
 	void bve(void);
 	void VE(void);
@@ -767,7 +765,7 @@ public:
 	void HRE(void);
 	void BCE(void);
 	void SUB(void);
-	bool consistent(SCNF&, OT&);
+	bool consistent(const SCNF&, const OT&);
 	/* flags */
 	bool pre_en, lpre_en, simp_perf_en, ve_en, ve_plus_en, sub_en, bce_en, hre_en, all_en;
 	int pre_delay, mu_pos, mu_neg, phases, cnf_free_freq;

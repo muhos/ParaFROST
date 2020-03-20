@@ -25,6 +25,7 @@ void ParaFROST::var_order()
 	occurs.resize(nOrgVars());
 	hist(orgs, true);
 	hist(bins);
+	bins.clear(true);
 	for (uint32 v = 0; v < nOrgVars(); v++) {
 		scores[v].v = v;
 		if (!occurs[v].ps || !occurs[v].ns)
@@ -47,14 +48,14 @@ void ParaFROST::hist(BCNF& cnf, bool rst)
 {
 	if (cnf.size() == 0) return;
 	if (rst) { for (int i = 0; i < occurs.size(); i++) occurs[i].reset(); }
-	for (int i = 0; i < cnf.size(); i++) clause_hist(cnf[i]);
+	for (int i = 0; i < cnf.size(); i++) clHist(cnf[i]);
 }
 
 void ParaFROST::hist(LCNF& cnf, bool rst)
 {
 	if (cnf.size() == 0) return;
 	if (rst) { for (int i = 0; i < occurs.size(); i++) occurs[i].reset(); }
-	for (int i = 0; i < cnf.size(); i++) clause_hist(cnf[i]);
+	for (int i = 0; i < cnf.size(); i++) clHist(cnf[i]);
 }
 
 void ParaFROST::PDM_fuse()

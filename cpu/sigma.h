@@ -23,19 +23,17 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 #include "solver.h" 
 
 #define LIT_REM_THR 10
-#define MIN_ELECTED_VARS 10
+#define MIN_PARALLEL_VARS 10
 #define CE_OCCURS_POS_LMT 256
 #define CE_OCCURS_NEG_LMT 256
 
 /* Elimination sub-routines */
-inline uint32 map_lit(const uint32& lit)
-{
-	return (1UL << HASH(lit));
-}
 
 inline bool isTautology(const uint32& elim_v, const S_REF c1, const S_REF c2)
 {
 	assert(elim_v > 0);
+	assert(c1->status() != DELETED);
+	assert(c2->status() != DELETED);
 	int it1 = 0, it2 = 0;
 	while (it1 < c1->size() && it2 < c2->size()) {
 		uint32 v1 = ABS(c1->lit(it1)), v2 = ABS(c2->lit(it2));
@@ -51,6 +49,7 @@ inline bool isTautology(const uint32& elim_v, const S_REF c1, const S_REF c2)
 
 inline bool isTautology_and(const S_REF org_c, const uVector1D& defs)
 {
+	assert(org_c->status() != DELETED);
 	for (int i = 0; i < defs.size(); i++) {
 		if (org_c->has(defs[i])) return true;
 	}
@@ -59,6 +58,7 @@ inline bool isTautology_and(const S_REF org_c, const uVector1D& defs)
 
 inline bool isTautology_or(const S_REF org_c, const uVector1D& defs)
 {
+	assert(org_c->status() != DELETED);
 	for (int i = 0; i < defs.size(); i++) {
 		if (org_c->has(FLIP(defs[i]))) return true;
 	}
@@ -67,6 +67,7 @@ inline bool isTautology_or(const S_REF org_c, const uVector1D& defs)
 
 inline void clause_extend_and(const uint32& neg_x, const S_REF org_c, const uVector1D& defs, uVector1D& out_c)
 {
+	assert(org_c->status() != DELETED);
 	for (int i = 0; i < org_c->size(); i++) {
 		if (org_c->lit(i) == neg_x) {
 			for (int k = 0; k < defs.size(); k++) out_c.push(FLIP(defs[k]));
@@ -77,6 +78,7 @@ inline void clause_extend_and(const uint32& neg_x, const S_REF org_c, const uVec
 
 inline void clause_extend_or(const uint32& x, const S_REF org_c, const uVector1D& defs, uVector1D& out_c)
 {
+	assert(org_c->status() != DELETED);
 	for (int i = 0; i < org_c->size(); i++) {
 		if (org_c->lit(i) == x) {
 			for (int k = 0; k < defs.size(); k++) out_c.push(defs[k]);
@@ -87,6 +89,7 @@ inline void clause_extend_or(const uint32& x, const S_REF org_c, const uVector1D
 
 inline void clause_split_and(const uint32& x, const S_REF org_c, const uint32& def, S_REF added)
 {
+	assert(org_c->status() != DELETED);
 	for (int k = 0; k < org_c->size(); k++) {
 		if (org_c->lit(k) == def) continue; // repeated literal
 		if (org_c->lit(k) == x) added->push(def);
@@ -99,6 +102,7 @@ inline void clause_split_and(const uint32& x, const S_REF org_c, const uint32& d
 
 inline void clause_split_or(const uint32& neg_x, const S_REF org_c, const uint32& def, S_REF added)
 {
+	assert(org_c->status() != DELETED);
 	for (int k = 0; k < org_c->size(); k++) {
 		if (org_c->lit(k) == FLIP(def)) continue; // repeated literal
 		if (org_c->lit(k) == neg_x) added->push(FLIP(def));
@@ -112,6 +116,8 @@ inline void clause_split_or(const uint32& neg_x, const S_REF org_c, const uint32
 inline void merge(const uint32& elim_v, const S_REF c1, const S_REF c2, S_REF added)
 {
 	assert(elim_v > 0);
+	assert(c1->status() != DELETED);
+	assert(c2->status() != DELETED);
 	int it1 = 0, it2 = 0;
 	register uint32 lit1, lit2, v1, v2;
 	while (it1 < c1->size() && it2 < c2->size()) {
@@ -144,6 +150,8 @@ inline void merge(const uint32& elim_v, const S_REF c1, const S_REF c2, S_REF ad
 inline bool merge_hre(const uint32& elim_var, const S_REF c1, const S_REF c2, uVector1D& out_c)
 {
 	assert(elim_var);
+	assert(c1->status() != DELETED);
+	assert(c2->status() != DELETED);
 	int it1 = 0, it2 = 0;
 	uint32 lit1, lit2, v1, v2;
 	while (it1 < c1->size() && it2 < c2->size()) {
@@ -184,23 +192,26 @@ inline bool selfSubset_sig(const uint32& A, const uint32& B)
 	return (A & ~B_tmp) == 0;
 }
 
-inline bool subset(const S_REF smaller_C, const S_REF larger_C)
+inline bool subset(const S_REF sm, const S_REF lr)
 {
+	assert(sm->status() != DELETED);
+	assert(lr->status() != DELETED);
 	int it1 = 0, it2 = 0, sub = 0;
-	while (it1 < smaller_C->size() && it2 < larger_C->size()) {
-		if (smaller_C->lit(it1) < larger_C->lit(it2)) it1++;
-		else if (larger_C->lit(it2) < smaller_C->lit(it1)) it2++;
+	while (it1 < sm->size() && it2 < lr->size()) {
+		if (sm->lit(it1) < lr->lit(it2)) it1++;
+		else if (lr->lit(it2) < sm->lit(it1)) it2++;
 		else { sub++; it1++; it2++; }
 	}
-	if (sub == smaller_C->size())
+	if (sub == sm->size())
 		return true;
 	return false;
 }
 
 inline bool isEqual(const SCLAUSE& c1, const uVector1D& c2)
 {
-	int it = 0;
+	assert(c1.status() != DELETED);
 	assert(c1.size() == c2.size());
+	int it = 0;
 	while (it < c2.size()) {
 		if (c1[it] != c2[it]) return false;
 		else it++;
@@ -210,8 +221,8 @@ inline bool isEqual(const SCLAUSE& c1, const uVector1D& c2)
 
 inline bool selfSubset(const uint32& x, const S_REF sm, const S_REF lr)
 {
-	//printf("smaller"); sm->print();
-	//printf("larger:"); lr->print();
+	assert(sm->status() != DELETED);
+	assert(lr->status() != DELETED);
 	int it1 = 0, it2 = 0, sub = 0;
 	bool self = false;
 	while (it1 < sm->size() && it2 < lr->size()) {
@@ -238,8 +249,6 @@ inline bool forward_equ(const uVector1D& m_c, const uint32& m_sig, OL& x_ol)
 	for (int i = 0; i < x_ol.size(); i++) {
 		if (x_ol[i]->status() != DELETED && m_c.size() == x_ol[i]->size() &&
 			subset_sig(m_sig, x_ol[i]->sig()) && isEqual(*x_ol[i], m_c)) {
-			//printf("Merged(%d):", i); printClause(m_c);
-			//printf("Redundancy(%d):", i); x_ol[i]->print();
 			x_ol[i]->set_status(DELETED);  //  HR found --> eliminate
 			return true;
 		}
@@ -265,7 +274,6 @@ bool substitute_AND(const uint32& x, const uVector1D& defs, OL& p_ol, OL& n_ol, 
 	if (numAddedClauses > p_ol.size() + n_ol.size()) return false;
 	// substitute negatives 
 	for (int i = 0; i < n_ol.size(); i++) {
-		n_ol[i]->set_status(DELETED);
 		if (!isTautology_and(n_ol[i], defs)) {
 			assert(out_c.empty());
 			clause_extend_and(NEG(x), n_ol[i], defs, out_c);
@@ -283,7 +291,6 @@ bool substitute_AND(const uint32& x, const uVector1D& defs, OL& p_ol, OL& n_ol, 
 		}
 	}
 	// substitute positives
-	for (int i = 0; i < p_ol.size(); i++) p_ol[i]->set_status(DELETED);
 	for (int d = 0; d < defs.size(); d++) {
 		for (int i = 0; i < p_ol.size(); i++) {
 			if (!(p_ol[i]->has(FLIP(defs[d])))) {
@@ -294,6 +301,9 @@ bool substitute_AND(const uint32& x, const uVector1D& defs, OL& p_ol, OL& n_ol, 
 			}
 		}
 	}
+	// delete old occurs
+	for (int i = 0; i < p_ol.size(); i++) p_ol[i]->set_status(DELETED);
+	for (int j = 0; j < n_ol.size(); j++) n_ol[j]->set_status(DELETED);
 	return true; // AND-substitution successful
 }
 
@@ -312,7 +322,6 @@ bool substitute_OR(const uint32& x, const uVector1D& defs, OL& p_ol, OL& n_ol, u
 	if (numAddedClauses > p_ol.size() + n_ol.size()) return false;
 	// substitute positives
 	for (int i = 0; i < p_ol.size(); i++) {
-		p_ol[i]->set_status(DELETED);
 		if (!isTautology_or(p_ol[i], defs)) {
 			assert(out_c.empty());
 			clause_extend_or(x, p_ol[i], defs, out_c);
@@ -330,7 +339,6 @@ bool substitute_OR(const uint32& x, const uVector1D& defs, OL& p_ol, OL& n_ol, u
 		}
 	}
 	// substitute negatives
-	for (int i = 0; i < n_ol.size(); i++) n_ol[i]->set_status(DELETED);
 	for (int d = 0; d < defs.size(); d++) {
 		for (int i = 0; i < n_ol.size(); i++) {
 			if (!(n_ol[i]->has(defs[d]))) {
@@ -340,6 +348,9 @@ bool substitute_OR(const uint32& x, const uVector1D& defs, OL& p_ol, OL& n_ol, u
 			}
 		}
 	}
+	// delete old occurs
+	for (int i = 0; i < p_ol.size(); i++) p_ol[i]->set_status(DELETED);
+	for (int j = 0; j < n_ol.size(); j++) n_ol[j]->set_status(DELETED);
 	return true; // OR-substitution successful
 }
 
@@ -355,18 +366,18 @@ bool gateReasoning_x(const uint32& x, OL& p_ol, OL& n_ol)
 			if ((c[0] ^ x) == NEG_SIGN) { // found x with negative sign
 				imp = FLIP(c[1]); // toggle implied literal sign
 				out_c.push(imp);
-				sig |= map_lit(imp);
+				sig |= mapHash(imp);
 			}
 			else if ((c[1] ^ x) == NEG_SIGN) {
 				imp = FLIP(c[0]); // toggle implied literal sign
 				out_c.push(imp);
-				sig |= map_lit(imp);
+				sig |= mapHash(imp);
 			}
 		}
 	}
 	if (out_c.size() > 1) {
 		out_c.push(x);
-		sig |= map_lit(x);
+		sig |= mapHash(x);
 		Sort(out_c.d_ptr(), out_c.size());
 		for (int i = 0; i < p_ol.size(); i++) {
 			SCLAUSE& c = *p_ol[i];
@@ -394,18 +405,18 @@ bool gateReasoning_x(const uint32& x, OL& p_ol, OL& n_ol)
 			if (c[0] == x) { // found x with positive sign
 				imp = FLIP(c[1]); // toggle implied literal sign
 				out_c.push(imp);
-				sig |= map_lit(imp);
+				sig |= mapHash(imp);
 			}
 			else if (c[1] == x) {
 				imp = FLIP(c[0]); // toggle implied literal sign
 				out_c.push(imp);
-				sig |= map_lit(imp);
+				sig |= mapHash(imp);
 			}
 		}
 	}
 	if (out_c.size() > 1) {
 		out_c.push(FLIP(x));
-		sig |= map_lit(FLIP(x));
+		sig |= mapHash(FLIP(x));
 		Sort(out_c.d_ptr(), out_c.size());
 		for (int i = 0; i < n_ol.size(); i++) {
 			SCLAUSE& c = *n_ol[i];
@@ -431,9 +442,7 @@ void resolve_x(const uint32& x, OL& p_ol, OL& n_ol)
 {
 	assert(x);
 	for (int i = 0; i < p_ol.size(); i++) {
-		p_ol[i]->set_status(DELETED);
 		for (int j = 0; j < n_ol.size(); j++) {
-			n_ol[j]->set_status(DELETED);
 			if (!isTautology(x, p_ol[i], n_ol[j])) {
 				S_REF added = new SCLAUSE();
 				merge(x, p_ol[i], n_ol[j], added);
@@ -441,6 +450,8 @@ void resolve_x(const uint32& x, OL& p_ol, OL& n_ol)
 			}
 		}
 	}
+	for (int i = 0; i < p_ol.size(); i++) p_ol[i]->set_status(DELETED);
+	for (int j = 0; j < n_ol.size(); j++) n_ol[j]->set_status(DELETED);
 }
 
 bool mayResolve_x(const uint32& x, OL& p_ol, OL& n_ol)
@@ -516,7 +527,10 @@ void self_sub_x(const uint32& x, OL& p_ol, OL& n_ol)
 		for (int j = 0; j < p_ol.size(); j++) {
 			S_REF sm_c = p_ol[j];
 			if (sm_c->status() != DELETED && sm_c->size() < pos_c->size() &&
-				subset_sig(sm_c->sig(), pos_c->sig()) && subset(sm_c, pos_c)) pos_c->set_status(DELETED);
+				subset_sig(sm_c->sig(), pos_c->sig()) && subset(sm_c, pos_c)) {
+				pos_c->set_status(DELETED);
+				break; // mission accomplished!
+			}
 		}
 	}
 	updateOL(p_ol);
@@ -538,7 +552,10 @@ void self_sub_x(const uint32& x, OL& p_ol, OL& n_ol)
 		for (int j = 0; j < n_ol.size(); j++) {
 			S_REF sm_c = n_ol[j];
 			if (sm_c->status() != DELETED && sm_c->size() < neg_c->size() &&
-				subset_sig(sm_c->sig(), neg_c->sig()) && subset(sm_c, neg_c)) neg_c->set_status(DELETED);
+				subset_sig(sm_c->sig(), neg_c->sig()) && subset(sm_c, neg_c)) {
+				neg_c->set_status(DELETED);
+				break; // mission accomplished!
+			}
 		}
 	}
 	updateOL(n_ol);

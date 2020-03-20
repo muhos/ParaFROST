@@ -30,7 +30,9 @@ static bool eq(T& in, const char* ref) {
 		ref++; in++;
 	}
 	return true;
+
 }
+bool isQuiet(void);
 void parseArguments(int& argc, char** argv);
 void printUsage(int  argc, char** argv, bool verbose = false);
 
@@ -52,6 +54,7 @@ protected:
 	}
 public:
 	// global
+	friend bool isQuiet(void);
 	friend void parseArguments(int& argc, char** argv);
 	friend void printUsage(int  argc, char** argv, bool verbose);
 	// derived methods
@@ -119,7 +122,7 @@ public:
 	}
 
 	virtual void help(bool verbose = false) {
-		fprintf(stderr, "  --%-15s = %-8s [", arg, type);
+		fprintf(stderr, "c |  --%-15s = %-8s [", arg, type);
 		if (r.h == INT32_MIN) fprintf(stderr, "%-5s", "-I32");
 		else fprintf(stderr, "%-5d", r.h);
 		fprintf(stderr, " .. ");
@@ -127,8 +130,8 @@ public:
 		else fprintf(stderr, "%5d", r.t);
 		fprintf(stderr, "] (default: %6d)\n", val);
 		if (verbose) {
-			fprintf(stderr, "   %s\n", text);
-			fprintf(stderr, "\n");
+			fprintf(stderr, "c |   %s\n", text);
+			fprintf(stderr, "c |\n");
 		}
 	}
 
@@ -174,7 +177,7 @@ public:
 	}
 
 	virtual void help(bool verbose = false) {
-		fprintf(stderr, "  --%-15s = %-8s [", arg, type);
+		fprintf(stderr, "c |  --%-15s = %-8s [", arg, type);
 		if (r.h == INT64_MIN) fprintf(stderr, "%-5s", "-I64");
 		else fprintf(stderr, "%5lld", r.h);
 		fprintf(stderr, " .. ");
@@ -182,8 +185,8 @@ public:
 		else fprintf(stderr, "%5lld", r.t);
 		fprintf(stderr, "] (default: %6lld)\n", val);
 		if (verbose) {
-			fprintf(stderr, "   %s\n", text);
-			fprintf(stderr, "\n");
+			fprintf(stderr, "c |   %s\n", text);
+			fprintf(stderr, "c |\n");
 		}
 	}
 
@@ -225,7 +228,7 @@ public:
 	}
 
 	virtual void help(bool verbose = false) {
-		fprintf(stderr, "  --%-15s = %-8s [", arg, type);
+		fprintf(stderr, "c |  --%-15s = %-8s [", arg, type);
 		if (r.h == -INFINITY) fprintf(stderr, "%-6s", "-inf");
 		else fprintf(stderr, "%6.2f", r.h);
 		fprintf(stderr, " .. ");
@@ -233,8 +236,8 @@ public:
 		else fprintf(stderr, "%6.2f", r.t);
 		fprintf(stderr, "] (default: %6.2f)\n", val);
 		if (verbose) {
-			fprintf(stderr, "   %s\n", text);
-			fprintf(stderr, "\n");
+			fprintf(stderr, "c |   %s\n", text);
+			fprintf(stderr, "c |\n");
 		}
 	}
 
@@ -261,10 +264,10 @@ public:
 		return true;
 	}
 	virtual void help(bool verbose = false) {
-		fprintf(stderr, "  --%-15s = %8s  (default: %s)\n", arg, type, val);
+		fprintf(stderr, "c |  --%-15s = %8s  (default: %s)\n", arg, type, val);
 		if (verbose) {
-			fprintf(stderr, "   %s\n", text);
-			fprintf(stderr, "\n");
+			fprintf(stderr, "c |   %s\n", text);
+			fprintf(stderr, "c |\n");
 		}
 	}
 	virtual void printArgument() { printf(" %s<%s> ", arg, val); }
@@ -297,12 +300,12 @@ public:
 	}
 
 	virtual void help(bool verbose = false) {
-		fprintf(stderr, "  -%-10s -no-%-10s", arg, arg);
+		fprintf(stderr, "c |  -%-10s -no-%-10s", arg, arg);
 		fprintf(stderr, "                 ");
 		fprintf(stderr, "(default: %s)\n", val ? "on" : "off");
 		if (verbose) {
-			fprintf(stderr, "   %s\n", text);
-			fprintf(stderr, "\n");
+			fprintf(stderr, "c |   %s\n", text);
+			fprintf(stderr, "c |\n");
 		}
 	}
 

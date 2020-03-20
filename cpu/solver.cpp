@@ -20,23 +20,7 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 #include "parser.h"
 
 /* options */
-static INT_OPT opt_verbose("verbose", "set the verbosity", 1, INT32R(0, 4));
-static INT_OPT opt_progress("progress-rate", "Progress rate to print search statistics", 10000, INT32R(1, INT32_MAX));
-static INT_OPT opt_pdm_threads("pdm-threads", "set the number of pdm threads (not ready)", 1, INT32R(0, INT32_MAX));
-static INT_OPT opt_pdm_rounds("pdm", "set the number <n> of pdm rounds", 0, INT32R(0, INT32_MAX));
-static INT_OPT opt_pdm_freq("pdm-freq", "PDM execution frequency per restarts", 0, INT32R(0, INT32_MAX));
-static INT_OPT opt_pdm_ord("pdm-ord", "set the pdm ordering scheme to either 1 (hist + act), 0 (high act) or -1 (low act)", 1, INT32R(-1, 1));
-static INT_OPT opt_pol("pol", "set polarity saving to either 1 (same), 0 (random) or -1 (revert)", 1, INT32R(-1, 1));
-static INT_OPT opt_timeout("timeout", "set the timeout in seconds", 0, INT32R(0, INT32_MAX));
-static INT_OPT opt_luby_base("luby-base", "set the restart base", 100, INT32R(32, INT32_MAX));
-static INT_OPT opt_SH("sh", "define the search heuristics, where: \n\
-	0 -> enable clause activity heuristic only,\n\
-	1 -> enable clause-sized random deletion heuristic,\n\
-	2 -> enable LBD heuristic.", 2, INT32R(0, 2));
-static STRING_OPT opt_restart("restart", "enables <policy> restart, where:\n\
-	pow  -> enable geometric restarts,\n\
-	luby -> enable luby restarts,\n\
-	lbd  -> enable dynamic lbd restarts.", "lbd");
+static BOOL_OPT opt_quiet_en("q", "enable quiet mode, same as verbose=0", false);
 static BOOL_OPT opt_pre_en("pre", "enable preprocessing", true);
 static BOOL_OPT opt_lpre_en("lpre", "enable preprocessing on learnt clauses if exist", false);
 static BOOL_OPT opt_perf_en("perf", "allow performance report on stdout", true);
@@ -47,29 +31,44 @@ static BOOL_OPT opt_fdp_en("fdp", "enable follow-up decision prioritization", tr
 static BOOL_OPT opt_cbt_en("cbt", "enable chronological backtracking", true);
 static BOOL_OPT opt_model_en("m", "allow removed print on stdout", false);
 static BOOL_OPT opt_proof_en("p", "enable proof generation in binary DRAT format", false);
-static BOOL_OPT opt_quiet_en("q", "enable quiet mode, same as verbose=0", false);
-static BOOL_OPT opt_bcp_en("bcp", "allow BCP only on top level", false);
-static INT_OPT opt_seed("seed", "Seed value for random generation", 9453921, INT32R(1, INT32_MAX));
-static INT_OPT opt_pre_delay("pre-delay", "Delay for applying preprocessing (in restarts)", 1, INT32R(0, INT32_MAX));
-static INT_OPT opt_init_red("init-reduce", "Initial number of conflicts for learnts reduction", 2000, INT32R(0, INT32_MAX));
-static INT_OPT opt_inc_red_sm("inc-small", "Small step for learnt clauses deletion", 300, INT32R(0, INT32_MAX));
-static INT_OPT opt_inc_red_bg("inc-big", "Large step for learnt clauses deletion", 1000, INT32R(0, INT32_MAX));
-static INT_OPT opt_lbd_frozen("lbd-frozen", "Freeze clauses if their LBD decreases than this value", 30, INT32R(0, INT32_MAX));
-static INT_OPT opt_lbd_min_size("lbd-min-size", "The min size required to minimize clause", 30, INT32R(3, INT32_MAX));
-static INT_OPT opt_lbd_min("lbd-min", "The min LBD required to minimize clause", 6, INT32R(3, INT32_MAX));
-static INT_OPT opt_lbd_rest_base("lbd-restart", "The base of restarts (initial LBD queue size)", 50, INT32R(10, INT32_MAX));
-static INT_OPT opt_bl_rest_base("lbd-bl-restart", "The base of block restarts (initial trail queue size)", 5000, INT32R(10, INT32_MAX));
-static INT_OPT opt_cbt_dist("cbt-dist", "The maximum distance (level difference) to activate CBT", 500, INT32R(GLUE, INT32_MAX));
-static INT_OPT opt_cbt_confs("cbt-conf", "The maximum number of conflicts to activate CBT", 5000, INT32R(0, INT32_MAX));
-static DOUBLE_OPT opt_RF("rf-rate", "The restart rate for trigger", 0.8, FP64R(0, 1));
-static DOUBLE_OPT opt_RB("rb-rate", "The restart rate for defuse", 1.4, FP64R(1, 5));
-static DOUBLE_OPT opt_luby_inc("luby-inc", "Luby restart increment value", 2.0);
+static INT_OPT opt_verbose("verbose", "set the verbosity", 1, INT32R(0, 4));
+static INT_OPT opt_progress("progress-rate", "progress rate to print search statistics", 10000, INT32R(1, INT32_MAX));
+static INT_OPT opt_pdm_rounds("pdm", "set the number <n> of pdm rounds", 0, INT32R(0, INT32_MAX));
+static INT_OPT opt_pdm_freq("pdm-freq", "PDM execution frequency per restarts", 0, INT32R(0, INT32_MAX));
+static INT_OPT opt_pdm_ord("pdm-ord", "set the pdm ordering scheme to either 1 (hist + act), 0 (high act) or -1 (low act)", 1, INT32R(-1, 1));
+static INT_OPT opt_pol("pol", "set polarity saving to either 1 (same), 0 (random) or -1 (revert)", 1, INT32R(-1, 1));
+static INT_OPT opt_timeout("timeout", "set the timeout in seconds", 0, INT32R(0, INT32_MAX));
+static INT_OPT opt_luby_base("luby-base", "set the restart base", 100, INT32R(32, INT32_MAX));
+static INT_OPT opt_SH("sh", "define the search heuristics, where:\nc |\
+	0 -> clause activity heuristic only,\nc |\
+	1 -> clause-sized random deletion heuristic,\nc |\
+	2 -> LBD heuristic.", 2, INT32R(0, 2));
+static INT_OPT opt_seed("seed", "seed value for random generation", 9453921, INT32R(1, INT32_MAX));
+static INT_OPT opt_pre_delay("pre-delay", "delay for applying preprocessing (in restarts)", 1, INT32R(0, INT32_MAX));
+static INT_OPT opt_init_red("init-reduce", "initial number of conflicts for learnts reduction", 2000, INT32R(0, INT32_MAX));
+static INT_OPT opt_inc_red_sm("inc-small", "small step for learnt clauses deletion", 300, INT32R(0, INT32_MAX));
+static INT_OPT opt_inc_red_bg("inc-big", "large step for learnt clauses deletion", 1000, INT32R(0, INT32_MAX));
+static INT_OPT opt_lbd_frozen("lbd-frozen", "freeze clauses if their LBD decreases than this value", 30, INT32R(0, INT32_MAX));
+static INT_OPT opt_lbd_min_size("lbd-min-size", "minimum size required to minimize clause", 30, INT32R(3, INT32_MAX));
+static INT_OPT opt_lbd_min("lbd-min", "minimum LBD required to minimize clause", 6, INT32R(3, INT32_MAX));
+static INT_OPT opt_lbd_rest_base("lbd-restart", "base of restarts (initial LBD queue size)", 50, INT32R(10, INT32_MAX));
+static INT_OPT opt_bl_rest_base("lbd-bl-restart", "base of block restarts (initial trail queue size)", 5000, INT32R(10, INT32_MAX));
+static INT_OPT opt_cbt_dist("cbt-dist", "maximum distance (level difference) to activate CBT", 500, INT32R(GLUE, INT32_MAX));
+static INT_OPT opt_cbt_confs("cbt-conf", "maximum number of conflicts to activate CBT", 5000, INT32R(0, INT32_MAX));
+static DOUBLE_OPT opt_RF("rf-rate", "restart rate for trigger", 0.8, FP64R(0, 1));
+static DOUBLE_OPT opt_RB("rb-rate", "restart rate for defuse", 1.4, FP64R(1, 5));
+static DOUBLE_OPT opt_luby_inc("luby-inc", "luby restart increment value", 2.0);
 static DOUBLE_OPT opt_var_inc("var-inc", "VSIDS increment value", 1.0, FP64R(1, 10));
 static DOUBLE_OPT opt_var_decay("var-decay", "VSIDS decay value", 0.7, FP64R(0, 1));
 static DOUBLE_OPT opt_var_decay_r("var-decay-r", "VSIDS decay rate value", 0.001, FP64R(0, 1));
+static STRING_OPT opt_restart("restart", "enables <policy> restart, where:\nc |\
+	pow  -> geometric restarts,\nc |\
+	luby -> luby restarts,\nc |\
+	lbd  -> dynamic lbd restarts.", "lbd");
+static STRING_OPT opt_proof_out("proof-file", "output file to write binary proof", "proof.out");
 
 //=======================================//
-//     container for BCNF info.           //
+//     container for CNF info.           //
 //=======================================//
 CNF_INFO cnf_stats;
 /********************************/
@@ -113,23 +112,46 @@ void set_timeout(int time_limit)
 }
 #endif
 // interrupt handlers
-void handler_exit(int)
+void handler_terminate(int)
 {
 	fflush(stdout);
 	printf("c |\n");
-	printf("c |    Interrupted\n");
+	printf("c |%45s\n","Interrupted");
 	printf("c |\n");
 	printf("s UNKNOWN\n");
 	printf("c |\n");
-	g_pFrost->print_reports();
-	exit(EXIT_FAILURE);
+	printf("c |--------------------------------------------------------------------------------------|\n");
+	_exit(EXIT_FAILURE);
 }
-void sig_handler(void handler(int))
+
+void handler_mercy_intr(int) 
 {
-	signal(SIGINT, handler);
-	signal(SIGTERM, handler);
+	fflush(stdout);
+	if (!g_pFrost->quiet_en) {
+		printf("c |\n");
+		printf("c |%45s\n", "Interrupted");
+		printf("c |\n");
+	}
+	g_pFrost->interrupt(); 
+}
+
+void handler_mercy_timeout(int) 
+{
+	fflush(stdout);
+	if (!g_pFrost->quiet_en) {
+		printf("c |\n");
+		printf("c |%45s\n", "Timeout");
+		printf("c |\n");
+	}
+	g_pFrost->interrupt();
+}
+
+void sig_handler(void h_intr(int), void h_timeout(int))
+{
+	signal(SIGINT, h_intr);
+	signal(SIGTERM, h_intr);
 #ifdef SIGXCPU
-	signal(SIGXCPU, handler);
+	if (h_timeout != NULL) signal(SIGXCPU, h_timeout);
 #endif
 }
 //============================//
@@ -151,20 +173,23 @@ struct LEARNT_SR {
 //		 ParaFROST defined members       //
 //=======================================//
 ParaFROST::ParaFROST(const string& path) :
-	timeout(opt_timeout), verbose(opt_verbose), progRate(opt_progress),
+	timeout(opt_timeout), verbose(opt_verbose), progRate(opt_progress), seed(opt_seed),
 	quiet_en(opt_quiet_en), parse_only_en(opt_par_en), rewriter_en(opt_rew_en), perf_en(opt_perf_en),
-	bcp_en(opt_bcp_en), mcv_en(!opt_lcv_en), model_en(opt_model_en), proof_en(opt_proof_en),
+	mcv_en(!opt_lcv_en), model_en(opt_model_en), proof_en(opt_proof_en),
 	fdp_en(opt_fdp_en), cbt_en(opt_cbt_en), pre_en(opt_pre_en), lpre_en(opt_lpre_en), pre_delay(opt_pre_delay),
 	var_inc(opt_var_inc), var_decay(opt_var_decay),
-	pdm_rounds(opt_pdm_rounds), pdm_freq(opt_pdm_freq), pdm_order(opt_pdm_ord), pdm_threads(opt_pdm_threads),
-	restart_base(opt_luby_base), restart_inc(opt_luby_inc),
-	seed(opt_seed), polarity(opt_pol), restPolicy(opt_restart),
-	SH(opt_SH), lbdFrozen(opt_lbd_frozen), lbdMinReduce(opt_lbd_min), lbdMinClSize(opt_lbd_min_size),
+	pdm_rounds(opt_pdm_rounds), pdm_freq(opt_pdm_freq), pdm_order(opt_pdm_ord),
+	restart_base(opt_luby_base), restart_inc(opt_luby_inc), restPolicy(opt_restart), SH(opt_SH),
+	polarity(opt_pol), lbdFrozen(opt_lbd_frozen), lbdMinReduce(opt_lbd_min), lbdMinClSize(opt_lbd_min_size),
 	nClsReduce(opt_init_red), incReduceSmall(opt_inc_red_sm), incReduceBig(opt_inc_red_bg),
 	lbdRestBase(opt_lbd_rest_base), blockRestBase(opt_bl_rest_base), RF(opt_RF), RB(opt_RB),
-	cbt_dist(opt_cbt_dist), cbt_conf_max(opt_cbt_confs)
+	cbt_dist(opt_cbt_dist), cbt_conf_max(opt_cbt_confs),
+	proof_path(opt_proof_out)
 {
-	if (quiet_en) verbose = 0;
+	intr = false;
+	if (quiet_en) { verbose = 0; perf_en = false; }
+	if (SH < 2 && restPolicy == "lbd") restPolicy = "luby";
+	if (SH == 2 && restPolicy != "lbd") restPolicy = "lbd";
 	if (pre_en) opt_simp();
 	sysMem_sz = 0ULL;
 	sysMemCons = 0.0;
@@ -172,23 +197,22 @@ ParaFROST::ParaFROST(const string& path) :
 	this->path = path;
 	timer = new TIMER();
 	if (proof_en) {
-		proofFile.open("proof.out", std::ofstream::binary | std::ofstream::out);
+		proofFile.open(proof_path, std::ofstream::binary | std::ofstream::out);
 		if (!proofFile.is_open()) {
-			cout << "c | Cannot open the proof file." << endl;
+			printf("Cannot open proof file %s\n", proof_path.c_str());
 			exit(EXIT_FAILURE);
 		}
 	}
-	if (!rewriter_en) CNF_parser(path);
-	else {
-		CNF_rewriter(path);
-		exit(EXIT_SUCCESS);
+	if (rewriter_en) { CNF_rewriter(path); exit(EXIT_SUCCESS); }
+	// parse cnf & check top state
+	CNF_STATE top = CNF_parser(path);
+	if (top == TERMINATE) { free_mem(); exit(EXIT_FAILURE); }
+	else if (top == UNSAT || BCP() != NULL) {
+		wrapUp(UNSAT);
+		if (proof_en) { write_proof('0'); proofFile.close(); }
+		free_mem(); exit(EXIT_SUCCESS);
 	}
-	if (parse_only_en) {
-		cout << "c |--------------------------------------------------------------------------------------|" << endl;
-		exit(EXIT_SUCCESS);
-	}
-	solver_alloc();
-	solver_init();
+	if (parse_only_en) { free_mem(); exit(EXIT_SUCCESS); }
 	if (verbose == 1) {
 		printf("c |-------------------------------------- Progress --------------------------------------|\n");
 		if (SH == 2) {
@@ -205,23 +229,156 @@ ParaFROST::ParaFROST(const string& path) :
 		}
 		printf("c |--------------------------------------------------------------------------------------|\n");
 	}
-	if (unit_en && BCP_top() == UNSAT) {
-		wrapUp(UNSAT);
-		if (proof_en) {
-			write_proof(0);
-			proofFile.close();
-		}
-		exit(EXIT_SUCCESS);
-	}
-	if (bcp_en) exit(EXIT_SUCCESS);
 }
 
 ParaFROST::~ParaFROST()
 {
 	if (verbose >= 1) cout << "c | Freeing up Host memory...";
 	free_mem();
-	timer->~TIMER();
 	if (verbose >= 1) cout << " done." << endl;
+	if (verbose >= 1) cout << "c |--------------------------------------------------------------------------------------|" << endl;
+}
+
+CNF_STATE ParaFROST::CNF_parser(const string& path) {
+	ifstream inputFile;
+	inputFile.open(path, ifstream::in);
+	if (!inputFile.is_open()) {
+		printf("Cannot open input file %s.\n", path.c_str());
+		exit(EXIT_FAILURE);
+	}
+	if (verbose >= 1) printf("c | Parsing CNF file \"%s\"\n", path.c_str());
+	char* tmp = new char[LIT_LEN];
+	char* buffer = new char[BUFFER_SIZE];
+	uVector1D header(2), tmpCl;
+	uint32* in_c;
+	int c_sz = 0, oldSz = 0;
+	while (inputFile.getline(buffer, BUFFER_SIZE)) {
+		std::streamsize len = inputFile.gcount();
+		if (len == 0) { printf("Error - empty line.\n"); exit(EXIT_FAILURE); }
+		if (len == 1 && *buffer == '\0') continue;
+		if (len == 2 && (*buffer == '0' || (*buffer >= '%' && *buffer <= '/'))) continue;
+		if (*buffer != 'c') {
+			if (*buffer == 'p') {
+				read_header(header, tmp, buffer);
+				if (verbose >= 1) printf("c | Found header %s\n", buffer);
+				cnf_stats.n_org_vars = header[0], cnf_stats.n_org_cls = header[1];
+				orgs.incMem(cnf_stats.n_org_cls);
+				WT_alloc();
+				solver_alloc();
+				solver_init();
+			}
+			else {
+				timer->start();
+				char* head = buffer;
+				bool c_end = false;
+				while (*buffer) if (*buffer++ == ' ' && *buffer == '0') c_end = true;
+				buffer = head;
+				if (!c_end) { printf("Error - clause ending not recognizable.\n"); return TERMINATE; }
+				c_sz = count_spaces(buffer); // predict number of lits (for faster clause storage!)
+				if (c_sz == 0) { printf("Error - empty clause.\n"); return TERMINATE; }
+				in_c = new uint32[c_sz];
+				toLits(in_c, tmp, buffer, c_sz);
+				if (proof_en) {
+					oldSz = c_sz;
+					tmpCl.clear(true);
+					tmpCl.incMem(c_sz);
+					tmpCl.copyFrom(in_c, c_sz);
+				}
+				if (checkClause(in_c, c_sz)) { // clause not a tautology
+					if (proof_en && c_sz < oldSz) {
+						write_proof('a');
+						write_proof(in_c, c_sz);
+						write_proof(0);
+						write_proof('d');
+						write_proof(tmpCl, c_sz);
+						write_proof(0);
+					}
+					if (c_sz == 1) {
+						assert(*in_c > 0);
+						uint32 v_idx = V2IDX(*in_c);
+						if (sol->assign(v_idx) == UNDEFINED) { var_heap->remove(v_idx); enqueue(*in_c); }
+						else if (sol->assign(v_idx) == ISNEG(*in_c)) return UNSAT;
+					}
+					else if (c_sz > MAX_CL_SZ) { 
+						printf("Error - clause size \"%d\" not supported.\n", c_sz);
+						return TERMINATE;
+					}
+					else if (cnf_stats.global_n_cls + 1 > cnf_stats.n_org_cls) {
+						printf("Error - too many clauses.\n");
+						return TERMINATE;
+					}
+					else {
+						B_REF org = new BCLAUSE();
+						org->copyLitsFrom(in_c, c_sz);
+						attachClause(org);
+					}
+				}
+				timer->stop();
+				timer->par += timer->CPU_time();
+				delete[] in_c;
+			}
+		}
+	}
+	delete[] buffer, tmp;
+	assert(nClauses() + nBins() <= nOrgClauses());
+	cnf_stats.n_org_bins = nBins();
+	cnf_stats.n_org_lits = nLiterals() + ((int64)nBins() << 1);
+	if ((int)nClauses() < orgs.size()) orgs.resize(nClauses());
+	inputFile.close();
+	if (verbose >= 1) printf("c | Read %d Vars, %d Cls, and %lld Lits in %.3f sec.\n", nOrgVars(), nOrgClauses(), nOrgLits() + learnt_cl.size(), timer->par);
+	return UNSOLVED;
+}
+
+void ParaFROST::free_mem()
+{
+	occurs.clear(true);
+	scores.clear(true);
+	learntLits.clear(true);
+	learnt_cl.clear(true);
+	trail_sz.clear(true);
+	wt.clear(true);
+	bins.clear(true);
+	orgs.clear(true);
+	lbdQ.clear(true);
+	trailQ.clear(true);
+	scnf.clear(true);
+	ot.clear(true);
+	removed.clear(true);
+	mappedVars.clear(true);
+	reverseVars.clear(true);
+	if (sysMem != NULL) {
+		free(sysMem);
+		sysMem = NULL;
+	}
+	if (var_heap != NULL) {
+		delete var_heap;
+		var_heap = NULL;
+	}
+	if (timer != NULL) {
+		delete timer;
+		timer = NULL;
+	}
+}
+
+void ParaFROST::WT_alloc(bool re)
+{
+	/* allocate host memory for the watch table */
+	assert(nOrgVars() > 0);
+	size_t maxVars = V2D(size_t(nOrgVars()) + 1);
+	double wt_cap = (double)maxVars * sizeof(WATCH);
+	assert(wt.empty());
+	if (re) {
+		int nOldVars = nOrgVars() + nRemVars();
+		sysMemCons -= V2D(size_t(nOldVars) + 1);
+		if (sysMemCons < 0) sysMemCons = 0.0;
+	}
+	sysMemCons += wt_cap;
+	if (sysMemCons >= sysMemTot) {
+		if (verbose > 1) cout << "\nc | Not enough system memory for watch table (Max: " << sysMemTot / MBYTE << ", Consumed: " << sysMemCons / MBYTE << " MB)" << endl;
+		else cout << "c | Not enough memory for watch table (Max: " << sysMemTot / MBYTE << ", Consumed: " << sysMemCons / MBYTE << " MB)" << endl;
+		exit(EXIT_FAILURE);
+	}
+	wt.incMem(maxVars);
 }
 
 void ParaFROST::solver_alloc(bool re)
@@ -242,8 +399,7 @@ void ParaFROST::solver_alloc(bool re)
 		lrn.max_cl_sz * sizeof(uint32) * 2;
 	sysMemCons += sysMem_sz + sizeof(VAR_HEAP) + sizeof(double) * nOrgVars();
 	if (sysMemCons >= sysMemTot) {
-		if (verbose > 1) cout << "\n| Not enough system memory for the solver (Allowed: " << sysMemTot / MBYTE << ", Consumed: " << sysMemCons / MBYTE << " MB)" << endl;
-		else cout << "| Not enough system memory for the solver (Allowed: " << sysMemTot / MBYTE << ", Consumed: " << sysMemCons / MBYTE << " MB)" << endl;
+		cout << "| Not enough system memory for the solver (Allowed: " << sysMemTot / MBYTE << ", Consumed: " << sysMemCons / MBYTE << " MB)" << endl;
 		exit(EXIT_FAILURE);
 	}
 	sysMem = NULL;
@@ -297,26 +453,11 @@ void ParaFROST::solver_alloc(bool re)
 	assert(sysMem == bottom);
 	sysMem -= sysMem_sz;
 	// VSIDS heap
+	var_heap = NULL;
 	var_heap = new VAR_HEAP();
 	var_heap->set_allocSize(nOrgVars());
 	var_heap->alloc();
 	if (verbose >= 2) cout << "(" << (double)sysMem_sz / MBYTE << " MB) ==> done." << endl;
-}
-
-void ParaFROST::free_mem()
-{
-	occurs.clear(true);
-	scores.clear(true);
-	learntLits.clear(true);
-	learnt_cl.clear(true);
-	trail_sz.clear(true);
-	wt.clear(true);
-	bins.clear(true);
-	orgs.clear(true);
-	lbdQ.clear(true);
-	trailQ.clear(true);
-	free(sysMem);
-	delete var_heap;
 }
 
 void ParaFROST::write_proof(uint32* lits, const CL_LEN& len) {
@@ -334,119 +475,6 @@ void ParaFROST::write_proof(uint32* lits, const CL_LEN& len) {
 		}
 		write_proof(Byte(b));
 	}
-}
-
-void ParaFROST::CNF_parser(const string& path) {
-	ifstream inputFile;
-	inputFile.open(path, ifstream::in);
-	if (!inputFile.is_open()) {
-		cout << "c | Cannot open the input file: " << path << endl;
-		exit(EXIT_FAILURE);
-	}
-	char* tmp = new char[LIT_LEN];
-	char* buffer = new char[BUFFER_SIZE];
-	uVector1D header(2);
-	uint32* clause;
-	register int clause_len = 0;
-	cout << "c | Parsing CNF file \"" << path << "\"" << endl;
-	cnf_stats.n_org_lits = 0;
-	cnf_stats.global_n_bins = 0;
-	cnf_stats.global_n_cls = 0;
-	cnf_stats.global_n_lits = 0;
-	cnf_stats.max_org_vars = 0;
-	cnf_stats.max_org_cl_width = 0;
-	int oldSz = 0;
-	uVector1D tmpCl;
-	while (inputFile.getline(buffer, BUFFER_SIZE)) {
-		std::streamsize len = inputFile.gcount();
-		if (len == 0) { cout << "c | Error --> Empty line found. " << endl; exit(EXIT_FAILURE); }
-		if (len == 1 && *buffer == '\0') continue;
-		if (len == 2 && (*buffer == '0' || (*buffer >= '%' && *buffer <= '/'))) continue;
-		if (*buffer != 'c') {
-			if (*buffer == 'p') {
-				read_header(header, tmp, buffer);
-				cout << "c | Found header " << buffer << endl;
-				cnf_stats.n_org_vars = header[0];
-				cnf_stats.n_org_cls = header[1];
-				orgs.incMem(cnf_stats.n_org_cls);
-				WT_alloc();
-			}
-			else {
-				timer->start();
-				char* head = buffer;
-				bool clause_end = false;
-				while (*buffer) if (*buffer++ == ' ' && *buffer == '0') clause_end = true;
-				buffer = head;
-				if (!clause_end) {
-					cout << "c | Error --> clause ending not recognizable." << endl;
-					cout << "c | Dump buffer --> " << buffer << endl;
-					exit(EXIT_FAILURE);
-				}
-				clause_len = count_spaces(buffer); // predict number of lits (for faster clause storage!)
-				if (clause_len == 0) {
-					cout << "c | Error --> empty clause." << endl;
-					exit(EXIT_FAILURE);
-				}
-				clause = new uint32[clause_len];
-				toLits(clause, tmp, buffer, clause_len);			
-				if (proof_en) {
-					oldSz = clause_len;
-					tmpCl.clear(true);
-					tmpCl.incMem(clause_len);
-					tmpCl.copyFrom(clause, clause_len);
-				}
-				if (checkClause(clause, clause_len)) { // clause not a tautology
-					if (proof_en && clause_len < oldSz) {
-						write_proof('a');
-						write_proof(clause, clause_len);
-						write_proof(0);
-						write_proof('d');
-						write_proof(tmpCl, clause_len);
-						write_proof(0);
-					}
-					if (clause_len == 1) {
-						unit_en = true;
-						learnt_cl.push(*clause); // enqueue top level unit to learnt_cl						
-					}
-					else if (clause_len > MAX_CLAUSE_LEN) {
-						cout << "c | Error --> clause size: " << clause_len << " is unsupported." << endl;
-						exit(EXIT_FAILURE);
-					}
-					else if (cnf_stats.global_n_cls + 1 > cnf_stats.n_org_cls) {
-						cout << "c | Error --> too many clauses." << endl;
-						exit(EXIT_FAILURE);
-					}
-					else {
-						B_REF new_cl = new BCLAUSE();
-						new_cl->copyLitsFrom(clause, clause_len);
-						attachClause(new_cl);
-						/*S_REF sc = new SCLAUSE();
-						sc->copyLitsFrom(clause, clause_len);
-						sc->set_status(ORIGINAL);
-						sc->calcSig();
-						scnf.push(sc);
-						cnf_stats.n_cls_after++;
-						cnf_stats.n_lits_after += sc->size();*/
-					}
-				}
-				timer->stop();
-				timer->par += timer->CPU_time();
-				delete[] clause;
-			}
-		}
-	}
-	delete[] buffer, tmp;
-	if (cnf_stats.max_org_vars > nOrgVars()) {
-		cout << "c | Error --> too many variables." << endl;
-		exit(EXIT_FAILURE);
-	}
-	assert(nClauses() + nBins() <= nOrgClauses());
-	cnf_stats.n_org_bins = nBins();
-	cnf_stats.n_org_lits = nLiterals() + ((int64)nBins() << 1);
-	if (nBins() == 0) bins.clear(true);
-	if ((int)nClauses() < orgs.size()) orgs.resize(nClauses());
-	inputFile.close();
-	printf("c | Read %d Vars, %d Cls, and %lld Lits in %.3f sec.\n", nOrgVars(), nOrgClauses(), nOrgLits() + learnt_cl.size(), timer->par);
 }
 
 void ParaFROST::CNF_rewriter(const string& path) {
@@ -496,11 +524,11 @@ void ParaFROST::CNF_rewriter(const string& path) {
 					cout << "c | Error --> empty clause." << endl;
 					exit(EXIT_FAILURE);
 				}
-				if (clause_len > MAX_CLAUSE_LEN) {
+				else if (clause_len > MAX_CL_SZ) {
 					cout << "c | Error --> clause size: " << clause_len << " is unsupported." << endl;
 					exit(EXIT_FAILURE);
 				}
-				if (cnf_stats.global_n_cls >= cnf_stats.n_org_cls) {
+				else if (cnf_stats.global_n_cls + 1 > cnf_stats.n_org_cls) {
 					cout << "c | Error --> too many clauses." << endl;
 					exit(EXIT_FAILURE);
 				}
@@ -513,28 +541,6 @@ void ParaFROST::CNF_rewriter(const string& path) {
 	assert(nClauses() <= nOrgClauses());
 	inputFile.close();
 	outFile.close();
-}
-
-uint32 ParaFROST::calcLBD(uVector1D& c)
-{
-	marker++;
-	register uint32 lbd = 0;
-	for (LIT_POS i = 0; i < c.size(); i++) {
-		int litLevel = sol->level(V2IDX(c[i]));
-		if (board[litLevel] != marker) { board[litLevel] = marker; lbd++; }
-	}
-	return lbd;
-}
-
-uint32 ParaFROST::calcLBD(C_REF c)
-{
-	marker++;
-	register uint32 lbd = 0;
-	for (LIT_POS i = 0; i < c->size(); i++) {
-		int litLevel = sol->level(V2IDX((*c)[i]));
-		if (board[litLevel] != marker) { board[litLevel] = marker; lbd++; }
-	}
-	return lbd;
 }
 
 void ParaFROST::attachClause(B_REF c)
@@ -653,44 +659,6 @@ void ParaFROST::shrinkClause(G_REF gc)
 	assert(c->size() > 1);
 }
 
-CNF_STATE ParaFROST::BCP_top()
-{
-	for (int i = 0; i < learnt_cl.size(); i++) {
-		assert(learnt_cl[i] > 0);
-		uint32 v_idx = V2IDX(learnt_cl[i]);
-		if (!sp->lock[v_idx]) { // not a duplicate
-			var_heap->remove(v_idx);
-			enqueue(learnt_cl[i]);
-		}
-	}
-	assert(sp->trail_size <= learnt_cl.size());
-	learnt_cl.clear();
-	C_REF conf = BCP();
-	if (conf != NULL) return UNSAT;
-	return UNSOLVED;
-}
-
-void ParaFROST::WT_alloc(bool re)
-{
-	/* allocate host memory for the watch table */
-	assert(nOrgVars() > 0);
-	size_t maxVars = V2D(size_t(nOrgVars()) + 1);
-	double wt_cap = (double)maxVars * sizeof(WATCH);
-	assert(wt.empty());
-	if (re) {
-		int nOldVars = nOrgVars() + nRemVars();
-		sysMemCons -= V2D(size_t(nOldVars) + 1);
-		if (sysMemCons < 0) sysMemCons = 0.0;
-	}
-	sysMemCons += wt_cap;
-	if (sysMemCons >= sysMemTot) {
-		if (verbose > 1) cout << "\nc | Not enough system memory for watch table (Max: " << sysMemTot / MBYTE << ", Consumed: " << sysMemCons / MBYTE << " MB)" << endl;
-		else cout << "c | Not enough memory for watch table (Max: " << sysMemTot / MBYTE << ", Consumed: " << sysMemCons / MBYTE << " MB)" << endl;
-		exit(EXIT_FAILURE);
-	}
-	wt.incMem(maxVars);
-}
-
 int ParaFROST::simplify(BCNF& cnf)
 {
 	if (cnf.size() == 0) return 0;
@@ -737,7 +705,7 @@ int ParaFROST::simplify(LCNF& cnf)
 void ParaFROST::simplify()
 {
 	if (sp->trail_size == sp->trail_offset || lrn.simp_props > 0) return;
-	if (verbose >= 2) printf("c | Simplifying BCNF..");
+	if (verbose >= 2) printf("c | Simplifying CNF..");
 	assert(sp->trail_head == sp->trail_size);
 	assert(nClauses() > 0);
 	assert(sp->trail_size > 0 && DL() == ROOT_LEVEL);
@@ -763,7 +731,7 @@ void ParaFROST::simplify()
 		wt[assign_f].clear(true);
 		uint32 assign_idx = V2IDX(assign);
 		if (var_heap->has(assign_idx)) var_heap->remove(assign_idx); // remove assign from the heap
-		if (pre_en && model_en) removed.push(assign); // save in case preprocessing mapped variables
+		if (pre_en) removed.push(assign); // save in case preprocessing mapped variables
 	}
 	// simplify input CNF
 	cnf_stats.global_n_cls = simplify(orgs); 
@@ -801,10 +769,10 @@ void ParaFROST::simp_learnt()
 	register uint32* lit = learnt_cl, *tmp_lit = tmp_stack, *end = lit + learnt_cl.size();
 	while (lit != end) *tmp_lit++ = *lit++;
 	uint32 min_level = 0;
-	for (LIT_POS k = 1; k < learnt_cl.size(); k++)  min_level |= 1UL << (sol->level(V2IDX(learnt_cl[k])) & 31);
+	for (LIT_POS k = 1; k < learnt_cl.size(); k++)  min_level |= mapHash(sol->level(V2IDX(learnt_cl[k])));
 	CL_LEN new_sz = 1, tmp_sz = (CL_LEN)learnt_cl.size();
 	for (LIT_POS k = 1; k < learnt_cl.size(); k++) {
-		if (source[V2IDX(learnt_cl[k])] == NULL || !lSubsume(learnt_cl[k], tmp_stack, tmp_sz, min_level))
+		if (source[V2IDX(learnt_cl[k])] == NULL || !selfsub(learnt_cl[k], tmp_stack, tmp_sz, min_level))
 			learnt_cl[new_sz++] = learnt_cl[k];
 	}
 	tmp_lit = tmp_stack; end = tmp_stack + tmp_sz;
@@ -812,7 +780,7 @@ void ParaFROST::simp_learnt()
 	learnt_cl.resize(new_sz);
 }
 
-void ParaFROST::subsume_bin() 
+void ParaFROST::binSelfsub() 
 {
 	marker++;
 	for (LIT_POS i = 1; i < learnt_cl.size(); i++) // mark all learnt literals except asserting
@@ -847,7 +815,7 @@ void ParaFROST::subsume_bin()
 	}
 }
 
-bool ParaFROST::lSubsume(const uint32& learntLit, uint32* tmp_stack, CL_LEN& tmp_tail, const uint32& min_level)
+bool ParaFROST::selfsub(const uint32& learntLit, uint32* tmp_stack, CL_LEN& tmp_tail, const uint32& min_level)
 {
 	assert(learntLit > 0);
 	assert(source[V2IDX(learntLit)] != NULL);
@@ -865,7 +833,7 @@ bool ParaFROST::lSubsume(const uint32& learntLit, uint32* tmp_stack, CL_LEN& tmp
 			uint32 parent = (*c)[l], parent_idx = V2IDX(parent);
 			int parent_dl = sol->level(parent_idx);
 			if (!sp->seen[parent_idx] && parent_dl > 0) {
-				if (source[parent_idx] != NULL && ((1UL << (parent_dl & 31)) & min_level) != 0) {
+				if (source[parent_idx] != NULL && (mapHash(parent_dl) & min_level) != 0) {
 					sp->seen[parent_idx] = 1;
 					*tail++ = parent;
 					tmp_stack[tmp_tail++] = parent;
@@ -900,23 +868,23 @@ void ParaFROST::bt_level()
 	}
 }
 
-void ParaFROST::cbtMaxLevel(C_REF c)
+void ParaFROST::cbt_level(C_REF c)
 {
 	sp->max1Found = false;
 	register uint32 w0_lit = (*c)[0];
-	sp->max_level = sol->level(V2IDX(w0_lit));
-	if (DL() == sp->max_level && DL() == sol->level(V2IDX((*c)[1]))) return;
+	sp->cbt_level = sol->level(V2IDX(w0_lit));
+	if (DL() == sp->cbt_level && DL() == sol->level(V2IDX((*c)[1]))) return;
 	// find the highest level in conflicting clause beyond literal-0
 	sp->max1Found = true;
 	int maxIdx = 0;
 	for (LIT_POS l = 1; l < c->size(); l++) { 
 		register int litLevel = sol->level(V2IDX((*c)[l]));
-		if (litLevel > sp->max_level) {
+		if (litLevel > sp->cbt_level) {
 			sp->max1Found = true;
-			sp->max_level = litLevel;
+			sp->cbt_level = litLevel;
 			maxIdx = l;
 		}
-		else if (litLevel == sp->max_level && sp->max1Found == true)
+		else if (litLevel == sp->cbt_level && sp->max1Found == true)
 			sp->max1Found = false;
 	}
 	if (maxIdx) { // found max. level, swap with w0-literal
@@ -992,7 +960,7 @@ void ParaFROST::analyze(C_REF c)
 	else { // simplify learnt clause 
 		simp_learnt(); 
 		if (SH == 2 && learnt_cl.size() <= lbdMinClSize && calcLBD(learnt_cl) <= lbdMinReduce)
-			subsume_bin();
+			binSelfsub();
 		bt_level();
 	}
 	if (SH == 2) {
@@ -1287,16 +1255,16 @@ CNF_STATE ParaFROST::search()
 	sp->reset_level();
 	sp->learnt_lbd = UNKNOWN;
 	int64 confs = UNKNOWN;
-	while (true) {
+	while (!interrupted()) {
 		if (verbose >= 2) printf("c | Current Decision Level = %d.\n", DL());
 		C_REF conf_ref = BCP();
 		if (conf_ref != NULL) {
 			nConflicts++; confs++; 
 			if (cbt_en) {
-				cbtMaxLevel(conf_ref);
-				if (sp->max_level == ROOT_LEVEL) return UNSAT;
+				cbt_level(conf_ref);
+				if (sp->cbt_level == ROOT_LEVEL) return UNSAT;
 				if (sp->max1Found) {
-					cancel_assigns(sp->max_level - 1);
+					cancel_assigns(sp->cbt_level - 1);
 					continue;
 				}
 			}
@@ -1317,7 +1285,7 @@ CNF_STATE ParaFROST::search()
 			analyze(conf_ref);
 			// chronological BT trigger
 			if (cbt_en && nConflicts >= cbt_conf_max && (DL() - sp->bt_level) >= cbt_dist) {
-				backJump(sp->max_level - 1); 
+				backJump(sp->cbt_level - 1); 
 				stats.cbt++;
 			}
 			else {
@@ -1367,14 +1335,15 @@ CNF_STATE ParaFROST::search()
 		}
 		if (verbose >= 3) printTrail(sp->trail, sp->trail_size);
 	}
+	return TERMINATE;
 }
 
 void ParaFROST::solve()
 {
 	simplify(); 
 	if (pre_en && pre_delay == 0) {	preprocess(); pre_en = false; }
-	R = pdm_rounds;
-	if (R > 0) { PDM_init(); R--; bins.clear(true); }
+	else if (units_f) bins.clear(); // bins are no longer valid when simplified
+	if (pdm_rounds > 0) { R = pdm_rounds; PDM_init(); R--; }
 	CNF_STATE status = UNSOLVED;
 	double rest_fact = 1.0;
 	while (status == UNSOLVED) {
@@ -1384,9 +1353,8 @@ void ParaFROST::solve()
 		}
 		// special restart for preprocessing
 		if (pre_en && restarts >= 1 && restarts % pre_delay == 0) {
-			preprocess(); pre_en = false;
-			R = pdm_rounds;
-			if (R > 0) { PDM_init(); R--; }
+			preprocess(); pre_en = false; progRate = opt_progress;
+			if (pdm_rounds > 0) { R = pdm_rounds; PDM_init(); R--; }
 		}
 		status = search();
 		restarts++;
@@ -1533,6 +1501,7 @@ void ParaFROST::print_stats(bool p)
 			remainedVars, nClauses(), nBins(), nLiterals(),
 			starts,
 			learnts.size(), nGlues(), nLearntLits(), learnts.size() == 0 ? 0 : nLearntLits() / (float)learnts.size());
+		progRate += progRate / 4;
 	}
 }
 
@@ -1577,31 +1546,47 @@ void ParaFROST::print_model()
 {
 	printf("v ");
 	for (int i = 0; i < removed.size(); i++) { // print any saved assignments
+		sp->frozen[V2IDX(removed[i])] = true; // trail may not be reset
 		printf("%d ", ISNEG(removed[i]) ? -int(ABS(removed[i])) : int(ABS(removed[i])));
 	}
 	if (mapped) { // recover mapped variables
 		assert(sp->trail_size < reverseVars.size() - 1);
 		for (int i = 0; i < sp->trail_size; i++) {
 			int v = reverseVars[ABS(sp->trail[i])];
-			printf("%d ", ISNEG(sp->trail[i]) ? -int(v - 1) : int(v - 1));
+			if (!sp->frozen[v - 1]) printf("%d ", ISNEG(sp->trail[i]) ? -v : v);
 		}
 	}
 	else {
 		for (int i = 0; i < sp->trail_size; i++) {
-			printf("%d ", ISNEG(sp->trail[i]) ? -int(ABS(sp->trail[i])) : int(ABS(sp->trail[i])));
+			if (!sp->frozen[V2IDX(sp->trail[i])]) 
+				printf("%d ", ISNEG(sp->trail[i]) ? -int(ABS(sp->trail[i])) : int(ABS(sp->trail[i])));
 		}
 	}
-	printf("\nc |\n");
 }
 
 void ParaFROST::wrapUp(const CNF_STATE &status)
 {
 	// print results
-	printf("c |--------------------------------------------------------------------------------------|\nc |\n");
+	if (verbose >= 1) printf("c |--------------------------------------------------------------------------------------|\nc |\n");
+	double simp_t = (double)timer->vo + timer->ot + timer->bve + timer->hse + timer->bce + timer->hre;
+	double sol_t = (double)timer->pdm + timer->red + timer->bcp + timer->bj;
 	if (status == SAT) {
-		cout << "c |\ns SATISFIABLE" << endl;
-		if (model_en) print_model();
+		if (!quiet_en) printf("c |\n");
+		printf("%s: ", path.c_str()); printf("s SATISFIABLE (time=%.3f)\n", simp_t + sol_t);
+		if (!quiet_en) printf("c |\n");
+		if (model_en) {
+			print_model();
+			if (!quiet_en) printf("\nc |\n");
+		}
 	}
-	else if (status == UNSAT) cout << "c |\ns UNSATISFIABLE" << endl;
+	else if (status == UNSAT) {
+		if (!quiet_en) printf("c |\n");
+		printf("%s: ", path.c_str()); printf("s UNSATISFIABLE (time=%.3f)\n", simp_t + sol_t);
+		if (!quiet_en) printf("c |\n");
+	}
+	else if (status == TERMINATE) {
+		printf("%s: ", path.c_str()); printf("s UNKNOWN (time=%.3f)\n", simp_t + sol_t);
+		if (!quiet_en) printf("c |\n");
+	}
 	if (perf_en) print_reports();
 }

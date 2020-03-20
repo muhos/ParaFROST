@@ -37,7 +37,10 @@ inline uint32 toLiteral(char* str)
 		cout << "c | Error --> expected a digit after (-) sign." << endl;
 		exit(EXIT_FAILURE);
 	}
-	if (cnf_stats.max_org_vars < v) cnf_stats.max_org_vars = v;
+	if (v > nOrgVars()) {
+		cout << "c | Error --> too many variables." << endl;
+		exit(EXIT_FAILURE);
+	}
 	return V2D(v) | sign;
 }
 
@@ -67,10 +70,10 @@ inline void read_header(uVector1D& header, char* tmp, char* line)
 	assert(numbers == 2);
 }
 
-inline void toLits(uint32* clause, char* tmp, char* line, int& len)
+inline void toLits(uint32* c, char* tmp, char* line, int& len)
 {
 	char digits = 0;
-	int clause_len = 0;
+	int c_sz = 0;
 	while (*line)
 	{
 		if (isdigit(*line) || *line == '-') *(tmp + digits++) = *line;
@@ -78,36 +81,36 @@ inline void toLits(uint32* clause, char* tmp, char* line, int& len)
 		{
 			assert(digits <= CHAR_MAX && digits <= LIT_LEN);
 			*(tmp + digits) = '\0';
-			clause[clause_len++] = toLiteral(tmp);
+			c[c_sz++] = toLiteral(tmp);
 			digits = 0;
 		}
 		line++;
 	}
-	assert(clause_len > 0 && clause_len <= len);
-	len = clause_len;
+	assert(c_sz > 0 && c_sz <= len);
+	len = c_sz;
 }
 
-inline bool checkClause(uint32* clause, int& len)
+inline bool checkClause(uint32* c, int& len)
 {
 	if (len == 1) return true;
 	else if (len == 2) {
-		if ((*(clause + 1) ^ *clause) == NEG_SIGN) // clause is a tautology
+		if ((*(c + 1) ^ *c) == NEG_SIGN) // c is a tautology
 			return false;
-		if (*(clause + 1) == *clause) len = 1;
-		else if (*(clause + 1) <  *clause) Swap(clause + 1, clause);
-		assert(clause[0] <= clause[1]);
+		if (*(c + 1) == *c) len = 1;
+		else if (*(c + 1) <  *c) Swap(c + 1, c);
+		assert(c[0] <= c[1]);
 		return true;
 	}
-	Sort(clause, len);
+	Sort(c, len);
 	// check if duplicates exist before doing rewriting
-	int clause_len = 1;
+	int c_sz = 1;
 	for (int l = 1; l < len; l++) {
-		if ((clause[l - 1] ^ clause[l]) == NEG_SIGN) // clause is a tautology
+		if ((c[l - 1] ^ c[l]) == NEG_SIGN) // c is a tautology
 			return false;
-		if (clause[l - 1] != clause[l])
-			clause[clause_len++] = clause[l];
+		if (c[l - 1] != c[l])
+			c[c_sz++] = c[l];
 	}
-	len = clause_len;
+	len = c_sz;
 	return true;
 }
 
