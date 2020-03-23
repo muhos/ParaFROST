@@ -1,0 +1,50 @@
+\documentclass[conference]{IEEEtran}
+\IEEEoverridecommandlockouts
+\usepackage{cite}
+\usepackage{amsmath,amssymb,amsfonts}
+\usepackage{algorithmic}
+\usepackage{graphicx}
+\usepackage{textcomp}
+\usepackage{xcolor}
+\usepackage{xspace}
+
+%
+\newcommand{\parafrost}{\textsc{ParaFROST}\xspace}
+\newcommand{\minisat}{\textsc{MiniSat}\xspace}
+\newcommand{\glucose}{\textsc{Glucose}\xspace}
+\newcommand{\lingeling}{\textsc{Lingeling}\xspace}
+\newcommand{\chaff}{\textsc{Chaff}\xspace}
+\newcommand{\grasp}{\textsc{Grasp}\xspace}
+\newcommand{\berkmin}{\textsc{BerkMin}\xspace}
+
+% mute the stupid IEEEtrans bibtex error!
+\makeatletter
+\def\endthebibliography{%
+	\def\@noitemerr{\@latex@warning{Empty `thebibliography' environment}}%
+	\endlist
+}
+\makeatother
+
+\begin{document}
+
+\title{ParaFROST at the SAT Race 2020
+\thanks{This work is part of the GEARS project with project number TOP2.16.044, which is (partly) financed by the Netherlands Organisation for Scientific Research (NWO).}
+}
+
+\author{\IEEEauthorblockN{Muhammad Osama and Anton Wijs}
+	\IEEEauthorblockA{Department of Mathematics and Computer Science\\
+		Eindhoven University of Technology, 5600 MB Eindhoven, The Netherlands\\
+	}
+}
+
+\maketitle
+
+\section{Introduction}
+This paper presents a brief description to our solver \parafrost{} which stands for \emph{Parallel Formal Reasoning Of SaTisfiability}. Our solver is based on state-of-the-art CDCL search~\cite{grasp,minisat,glucose}, integrated with preprocessing as presented in SIGmA (SAT sImplification on GPU Architectures)~\cite{sigmaTacas,sigmaIfm} and a new technique called Parallel Decision Making (PDM)~\cite{pdcl}. The submitted version only allows a single-threaded CPU execution.
+
+\parafrost provides easy-to-use infrastructure for SAT solving and/or preprocessing with optimized data structures for both CPU/GPU architectures, and fine-tuned heuristic parameters. The \emph{Parallel} keyword in \parafrost intuitively means that SAT simplifications can be fully executed on variables in parallel as described in~\cite{sigmaTacas} using the Least Constrained Variable Elections (LCVE) algorithm while periodically, via the PDM procedure~\cite{pdcl}, the solver is capable of making decisions that can be assigned and propagated in parallel as well. Choosing variables to preprocess or decisions relies heavily on \emph{freezing} (that is where FROST originated) mutually independent variables according to some logical properties.  
+%========== references ===========
+\bibliographystyle{IEEEtran}
+\bibliography{IEEEabrv,pf_refs}
+
+\end{document}
