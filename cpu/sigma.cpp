@@ -20,7 +20,7 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 /* Simp Options */
 static BOOL_OPT opt_simp_perf_en("perf-simp", "print simplifier full performance report", true);
-static BOOL_OPT opt_ve_en("bve", "enable bounded variable elimination (BVE)", false);
+static BOOL_OPT opt_ve_en("bve", "enable bounded variable elimination (BVE)", true);
 static BOOL_OPT opt_sub_en("sub", "enable hybrid subsumption elimination (SUB) with high freezing temperature", false);
 static BOOL_OPT opt_ve_plus_en("bve+", "enable (BVE + SUB) untill no literals can be removed", true);
 static BOOL_OPT opt_bce_en("bce", "enable blocked clause elimination", false);
@@ -35,7 +35,7 @@ void ParaFROST::opt_simp()
 {
 	assert(pre_en);
 	simp_perf_en = opt_simp_perf_en;
-	ve_en = opt_ve_en;
+	ve_en = opt_ve_en || opt_ve_plus_en;
 	ve_plus_en = opt_ve_plus_en;
 	sub_en = opt_sub_en;
 	bce_en = opt_bce_en;
@@ -45,7 +45,8 @@ void ParaFROST::opt_simp()
 	mu_pos = opt_mu_pos;
 	mu_neg = opt_mu_neg;
 	cnf_free_freq = opt_cnf_free;
-	if (!phases && (ve_en || ve_plus_en)) phases = 1; // at least 1 phase needed for BVE(+)
+	if (!phases && ve_en) phases = 1; // at least 1 phase needed for BVE(+)
+	if (phases && !ve_en) phases = 0;
 }
 
 void ParaFROST::hist(const SCNF& cnf, bool rst)
@@ -89,7 +90,8 @@ void ParaFROST::attachClause(S_REF c, const bool& added)
 	assert(c->size());
 	assert(c->status() == UNKNOWN);
 	if (added) {
-		if (c->size() == 1) enqueue(c->w0_lit());
+		if (c->size() == 1 && sol->assign(V2IDX(**c)) == UNDEFINED) 
+			enqueue(**c);
 		else {
 			c->set_status(LEARNT);
 			c->calcSig();
@@ -111,11 +113,6 @@ void ParaFROST::attachClause(S_REF c, const bool& added)
 		scnf[cnf_stats.global_n_cls++] = c;
 		cnf_stats.global_n_lits += c->size();
 	}
-	// attach to OT
-	for (LIT_POS l = 0; l < c->size(); l++) {
-		assert(c->lit(l));
-		ot[c->lit(l)].push(c);
-	}
 }
 
 void ParaFROST::reattachClause(B_REF c)
@@ -129,7 +126,7 @@ void ParaFROST::reattachClause(B_REF c)
 	wt[FLIP(*(*c + 1))].push(WATCH(c, **c));
 	if (sz == 2) {
 		cnf_stats.global_n_bins++;
-		bins.push(c);
+		bins.push(c); // for pdm_init histogram
 	}
 	else {
 		c->set_status(ORIGINAL);
@@ -157,7 +154,10 @@ void ParaFROST::shrinkCNF(bool countVars)
 			}
 		}
 		for (uint32 v = 0; v < nOrgVars(); v++) {
-			if (!sp->seen[v]) cnf_stats.global_n_del_vars++;
+			if (!sp->seen[v]) {
+				cnf_stats.global_n_del_vars++;
+				if (!sp->lock[v] && !pv->melted[v]) removed.push(V2D(v + 1)); // disappeared
+			}
 			else sp->seen[v] = 0;
 		}
 	}
@@ -199,7 +199,8 @@ void ParaFROST::strengthen(S_REF c, const uint32& self_lit)
 		write_proof(*c, c->size());
 		write_proof(0);
 	}
-	if (c->size() == 1) enqueue(c->w0_lit());
+	if (c->size() == 1 && sol->assign(V2IDX(**c)) == UNDEFINED) 
+		enqueue(**c);
 }
 
 bool ParaFROST::propClause(S_REF c, const uint32& f_assign)
@@ -241,6 +242,8 @@ CNF_STATE ParaFROST::prop()
 			assert(c->size());
 			if (c->status() == DELETED || propClause(c, f_assign)) continue; // clause satisfied
 			// clause is unit or conflict
+			// Note: attach & strengthen don't check for conflict before enqueue
+			if (c->size() == 0) return UNSAT;  
 			if (c->size() == 1) { 
 				assert(c->w0_lit());
 				uint32 unit = c->w0_lit(), unit_idx = V2IDX(unit);
@@ -288,6 +291,8 @@ void ParaFROST::create_ot(bool rst)
 
 void ParaFROST::_simplify()
 {
+	C_REF ref = BCP();
+	assert(ref == NULL); // at this point BCP cannot return a conflict!
 	if (sp->trail_size == sp->trail_offset) return;
 	assert(sp->trail_size > 0 && DL() == ROOT_LEVEL);
 	assert(sp->trail_head == sp->trail_size);
@@ -330,60 +335,70 @@ void ParaFROST::_simplify()
 
 void ParaFROST::extractBins()
 {
-	if (nOrgBins()) {
-		bins.clear(); // for garbage collection
-		bins.incMem(nBins());
-		uint32 nbins = 0;
-		for (uint32 v = 0; v < nOrgVars(); v++) {
-			uint32 p = V2D(v + 1), n = NEG(p);
-			WL& posBins = wt[n];
-			for (int j = 0; j < posBins.size(); j++) {
-				assert(posBins[j].c_ref != NULL);
-				B_REF c = (B_REF)posBins[j].c_ref;
-				if (c->size() == 2 && !c->orgBin() && !c->molten()) { // collect learnt bins
-					bins[nbins++] = c;
-					c->melt();
+	if (pre_delay) {
+		if (nOrgBins()) {
+			bins.clear(), bins.incMem(nBins());  // for garbage collection
+			uint32 nbins = 0;
+			for (uint32 v = 0; v < nOrgVars(); v++) {
+				uint32 p = V2D(v + 1), n = NEG(p);
+				WL& posBins = wt[n];
+				for (int j = 0; j < posBins.size(); j++) {
+					assert(posBins[j].c_ref != NULL);
+					B_REF c = (B_REF)posBins[j].c_ref;
+					if (c->size() == 2 && !c->orgBin() && !c->molten()) { // collect learnt bins
+						bins[nbins++] = c;
+						c->melt();
+					}
+					if (c->orgBin()) {
+						assert(c->status() == UNKNOWN);
+						S_REF sc = new SCLAUSE();
+						sc->copyLitsFrom(*c, 2);
+						attachClause(sc, false);
+						c->reset_orgBin();
+						c->melt();
+						bins[nbins++] = c;
+					}
 				}
-				if (c->orgBin()) {
-					assert(c->status() == UNKNOWN);
-					S_REF sc = new SCLAUSE();
-					sc->copyLitsFrom(*c, 2);
-					attachClause(sc, false);
-					c->reset_orgBin();
-					c->melt();
-					bins[nbins++] = c;
+				WL& negBins = wt[p];
+				for (int j = 0; j < negBins.size(); j++) {
+					assert(negBins[j].c_ref != NULL);
+					B_REF c = (B_REF)negBins[j].c_ref;
+					if (c->size() == 2 && !c->orgBin() && !c->molten()) {
+						bins[nbins++] = c;
+						c->melt();
+					}
+					if (c->orgBin()) {
+						assert(c->status() == UNKNOWN);
+						S_REF sc = new SCLAUSE();
+						sc->copyLitsFrom(*c, 2);
+						attachClause(sc, false);
+						c->reset_orgBin();
+						c->melt();
+						bins[nbins++] = c;
+					}
 				}
 			}
-			WL& negBins = wt[p];
-			for (int j = 0; j < negBins.size(); j++) {
-				assert(negBins[j].c_ref != NULL);
-				B_REF c = (B_REF)negBins[j].c_ref;
-				if (c->size() == 2 && !c->orgBin() && !c->molten()) {
-					bins[nbins++] = c;
-					c->melt();
-				}
-				if (c->orgBin()) {
-					assert(c->status() == UNKNOWN);
-					S_REF sc = new SCLAUSE();
-					sc->copyLitsFrom(*c, 2);
-					attachClause(sc, false);
-					c->reset_orgBin();
-					c->melt();
-					bins[nbins++] = c;
-				}
-			}
+			for (int i = 0; i < nbins; i++) delete bins[i];
 		}
-		for (int i = 0; i < nbins; i++) delete bins[i];
-		bins.clear(true);
 	}
+	else {
+		for (int i = 0; i < bins.size(); i++) {
+			if (bins[i]->orgBin()) {
+				assert(bins[i]->status() == UNKNOWN);
+				S_REF sc = new SCLAUSE();
+				sc->copyLitsFrom(*bins[i], 2);
+				attachClause(sc, false);
+			}
+			delete bins[i];
+		}
+	}
+	bins.clear(true);
 	wt.clear(true);
 }
 
 bool ParaFROST::awaken()
 { 
-	// bcp/simplify any remained facts at root level
-	if (BCP() != NULL) return false;
-	_simplify(); 
+	if (pre_delay) _simplify(); // bcp/simplify any remained facts at root level
 	// alloc memory for occur. table
 	size_t maxVars = V2D(size_t(nOrgVars()) + 1);
 	double ot_cap = (double)maxVars * sizeof(S_REF);
@@ -408,8 +423,7 @@ bool ParaFROST::awaken()
 	scnf.incMem(scnf_sz);
 	cnf_stats.global_n_cls = 0;
 	cnf_stats.global_n_lits = 0;
-	// append bins (must done first before freeing any clause)
-	extractBins();
+	extractBins(); 
 	// append k-size orgs
 	for (int i = 0; i < orgs.size(); i++) {
 		assert(orgs[i]->size() > 2);
@@ -441,9 +455,9 @@ void ParaFROST::preprocess()
 	/********************************/
 	pv->mu_inc = 0;
 	int64 lits_before = nLiterals();
-	int64 lits_removed = INT64_MAX;
+	int64 lits_diff = INT64_MAX;
 	int phase = 0;
-	while (lits_removed >= LIT_REM_THR && phase < phases) {
+	while (lits_diff >= LIT_REM_THR && phase < phases) {
 		if (verbose > 1) cout << "c |\t\tPhase-" << phase << " Variable Elections" << endl;
 		LCVE(); 
 		if (pv->nPVs <= MIN_PARALLEL_VARS) {
@@ -454,19 +468,19 @@ void ParaFROST::preprocess()
 			break;
 		}
 		VE(); // perform an extended BVE
-		if (phase % cnf_free_freq == 0) shrinkCNF();
-		cnt_all(); // count number of remaining literals & clauses
-		lits_removed = (lits_before > cnf_stats.n_lits_after) ? lits_before - cnf_stats.n_lits_after : cnf_stats.n_lits_after - lits_before;
-		if (phase >= 2 && cnf_stats.n_lits_after > lits_before) {
+		cnt_lits(); // count number of remaining literals & clauses
+		if (phase >= 2 && cnf_stats.n_lits_after >= lits_before) {
 			if (verbose > 1) {
 				cout << "c | WARNING: literals are increasing --> exit procedure." << endl;
 				cout << "c |-----------------------------------------------------------------|" << endl;
 			}
 			break;
 		}
-		lits_before = cnf_stats.n_lits_after;
+		lits_diff = (lits_before > cnf_stats.n_lits_after) ? lits_before - cnf_stats.n_lits_after : cnf_stats.n_lits_after - lits_before;
+		if (lits_diff && phase % cnf_free_freq == 0) shrinkCNF();
 		phase++;
 		pv->mu_inc++; // to increase the temperature
+		lits_before = cnf_stats.n_lits_after;
 		if (verbose > 1) cout << "c |-----------------------------------------------------------------|" << endl;
 	} // end-of-while
 	/********************************/
@@ -474,12 +488,8 @@ void ParaFROST::preprocess()
 	/********************************/
 	if (sub_en | hre_en | bce_en | all_en) {
 		if (verbose > 1) cout << "c | 2nd-Stage Clause Eliminations.." << endl;
-		int max_occurs_pos = mu_pos, max_occurs_neg = mu_neg;
-		while (max_occurs_pos < CE_OCCURS_POS_LMT && max_occurs_neg < CE_OCCURS_NEG_LMT) {
-			pv->mu_inc++;
-			max_occurs_pos <<= pv->mu_inc;
-			max_occurs_neg <<= pv->mu_inc;
-		}
+		int t_p = mu_pos, t_n = mu_neg;
+		while (t_p < CE_POS_LMT && t_n < CE_NEG_LMT) pv->mu_inc++, t_p <<= pv->mu_inc, t_n <<= pv->mu_inc;
 		LCVE();
 		if (all_en | sub_en) SUB();
 		if (all_en | bce_en) BCE();
@@ -491,14 +501,13 @@ void ParaFROST::preprocess()
 	ot.clear(true);
 	shrinkCNF(true); 
 	print_pstats();
-	uint32 orgVars = nOrgVars();
-	cnf_stats.n_org_vars -= nRemVars();
 	cnf_stats.n_org_cls = nClauses();
 	cnf_stats.n_org_lits = nLiterals();
 	if (nRemVars() - simpVars != 0) { // variables are removed by preprocess? then map
 		mapped = true;
-		mappedVars.incMem(orgVars + 1, 0);
-		reverseVars.incMem(orgVars + 1, 0);
+		mappedVars.incMem(nOrgVars() + 1, 0);
+		reverseVars.incMem(nOrgVars() + 1, 0);
+		cnf_stats.n_org_vars -= nRemVars(); // update nr. variables
 		cleanSlate();
 	}
 	else { // no mapping is needed
@@ -609,19 +618,15 @@ void ParaFROST::bve()
 			pv->melted[x] = true;
 			removed.push(V2D(x + 1));
 		}
-		else if (gateReasoning_x(p, ot[p], ot[n])) {
+		else if (gateReasoning_x(p, ot[p], ot[n]) || mayResolve_x(x + 1, ot[p], ot[n])) {
 			pv->melted[x] = true;
 			removed.push(V2D(x + 1));
 		}
-		else if (mayResolve_x(x + 1, ot[p], ot[n])) {
-			pv->melted[x] = true;
-			removed.push(V2D(x + 1));
-		}
-		if (prop() == UNSAT) {
-			wrapUp(UNSAT);
-			this->~ParaFROST();
-			exit(EXIT_SUCCESS);
-		}
+	}
+	if (prop() == UNSAT) {
+		wrapUp(UNSAT);
+		this->~ParaFROST();
+		exit(EXIT_SUCCESS);
 	}
 	timer->stop();
 	timer->bve += timer->CPU_time();
@@ -648,7 +653,7 @@ void ParaFROST::VE()
 			pv->nPVs = n;
 			if (pv->nPVs == 0) {
 				if (verbose > 1) cout << "c | Nothing left to eliminate --> terminate procedure." << endl;
-				return;
+				break;
 			}
 			// HSE 
 			if (verbose > 1) cout << "c | HSE-ing non-eliminated variables..";
@@ -681,11 +686,11 @@ void ParaFROST::HSE()
 		register uint32 x = pv->PVs[v];
 		uint32 p = V2D(x + 1), n = NEG(p);
 		if (!pv->melted[x]) self_sub_x(p, ot[p], ot[n]);
-		if (prop() == UNSAT) {
-			wrapUp(UNSAT);
-			this->~ParaFROST();
-			exit(EXIT_SUCCESS);
-		}
+	}
+	if (prop() == UNSAT) {
+		wrapUp(UNSAT);
+		this->~ParaFROST();
+		exit(EXIT_SUCCESS);
 	}
 	timer->stop();
 	timer->hse += timer->CPU_time();
@@ -700,16 +705,16 @@ void ParaFROST::SUB()
 		assert(!pv->melted[x]);
 		uint32 p = V2D(x + 1), n = NEG(p);
 		self_sub_x(p, ot[p], ot[n]);
-		if (prop() == UNSAT) {
-			wrapUp(UNSAT);
-			this->~ParaFROST();
-			exit(EXIT_SUCCESS);
-		}
+	}
+	if (prop() == UNSAT) {
+		wrapUp(UNSAT);
+		this->~ParaFROST();
+		exit(EXIT_SUCCESS);
 	}
 	timer->stop();
 	timer->hse += timer->CPU_time();
 	if (verbose > 1) cout << " ==> done." << endl;
-	if (verbose > 1) { cnt_all(); printf("c |\t\t\t SUB Reductions\n"); logReductions(); }
+	if (verbose > 1) { cnt_cls(); printf("c |\t\t\t SUB Reductions\n"); logReductions(); }
 }
 
 void ParaFROST::BCE()
@@ -725,7 +730,7 @@ void ParaFROST::BCE()
 	timer->stop();
 	timer->bce += timer->CPU_time();
 	if (verbose > 1) cout << " ==> done." << endl;
-	if (verbose > 1) { cnt_all(); printf("c |\t\t\t BCE Reductions\n"); logReductions(); }
+	if (verbose > 1) { cnt_cls(); printf("c |\t\t\t BCE Reductions\n"); logReductions(); }
 }
 
 void ParaFROST::HRE()
@@ -757,7 +762,7 @@ void ParaFROST::HRE()
 	timer->stop();
 	timer->hre += timer->CPU_time();
 	if (verbose > 1) cout << " ==> done." << endl;
-	if (verbose > 1) { cnt_all(); printf("c |\t\t\t HRE Reductions\n"); logReductions(); }
+	if (verbose > 1) { cnt_cls(); printf("c |\t\t\t HRE Reductions\n"); logReductions(); }
 }
 
 bool ParaFROST::consistent(const SCNF& cnf, const OT& ot)

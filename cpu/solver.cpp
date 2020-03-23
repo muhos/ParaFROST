@@ -108,7 +108,7 @@ int64 getTotalSystemMemory()
 }
 void set_timeout(int time_limit)
 {
-	printf("WARNING -> Timeout not supported on Windows.\n");
+	printf("C | WARNING - timeout not supported on Windows.\n");
 }
 #endif
 // interrupt handlers
@@ -213,6 +213,7 @@ ParaFROST::ParaFROST(const string& path) :
 		free_mem(); exit(EXIT_SUCCESS);
 	}
 	if (parse_only_en) { free_mem(); exit(EXIT_SUCCESS); }
+	simplify_top();
 	if (verbose == 1) {
 		printf("c |-------------------------------------- Progress --------------------------------------|\n");
 		if (SH == 2) {
@@ -744,9 +745,59 @@ void ParaFROST::simplify()
 	lrn.simp_props = nLiterals() + nLearntLits();
 	timer->stop();
 	timer->red += timer->CPU_time();
-	assert(consistent(learnts, wt));
 	if (verbose >= 2) printf(" ==> done\n");
-	//print(wt);
+}
+
+void ParaFROST::simplify_top()
+{
+	if (sp->trail_size == sp->trail_offset) return;
+	if (verbose >= 2) printf("c | Simplifying CNF..");
+	assert(sp->trail_offset == 0);
+	assert(sp->trail_head == sp->trail_size);
+	assert(nClauses() > 0);
+	assert(sp->trail_size > 0 && DL() == ROOT_LEVEL);
+	assert(sol->assign(V2IDX(sp->trail[sp->trail_size - 1])) != UNDEFINED);
+	timer->start();
+	// simplify orgs
+	cnf_stats.global_n_cls = 0;
+	for (int i = 0; i < orgs.size(); i++) {
+		B_REF c = orgs[i];
+		if (c->satisfied(assigns)) detachClause(c);
+		else {
+			shrinkClause(c);
+			if (c->size() > 2) orgs[cnf_stats.global_n_cls++] = c;
+			else { c->flag_orgBin(); c->set_status(UNKNOWN); bins.push(c); }
+		}
+	}
+	orgs.resize(cnf_stats.global_n_cls);
+	// simplify bins
+	cnf_stats.global_n_bins = 0;
+	for (int i = 0; i < bins.size(); i++) {
+		B_REF c = bins[i];
+		if (c->satisfied(assigns)) {
+			remWatch(wt[FLIP(c->w0_lit())], c);
+			remWatch(wt[FLIP(c->w1_lit())], c);
+			delete c;
+		}
+		else bins[cnf_stats.global_n_bins++] = c;
+	}
+	bins.resize(cnf_stats.global_n_bins);
+	// remove root-level watch lists
+	for (int i = sp->trail_offset; i < sp->trail_size; i++) {
+		uint32 assign = sp->trail[i];
+		wt[assign].clear(true);
+		wt[FLIP(assign)].clear(true);
+		uint32 assign_idx = V2IDX(assign);
+		if (var_heap->has(assign_idx)) var_heap->remove(assign_idx); // remove assign from the heap
+		if (pre_en) removed.push(assign); // save in case preprocessing mapped variables
+	}
+	cnf_stats.global_n_del_vars += (sp->trail_size - sp->trail_offset);
+	sp->trail_offset = sp->trail_size;
+	timer->stop();
+	timer->red += timer->CPU_time();
+	assert(consistent(bins, wt));
+	assert(consistent(orgs, wt));
+	if (verbose >= 2) printf(" ==> done\n");
 }
 
 void ParaFROST::enqueue(const uint32& assign, const int& pLevel, const G_REF src)
@@ -1064,18 +1115,14 @@ void ParaFROST::backJump(const int& bt_level) {
 void ParaFROST::remWatch(WL& ws, const G_REF gc)
 {
 	if (ws.size() == 0) return;     
-	else if (ws.size() == 1) {
-		assert(ws[0].c_ref == gc);
-		ws[0].reset();
-		ws.clear();
-		return;
-	}
-	int c_idx = 0;
-	while (ws[c_idx].c_ref != gc) c_idx++;
-	assert(c_idx < ws.size());
-	while (c_idx < ws.size() - 1) {
-		ws[c_idx] = ws[c_idx + 1];
-		c_idx++;
+	if (ws.size() > 1) {
+		int c_idx = 0;
+		while (ws[c_idx].c_ref != gc) c_idx++;
+		assert(c_idx < ws.size());
+		while (c_idx < ws.size() - 1) {
+			ws[c_idx] = ws[c_idx + 1];
+			c_idx++;
+		}
 	}
 	ws.pop();
 }
@@ -1230,7 +1277,7 @@ C_REF ParaFROST::BCP()
 
 CNF_STATE ParaFROST::decide()
 {
-	if (R > 0 && ((int)nOrgVars() - sp->trail_size) > ref_vars) { PDM(); R--; }
+	if (R > 0 && ((int)nOrgVars() - sp->trail_size) > ref_vars) PDM();
 	if (sp->trail_size - sp->trail_head == 0) {
 		uint32 dec = UNKNOWN;
 		int cand = UNDEFINED;
@@ -1340,10 +1387,8 @@ CNF_STATE ParaFROST::search()
 
 void ParaFROST::solve()
 {
-	simplify(); 
-	if (pre_en && pre_delay == 0) {	preprocess(); pre_en = false; }
-	else if (units_f) bins.clear(); // bins are no longer valid when simplified
-	if (pdm_rounds > 0) { R = pdm_rounds; PDM_init(); R--; }
+	if (pre_en && !pre_delay) {	preprocess(); pre_en = false; }
+	PDM_init();
 	CNF_STATE status = UNSOLVED;
 	double rest_fact = 1.0;
 	while (status == UNSOLVED) {
@@ -1353,8 +1398,8 @@ void ParaFROST::solve()
 		}
 		// special restart for preprocessing
 		if (pre_en && restarts >= 1 && restarts % pre_delay == 0) {
-			preprocess(); pre_en = false; progRate = opt_progress;
-			if (pdm_rounds > 0) { R = pdm_rounds; PDM_init(); R--; }
+			preprocess(); PDM_init();
+			pre_en = false; progRate = opt_progress;
 		}
 		status = search();
 		restarts++;

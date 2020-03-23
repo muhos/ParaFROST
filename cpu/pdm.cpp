@@ -87,7 +87,9 @@ void ParaFROST::pumpFrozen()
 
 void ParaFROST::PDM_init()
 {
-	if (verbose >= 2) printf("c | Electing decisions..\n");
+	if (!pdm_rounds) return;
+	R = pdm_rounds;
+	if (verbose >= 2) printf("c | Electing decisions (R=%d)..\n", R);
 	stats.pdm_calls++;
 	var_order(); // initial variable ordering
 	timer->start();
@@ -135,6 +137,7 @@ void ParaFROST::PDM_init()
 	while (f != f_end) *f++ = 0;
 	// update pdm counter
 	ref_vars = nOrgVars() - nPDs;
+	R--;
 	stats.n_pds += nPDs;
 	// FUD Prioritization
 	if (fdp_en) pumpFrozen();
@@ -176,6 +179,7 @@ void ParaFROST::PDM()
 	bool* f = sp->frozen, * f_end = f + nOrgVars();
 	while (f != f_end) *f++ = 0;
 	ref_vars = nOrgVars() - nPDs;
+	R--;
 	stats.n_pds += nPDs;
 	timer->stop();
 	timer->pdm += timer->CPU_time();

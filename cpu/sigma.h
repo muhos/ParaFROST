@@ -24,8 +24,8 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 #define LIT_REM_THR 10
 #define MIN_PARALLEL_VARS 10
-#define CE_OCCURS_POS_LMT 256
-#define CE_OCCURS_NEG_LMT 256
+#define CE_POS_LMT 256
+#define CE_NEG_LMT 256
 
 /* Elimination sub-routines */
 

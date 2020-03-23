@@ -402,18 +402,9 @@ typedef SCLAUSE* S_REF; // ref to SCLAUSE
 struct WATCH {
 	G_REF c_ref;
 	uint32  blocker;
-	WATCH() {
-		c_ref = NULL;
-		blocker = 0;
-	}
-	void reset() {
-		c_ref = NULL;
-		blocker = 0;
-	}
-	WATCH(G_REF ref, uint32 lit) {
-		c_ref = ref;
-		blocker = lit;
-	}
+	WATCH() { c_ref = NULL; blocker = 0; }
+	WATCH(G_REF ref, uint32 lit) { c_ref = ref; blocker = lit; }
+	~WATCH(){ c_ref = NULL; blocker = 0; }
 };
 /*****************************************************/
 // define types for new structures
@@ -527,6 +518,7 @@ public:
 	inline void interrupt(void) { intr = true; }
 	inline bool interrupted(void) { return intr; }
 	inline void write_proof(const Byte& byte) { proofFile << byte; }
+	inline double drand(void) const { return ((double)rand() / (double)RAND_MAX); };
 	inline void incDL(void) { trail_sz.push(sp->trail_size); }
 	inline int DL(void) const { return trail_sz.size(); }
 	inline void clHist(const G_REF gc) {
@@ -563,7 +555,6 @@ public:
 		}
 		return lbd;
 	}
-	inline double drand(void) const { return ((double)rand() / (double)RAND_MAX); };
 	inline void init(bool re = true) {
 		if (SH == 2) {
 			maxConflicts = UNKNOWN;
@@ -602,6 +593,7 @@ public:
 	int simplify(BCNF&);
 	int simplify(LCNF&);
 	void simplify(void);
+	void simplify_top(void);
 	void solve(void);
 	CNF_STATE CNF_parser(const string&);
 	CNF_STATE search(void);
@@ -684,7 +676,7 @@ public:
 			else occurs[V2IDX(c->lit(i))].ps++;
 		}
 	}
-	inline void cnt_all()
+	inline void cnt_cls()
 	{
 		cnf_stats.n_cls_after = 0;
 		cnf_stats.n_lits_after = 0;
