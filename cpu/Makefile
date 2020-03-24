@@ -1,7 +1,7 @@
 ################################################################################
 #
 # Muhammad Osama Mahmoud, Eindhoven University of Technology (TU/e).
-# Mathematics and Computer Science Department, MDSE, SET Group.
+# Mathematics and Computer Science Department, SET cluster.
 # GEARS Project, All rights reserved.
 #
 ################################################################################
@@ -22,7 +22,7 @@ HOST_COMPILER ?= g++
 # target size
 TARGET_SIZE := $(shell getconf LONG_BIT)
 
-# compiler  flags
+# compiler flags
 MTHREADS  := -pthreads
 CCFLAGS   := -m${TARGET_SIZE} -std=c++14 
 LDFLAGS   := 
@@ -51,28 +51,26 @@ all: build
 
 build: parafrost
 
-sigma.o:sigma.cpp
+pfsimp.o:pfsimp.cpp
 	$(EXEC) $(HOST_COMPILER) $(INCLUDES) $(CCFLAGS) -o $@ -c $(WARN) $<
 
-solver.o:solver.cpp
+pfsolve.o:pfsolve.cpp
 	$(EXEC) $(HOST_COMPILER) $(INCLUDES) $(CCFLAGS) -o $@ -c $(WARN) $<
 
-pdm.o:pdm.cpp
+pfpdm.o:pfpdm.cpp
 	$(EXEC) $(HOST_COMPILER) $(INCLUDES) $(CCFLAGS) -o $@ -c $(WARN) $<
 
-args.o:args.cpp
+pfargs.o:pfargs.cpp
 	$(EXEC) $(HOST_COMPILER) $(INCLUDES) $(CCFLAGS) -o $@ -c $(WARN) $<
 
-main.o:main.cpp
+pfmain.o:pfmain.cpp
 	$(EXEC) $(HOST_COMPILER) $(INCLUDES) $(CCFLAGS) -o $@ -c $(WARN) $<
 
-parafrost: args.o pdm.o sigma.o solver.o main.o
+parafrost: pfargs.o pfsimp.o pfpdm.o pfsolve.o pfmain.o
 	$(EXEC) $(HOST_COMPILER) $(LDFLAGS) $(CCFLAGS) -o $@ $+ $(LIBRARIES)
 	$(EXEC) mkdir -p $(TARGET_ARCH)/$(TARGET_OS)/$(BUILD_TYPE)
 	$(EXEC) cp $@ $(TARGET_ARCH)/$(TARGET_OS)/$(BUILD_TYPE)
 
 clean:
-	rm -f args.o sigma.o solver.o pdm.o main.o parafrost  
+	rm -f pfargs.o pfsimp.o pfpdm.o pfsolve.o pfmain.o parafrost  
 	rm -rf $(TARGET_ARCH)/$(TARGET_OS)/$(BUILD_TYPE)/parafrost
-
-clobber: clean
