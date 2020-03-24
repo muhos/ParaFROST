@@ -58,6 +58,10 @@ Resolving the first two clauses gives the resolvent $\{a,b\}$ which is equivalen
 In this submission, a sequential implementation of all simplifications described above is provided as part of \parafrost with light workload. By default, in \parafrost the \texttt{ve+} is enabled with light number of \texttt{phases} set to 2. The \texttt{phases=<n>} option applies \texttt{ve+} for a configured number of iterations, with increasingly large values of the threshold $\mu$ (maximum occurrences of a variable). In another configuration (e.g. \parafrostHRE), the \texttt{HRE} method is enabled.
 
 All configurations delay preprocessing by a user-defined number of restarts. This gives the solver enough time to solve trivial problems (solved in few seconds), especially large formulas before simplifications are executed. The number of restarts needed to activate preprocessing is set to 50 through the option \texttt{pre-delay=<n>}. The solver supports geometric~\cite{geoRestart}, luby~\cite{minisat}, and dynamic restarts~\cite{dynamicRestarts}. However, in this submission, we enable only dynamic restarts.
+%
+%
+\section{Parallel Decision Making}
+
 %========== references ===========
 \bibliographystyle{IEEEtran}
 \bibliography{IEEEabrv,pf_refs}
