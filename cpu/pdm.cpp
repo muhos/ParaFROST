@@ -129,7 +129,7 @@ void ParaFROST::PDM_init()
 		sp->seen[v_idx] = 0;
 		if (sp->frozen[v_idx]) {
 			printf("c | Var(%d) is elected and frozen.\n", v_idx + 1);
-			printClauseSet(v_idx);
+			printWatched(v_idx);
 		}
 		assert(!sp->frozen[v_idx]);
 	}
@@ -172,7 +172,7 @@ void ParaFROST::PDM()
 		sp->seen[v_idx] = 0;
 		if (sp->frozen[v_idx]) {
 			printf("c | Var(%d) is elected and frozen.\n", v_idx + 1);
-			printClauseSet(v_idx);
+			printWatched(v_idx);
 		}
 		assert(!sp->frozen[v_idx]);
 	}

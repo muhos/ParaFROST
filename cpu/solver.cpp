@@ -163,7 +163,6 @@ struct LEARNT_CMP {
 		else return a->activity() != b->activity() ? a->activity() < b->activity() : a->size() > b->size();
 	}
 };
-
 struct LEARNT_SR {
 	bool operator () (C_REF a, C_REF b) {
 		return a->activity() > b->activity();
@@ -459,23 +458,6 @@ void ParaFROST::solver_alloc(bool re)
 	var_heap->set_allocSize(nOrgVars());
 	var_heap->alloc();
 	if (verbose >= 2) cout << "(" << (double)sysMem_sz / MBYTE << " MB) ==> done." << endl;
-}
-
-void ParaFROST::write_proof(uint32* lits, const CL_LEN& len) {
-	assert(len > 0);
-	uint32* lit = lits, * end = lits + len;
-	while (lit != end) {
-		register uint32 b = 0;
-		if (mapped) 
-			b = revLit(*lit++);
-		else
-			b = *lit++;
-		while (b > 127) {
-			write_proof(Byte(128 | (b & 127)));
-			b >>= 7;
-		}
-		write_proof(Byte(b));
-	}
 }
 
 void ParaFROST::CNF_rewriter(const string& path) {
@@ -1196,7 +1178,7 @@ C_REF ParaFROST::BCP()
 		uint32 assign = sp->trail[sp->trail_head++], assign_idx = V2IDX(assign), assign_dl = sol->level(assign_idx);
 		assert(assign > 0);
 		if (verbose >= 4) printf("c | Propagating assign(%d@%d):\n", (ISNEG(assign)) ? -int(ABS(assign)) : ABS(assign), assign_dl);
-		if (verbose >= 4) printClauseSet(assign_idx);
+		if (verbose >= 4) printWatched(assign_idx);
 		WL& ws = wt[assign];
 		if (ws.size()) {
 			WATCH* w_i = ws, * w_j = w_i, * end = w_i + ws.size();
@@ -1266,7 +1248,7 @@ C_REF ParaFROST::BCP()
 			}
 			ws.shrink(w_i - w_j);
 		}
-		if (verbose >= 4) printClauseSet(assign_idx);
+		if (verbose >= 4) printWatched(assign_idx);
 	}
 	stats.n_props += numProps;
 	lrn.simp_props -= numProps;
@@ -1344,12 +1326,12 @@ CNF_STATE ParaFROST::search()
 				lrn.adjust_conf *= lrn.adjust_inc;
 				lrn.adjust_cnt = (int)lrn.adjust_conf;
 				lrn.max_learnt_cls *= lrn.size_inc;
-				print_stats();
+				printStats();
 			}
 			else if (SH == 2) {
 				lbdQ.push(sp->learnt_lbd);
 				lbdSum += sp->learnt_lbd;
-				print_stats(nConflicts == 1 || nConflicts % progRate == 0);
+				printStats(nConflicts == 1 || nConflicts % progRate == 0);
 			}
 			// update var/clause activities
 			var_heap->VarDecayAct();
@@ -1418,29 +1400,6 @@ void ParaFROST::solver_init()
 	if (SH == 2) { lbdQ.alloc(lbdRestBase); trailQ.alloc(blockRestBase); }
 	cl_params.init();
 	init();
-}
-
-double ParaFROST::luby_seq(double y, int x) {
-	// MiniSat-based luby seq.
-	int size, seq;
-	for (size = 1, seq = 0; size < x + 1; seq++, size = (size << 1) + 1);
-	while (size - 1 != x) {
-		size = (size - 1) >> 1;
-		seq--;
-		x = x % size;
-	}
-	return pow(y, seq);
-}
-
-void ParaFROST::printClauseSet(const uint32& v_idx)
-{
-	uint32 p = V2D(v_idx + 1), n = NEG(p);
-	WL& pos_list = wt[n];
-	WL& neg_list = wt[p];
-	printf("c |                    OL of v(%d)\n", v_idx + 1);
-	printWL(pos_list);
-	printWL(neg_list);
-	printf("c |--------------- End of clause set ---------------\n");
 }
 
 bool ParaFROST::consistent(BCNF& cnf, WT& wt)
@@ -1525,29 +1484,6 @@ bool ParaFROST::consistent(LCNF& cnf, WT& wt)
 		}
 	}
 	return true;
-}
-
-void ParaFROST::print_stats()
-{
-	if (verbose == 1) {
-		int remainedVars = (int)nOrgVars() - (int)nRemVars();
-		printf("c | %9d %9d %10lld | %10lld %10lld %10lld %10lld %7.0f |\n",
-			remainedVars, nClauses(), nLiterals(),
-			nConflicts, lrn.max_learnt_cls,
-			(int64)learnts.size(), nLearntLits(), (float)nLearntLits() / learnts.size());
-	}
-}
-
-void ParaFROST::print_stats(bool p)
-{
-	if (verbose == 1 && p) {
-		int remainedVars = (int)nOrgVars() - (int)nRemVars();
-		printf("c | %9d %9d %8d %10lld %6d %9d %8d %10lld %7.0f |\n",
-			remainedVars, nClauses(), nBins(), nLiterals(),
-			starts,
-			learnts.size(), nGlues(), nLearntLits(), learnts.size() == 0 ? 0 : nLearntLits() / (float)learnts.size());
-		progRate += progRate / 4;
-	}
 }
 
 void ParaFROST::print_reports()

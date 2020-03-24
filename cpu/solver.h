@@ -126,6 +126,8 @@ public:
 		printf("c |\n");
 	}
 };
+extern ASSIGN_ST* assigns;
+extern int* levels;
 /*****************************************************/
 /*  Name:     BCLAUSE                                */
 /*  Usage:    abstract clause for solving on host    */
@@ -415,7 +417,6 @@ typedef Vec<WL> WT;
 typedef Vec<S_REF> SCNF;
 typedef Vec<S_REF> OL;
 typedef Vec<OL> OT;
-
 typedef struct
 {
 	uint32* PVs;
@@ -486,6 +487,116 @@ struct LEARN {
 		adjust_cnt = (uint32)adjust_conf;
 	}
 };
+
+//====================================================//
+//                  HELPER Functions                  //
+//====================================================//
+inline void printLit(const uint32& lit)
+{
+	printf("%d@", (ISNEG(lit)) ? -int(ABS(lit)) : ABS(lit));
+}
+inline void printVars(const uint32* arr, const int& size)
+{
+	printf("c | [");
+	for (int i = 0; i < size; i++) {
+		printf("%4d ", arr[i] + 1);
+	}
+	printf("]\n");
+}
+inline void printAssigns(const uint32* arr, const int& size)
+{
+	printf("c | [");
+	for (int i = 0; i < size; i++) {
+		printf("%4d ", ISNEG(arr[i]) ? -int(ABS(arr[i])) : ABS(arr[i]));
+	}
+	printf("]\n");
+}
+inline void printTrail(const uint32* trail, const int& size)
+{
+	for (int i = 0; i < size; i++)
+		printf("c | trail[%d] = %d@%d\n", i, ISNEG(trail[i]) ? -int(ABS(trail[i])) : ABS(trail[i]), levels[V2IDX(trail[i])]);
+}
+inline void printClause(const uVector1D& cl)
+{
+	printf("c | (");
+	for (int i = 0; i < cl.size(); i++) {
+		printf("%4d ", ISNEG(cl[i]) ? -int(ABS(cl[i])) : ABS(cl[i]));
+	}
+	printf(")\n");
+}
+inline void printLearnt(const uVector1D& cl)
+{
+	printf("c | Learnt(");
+	for (LIT_POS n = 0; n < cl.size(); n++) {
+		printf(" %d@%d ", (ISNEG(cl[n])) ? -int(ABS(cl[n])) : ABS(cl[n]), levels[V2IDX(cl[n])]);
+	}
+	printf(")\n");
+}
+template<class T>
+inline void printCNF(const Vec<T>& cnf, const int& offset = 0) {
+	printf("c |               Host CNF(sz = %d)\n", cnf.size());
+	for (int c = offset; c < cnf.size(); c++) {
+		if (cnf[c]->size() > 0) {
+			printf("c | C(%d)->", c);
+			cnf[c]->print();
+		}
+	}
+	printf("c |=================================================|\n");
+}
+inline void printWL(const WL& list) {
+	for (int i = 0; i < list.size(); i++) {
+		printf("c | ");
+		if (((B_REF)list[i].c_ref)->status() == LEARNT) {
+			C_REF cl = (C_REF)list[i].c_ref;
+			cl->print();
+		}
+		else
+			((B_REF)list[i].c_ref)->print();
+	}
+}
+inline void printWT(const WT& wt) {
+	printf("c | Negative occurs:\n");
+	for (uint32 v = 0; v < nOrgVars(); v++) {
+		uint32 p = V2D(v + 1);
+		if (wt[p].size() != 0) {
+			printf("c | Var(%d):\n", -int(v + 1));
+			printWL(wt[p]);
+		}
+	}
+	printf("c | Positive occurs:\n");
+	for (uint32 v = 0; v < nOrgVars(); v++) {
+		uint32 n = NEG(V2D(v + 1));
+		if (wt[n].size() != 0) {
+			printf("c | Var(%d):\n", v + 1);
+			printWL(wt[n]);
+		}
+	}
+}
+inline void printOL(const OL& list) {
+	for (int i = 0; i < list.size(); i++) {
+		printf("c | ");
+		list[i]->print();
+	}
+}
+inline void printOT(const OT& ot) {
+	printf("c | Positive occurs:\n");
+	for (uint32 v = 0; v < nOrgVars(); v++) {
+		uint32 p = V2D(v + 1);
+		if (ot[p].size() != 0) {
+			printf("c | Var(%d):\n", v + 1);
+			printOL(ot[p]);
+		}
+	}
+	printf("c | Negative occurs:\n");
+	for (uint32 v = 0; v < nOrgVars(); v++) {
+		uint32 n = NEG(V2D(v + 1));
+		if (ot[n].size() != 0) {
+			printf("c | Var(%d):\n", -int(v + 1));
+			printOL(ot[n]);
+		}
+	}
+}
+
 /*****************************************************/
 /*  Name:     ParaFROST                              */
 /*  Usage:    global handler for solver/simplifier   */
@@ -500,25 +611,45 @@ protected:
 	WT wt; BCNF orgs, bins; LCNF learnts;
 	VAR_HEAP* var_heap; PV* pv; SP* sp; SOL* sol;
 	G_REF* source; 
-	int* board;	uint32* tmp_stack, * simpLearnt;
+	int* board;	uint32* tmp_stack, *simpLearnt;
 	uVector1D learnt_cl, learntLits; vector1D trail_sz;
 	LEARN lrn; CL_PARAM cl_params; STATS stats;
 	Byte* sysMem; size_t sysMem_sz;
 	double sysMemTot, sysMemCons;
 	int64 maxConflicts, nConflicts;
 	int starts, restarts, R, ref_vars, reductions, marker;
-	BQUEUE<uint32> lbdQ, trailQ; 
-	float lbdSum; 
+	BQUEUE<uint32> lbdQ, trailQ; float lbdSum; 
 	std::ofstream proofFile;
 	bool intr, units_f;
 public:
 	ParaFROST(const string&);
 	~ParaFROST(void);
-	/* inline helpers */
+	//============== inline methods ===============
 	inline void interrupt(void) { intr = true; }
 	inline bool interrupted(void) { return intr; }
 	inline void write_proof(const Byte& byte) { proofFile << byte; }
+	inline void write_proof(uint32* lits, const CL_LEN& len) {
+		assert(len > 0);
+		uint32* lit = lits, * end = lits + len;
+		while (lit != end) {
+			register uint32 b = 0;
+			if (mapped) b = revLit(*lit++);
+			else b = *lit++;
+			while (b > 127) { write_proof(Byte(128 | (b & 127))); b >>= 7; }
+			write_proof(Byte(b));
+		}
+	}
 	inline double drand(void) const { return ((double)rand() / (double)RAND_MAX); };
+	inline double luby_seq(double y, int x) {
+		int size, seq;
+		for (size = 1, seq = 0; size < x + 1; seq++, size = (size << 1) + 1);
+		while (size - 1 != x) {
+			size = (size - 1) >> 1;
+			seq--;
+			x = x % size;
+		}
+		return pow(y, seq);
+	}
 	inline void incDL(void) { trail_sz.push(sp->trail_size); }
 	inline int DL(void) const { return trail_sz.size(); }
 	inline void clHist(const G_REF gc) {
@@ -579,7 +710,33 @@ public:
 			sp->reset_trail();
 		}
 	}
-	/******************/
+	inline void printWatched(const uint32& v_idx) {
+		uint32 p = V2D(v_idx + 1);
+		WL& pos_list = wt[NEG(p)], &neg_list = wt[p];
+		printf("c |\t\tWL of v(%d)\n", v_idx + 1);
+		printWL(pos_list); printWL(neg_list);
+		printf("c |---------------------------------\n");
+	}
+	inline void printStats() {
+		if (verbose == 1) {
+			int remainedVars = (int)nOrgVars() - (int)nRemVars();
+			printf("c | %9d %9d %10lld | %10lld %10lld %10lld %10lld %7.0f |\n",
+				remainedVars, nClauses(), nLiterals(),
+				nConflicts, lrn.max_learnt_cls,
+				(int64)learnts.size(), nLearntLits(), (float)nLearntLits() / learnts.size());
+		}
+	}
+	inline void printStats(bool p) {
+		if (verbose == 1 && p) {
+			int remainedVars = (int)nOrgVars() - (int)nRemVars();
+			printf("c | %9d %9d %8d %10lld %6d %9d %8d %10lld %7.0f |\n",
+				remainedVars, nClauses(), nBins(), nLiterals(),
+				starts,
+				learnts.size(), nGlues(), nLearntLits(), learnts.size() == 0 ? 0 : nLearntLits() / (float)learnts.size());
+			progRate += progRate / 4;
+		}
+	}
+	//=============================================
 	void free_mem(void);
 	void CNF_rewriter(const string&);
 	void var_order(void);
@@ -611,7 +768,6 @@ public:
 	void binSelfsub(void);
 	void simp_learnt(void);
 	bool selfsub(const uint32&, uint32*, CL_LEN&, const uint32&);
-	double luby_seq(double y, int x);
 	void cbt_level(C_REF);
 	void analyze(C_REF);
 	void cancel_assigns(const int&);
@@ -621,12 +777,8 @@ public:
 	void detachClause(B_REF);
 	void detachClause(C_REF);
 	void lReduce(void);
-	void write_proof(uint32*, const CL_LEN&);
-	void printClauseSet(const uint32&);
 	bool consistent(BCNF&, WT&);
 	bool consistent(LCNF&, WT&);
-	void print_stats(void);
-	void print_stats(bool);
 	void print_reports(void);
 	void print_model(void);
 	void wrapUp(const CNF_STATE&);
@@ -762,119 +914,6 @@ public:
 	bool pre_en, lpre_en, simp_perf_en, ve_en, ve_plus_en, sub_en, bce_en, hre_en, all_en;
 	int pre_delay, mu_pos, mu_neg, phases, cnf_free_freq;
 };
-/******************/
-/*     Aliases    */
-/******************/
 extern ParaFROST* g_pFrost;
-extern ASSIGN_ST* assigns;
-extern int* levels;
-//====================================================//
-//                  HELPER Functions                  //
-//====================================================//
-inline void printLit(const uint32& lit)
-{
-	printf("%d@", (ISNEG(lit)) ? -int(ABS(lit)) : ABS(lit));
-}
-inline void printVars(const uint32* arr, const int& size)
-{
-	printf("c | [");
-	for (int i = 0; i < size; i++) {
-		printf("%4d ", arr[i] + 1);
-	}
-	printf("]\n");
-}
-inline void printAssigns(const uint32* arr, const int& size)
-{
-	printf("c | [");
-	for (int i = 0; i < size; i++) {
-		printf("%4d ", ISNEG(arr[i]) ? -int(ABS(arr[i])) : ABS(arr[i]));
-	}
-	printf("]\n");
-}
-inline void printTrail(const uint32* trail, const int& size)
-{
-	for (int i = 0; i < size; i++) 
-		printf("c | trail[%d] = %d@%d\n", i, ISNEG(trail[i]) ? -int(ABS(trail[i])) : ABS(trail[i]), levels[V2IDX(trail[i])]);
-}
-inline void printClause(const uVector1D& cl)
-{
-	printf("c | (");
-	for (int i = 0; i < cl.size(); i++) {
-		printf("%4d ", ISNEG(cl[i]) ? -int(ABS(cl[i])) : ABS(cl[i]));
-	}
-	printf(")\n");
-}
-inline void printLearnt(const uVector1D& cl)
-{
-	printf("c | Learnt(");
-	for (LIT_POS n = 0; n < cl.size(); n++) {
-		printf(" %d@%d ", (ISNEG(cl[n])) ? -int(ABS(cl[n])) : ABS(cl[n]), levels[V2IDX(cl[n])]);
-	}
-	printf(")\n");
-}
-template<class T>
-inline void printCNF(const Vec<T>& cnf, const int& offset = 0) {
-	printf("c |               Host CNF(sz = %d)\n", cnf.size());
-	for (int c = offset; c < cnf.size(); c++) {
-		if (cnf[c]->size() > 0) {
-			printf("c | C(%d)->", c);
-			cnf[c]->print();
-		}
-	}
-	printf("c |=================================================|\n");
-}
-inline void printWL(const WL& list) {
-	for (int i = 0; i < list.size(); i++) {
-		printf("c | ");
-		if (((B_REF)list[i].c_ref)->status() == LEARNT) {
-			C_REF cl = (C_REF)list[i].c_ref;
-			cl->print();
-		}
-		else 
-			((B_REF)list[i].c_ref)->print();
-	}
-}
-inline void printWT(const WT& wt) {
-	printf("c | Negative occurs:\n");
-	for (uint32 v = 0; v < nOrgVars(); v++) {
-		uint32 p = V2D(v + 1);
-		if (wt[p].size() != 0) {
-			printf("c | Var(%d):\n", -int(v + 1));
-			printWL(wt[p]);
-		}
-	}
-	printf("c | Positive occurs:\n");
-	for (uint32 v = 0; v < nOrgVars(); v++) {
-		uint32 n = NEG(V2D(v + 1));
-		if (wt[n].size() != 0) {
-			printf("c | Var(%d):\n", v + 1);
-			printWL(wt[n]);
-		}
-	}
-}
-inline void printOL(const OL& list) {
-	for (int i = 0; i < list.size(); i++) {
-		printf("c | ");
-		list[i]->print();
-	}
-}
-inline void printOT(const OT& ot) {
-	printf("c | Positive occurs:\n");
-	for (uint32 v = 0; v < nOrgVars(); v++) {
-		uint32 p = V2D(v + 1);
-		if (ot[p].size() != 0) {
-			printf("c | Var(%d):\n", v + 1);
-			printOL(ot[p]);
-		}
-	}
-	printf("c | Negative occurs:\n");
-	for (uint32 v = 0; v < nOrgVars(); v++) {
-		uint32 n = NEG(V2D(v + 1));
-		if (ot[n].size() != 0) {
-			printf("c | Var(%d):\n", -int(v + 1));
-			printOL(ot[n]);
-		}
-	}
-}
 
 #endif 

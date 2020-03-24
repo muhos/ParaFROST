@@ -111,23 +111,19 @@ public:
 		new (&data[sz]) T();
 		sz++;
 	}
-
 	void push(const T& val) {
 		if (sz == cap) capacity(sz + 1);
 		new (&data[sz++]) T(val);
 	}
-
 	void pop(void) {
 		assert(sz > 0);
 		sz--;
 		data[sz].~T();
 	}
-
 	void copyFrom(Vec<T>& copy) const {
 		assert(copy.size() <= sz);
 		for (SZ_T i = 0; i < sz; i++) data[i] = copy[i];
 	}
-
 	template<class CSZ_T>
 	void copyFrom(T* copy, const CSZ_T& copy_sz) const {
 		assert(copy_sz <= sz);
