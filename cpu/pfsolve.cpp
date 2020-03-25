@@ -215,7 +215,7 @@ CNF_STATE ParaFROST::CNF_parser(const string& path) {
 				read_header(header, tmp, buffer);
 				if (verbose >= 1) printf("c | Found header %s\n", buffer);
 				cnf_stats.n_org_vars = header[0], cnf_stats.n_org_cls = header[1];
-				orgs.incMem(cnf_stats.n_org_cls);
+				orgs.resize(cnf_stats.n_org_cls);
 				WT_alloc();
 				solver_alloc();
 				solver_init();
@@ -234,7 +234,7 @@ CNF_STATE ParaFROST::CNF_parser(const string& path) {
 				if (proof_en) {
 					oldSz = c_sz;
 					tmpCl.clear(true);
-					tmpCl.incMem(c_sz);
+					tmpCl.resize(c_sz);
 					tmpCl.copyFrom(in_c, c_sz);
 				}
 				if (checkClause(in_c, c_sz)) { // clause not a tautology
@@ -331,7 +331,7 @@ void ParaFROST::WT_alloc(bool re)
 		else cout << "c | Not enough memory for watch table (Max: " << sysMemTot / MBYTE << ", Consumed: " << sysMemCons / MBYTE << " MB)" << endl;
 		exit(EXIT_FAILURE);
 	}
-	wt.incMem(maxVars);
+	wt.resize(maxVars);
 }
 
 void ParaFROST::solver_alloc(bool re)
@@ -567,7 +567,7 @@ void ParaFROST::shrinkClause(G_REF gc)
 	CL_LEN sz = c->size();
 	uVector1D tmpCl;
 	if (proof_en) {
-		tmpCl.incMem(sz);
+		tmpCl.resize(sz);
 		tmpCl.copyFrom(lits);
 	}
 	if (sz == 3 && assigns[V2IDX(lits[2])] == ISNEG(lits[2]))

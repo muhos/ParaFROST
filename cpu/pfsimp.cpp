@@ -19,8 +19,6 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 #include "pfsimp.h"
 #include "pfsimpopts.h"
 
-/* Simp Options */
-
 void ParaFROST::opt_simp()
 {
 	assert(pre_en);
@@ -324,7 +322,7 @@ void ParaFROST::extractBins()
 {
 	if (pre_delay) {
 		if (nOrgBins()) {
-			bins.clear(), bins.incMem(nBins());  // for garbage collection
+			bins.clear(), bins.resize(nBins());  // for garbage collection
 			uint32 nbins = 0;
 			for (uint32 v = 0; v < nOrgVars(); v++) {
 				uint32 p = V2D(v + 1), n = NEG(p);
@@ -395,7 +393,7 @@ bool ParaFROST::awaken()
 		sysMemCons -= ot_cap;
 		return false;
 	}
-	ot.incMem(maxVars);
+	ot.resize(maxVars);
 	// alloc memory for scnf
 	assert(scnf.empty());
 	assert(orgs.size() == nClauses());
@@ -407,7 +405,7 @@ bool ParaFROST::awaken()
 		sysMemCons -= scnf_cap;
 		return false;
 	}
-	scnf.incMem(scnf_sz);
+	scnf.resize(scnf_sz);
 	cnf_stats.global_n_cls = 0;
 	cnf_stats.global_n_lits = 0;
 	extractBins(); 
@@ -492,8 +490,8 @@ void ParaFROST::preprocess()
 	cnf_stats.n_org_lits = nLiterals();
 	if (nRemVars() - simpVars != 0) { // variables are removed by preprocess? then map
 		mapped = true;
-		mappedVars.incMem(nOrgVars() + 1, 0);
-		reverseVars.incMem(nOrgVars() + 1, 0);
+		mappedVars.resize(nOrgVars() + 1, 0);
+		reverseVars.resize(nOrgVars() + 1, 0);
 		cnf_stats.n_org_vars -= nRemVars(); // update nr. variables
 		cleanSlate();
 	}

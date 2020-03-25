@@ -139,7 +139,7 @@ class BCLAUSE {
 public:
 	BCLAUSE() { _st = UNKNOWN; }
 	BCLAUSE(const LIT_POS& nLits) { 
-		_lits.incMem(nLits);
+		_lits.resize(nLits);
 		_st = UNKNOWN;
 	}
 	~BCLAUSE() {
@@ -154,7 +154,7 @@ public:
 	inline uint32* d_ptr() { return _lits; }
 
 	inline void copyLitsFrom(uint32* src, const CL_LEN& sz) {
-		_lits.incMem(sz);
+		_lits.resize(sz);
 		register uint32* h = _lits, * e = h + sz, * s = src;
 		while (h != e) *h++ = *s++;
 	}
@@ -413,11 +413,11 @@ struct WATCH {
 /*****************************************************/
 typedef Vec<B_REF> BCNF;
 typedef Vec<C_REF> LCNF;
-typedef Vec<WATCH> WL;
-typedef Vec<WL> WT;
+typedef Vec<WATCH, int64> WL;
+typedef Vec<WL, int64> WT;
 typedef Vec<S_REF> SCNF;
 typedef Vec<S_REF> OL;
-typedef Vec<OL> OT;
+typedef Vec<OL, int64> OT;
 /*****************************************************/
 /*  Name:     Containers for simp., search and learn */
 /*  Dependency:  none                                */

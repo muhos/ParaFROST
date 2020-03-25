@@ -76,7 +76,7 @@ public:
 	}
 	void alloc() {
 		activity = new double[alloc_sz];
-		indices.incMem(alloc_sz);
+		indices.resize(alloc_sz);
 	}
 
 	void init(double var_inc, double var_decay) {

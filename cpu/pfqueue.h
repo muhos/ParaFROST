@@ -35,7 +35,7 @@ public:
 
 	void alloc(int cap) {
 		_bound = cap;
-		data.incMem(_bound, 0);
+		data.resize(_bound, 0);
 		reset();
 	}
 

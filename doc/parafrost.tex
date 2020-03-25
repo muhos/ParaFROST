@@ -7,18 +7,14 @@
 \usepackage{textcomp}
 \usepackage{xcolor}
 \usepackage{xspace}
+\usepackage{url}
 
 %
 \newcommand{\parafrost}{ParaFROST\xspace}
 \newcommand{\parafrostHRE}{ParaFROST\_HRE\xspace}
 \newcommand{\parafrostCBT}{ParaFROST\_CBT\xspace}
 \newcommand{\parafrostALL}{ParaFROST\_ALL\xspace}
-\newcommand{\minisat}{\textsc{MiniSat}\xspace}
-\newcommand{\glucose}{\textsc{Glucose}\xspace}
-\newcommand{\lingeling}{\textsc{Lingeling}\xspace}
-\newcommand{\chaff}{\textsc{Chaff}\xspace}
-\newcommand{\grasp}{\textsc{Grasp}\xspace}
-\newcommand{\berkmin}{\textsc{BerkMin}\xspace}
+
 
 % mute the stupid IEEEtrans bibtex error!
 \makeatletter
@@ -57,10 +53,22 @@ Resolving the first two clauses gives the resolvent $\{a,b\}$ which is equivalen
 
 In this submission, a sequential implementation of all simplifications described above is provided as part of \parafrost with light workload. By default, in \parafrost the \texttt{ve+} is enabled with light number of \texttt{phases} set to 2. The \texttt{phases=<n>} option applies \texttt{ve+} for a configured number of iterations, with increasingly large values of the threshold $\mu$ (maximum occurrences of a variable). In another configuration (e.g. \parafrostHRE), the \texttt{HRE} method is enabled.
 
-All configurations delay preprocessing by a user-defined number of restarts. This gives the solver enough time to solve trivial problems (solved in few seconds), especially large formulas before simplifications are executed. The number of restarts needed to activate preprocessing is set to 50 through the option \texttt{pre-delay=<n>}. The solver supports geometric~\cite{geoRestart}, luby~\cite{minisat}, and dynamic restarts~\cite{dynamicRestarts}. However, in this submission, we enable only dynamic restarts.
+All configurations delay preprocessing by a user-defined number of restarts. This gives the solver enough time to solve trivial problems (solved in few seconds), especially large formulas before simplifications are executed. The number of restarts needed to activate preprocessing is set to 50 through the option \texttt{pre-delay=<n>}. The solver supports geometric~\cite{geoRestart}, Luby~\cite{minisat}, and dynamic restarts~\cite{dynamicRestarts}. However, in this submission, we enable only dynamic restarts.
 %
 %
 \section{Parallel Decision Making}
+We proposed a new approach~\cite{pdcl} to make parallel decisions in such a way, they can be assigned and propagated simultaneously without causing any implications or conflicts. Originally, we did so to introduce a possible parallelisation strategy. This strategy is yet to pay off, but surprisingly, the PDM turned out to have
+a considerably positive impact on standard, sequential CDCL, for many different SAT benchmark problems. In all configurations, the solver periodically calls PDM with a maximum of 3 rounds per search. Otherwise, a single decision is made as the standard CDCL procedure does. The number of PDM rounds is controlled via the option \texttt{pdm=<n>}. 
+%
+%
+\section{Chronological Backtracking}
+We adopted the \emph{chronological backtracking} (CBT) introduced by the authors in~\cite{cbt}, to help CDCL solvers avoid jumping too far in certain situations. However, the procedure is computationally expensive in calculating the correct chronological level during a conflict. Therefore, we enabled this feature in a separate solver instance called \parafrostCBT. The CBT is triggered when the number of conflicts are multiple of 5000 (\texttt{cbt-conf=<n>}) and the jumping distance is 500 (\texttt{cbt-dist=<n>}).
+%
+%
+\section{Automated Tuning}
+The GPU code tuner made by Ben van Werkhoven~\cite{tuner,tunerCode} is used to optimize the parameter settings of all heuristics in our solver. The tool is capable of tuning both CPU and GPU codes with support for many search optimization algorithms. In our case, we collected a sample of 48 different formulas, stemmed from different CNF families. The solving time per problem is expected to take 1000 seconds according to a solver experiment without tuning. Then we ran a Python script to optimize the solver based on the accumulated running time of the selected benchmark suite. The tuned parameters are passed to the solver as command-line options. The basin hopping strategy is used to accelerate the tuning process.
+
+Finally, the solver instance \parafrostALL comprises all configurations described in the previous sections, in which all simplifications and CBT are enabled.
 
 %========== references ===========
 \bibliographystyle{IEEEtran}

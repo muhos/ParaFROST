@@ -37,89 +37,59 @@ template<class T, class SZ_T = int>
 class Vec {
 private:
 	T* data;
-	SZ_T sz;
-	SZ_T cap;
+	SZ_T sz, cap;
 
 	Vec<T>& operator=(Vec<T>& rhs);
 	Vec(Vec<T>& rhs);
-
-	inline SZ_T max(SZ_T x, SZ_T y) {
-		return (x > y) ? x : y;
-	}
+	inline SZ_T max(SZ_T x, SZ_T y) { return (x > y) ? x : y; }
 
 public:
-	Vec() {
-		data = NULL;
-		sz = 0;
-		cap = 0;
-	}
-	explicit Vec(SZ_T size) {
-		data = NULL;
-		sz = 0;
-		cap = 0;
-		incMem(size);
-	}
-	Vec(SZ_T size, const T& val) {
-		data = NULL;
-		sz = 0;
-		cap = 0;
-		incMem(size, val);
-	}
+	Vec() { data = NULL, sz = 0, cap = 0; }
+	explicit Vec(SZ_T size) { data = NULL, sz = 0, cap = 0; resize(size); }
+	Vec(SZ_T size, const T& val) { data = NULL, sz = 0, cap = 0; resize(size, val); }
 	~Vec() { clear(true); }
 
 	// pointer to raw data
-	operator T* (void) {
-		return data;
-	}
-	T* d_ptr(void) {
-		return data;
-	}
+	operator T* (void) { return data; }
+	T* d_ptr(void) { return data; }
 	// indexing operators:
-	const T& operator [] (SZ_T index) const {
-		assert(index < sz);
-		return data[index];
-	}
-	T& operator [] (SZ_T index) {
-		assert(index < sz);
-		return data[index];
-	}
+	const T& operator [] (SZ_T index) const { assert(index < sz); return data[index]; }
+	T& operator [] (SZ_T index) { assert(index < sz); return data[index]; }
 
 	// memory 
-	void capacity(SZ_T min_cap);
-	void incMem(SZ_T size);
-	void incMem(SZ_T size, const T& val);
+	void reallocMem(SZ_T min_cap);
+	void expand(SZ_T size);
+	void expand(SZ_T size, const T& val);
 	void clear(bool dealloc = false);
 	bool empty() { return sz == 0; }
 	SZ_T size(void) const { return sz; }
-	int capacity(void) const { return cap; }
 	void resize(SZ_T n) {
 		if (n == sz) return;
 		if (n < sz) shrink(sz - n);
-		else incMem(n);
+		else expand(n);
+	}
+	void resize(SZ_T n, const T& val) {
+		if (n == sz) {
+			for (SZ_T i = 0; i < sz; i++) data[i] = val;
+			return;
+		}
+		if (n < sz) shrink(sz - n, val);
+		else expand(n, val);
 	}
 	void shrink(SZ_T n) {
 		assert(n <= sz);
-		for (SZ_T i = 0; i < n; i++) {
-			sz--;
-			data[sz].~T();
-		}
+		for (SZ_T i = 0; i < n; i++) data[--sz].~T();
+	}
+	void shrink(SZ_T n, const T& val) {
+		assert(n <= sz);
+		for (SZ_T i = 0; i < n; i++) data[--sz].~T();
+		for (SZ_T i = 0; i < sz; i++) data[i] = val;
 	}
 
 	// new elements
-	void push(void) {
-		if (sz == cap) capacity(sz + 1);
-		new (&data[sz]) T();
-		sz++;
-	}
-	void push(const T& val) {
-		if (sz == cap) capacity(sz + 1);
-		new (&data[sz++]) T(val);
-	}
-	void pop(void) {
-		assert(sz > 0);
-		sz--;
-		data[sz].~T();
-	}
+	void push(void) { if (sz == cap) reallocMem(sz + 1); new (&data[sz++]) T(); }
+	void push(const T& val) { if (sz == cap) reallocMem(sz + 1); new (&data[sz++]) T(val); }
+	void pop(void) { assert(sz > 0); data[--sz].~T(); }
 	void copyFrom(Vec<T>& copy) const {
 		assert(copy.size() <= sz);
 		for (SZ_T i = 0; i < sz; i++) data[i] = copy[i];
@@ -132,7 +102,7 @@ public:
 };
 
 template<class T, class SZ_T>
-void Vec<T, SZ_T>::capacity(SZ_T min_cap) {
+void Vec<T, SZ_T>::reallocMem(SZ_T min_cap) {
 	if (cap >= min_cap) return;
 	SZ_T add = max((min_cap - cap + 1) & ~1, ((cap >> 1) + 2) & ~1);
 	const SZ_T size_max = std::numeric_limits<SZ_T>::max();
@@ -142,17 +112,17 @@ void Vec<T, SZ_T>::capacity(SZ_T min_cap) {
 }
 
 template<class T, class SZ_T>
-void Vec<T, SZ_T>::incMem(SZ_T size, const T& val) {
+void Vec<T, SZ_T>::expand(SZ_T size, const T& val) {
 	if (sz >= size) return;
-	capacity(size);
+	reallocMem(size);
 	for (SZ_T i = sz; i < size; i++) data[i] = val;
 	sz = size;
 }
 
 template<class T, class SZ_T>
-void Vec<T, SZ_T>::incMem(SZ_T size) {
+void Vec<T, SZ_T>::expand(SZ_T size) {
 	if (sz >= size) return;
-	capacity(size);
+	reallocMem(size);
 	for (SZ_T i = sz; i < size; i++) new (&data[i]) T();
 	sz = size;
 }
@@ -160,8 +130,7 @@ void Vec<T, SZ_T>::incMem(SZ_T size) {
 template<class T, class SZ_T>
 void Vec<T, SZ_T>::clear(bool dealloc) {
 	if (data != NULL) {
-		for (SZ_T i = 0; i < sz; i++) 
-			data[i].~T();
+		for (SZ_T i = 0; i < sz; i++) data[i].~T();
 		sz = 0;
 		if (dealloc) {
 			free(data);
