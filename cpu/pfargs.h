@@ -1,4 +1,4 @@
-/***********************************************************************
+/***********************************************************************[pfargs.h]
 Copyright(c) 2020, Muhammad Osama - Anton Wijs,
 Technische Universiteit Eindhoven (TU/e).
 
@@ -14,7 +14,7 @@ GNU General Public License for more details.
 
 You should have received a copy of the GNU General Public License
 along with this program.  If not, see <https://www.gnu.org/licenses/>.
-************************************************************************/
+**********************************************************************************/
 
 #ifndef __ARGS_
 #define __ARGS_
@@ -22,19 +22,14 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 #include "pfdefs.h"
 
 // global 
-template<class T>
-static bool eq(T& in, const char* ref) {
-	while (*ref != '\0') {
-		if (*ref != *in)
-			return false;
-		ref++; in++;
-	}
-	return true;
-
-}
 bool isQuiet(void);
 void parseArguments(int& argc, char** argv);
 void printUsage(int  argc, char** argv, bool verbose = false);
+template<class T>
+bool eq(T& in, const char* ref) {
+	while (*ref != '\0') { if (*ref != *in) return false; ref++; in++; }
+	return true;
+}
 
 class ARG
 {

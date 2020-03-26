@@ -1,4 +1,4 @@
-/***********************************************************************
+/***********************************************************************[pfsolve.h]
 Copyright(c) 2020, Muhammad Osama - Anton Wijs,
 Technische Universiteit Eindhoven (TU/e).
 
@@ -14,7 +14,7 @@ GNU General Public License for more details.
 
 You should have received a copy of the GNU General Public License
 along with this program.  If not, see <https://www.gnu.org/licenses/>.
-************************************************************************/
+**********************************************************************************/
 
 #ifndef __SOLVE_
 #define __SOLVE_
@@ -31,8 +31,8 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /*****************************************************/
 /*  Name:     SOL                                    */
 /*  Usage:    store assignment info.                 */
-/*  Scope:    host and device                        */
-/*  Memory:   managed memory (initially on host)     */
+/*  Scope:    host                                   */
+/*  Memory:   system memory                          */
 /*  Dependency:  none                                */
 /*****************************************************/
 class SOL
@@ -41,20 +41,11 @@ class SOL
 	int* _level;
 	uint32 numVars;
 public:
-	SOL()
-	{
-		_assigns = NULL;
-		_level = NULL;
-		numVars = 0;
-	}
+	SOL() { _assigns = NULL, _level = NULL, numVars = 0; }
+	~SOL() { _assigns = NULL, _level = NULL, numVars = 0; }
 
-	~SOL() {
-		_assigns = NULL;
-		_level = NULL;
-		numVars = 0;
-	}
-
-	void alloc_lits(Byte** _mem) {
+	void allocMem(Byte** _mem, const uint32& sz) {
+		numVars = sz;
 		assert(numVars > 0);
 		_assigns = (ASSIGN_ST*)(*_mem);
 		*_mem += numVars * sizeof(ASSIGN_ST);
@@ -62,54 +53,21 @@ public:
 		*_mem += numVars * sizeof(int);
 	}
 
-	inline void set_size(const uint32& numVars) {
-		this->numVars = numVars;
-	}
-
-	inline uint32 size() {
-		return numVars;
-	}
-
-	inline ASSIGN_ST* assigns_ptr() {
-		return _assigns;
-	}
+	inline uint32 size() { return numVars; }
+	inline uint32 size() const { return numVars; }
+	inline ASSIGN_ST* assigns_ptr() { return _assigns; }
+	inline int* levels_ptr() { return _level; }
+	inline void init(const uint32& idx) { _assigns[idx] = UNDEFINED, _level[idx] = UNDEFINED; }
+	inline void init_assign(const uint32& idx) { _assigns[idx] = UNDEFINED; }
+	inline void init_level(const uint32& idx) { _level[idx] = UNDEFINED; }
+	inline void set_assign(const uint32& idx, const ASSIGN_ST& asg) { _assigns[idx] = asg; }
+	inline ASSIGN_ST assign(const uint32& idx) { return _assigns[idx]; }
+	inline int level(const uint32& idx) { return _level[idx]; }
+	inline void set_level(const uint32& idx, const int& dl) { _level[idx] = dl; }
 
 	inline void copyAssignsTo(ASSIGN_ST* dest) {
 		ASSIGN_ST* a = _assigns, *dest_a = dest, * a_e = a + numVars;
 		while (a != a_e) *dest_a++ = *a++;
-	}
-
-	inline int* levels_ptr() {
-		return _level;
-	}
-
-	inline void init(const uint32& idx) {
-		*(_assigns + idx) = UNDEFINED;
-		*(_level + idx) = UNDEFINED;
-	}
-
-	inline void init_assign(const uint32& idx) {
-		*(_assigns + idx) = UNDEFINED;
-	}
-
-	inline void init_level(const uint32& idx) {
-		*(_level + idx) = UNDEFINED;
-	}
-
-	inline void set_assign(const uint32& idx, const ASSIGN_ST& asg) {
-		*(_assigns + idx) = asg;
-	}
-
-	inline ASSIGN_ST assign(const uint32& idx) {
-		return *(_assigns + idx);
-	}
-
-	inline int level(const uint32& idx) {
-		return *(_level + idx);
-	}
-
-	inline void set_level(const uint32& idx, const int& dl) {
-		*(_level + idx) = dl;
 	}
 
 	inline void print_assign(const uint32& idx) {
@@ -377,7 +335,7 @@ public:
 	inline void calcSig(const uint32& init_sig = 0) {
 		_sig = init_sig;
 		for (LIT_POS l = 0; l < this->size(); l++)
-			_sig |= (1UL << HASH((*this)[l]));
+			_sig |= MAPHASH((*this)[l]);
 	}
 
 	inline uint32 sig() { return _sig; }
@@ -427,6 +385,13 @@ struct PV {
 	bool* melted;
 	int nPVs, mu_inc;
 };
+/*****************************************************/
+/*  Name:     SP                                     */
+/*  Usage:    Information of search space            */
+/*  Scope:    host only                              */
+/*  Memory:   system memory                          */
+/*  Dependency: none                                 */
+/*****************************************************/
 struct SP {
 	uint32* trail, * free_decs;
 	bool* lock, * seen, * frozen, * pol;
@@ -444,6 +409,13 @@ struct SP {
 		max1Found = false;
 	}
 };
+/*****************************************************/
+/*  Name:     STATS, LEARN, CL_PARAM                 */
+/*  Usage:    Statistics & heuristics                */
+/*  Scope:    host only                              */
+/*  Memory:   system memory                          */
+/*  Dependency: none                                 */
+/*****************************************************/
 struct STATS {
 	int64 n_units;
 	int64 n_props;
@@ -491,7 +463,6 @@ struct LEARN {
 		adjust_cnt = (uint32)adjust_conf;
 	}
 };
-
 //====================================================//
 //                  HELPER Functions                  //
 //====================================================//
@@ -600,7 +571,6 @@ inline void printOT(const OT& ot) {
 		}
 	}
 }
-
 /*****************************************************/
 /*  Name:     ParaFROST                              */
 /*  Usage:    global handler for solver/simplifier   */
@@ -613,8 +583,7 @@ protected:
 	TIMER* timer;
 	Vec<OCCUR> occurs; Vec<SCORE> scores;
 	WT wt; BCNF orgs, bins; LCNF learnts;
-	VAR_HEAP* var_heap; PV* pv; SP* sp; SOL* sol;
-	G_REF* source; 
+	VAR_HEAP* var_heap; PV* pv; SP* sp; SOL* sol; G_REF* source; 
 	int* board;	uint32* tmp_stack, *simpLearnt;
 	uVector1D learnt_cl, learntLits; vector1D trail_sz;
 	LEARN lrn; CL_PARAM cl_params; STATS stats;
@@ -741,7 +710,7 @@ public:
 		}
 	}
 	//=============================================
-	void free_mem(void);
+	void sysFree(void);
 	void CNF_rewriter(const string&);
 	void var_order(void);
 	void hist(BCNF&, bool rst = false);
@@ -885,12 +854,15 @@ public:
 		}
 	}
 	//==============================================
+	void killSolver();
 	void opt_simp();
 	void hist(const SCNF&, bool rst = false);
 	void var_reorder(void);
 	void extractBins(void);
 	bool awaken(void);
 	void cleanSlate(void);
+	void reduce_ol(OL&);
+	void reduce_ot(void);
 	void create_ot(bool rst = true);
 	CNF_STATE prop(void);
 	void strengthen(S_REF, const uint32&);

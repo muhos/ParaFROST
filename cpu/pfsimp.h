@@ -1,4 +1,4 @@
-/***********************************************************************
+/***********************************************************************[pfsimp.h]
 Copyright(c) 2020, Muhammad Osama - Anton Wijs,
 Technische Universiteit Eindhoven (TU/e).
 
@@ -14,7 +14,7 @@ GNU General Public License for more details.
 
 You should have received a copy of the GNU General Public License
 along with this program.  If not, see <https://www.gnu.org/licenses/>.
-************************************************************************/
+**********************************************************************************/
 
 #ifndef __SIMP_
 #define __SIMP_
@@ -278,8 +278,8 @@ inline void updateOL(OL& ol)
 	int idx = 0, ol_sz = ol.size();
 	while (idx < ol_sz) {
 		S_REF c_ref = ol[idx];
-		if (c_ref->isReason()) {
-			c_ref->init_reason();
+		if (c_ref->molten()) {
+			c_ref->freeze();
 			ol[idx] = ol[ol_sz - 1];
 			ol_sz--;
 		}
@@ -399,18 +399,18 @@ bool gateReasoning_x(const uint32& x, OL& p_ol, OL& n_ol)
 			if ((c[0] ^ x) == NEG_SIGN) { // found x with negative sign
 				imp = FLIP(c[1]); // toggle implied literal sign
 				out_c.push(imp);
-				sig |= mapHash(imp);
+				sig |= MAPHASH(imp);
 			}
 			else if ((c[1] ^ x) == NEG_SIGN) {
 				imp = FLIP(c[0]); // toggle implied literal sign
 				out_c.push(imp);
-				sig |= mapHash(imp);
+				sig |= MAPHASH(imp);
 			}
 		}
 	}
 	if (out_c.size() > 1) {
 		out_c.push(x);
-		sig |= mapHash(x);
+		sig |= MAPHASH(x);
 		Sort(out_c.d_ptr(), out_c.size());
 		for (int i = 0; i < p_ol.size(); i++) {
 			SCLAUSE& c = *p_ol[i];
@@ -438,18 +438,18 @@ bool gateReasoning_x(const uint32& x, OL& p_ol, OL& n_ol)
 			if (c[0] == x) { // found x with positive sign
 				imp = FLIP(c[1]); // toggle implied literal sign
 				out_c.push(imp);
-				sig |= mapHash(imp);
+				sig |= MAPHASH(imp);
 			}
 			else if (c[1] == x) {
 				imp = FLIP(c[0]); // toggle implied literal sign
 				out_c.push(imp);
-				sig |= mapHash(imp);
+				sig |= MAPHASH(imp);
 			}
 		}
 	}
 	if (out_c.size() > 1) {
 		out_c.push(FLIP(x));
-		sig |= mapHash(FLIP(x));
+		sig |= MAPHASH(FLIP(x));
 		Sort(out_c.d_ptr(), out_c.size());
 		for (int i = 0; i < n_ol.size(); i++) {
 			SCLAUSE& c = *n_ol[i];
@@ -513,13 +513,13 @@ void self_sub_x(const uint32& x, OL& p_ol, OL& n_ol)
 			if (neg_c->size() > 1 && neg_c->size() < pos_c->size() &&
 				selfSubset_sig(neg_c->sig(), pos_c->sig()) && selfSubset(x, neg_c, pos_c)) {
 				g_pFrost->strengthen(pos_c, x);
-				pos_c->flag_reason(); // mark for fast recongnition in ot update 
+				pos_c->melt(); // mark for fast recongnition in ot update 
 			}
 			else if (neg_c->size() > 1 && neg_c->size() == pos_c->size() &&
 				selfSubset_sig(neg_c->sig(), pos_c->sig()) && selfSubset(x, neg_c, pos_c)) {
 				// shorten the positive occur and delete the negative occur subsumed by the former
 				g_pFrost->strengthen(pos_c, x);
-				pos_c->flag_reason(); 
+				pos_c->melt(); 
 				neg_c->set_status(DELETED);
 			}
 		}
@@ -545,7 +545,7 @@ void self_sub_x(const uint32& x, OL& p_ol, OL& n_ol)
 			if (pos_c->size() > 1 && pos_c->size() < neg_c->size() &&
 				selfSubset_sig(pos_c->sig(), neg_c->sig()) && selfSubset(NEG(x), pos_c, neg_c)) {
 				g_pFrost->strengthen(neg_c, NEG(x));
-				neg_c->flag_reason(); 
+				neg_c->melt(); 
 			}
 		}
 		// subsumption check

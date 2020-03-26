@@ -1,4 +1,4 @@
-/***********************************************************************
+/***********************************************************************[pfsort.h]
 Copyright(c) 2020, Muhammad Osama - Anton Wijs,
 Technische Universiteit Eindhoven (TU/e).
 
@@ -14,7 +14,8 @@ GNU General Public License for more details.
 
 You should have received a copy of the GNU General Public License
 along with this program.  If not, see <https://www.gnu.org/licenses/>.
-************************************************************************/
+**********************************************************************************/
+
 #ifndef __SORT_
 #define __SORT_
 

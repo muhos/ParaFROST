@@ -1,4 +1,4 @@
-/***********************************************************************
+/***********************************************************************[pfopts.h]
 Copyright(c) 2020, Muhammad Osama - Anton Wijs,
 Technische Universiteit Eindhoven (TU/e).
 
@@ -14,7 +14,7 @@ GNU General Public License for more details.
 
 You should have received a copy of the GNU General Public License
 along with this program.  If not, see <https://www.gnu.org/licenses/>.
-************************************************************************/
+**********************************************************************************/
 
 #ifndef __SOLVE_OPTS_
 #define __SOLVE_OPTS_
@@ -22,19 +22,19 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 #include "pfargs.h"
 
 BOOL_OPT opt_quiet_en("q", "enable quiet mode, same as verbose=0", false);
-BOOL_OPT opt_pre_en("pre", "enable preprocessing", true);
+BOOL_OPT opt_pre_en("pre", "enable preprocessing", false);
 BOOL_OPT opt_lpre_en("lpre", "enable preprocessing on learnt clauses if exist", false);
 BOOL_OPT opt_perf_en("perf", "allow performance report on stdout", true);
 BOOL_OPT opt_rew_en("rew", "rewrite the input formula without any special/illegal characters", false);
 BOOL_OPT opt_par_en("par", "parse only the input formula", false);
 BOOL_OPT opt_lcv_en("lcv", "use least-constrained variables to make parallel decisions", false);
 BOOL_OPT opt_fdp_en("fdp", "enable follow-up decision prioritization", true);
-BOOL_OPT opt_cbt_en("cbt", "enable chronological backtracking", true);
-BOOL_OPT opt_model_en("m", "allow removed print on stdout", false);
-BOOL_OPT opt_proof_en("p", "enable proof generation in binary DRAT format", false);
+BOOL_OPT opt_cbt_en("cbt", "enable chronological backtracking", false);
+BOOL_OPT opt_model_en("m", "allow removed print on stdout", true);
+BOOL_OPT opt_proof_en("p", "enable proof generation in binary DRAT format", true);
 INT_OPT opt_verbose("verbose", "set the verbosity", 1, INT32R(0, 4));
 INT_OPT opt_progress("progress-rate", "progress rate to print search statistics", 10000, INT32R(1, INT32_MAX));
-INT_OPT opt_pdm_rounds("pdm", "set the number <n> of pdm rounds in a single search", 0, INT32R(0, INT32_MAX));
+INT_OPT opt_pdm_rounds("pdm", "set the number <n> of pdm rounds in a single search", 3, INT32R(0, INT32_MAX));
 INT_OPT opt_pdm_freq("pdm-freq", "PDM execution frequency per restarts (0 for conflicts slave)", 0, INT32R(0, INT32_MAX));
 INT_OPT opt_pdm_ord("pdm-ord", "set the pdm ordering scheme to either 1 (hist + act), 0 (high act) or -1 (low act)", 1, INT32R(-1, 1));
 INT_OPT opt_pol("pol", "set polarity saving to either 1 (same), 0 (random) or -1 (revert)", 1, INT32R(-1, 1));
@@ -45,7 +45,7 @@ INT_OPT opt_SH("sh", "define the search heuristics, where:\nc |\
 	1 -> clause-sized random deletion heuristic,\nc |\
 	2 -> LBD heuristic.", 2, INT32R(0, 2));
 INT_OPT opt_seed("seed", "seed value for random generation", 9453921, INT32R(1, INT32_MAX));
-INT_OPT opt_pre_delay("pre-delay", "delay for applying preprocessing (in restarts)", 1, INT32R(0, INT32_MAX));
+INT_OPT opt_pre_delay("pre-delay", "delay for applying preprocessing (in restarts)", 20, INT32R(0, INT32_MAX));
 INT_OPT opt_init_red("init-reduce", "initial number of conflicts for learnts reduction", 2000, INT32R(0, INT32_MAX));
 INT_OPT opt_inc_red_sm("inc-small", "small step for learnt clauses deletion", 300, INT32R(0, INT32_MAX));
 INT_OPT opt_inc_red_bg("inc-big", "large step for learnt clauses deletion", 1000, INT32R(0, INT32_MAX));

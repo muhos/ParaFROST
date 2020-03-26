@@ -1,4 +1,4 @@
-﻿/***********************************************************************
+﻿/***********************************************************************[pfdefs.h]
 Copyright(c) 2020, Muhammad Osama - Anton Wijs,
 Technische Universiteit Eindhoven (TU/e).
 
@@ -14,7 +14,8 @@ GNU General Public License for more details.
 
 You should have received a copy of the GNU General Public License
 along with this program.  If not, see <https://www.gnu.org/licenses/>.
-************************************************************************/
+**********************************************************************************/
+
 #ifndef __GL_DEFS_
 #define __GL_DEFS_
 //=======================================//
@@ -33,7 +34,6 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 #include <climits>
 #include <cstdlib>
 #include <random>
-#include <sched.h> 
 #include <csignal>
 #include "Vec.h"
 using std::cout;
@@ -52,7 +52,6 @@ using std::ifstream;
 #define BUFFER_SIZE (MBYTE << 3)
 #define MAX_CL_SZ 0x0000FFFF
 #define NEG_SIGN 0x00000001
-#define POS_SIGN 0x00000000
 #define HASH_MASK 0x0000001F
 #define TAUTOLOGY 0
 #define CMP(a,b) (b == 0 ? a : b)
@@ -77,7 +76,7 @@ using std::ifstream;
 #define DEL_RST (int8_t)0xF7  // xxxx-0xxx
 #define BIN_RST (int8_t)0xEF  // xxx0-xxxx
 #define MAX(x,y) ((x > y) ? x : y)
-#define MAP_LIT(x) (1UL << HASH(x))
+#define MAPHASH(x) (1UL << HASH(x))
 #define POS(x) (x & 0xFFFFFFFE)
 #define ROOT_LEVEL 0
 #define UNDEFINED -1
@@ -179,10 +178,6 @@ inline int64 nLiterals() {
 inline int64 nLearntLits() {
 	return cnf_stats.n_added_lits;
 }
-inline uint32 mapHash(const uint32& val)
-{
-	return (1UL << HASH(val));
-}
 
 struct OCCUR {
 	uint32 ps, ns;
@@ -203,30 +198,19 @@ private:
 public:
 	float par, vo, pdm;
 	float bcp, bj, red;
-	float ot, lcve, bve, hse, bce, hre, simp;
+	float ot, lcve, bve, hse, bce, hre;
 
 	TIMER() {
 		_start = 0, _stop = 0, cpuTime = 0;
 		par = 0, vo = 0, pdm = 0;
 		bcp = 0, bj = 0, red = 0;
-		lcve = 0, ot = 0, bve = 0, hse = 0, bce = 0, hre = 0, simp = 0;
+		lcve = 0, ot = 0, bve = 0, hse = 0, bce = 0, hre = 0;
 	}
+	~TIMER() { cpuTime = 0; }
 
-	~TIMER() {
-		cpuTime = 0;
-	}
-
-	void start() {
-		_start = clock();
-	}
-
-	void stop() {
-		_stop = clock();
-	}
-
-	float CPU_time() {
-		return cpuTime = ((float)abs(_stop - _start)) / CLOCKS_PER_SEC;
-	}
+	void start() { _start = clock(); }
+	void stop() { _stop = clock(); }
+	float CPU_time() { return cpuTime = ((float)abs(_stop - _start)) / CLOCKS_PER_SEC; }
 };
 
 #endif // __GL_DEFS_

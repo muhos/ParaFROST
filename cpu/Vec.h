@@ -1,4 +1,25 @@
-/*******************************************************************************************[Vec.h]
+/******************************************************************************************[Vec.h]
+ ParaFROST -- Copyright (c) 2020, Muhammad Osama - Anton Wijs
+
+ParaFROST "Vec.h" header file is a modified version, based on MiniSat (see below MiniSat copyrights).
+Therefore, permissions and copyrights of this file ONLY (Vec.h) are exactly the same as Minisat.
+ParaFROST other sources are based on another copyright. This program is free software: 
+you can redistribute it and/or modify it under the terms of the GNU General Public
+License as published by the Free Software Foundation, either version 3 of the License, or
+(at your option) any later version.
+
+This program is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; 
+without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. 
+See the GNU General Public License for more details.
+
+You should have received a copy of the GNU General Public License along with this program.  
+If not, see <https://www.gnu.org/licenses/>. 
+
+- The above and below copyrights notices and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+- Original Minisat Copyrights:
+
 Copyright (c) 2003-2007, Niklas Een, Niklas Sorensson
 Copyright (c) 2007-2010, Niklas Sorensson
 
@@ -17,8 +38,6 @@ NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FO
 DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT
 OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 **************************************************************************************************/
-/* Copyright (c) 2020, Muhammad Osama */
-/**************************************/
 
 #ifndef __VEC_
 #define __VEC_

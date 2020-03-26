@@ -1,4 +1,4 @@
-/***********************************************************************
+/***********************************************************************[pfheap.h]
 Copyright(c) 2020, Muhammad Osama - Anton Wijs,
 Technische Universiteit Eindhoven (TU/e).
 
@@ -14,7 +14,7 @@ GNU General Public License for more details.
 
 You should have received a copy of the GNU General Public License
 along with this program.  If not, see <https://www.gnu.org/licenses/>.
-************************************************************************/
+**********************************************************************************/
 
 #ifndef __HEAP_
 #define __HEAP_
@@ -74,7 +74,9 @@ public:
 		heap.clear(true);
 		indices.clear(true);
 	}
-	void alloc() {
+	void allocMem(const uint32& sz) {
+		alloc_sz = sz;
+		assert(alloc_sz > 0);
 		activity = new double[alloc_sz];
 		indices.resize(alloc_sz);
 	}
@@ -124,10 +126,6 @@ public:
 
 	double VarDecay(void) {
 		return var_param.var_decay;
-	}
-
-	void set_allocSize(const uint32& max_sz) {
-		alloc_sz = max_sz;
 	}
 
 	int size() {

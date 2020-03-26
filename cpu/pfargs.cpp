@@ -1,4 +1,4 @@
-/***********************************************************************
+/***********************************************************************[pfargs.cpp]
 Copyright(c) 2020, Muhammad Osama - Anton Wijs,
 Technische Universiteit Eindhoven (TU/e).
 
@@ -14,7 +14,7 @@ GNU General Public License for more details.
 
 You should have received a copy of the GNU General Public License
 along with this program.  If not, see <https://www.gnu.org/licenses/>.
-************************************************************************/
+**********************************************************************************/
 
 #include "pfsort.h"
 #include "pfargs.h"
@@ -74,8 +74,8 @@ void printUsage(int argc, char** argv, bool verbose)
         options[i]->help(verbose);
         prev_type = options[i]->type;
     }
-    fprintf(stderr, "c |\nc |  -h or --help  Print help message.\n");
-    fprintf(stderr, "c |  --help-more   Print verbose help message.\n");
+    fprintf(stderr, "c |\nc |  -h or --help  print available options.\n");
+    fprintf(stderr, "c |  --help-more   print available options with verbose message.\n");
     fprintf(stderr, "c |\nc |--------------------------------------------------------------------------------------|\n");
     exit(EXIT_SUCCESS);
 }

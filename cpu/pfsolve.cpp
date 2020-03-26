@@ -1,5 +1,5 @@
-﻿/***********************************************************************
-Copyright(c) 2020, Muhammad Osama - Anton Wijs, 
+﻿/***********************************************************************[pfsolve.cpp]
+Copyright(c) 2020, Muhammad Osama - Anton Wijs,
 Technische Universiteit Eindhoven (TU/e).
 
 This program is free software: you can redistribute it and/or modify
@@ -14,7 +14,7 @@ GNU General Public License for more details.
 
 You should have received a copy of the GNU General Public License
 along with this program.  If not, see <https://www.gnu.org/licenses/>.
-************************************************************************/
+**********************************************************************************/
 #include "pfsort.h"
 #include "pfsolve.h" 
 #include "pfparser.h"
@@ -61,7 +61,7 @@ int64 getTotalSystemMemory()
 }
 void set_timeout(int time_limit)
 {
-	printf("C | WARNING - timeout not supported on Windows.\n");
+	printf("c | WARNING - timeout not supported on Windows.\n");
 }
 #endif
 // interrupt handlers
@@ -158,13 +158,13 @@ ParaFROST::ParaFROST(const string& path) :
 	if (rewriter_en) { CNF_rewriter(path); exit(EXIT_SUCCESS); }
 	// parse cnf & check top state
 	CNF_STATE top = CNF_parser(path);
-	if (top == TERMINATE) { free_mem(); exit(EXIT_FAILURE); }
+	if (top == TERMINATE) { sysFree(); exit(EXIT_FAILURE); }
 	else if (top == UNSAT || BCP() != NULL) {
 		wrapUp(UNSAT);
 		if (proof_en) { write_proof('0'); proofFile.close(); }
-		free_mem(); exit(EXIT_SUCCESS);
+		sysFree(); exit(EXIT_SUCCESS);
 	}
-	if (parse_only_en) { free_mem(); exit(EXIT_SUCCESS); }
+	if (parse_only_en) { sysFree(); exit(EXIT_SUCCESS); }
 	simplify_top();
 	if (verbose == 1) {
 		printf("c |-------------------------------------- Progress --------------------------------------|\n");
@@ -187,7 +187,7 @@ ParaFROST::ParaFROST(const string& path) :
 ParaFROST::~ParaFROST()
 {
 	if (verbose >= 1) cout << "c | Freeing up Host memory...";
-	free_mem();
+	sysFree();
 	if (verbose >= 1) cout << " done." << endl;
 	if (verbose >= 1) cout << "c |--------------------------------------------------------------------------------------|" << endl;
 }
@@ -282,7 +282,7 @@ CNF_STATE ParaFROST::CNF_parser(const string& path) {
 	return UNSOLVED;
 }
 
-void ParaFROST::free_mem()
+void ParaFROST::sysFree()
 {
 	occurs.clear(true);
 	scores.clear(true);
@@ -363,8 +363,7 @@ void ParaFROST::solver_alloc(bool re)
 	sol = (SOL*)sysMem;
 	sysMem += sizeof(SOL);
 	assert(sysMem < bottom);
-	sol->set_size(nOrgVars());
-	sol->alloc_lits(&sysMem);
+	sol->allocMem(&sysMem, nOrgVars());
 	assigns = sol->assigns_ptr();
 	levels = sol->levels_ptr();
 	assert(sysMem < bottom);
@@ -408,8 +407,7 @@ void ParaFROST::solver_alloc(bool re)
 	// VSIDS heap
 	var_heap = NULL;
 	var_heap = new VAR_HEAP();
-	var_heap->set_allocSize(nOrgVars());
-	var_heap->alloc();
+	var_heap->allocMem(nOrgVars());
 	if (verbose >= 2) cout << "(" << (double)sysMem_sz / MBYTE << " MB) ==> done." << endl;
 }
 
@@ -755,7 +753,7 @@ void ParaFROST::simp_learnt()
 	register uint32* lit = learnt_cl, *tmp_lit = tmp_stack, *end = lit + learnt_cl.size();
 	while (lit != end) *tmp_lit++ = *lit++;
 	uint32 min_level = 0;
-	for (LIT_POS k = 1; k < learnt_cl.size(); k++)  min_level |= mapHash(sol->level(V2IDX(learnt_cl[k])));
+	for (LIT_POS k = 1; k < learnt_cl.size(); k++)  min_level |= MAPHASH(sol->level(V2IDX(learnt_cl[k])));
 	CL_LEN new_sz = 1, tmp_sz = (CL_LEN)learnt_cl.size();
 	for (LIT_POS k = 1; k < learnt_cl.size(); k++) {
 		if (source[V2IDX(learnt_cl[k])] == NULL || !selfsub(learnt_cl[k], tmp_stack, tmp_sz, min_level))
@@ -819,7 +817,7 @@ bool ParaFROST::selfsub(const uint32& learntLit, uint32* tmp_stack, CL_LEN& tmp_
 			uint32 parent = (*c)[l], parent_idx = V2IDX(parent);
 			int parent_dl = sol->level(parent_idx);
 			if (!sp->seen[parent_idx] && parent_dl > 0) {
-				if (source[parent_idx] != NULL && (mapHash(parent_dl) & min_level) != 0) {
+				if (source[parent_idx] != NULL && (MAPHASH(parent_dl) & min_level) != 0) {
 					sp->seen[parent_idx] = 1;
 					*tail++ = parent;
 					tmp_stack[tmp_tail++] = parent;
@@ -1502,24 +1500,28 @@ void ParaFROST::wrapUp(const CNF_STATE &status)
 {
 	// print results
 	if (verbose >= 1) printf("c |--------------------------------------------------------------------------------------|\nc |\n");
-	double simp_t = (double)timer->vo + timer->ot + timer->bve + timer->hse + timer->bce + timer->hre;
-	double sol_t = (double)timer->pdm + timer->red + timer->bcp + timer->bj;
+	//double simp_t = (double)timer->vo + timer->ot + timer->bve + timer->hse + timer->bce + timer->hre;
+	//double sol_t = (double)timer->pdm + timer->red + timer->bcp + timer->bj;
 	if (status == SAT) {
 		if (!quiet_en) printf("c |\n");
-		printf("%s: ", path.c_str()); printf("s SATISFIABLE (time=%.3f)\n", simp_t + sol_t);
+		//printf("%s: ", path.c_str()); printf("s SATISFIABLE (time=%.3f)\n", simp_t + sol_t);
+		printf("s SATISFIABLE\n");
 		if (!quiet_en) printf("c |\n");
 		if (model_en) {
 			print_model();
 			if (!quiet_en) printf("\nc |\n");
+			else printf("\n");
 		}
 	}
 	else if (status == UNSAT) {
 		if (!quiet_en) printf("c |\n");
-		printf("%s: ", path.c_str()); printf("s UNSATISFIABLE (time=%.3f)\n", simp_t + sol_t);
+		//printf("%s: ", path.c_str()); printf("s UNSATISFIABLE (time=%.3f)\n", simp_t + sol_t);
+		printf("s UNSATISFIABLE\n");
 		if (!quiet_en) printf("c |\n");
 	}
 	else if (status == TERMINATE) {
-		printf("%s: ", path.c_str()); printf("s UNKNOWN (time=%.3f)\n", simp_t + sol_t);
+		//printf("%s: ", path.c_str()); printf("s UNKNOWN (time=%.3f)\n", simp_t + sol_t);
+		printf("s UNKNOWN\n");
 		if (!quiet_en) printf("c |\n");
 	}
 	if (perf_en) print_reports();
