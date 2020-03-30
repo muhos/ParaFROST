@@ -45,7 +45,7 @@ INT_OPT opt_SH("sh", "define the search heuristics, where:\nc |\
 	1 -> clause-sized random deletion heuristic,\nc |\
 	2 -> LBD heuristic.", 2, INT32R(0, 2));
 INT_OPT opt_seed("seed", "seed value for random generation", 9453921, INT32R(1, INT32_MAX));
-INT_OPT opt_pre_delay("pre-delay", "delay for applying preprocessing (in restarts)", 20, INT32R(0, INT32_MAX));
+INT_OPT opt_pre_delay("pre-delay", "delay for applying preprocessing (in restarts)", 50, INT32R(0, INT32_MAX));
 INT_OPT opt_init_red("init-reduce", "initial number of conflicts for learnts reduction", 2000, INT32R(0, INT32_MAX));
 INT_OPT opt_inc_red_sm("inc-small", "small step for learnt clauses deletion", 300, INT32R(0, INT32_MAX));
 INT_OPT opt_inc_red_bg("inc-big", "large step for learnt clauses deletion", 1000, INT32R(0, INT32_MAX));
@@ -53,6 +53,7 @@ INT_OPT opt_lbd_frozen("lbd-frozen", "freeze clauses if their LBD decreases than
 INT_OPT opt_lbd_min_size("lbd-min-size", "minimum size required to minimize clause", 30, INT32R(3, INT32_MAX));
 INT_OPT opt_lbd_min("lbd-min", "minimum LBD required to minimize clause", 6, INT32R(3, INT32_MAX));
 INT_OPT opt_lbd_rest_base("lbd-restart", "base of restarts (initial LBD queue size)", 50, INT32R(10, INT32_MAX));
+INT_OPT opt_var_dfreq("var-dfreq", "minimum conflicts to increase VSIDS decay", 5000, INT32R(1000, INT32_MAX));
 INT_OPT opt_bl_rest_base("lbd-bl-restart", "base of block restarts (initial trail queue size)", 5000, INT32R(10, INT32_MAX));
 INT_OPT opt_cbt_dist("cbt-dist", "maximum distance (level difference) to activate CBT", 500, INT32R(GLUE, INT32_MAX));
 INT_OPT opt_cbt_confs("cbt-conf", "maximum number of conflicts to activate CBT", 5000, INT32R(0, INT32_MAX));
@@ -61,7 +62,7 @@ DOUBLE_OPT opt_RB("rb-rate", "restart rate for defuse", 1.4, FP64R(1, 5));
 DOUBLE_OPT opt_luby_inc("luby-inc", "luby restart increment value", 2.0);
 DOUBLE_OPT opt_var_inc("var-inc", "VSIDS increment value", 1.0, FP64R(1, 10));
 DOUBLE_OPT opt_var_decay("var-decay", "VSIDS decay value", 0.7, FP64R(0, 1));
-DOUBLE_OPT opt_var_decay_r("var-decay-r", "VSIDS decay rate value", 0.001, FP64R(0, 1));
+DOUBLE_OPT opt_var_decay_r("var-decay-r", "VSIDS decay rate value", 0.006, FP64R(0, 1));
 STRING_OPT opt_restart("restart", "enables <policy> restart, where:\nc |\
 	pow  -> geometric restarts,\nc |\
 	luby -> luby restarts,\nc |\

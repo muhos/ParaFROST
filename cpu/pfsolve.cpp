@@ -15,9 +15,10 @@ GNU General Public License for more details.
 You should have received a copy of the GNU General Public License
 along with this program.  If not, see <https://www.gnu.org/licenses/>.
 **********************************************************************************/
+
 #include "pfsort.h"
 #include "pfsolve.h" 
-#include "pfparser.h"
+#include "pfdimacs.h"
 #include "pfopts.h"
 
 //=======================================//
@@ -33,38 +34,36 @@ ParaFROST* g_pFrost = NULL;
 /***********************************/
 /*     Resources queries           */
 /***********************************/
-#ifdef __linux__ 
-int64 getTotalSystemMemory()
+int64 getAvailSysMem()
 {
-	long pages = sysconf(_SC_PHYS_PAGES);
-	long page_size = sysconf(_SC_PAGE_SIZE);
-	return pages * page_size;
+#ifdef __linux__ 
+	struct sysinfo memInfo;
+	sysinfo(&memInfo);
+	return (memInfo.freeram * (int64)memInfo.mem_unit);
+#elif _WIN32
+	MEMORYSTATUSEX memInfo;
+	memInfo.dwLength = sizeof(MEMORYSTATUSEX);
+	GlobalMemoryStatusEx(&memInfo);
+	return memInfo.ullAvailPhys;
+#endif
 }
+
 void set_timeout(int time_limit)
 {
+#ifdef __linux__ 
 	if (time_limit != 0) {
 		rlimit rl;
 		getrlimit(RLIMIT_CPU, &rl);
 		if (rl.rlim_max == RLIM_INFINITY || (rlim_t)time_limit < rl.rlim_max) {
 			rl.rlim_cur = time_limit;
-			if (setrlimit(RLIMIT_CPU, &rl) == -1) printf("WARNING -> Timeout cannot be set.\n");
+			if (setrlimit(RLIMIT_CPU, &rl) == -1) printf("WARNING - Timeout cannot be set\n");
 		}
 	}
-}
 #elif _WIN32
-int64 getTotalSystemMemory()
-{
-	MEMORYSTATUSEX status;
-	status.dwLength = sizeof(status);
-	GlobalMemoryStatusEx(&status);
-	return status.ullTotalPhys;
-}
-void set_timeout(int time_limit)
-{
 	printf("c | WARNING - timeout not supported on Windows.\n");
-}
 #endif
-// interrupt handlers
+}
+
 void handler_terminate(int)
 {
 	fflush(stdout);
@@ -129,7 +128,7 @@ ParaFROST::ParaFROST(const string& path) :
 	quiet_en(opt_quiet_en), parse_only_en(opt_par_en), rewriter_en(opt_rew_en), perf_en(opt_perf_en),
 	mcv_en(!opt_lcv_en), model_en(opt_model_en), proof_en(opt_proof_en),
 	fdp_en(opt_fdp_en), cbt_en(opt_cbt_en), pre_en(opt_pre_en), lpre_en(opt_lpre_en), pre_delay(opt_pre_delay),
-	var_inc(opt_var_inc), var_decay(opt_var_decay),
+	var_inc(opt_var_inc), var_decay(opt_var_decay), VSIDSDecayFreq(opt_var_dfreq),
 	pdm_rounds(opt_pdm_rounds), pdm_freq(opt_pdm_freq), pdm_order(opt_pdm_ord),
 	restart_base(opt_luby_base), restart_inc(opt_luby_inc), restPolicy(opt_restart), SH(opt_SH),
 	polarity(opt_pol), lbdFrozen(opt_lbd_frozen), lbdMinReduce(opt_lbd_min), lbdMinClSize(opt_lbd_min_size),
@@ -139,15 +138,15 @@ ParaFROST::ParaFROST(const string& path) :
 	proof_path(opt_proof_out)
 {
 	intr = false;
-	if (quiet_en) { verbose = 0; perf_en = false; }
+	sysMem_sz = 0ULL;
+	sysMemCons = 0LL;
+	sysMemAvail = getAvailSysMem();
+	if (sysMemAvail < MBYTE) printf("c | Not enough memory to run the solver (Available: %lld GB)\n", sysMemAvail / GBYTE), exit(EXIT_FAILURE);
+	if (verbose >= 1) printf("c | Available system memory = %lld GB\n", sysMemAvail / GBYTE);
+	if (quiet_en) verbose = 0, perf_en = false;
 	if (SH < 2 && restPolicy == "lbd") restPolicy = "luby";
 	if (SH == 2 && restPolicy != "lbd") restPolicy = "lbd";
-	if (pre_en) opt_simp();
-	sysMem_sz = 0ULL;
-	sysMemCons = 0.0;
-	sysMemTot = (double)getTotalSystemMemory() - 1.0 * GBYTE;
-	this->path = path;
-	timer = new TIMER();
+	if (pre_en) optSimp();
 	if (proof_en) {
 		proofFile.open(proof_path, std::ofstream::binary | std::ofstream::out);
 		if (!proofFile.is_open()) {
@@ -155,17 +154,13 @@ ParaFROST::ParaFROST(const string& path) :
 			exit(EXIT_FAILURE);
 		}
 	}
-	if (rewriter_en) { CNF_rewriter(path); exit(EXIT_SUCCESS); }
+	this->path = path;
+	timer = new TIMER();
+	if (rewriter_en) { cnfrewriter(path); exit(EXIT_SUCCESS); }
 	// parse cnf & check top state
-	CNF_STATE top = CNF_parser(path);
-	if (top == TERMINATE) { sysFree(); exit(EXIT_FAILURE); }
-	else if (top == UNSAT || BCP() != NULL) {
-		wrapUp(UNSAT);
-		if (proof_en) { write_proof('0'); proofFile.close(); }
-		sysFree(); exit(EXIT_SUCCESS);
-	}
-	if (parse_only_en) { sysFree(); exit(EXIT_SUCCESS); }
-	simplify_top();
+	CNF_STATE top = parser(path);
+	if (top == TERMINATE || parse_only_en) killSolver();
+	else if (top == UNSAT || BCP() != NULL) { if (proof_en) write_proof('0'); killSolver(UNSAT); }
 	if (verbose == 1) {
 		printf("c |-------------------------------------- Progress --------------------------------------|\n");
 		if (SH == 2) {
@@ -192,94 +187,129 @@ ParaFROST::~ParaFROST()
 	if (verbose >= 1) cout << "c |--------------------------------------------------------------------------------------|" << endl;
 }
 
-CNF_STATE ParaFROST::CNF_parser(const string& path) {
+CNF_STATE ParaFROST::parser(const string& path) {
+	struct stat st;
+	stat(path.c_str(), &st);
+	size_t fsz = st.st_size;
+	if (verbose >= 1) printf("c | Parsing CNF file \"%s\" (size: %zd KB)\n", path.c_str(), fsz / KBYTE);
+	timer->start();
+#ifdef __linux__
+	int fd = open(path.c_str(), O_RDONLY, 0);
+	if (fd == -1) printf("Cannot open input file\n"), exit(EXIT_FAILURE);
+	void* buffer = mmap(NULL, fsz, PROT_READ, MAP_PRIVATE, fd, 0);
+	char* str = (char*)buffer;
+#else
 	ifstream inputFile;
 	inputFile.open(path, ifstream::in);
-	if (!inputFile.is_open()) {
-		printf("Cannot open input file %s.\n", path.c_str());
-		exit(EXIT_FAILURE);
-	}
-	if (verbose >= 1) printf("c | Parsing CNF file \"%s\"\n", path.c_str());
-	char* tmp = new char[LIT_LEN];
-	char* buffer = new char[BUFFER_SIZE];
-	uVector1D header(2), tmpCl;
-	uint32* in_c;
-	int c_sz = 0, oldSz = 0;
-	while (inputFile.getline(buffer, BUFFER_SIZE)) {
-		std::streamsize len = inputFile.gcount();
-		if (len == 0) { printf("Error - empty line.\n"); exit(EXIT_FAILURE); }
-		if (len == 1 && *buffer == '\0') continue;
-		if (len == 2 && (*buffer == '0' || (*buffer >= '%' && *buffer <= '/'))) continue;
-		if (*buffer != 'c') {
-			if (*buffer == 'p') {
-				read_header(header, tmp, buffer);
-				if (verbose >= 1) printf("c | Found header %s\n", buffer);
-				cnf_stats.n_org_vars = header[0], cnf_stats.n_org_cls = header[1];
-				orgs.resize(cnf_stats.n_org_cls);
-				WT_alloc();
-				solver_alloc();
-				solver_init();
+	if (!inputFile.is_open()) printf("Cannot open input file\n"), exit(EXIT_FAILURE);
+	char* buffer = new char[fsz + 1], *str = buffer;
+	inputFile.read(buffer, fsz);
+	buffer[fsz] = '\0';
+#endif
+	uVector1D in_c, tmpCl;
+	int oldSz = 0;
+	char* eof = str + fsz;
+	while (str < eof) {
+		skipWS(str);
+		if (*str == '\0' || *str == '0' || *str == '%') break;
+		if (*str == 'c') skipLine(str);
+		else if (*str == 'p') {
+			if (!eq(str, "p cnf")) printf("Error - header has wrong format\n"), exit(EXIT_FAILURE);
+			cnf_stats.n_org_vars = toInteger(str);
+			cnf_stats.n_org_cls = toInteger(str);
+			if (cnf_stats.n_org_vars <= 0 || cnf_stats.n_org_cls <= 0) printf("Error - header has negative or zero value\n"), exit(EXIT_FAILURE);
+			if (verbose >= 1) printf("c | Found header %d %d\n", cnf_stats.n_org_vars, cnf_stats.n_org_cls);
+			assert(orgs.empty());
+			orgs.resize(cnf_stats.n_org_cls);
+			assert(wt.empty());
+			wt.resize((int64)V2D(nOrgVars() + 1LL));
+			allocSolver();
+			initSolver();
+		}
+		else {
+			toClause(in_c, str);
+			if (proof_en) {
+				oldSz = in_c.size();
+				tmpCl.clear(true);
+				tmpCl.resize(in_c.size());
+				tmpCl.copyFrom(in_c);
 			}
-			else {
-				timer->start();
-				char* head = buffer;
-				bool c_end = false;
-				while (*buffer) if (*buffer++ == ' ' && *buffer == '0') c_end = true;
-				buffer = head;
-				if (!c_end) { printf("Error - clause ending not recognizable.\n"); return TERMINATE; }
-				c_sz = count_spaces(buffer); // predict number of lits (for faster clause storage!)
-				if (c_sz == 0) { printf("Error - empty clause.\n"); return TERMINATE; }
-				in_c = new uint32[c_sz];
-				toLits(in_c, tmp, buffer, c_sz);
-				if (proof_en) {
-					oldSz = c_sz;
-					tmpCl.clear(true);
-					tmpCl.resize(c_sz);
-					tmpCl.copyFrom(in_c, c_sz);
+			if (checkClause(in_c)) { // clause not a tautology
+				if (proof_en && in_c.size() < oldSz) {
+					write_proof('a');
+					write_proof(in_c, in_c.size());
+					write_proof(0);
+					write_proof('d');
+					write_proof(tmpCl, in_c.size());
+					write_proof(0);
 				}
-				if (checkClause(in_c, c_sz)) { // clause not a tautology
-					if (proof_en && c_sz < oldSz) {
-						write_proof('a');
-						write_proof(in_c, c_sz);
-						write_proof(0);
-						write_proof('d');
-						write_proof(tmpCl, c_sz);
-						write_proof(0);
-					}
-					if (c_sz == 1) {
-						assert(*in_c > 0);
-						uint32 v_idx = V2IDX(*in_c);
-						if (sol->assign(v_idx) == UNDEFINED) { var_heap->remove(v_idx); enqueue(*in_c); }
-						else if (sol->assign(v_idx) == ISNEG(*in_c)) return UNSAT;
-					}
-					else if (c_sz > MAX_CL_SZ) { 
-						printf("Error - clause size \"%d\" not supported.\n", c_sz);
-						return TERMINATE;
-					}
-					else if (cnf_stats.global_n_cls + 1 > cnf_stats.n_org_cls) {
-						printf("Error - too many clauses.\n");
-						return TERMINATE;
-					}
-					else {
-						B_REF org = new BCLAUSE();
-						org->copyLitsFrom(in_c, c_sz);
-						attachClause(org);
-					}
+				if (in_c.size() == 1) {
+					assert(*in_c > 0);
+					uint32 v_idx = V2IDX(*in_c);
+					if (sol->assign(v_idx) == UNDEFINED) { var_heap->remove(v_idx); enqueue(*in_c); }
+					else if (sol->assign(v_idx) == ISNEG(*in_c)) return UNSAT;
 				}
-				timer->stop();
-				timer->par += timer->CPU_time();
-				delete[] in_c;
+				else if (cnf_stats.global_n_cls + 1 > cnf_stats.n_org_cls) { printf("Error - too many clauses\n"); return TERMINATE; }
+				else {
+					B_REF org = new BCLAUSE();
+					org->copyLitsFrom(in_c, in_c.size());
+					attachClause(org);
+				}
 			}
 		}
 	}
-	delete[] buffer, tmp;
-	assert(nClauses() + nBins() <= nOrgClauses());
+	timer->stop();
+	timer->par = timer->cpuTime();
+#ifdef __linux__
+	if (munmap(buffer, fsz) != 0) {
+		printf("Cannot clean input file %s mapping.\n", path.c_str());
+		exit(EXIT_FAILURE);
+	}
+	close(fd);
+#else
+	delete[] buffer;
+	inputFile.close();
+#endif
+	assert(nClauses() + nBins() <= nOrgCls());
 	cnf_stats.n_org_bins = nBins();
 	cnf_stats.n_org_lits = nLiterals() + ((int64)nBins() << 1);
 	if ((int)nClauses() < orgs.size()) orgs.resize(nClauses());
-	inputFile.close();
-	if (verbose >= 1) printf("c | Read %d Vars, %d Cls, and %lld Lits in %.3f sec.\n", nOrgVars(), nOrgClauses(), nOrgLits() + learnt_cl.size(), timer->par);
+	in_c.clear(true), tmpCl.clear(true);
+	if (verbose >= 1) printf("c | Read %d Vars, %d Cls, and %lld Lits in %.3f sec.\n", nOrgVars(), nClauses() + nOrgBins() + sp->trail_size, nOrgLits() + sp->trail_size, timer->par);
 	return UNSOLVED;
+}
+
+int64 ParaFROST::sysMemUsed()
+{
+	int64 memUsed = 0;
+#ifdef __linux__ 
+	FILE* file = fopen("/proc/self/status", "r");
+	char line[128];
+	while (fgets(line, 128, file) != NULL) {
+		char* str = line;
+		if (eq(str, "VmRSS:")) {
+			skipWS(str);
+			memUsed = toInteger(str);
+			break;
+		}
+	}
+	fclose(file);
+	return memUsed * KBYTE;
+#elif _WIN32
+	PROCESS_MEMORY_COUNTERS_EX memInfo;
+	GetProcessMemoryInfo(GetCurrentProcess(), (PROCESS_MEMORY_COUNTERS*)&memInfo, sizeof(PROCESS_MEMORY_COUNTERS_EX));
+	memUsed = memInfo.WorkingSetSize;
+#endif
+	return memUsed;
+}
+
+void ParaFROST::killSolver(const CNF_STATE& status)
+{
+	wrapUp(status);
+	if (proof_en) proofFile.close();
+	this->~ParaFROST();
+	g_pFrost = NULL;
+	exit(EXIT_SUCCESS);
 }
 
 void ParaFROST::sysFree()
@@ -313,52 +343,22 @@ void ParaFROST::sysFree()
 	}
 }
 
-void ParaFROST::WT_alloc(bool re)
+void ParaFROST::allocSolver(const bool& re)
 {
-	/* allocate host memory for the watch table */
-	assert(nOrgVars() > 0);
-	size_t maxVars = V2D(size_t(nOrgVars()) + 1);
-	double wt_cap = (double)maxVars * sizeof(WATCH);
-	assert(wt.empty());
 	if (re) {
-		int nOldVars = nOrgVars() + nRemVars();
-		sysMemCons -= V2D(size_t(nOldVars) + 1);
-		if (sysMemCons < 0) sysMemCons = 0.0;
-	}
-	sysMemCons += wt_cap;
-	if (sysMemCons >= sysMemTot) {
-		if (verbose > 1) cout << "\nc | Not enough system memory for watch table (Max: " << sysMemTot / MBYTE << ", Consumed: " << sysMemCons / MBYTE << " MB)" << endl;
-		else cout << "c | Not enough memory for watch table (Max: " << sysMemTot / MBYTE << ", Consumed: " << sysMemCons / MBYTE << " MB)" << endl;
-		exit(EXIT_FAILURE);
-	}
-	wt.resize(maxVars);
-}
-
-void ParaFROST::solver_alloc(bool re)
-{
-	if (verbose >= 2) cout << "c | Allocating fixed memory..";
-	if (re) {
-		int nOldVars = nOrgVars() + nRemVars();
 		assert(sysMem != NULL);
 		assert(var_heap != NULL);
 		free(sysMem);
 		delete var_heap;
-		sysMemCons -= (sysMem_sz + sizeof(VAR_HEAP) + (double)sizeof(double) * nOldVars);
-		if (sysMemCons < 0) sysMemCons = 0.0;
 	}
 	lrn.max_cl_sz = nOrgVars();
 	sysMem_sz = sizeof(SOL) + sizeof(SP) + sizeof(PV) +
 		nOrgVars() * (sizeof(uint32) * 5 + sizeof(ASSIGN_ST) + sizeof(G_REF) + 5) +
 		lrn.max_cl_sz * sizeof(uint32) * 2;
-	sysMemCons += sysMem_sz + sizeof(VAR_HEAP) + sizeof(double) * nOrgVars();
-	if (sysMemCons >= sysMemTot) {
-		cout << "| Not enough system memory for the solver (Allowed: " << sysMemTot / MBYTE << ", Consumed: " << sysMemCons / MBYTE << " MB)" << endl;
-		exit(EXIT_FAILURE);
-	}
 	sysMem = NULL;
-	sysMem = (Byte*)malloc(sysMem_sz);
+	sysMem = (addr_t)malloc(sysMem_sz);
 	memset(sysMem, 0, sysMem_sz);
-	Byte* bottom = sysMem + sysMem_sz;
+	addr_t bottom = sysMem + sysMem_sz;
 	// sol
 	sol = (SOL*)sysMem;
 	sysMem += sizeof(SOL);
@@ -408,10 +408,46 @@ void ParaFROST::solver_alloc(bool re)
 	var_heap = NULL;
 	var_heap = new VAR_HEAP();
 	var_heap->allocMem(nOrgVars());
-	if (verbose >= 2) cout << "(" << (double)sysMem_sz / MBYTE << " MB) ==> done." << endl;
+	if (verbose >= 2) printf("C | Memory consumed after allocSolver call = %lld MB\n", sysMemUsed() / MBYTE);
 }
 
-void ParaFROST::CNF_rewriter(const string& path) {
+void ParaFROST::resetSolver(const bool& re) {
+	if (SH == 2) {
+		maxConflicts = UNKNOWN;
+		marker = UNKNOWN;
+		reductions = 1;
+		lrn.nClsReduce = nClsReduce;
+		lbdQ.reset();
+		trailQ.reset();
+	}
+	nConflicts = UNKNOWN;
+	ref_vars = UNKNOWN;
+	cnf_stats.n_added_lits = cnf_stats.global_n_gcs = UNKNOWN;
+	lrn.init();
+	stats.reset();
+	var_heap->init(var_inc, var_decay);
+	var_heap->build(nOrgVars());
+	if (re) {
+		for (uint32 v = 0; v < nOrgVars(); v++) { sp->pol[v] = true; sol->init(v); }
+	}
+	else {
+		for (uint32 v = 0; v < nOrgVars(); v++) { sp->pol[v] = true; sp->lock[v] = false; source[v] = NULL; sol->init(v); }
+		sp->reset_trail();
+	}
+}
+
+void ParaFROST::initSolver()
+{
+	assert(UNKNOWN == 0);
+	assert(UNDEFINED < 0 && ROOT_LEVEL == 0);
+	srand(seed);
+	restarts = starts = UNKNOWN;
+	if (SH == 2) { lbdQ.alloc(lbdRestBase); trailQ.alloc(blockRestBase); }
+	cl_params.init();
+	resetSolver();
+}
+
+void ParaFROST::cnfrewriter(const string& path) {
 	ifstream inputFile;
 	inputFile.open(path + ".cnf", ifstream::in);
 	if (!inputFile.is_open()) {
@@ -424,55 +460,32 @@ void ParaFROST::CNF_rewriter(const string& path) {
 		cout << "c | Cannot open the output file: " << path << endl;
 		exit(EXIT_FAILURE);
 	}
-	char* tmp = new char[LIT_LEN];
-	char* buffer = new char[BUFFER_SIZE];
-	uVector1D header(2);
+	char* line = new char[BUFFER_SIZE];
 	cnf_stats.global_n_cls = 0;
-	register int clause_len = 0;
-	cout << "c | Parsing BCNF file \"" << path << "\"" << endl;
-	outFile << "c rewritten formula generated by ParaFROST." << endl;
-	while (inputFile.getline(buffer, BUFFER_SIZE)) {
-		std::streamsize len = inputFile.gcount();
-		if (len == 0) { cout << "c | Error --> Empty line found. " << endl; exit(EXIT_FAILURE); }
-		if (len == 1 && *buffer == '\0') continue;
-		if (len == 2 && (*buffer == '0' || (*buffer >= '%' && *buffer <= '/'))) continue;
-		if (*buffer != 'c') {
-			if (*buffer == 'p') {
-				read_header(header, tmp, buffer);
-				cout << "c | Found header " << buffer << endl;
-				cnf_stats.n_org_cls = header[1];
-				outFile << buffer << endl;
+	if (verbose >= 1) printf("c | Parsing CNF file \"%s\"\n", path.c_str());
+	outFile << "c rewritten formula by ParaFROST." << endl;
+	while (inputFile.getline(line, BUFFER_SIZE)) {
+		char* ch = line; int len = 0;
+		while (*ch) ch++;
+		len = ch - line;
+		if (len == 0 || (len == 1 && (*line == '0' || (*line >= '%' && *line <= '/')))) continue;
+		if (*line != 'c') {
+			if (*line == 'p') {
+				if (!eq(line, "p cnf")) printf("Error - header has wrong format\n"), exit(EXIT_FAILURE);
+				cnf_stats.n_org_vars = toInteger(line);
+				cnf_stats.n_org_cls = toInteger(line);
+				if (cnf_stats.n_org_vars <= 0 || cnf_stats.n_org_cls <= 0) printf("Error - header has negative or zero value\n"), exit(EXIT_FAILURE);
+				if (verbose >= 1) printf("c | Found header %d %d\n", cnf_stats.n_org_vars, cnf_stats.n_org_cls);
+				outFile << line << endl;
 			}
 			else {
-				char* head = buffer;
-				bool clause_end = false;
-				while (*buffer) if (*buffer++ == ' ' && *buffer == '0') clause_end = true;
-				buffer = head;
-				if (!clause_end) {
-					cout << "c | Error --> clause ending not recognizable." << endl;
-					cout << "c | Dump buffer --> " << buffer << endl;
-					exit(EXIT_FAILURE);
-				}
-				clause_len = count_spaces(buffer); // predict number of lits (for faster clause storage!)
-				if (clause_len == 0) {
-					cout << "c | Error --> empty clause." << endl;
-					exit(EXIT_FAILURE);
-				}
-				else if (clause_len > MAX_CL_SZ) {
-					cout << "c | Error --> clause size: " << clause_len << " is unsupported." << endl;
-					exit(EXIT_FAILURE);
-				}
-				else if (cnf_stats.global_n_cls + 1 > cnf_stats.n_org_cls) {
-					cout << "c | Error --> too many clauses." << endl;
-					exit(EXIT_FAILURE);
-				}
 				cnf_stats.global_n_cls++;
-				outFile << buffer << endl;
+				outFile << line << endl;
 			}
 		}
 	}
-	delete[] buffer, tmp;
-	assert(nClauses() <= nOrgClauses());
+	delete[] line;
+	assert(nClauses() <= nOrgCls());
 	inputFile.close();
 	outFile.close();
 }
@@ -644,7 +657,6 @@ void ParaFROST::simplify()
 	assert(nClauses() > 0);
 	assert(sp->trail_size > 0 && DL() == ROOT_LEVEL);
 	assert(sol->assign(V2IDX(sp->trail[sp->trail_size - 1])) != UNDEFINED);
-	timer->start();
 	// reduce watch table
 	for (int i = sp->trail_offset; i < sp->trail_size; i++) {
 		uint32 assign = sp->trail[i], assign_f = FLIP(assign);
@@ -676,60 +688,6 @@ void ParaFROST::simplify()
 	cnf_stats.global_n_del_vars += (sp->trail_size - sp->trail_offset);
 	sp->trail_offset = sp->trail_size;
 	lrn.simp_props = nLiterals() + nLearntLits();
-	timer->stop();
-	timer->red += timer->CPU_time();
-	if (verbose >= 2) printf(" ==> done\n");
-}
-
-void ParaFROST::simplify_top()
-{
-	if (sp->trail_size == sp->trail_offset) return;
-	if (verbose >= 2) printf("c | Simplifying CNF..");
-	assert(sp->trail_offset == 0);
-	assert(sp->trail_head == sp->trail_size);
-	assert(nClauses() > 0);
-	assert(sp->trail_size > 0 && DL() == ROOT_LEVEL);
-	assert(sol->assign(V2IDX(sp->trail[sp->trail_size - 1])) != UNDEFINED);
-	timer->start();
-	// simplify orgs
-	cnf_stats.global_n_cls = 0;
-	for (int i = 0; i < orgs.size(); i++) {
-		B_REF c = orgs[i];
-		if (c->satisfied(assigns)) detachClause(c);
-		else {
-			shrinkClause(c);
-			if (c->size() > 2) orgs[cnf_stats.global_n_cls++] = c;
-			else { c->flag_orgBin(); c->set_status(UNKNOWN); bins.push(c); }
-		}
-	}
-	orgs.resize(cnf_stats.global_n_cls);
-	// simplify bins
-	cnf_stats.global_n_bins = 0;
-	for (int i = 0; i < bins.size(); i++) {
-		B_REF c = bins[i];
-		if (c->satisfied(assigns)) {
-			remWatch(wt[FLIP(c->w0_lit())], c);
-			remWatch(wt[FLIP(c->w1_lit())], c);
-			delete c;
-		}
-		else bins[cnf_stats.global_n_bins++] = c;
-	}
-	bins.resize(cnf_stats.global_n_bins);
-	// remove root-level watch lists
-	for (int i = sp->trail_offset; i < sp->trail_size; i++) {
-		uint32 assign = sp->trail[i];
-		wt[assign].clear(true);
-		wt[FLIP(assign)].clear(true);
-		uint32 assign_idx = V2IDX(assign);
-		if (var_heap->has(assign_idx)) var_heap->remove(assign_idx); // remove assign from the heap
-		if (pre_en) removed.push(assign); // save in case preprocessing mapped variables
-	}
-	cnf_stats.global_n_del_vars += (sp->trail_size - sp->trail_offset);
-	sp->trail_offset = sp->trail_size;
-	timer->stop();
-	timer->red += timer->CPU_time();
-	assert(consistent(bins, wt));
-	assert(consistent(orgs, wt));
 	if (verbose >= 2) printf(" ==> done\n");
 }
 
@@ -743,25 +701,6 @@ void ParaFROST::enqueue(const uint32& assign, const int& pLevel, const G_REF src
 	sol->set_assign(assign_idx, !ISNEG(assign));
 	sol->set_level(assign_idx, pLevel);
 	if (verbose >= 3) printf("c | New %s: %d@%d.\n", src == NULL ? "decision" : "imp", (ISNEG(assign)) ? -int(ABS(assign)) : ABS(assign), pLevel);
-}
-
-void ParaFROST::simp_learnt()
-{
-	assert(learnt_cl.size() > 1);
-	assert(lrn.max_cl_sz > learnt_cl.size());
-	if (verbose >= 3) printLearnt(learnt_cl);
-	register uint32* lit = learnt_cl, *tmp_lit = tmp_stack, *end = lit + learnt_cl.size();
-	while (lit != end) *tmp_lit++ = *lit++;
-	uint32 min_level = 0;
-	for (LIT_POS k = 1; k < learnt_cl.size(); k++)  min_level |= MAPHASH(sol->level(V2IDX(learnt_cl[k])));
-	CL_LEN new_sz = 1, tmp_sz = (CL_LEN)learnt_cl.size();
-	for (LIT_POS k = 1; k < learnt_cl.size(); k++) {
-		if (source[V2IDX(learnt_cl[k])] == NULL || !selfsub(learnt_cl[k], tmp_stack, tmp_sz, min_level))
-			learnt_cl[new_sz++] = learnt_cl[k];
-	}
-	tmp_lit = tmp_stack; end = tmp_stack + tmp_sz;
-	while (tmp_lit < end) sp->seen[V2IDX(*tmp_lit++)] = 0;
-	learnt_cl.resize(new_sz);
 }
 
 void ParaFROST::binSelfsub() 
@@ -835,7 +774,26 @@ bool ParaFROST::selfsub(const uint32& learntLit, uint32* tmp_stack, CL_LEN& tmp_
 	return true;
 }
 
-void ParaFROST::bt_level()
+void ParaFROST::selfsub()
+{
+	assert(learnt_cl.size() > 1);
+	assert(lrn.max_cl_sz > learnt_cl.size());
+	if (verbose >= 3) printLearnt(learnt_cl);
+	register uint32* lit = learnt_cl, * tmp_lit = tmp_stack, * end = lit + learnt_cl.size();
+	while (lit != end) *tmp_lit++ = *lit++;
+	uint32 min_level = 0;
+	for (LIT_POS k = 1; k < learnt_cl.size(); k++)  min_level |= MAPHASH(sol->level(V2IDX(learnt_cl[k])));
+	CL_LEN new_sz = 1, tmp_sz = (CL_LEN)learnt_cl.size();
+	for (LIT_POS k = 1; k < learnt_cl.size(); k++) {
+		if (source[V2IDX(learnt_cl[k])] == NULL || !selfsub(learnt_cl[k], tmp_stack, tmp_sz, min_level))
+			learnt_cl[new_sz++] = learnt_cl[k];
+	}
+	tmp_lit = tmp_stack; end = tmp_stack + tmp_sz;
+	while (tmp_lit < end) sp->seen[V2IDX(*tmp_lit++)] = 0;
+	learnt_cl.resize(new_sz);
+}
+
+void ParaFROST::btLevel()
 {
 	if (learnt_cl.size() == 1) sp->bt_level = ROOT_LEVEL;
 	else if (learnt_cl.size() == 2) sp->bt_level = sol->level(V2IDX(learnt_cl[1]));
@@ -852,7 +810,7 @@ void ParaFROST::bt_level()
 	}
 }
 
-void ParaFROST::cbt_level(C_REF c)
+void ParaFROST::cbtLevel(C_REF c)
 {
 	sp->max1Found = false;
 	register uint32 w0_lit = (*c)[0];
@@ -885,11 +843,10 @@ void ParaFROST::cbt_level(C_REF c)
 
 void ParaFROST::analyze(C_REF c)
 {
-	if (verbose >= 2) printf("c | Analyzing conflict..");
 	if (verbose >= 3) {
-		printf("\n"); printTrail(sp->trail, sp->trail_size);
+		printf("c | Analyzing conflict:\n"); 
+		printTrail(sp->trail, sp->trail_size);
 	}
-	timer->start();
 	learnt_cl.clear();
 	learnt_cl.push(UNKNOWN);
 	int conf_level = UNDEFINED;
@@ -942,10 +899,10 @@ void ParaFROST::analyze(C_REF c)
 	stats.max_lits += learnt_cl.size();
 	if (learnt_cl.size() == 1) sp->bt_level = ROOT_LEVEL;
 	else { // simplify learnt clause 
-		simp_learnt(); 
+		selfsub(); 
 		if (SH == 2 && learnt_cl.size() <= lbdMinClSize && calcLBD(learnt_cl) <= lbdMinReduce)
 			binSelfsub();
-		bt_level();
+		btLevel();
 	}
 	if (SH == 2) {
 		sp->learnt_lbd = calcLBD(learnt_cl); // calculate LBD of minimized learnt clause
@@ -961,12 +918,10 @@ void ParaFROST::analyze(C_REF c)
 		}
 	}
 	stats.tot_lits += learnt_cl.size();
-	timer->stop();
-	timer->bj += timer->CPU_time();
 	if (verbose >= 3) printLearnt(learnt_cl);
 }
 
-void ParaFROST::cancel_assigns(const int& bt_level)
+void ParaFROST::cancelAssigns(const int& bt_level)
 {
 	// Non-Chrono. BT
 	if (!cbt_en && DL() > bt_level) {
@@ -1014,11 +969,10 @@ void ParaFROST::cancel_assigns(const int& bt_level)
 }
 
 void ParaFROST::backJump(const int& bt_level) {
-	if (verbose >= 2) printf("c | Backjumping to level %d\n", bt_level);
-	timer->start();
+	if (verbose >= 3) printf("c | Backjumping to level %d\n", bt_level);
 	assert(sp->trail_size > 0);
 	// cancel old assignments up to backtrack level <bt_level>
-	cancel_assigns(bt_level);
+	cancelAssigns(bt_level);
 	// add learnt clause & enqueue learnt decision
 	if (proof_en) {
 		write_proof('a');
@@ -1041,8 +995,6 @@ void ParaFROST::backJump(const int& bt_level) {
 		attachClause(learnt);
 		enqueue(learnt_cl[0], sp->bt_level, learnt); // enqueue must always use sp->bt_level
 	}
-	timer->stop();
-	timer->bj += timer->CPU_time();
 }
 
 void ParaFROST::remWatch(WL& ws, const G_REF gc)
@@ -1063,9 +1015,6 @@ void ParaFROST::remWatch(WL& ws, const G_REF gc)
 void ParaFROST::lReduce()
 {
 	if (verbose >= 2) printf("c | Reducing learnt database..");
-	timer->start();
-	/*printf("c | before reduce:\n");
-	printCNF(learnts, 0);*/
 	int n = 0;
 	if (SH == 1) { // CSR
 		Sort(learnts, LEARNT_SR());
@@ -1111,17 +1060,12 @@ void ParaFROST::lReduce()
 		}
 	}
 	learnts.resize(n);
-	timer->stop();
-	timer->red += timer->CPU_time();
 	assert(consistent(learnts, wt));
 	if (verbose >= 2) printf(" ==> done.\n");
-	/*printf("c | after reduce:\n");
-	printCNF(learnts, 0);*/
 }
 
 C_REF ParaFROST::BCP()
 {
-	timer->start();
 	C_REF conf_ref = NULL;
 	int numProps = 0;
 	while (sp->trail_head < sp->trail_size) { // propagate assignments
@@ -1203,8 +1147,6 @@ C_REF ParaFROST::BCP()
 	}
 	stats.n_props += numProps;
 	lrn.simp_props -= numProps;
-	timer->stop();
-	timer->bcp += timer->CPU_time();
 	return conf_ref;
 }
 
@@ -1236,15 +1178,15 @@ CNF_STATE ParaFROST::search()
 	sp->learnt_lbd = UNKNOWN;
 	int64 confs = UNKNOWN;
 	while (!interrupted()) {
-		if (verbose >= 2) printf("c | Current Decision Level = %d.\n", DL());
+		if (verbose >= 3) printf("c | Current Decision Level = %d\n", DL());
 		C_REF conf_ref = BCP();
 		if (conf_ref != NULL) {
 			nConflicts++; confs++; 
 			if (cbt_en) {
-				cbt_level(conf_ref);
+				cbtLevel(conf_ref);
 				if (sp->cbt_level == ROOT_LEVEL) return UNSAT;
 				if (sp->max1Found) {
-					cancel_assigns(sp->cbt_level - 1);
+					cancelAssigns(sp->cbt_level - 1);
 					continue;
 				}
 			}
@@ -1252,11 +1194,11 @@ CNF_STATE ParaFROST::search()
 			if (SH == 2) {
 				maxConflicts++;
 				// increase var decay over time
-				if (nConflicts % blockRestBase == 0 && var_heap->VarDecay() < 0.95) 
+				if (nConflicts % VSIDSDecayFreq == 0 && var_heap->VarDecay() < 0.95) 
 					var_heap->incVarDecay(opt_var_decay_r);
 				// block restarts
 				trailQ.push(sp->trail_size);
-				if (maxConflicts > BL_RESTART_MIN && lbdQ.isFull() && sp->trail_size > (RB * trailQ.average())) {
+				if (maxConflicts > BL_RESTART_MIN && lbdQ.full() && sp->trail_size > (RB * trailQ.average())) {
 					lbdQ.reset();
 					stats.nRestartStops++;
 				}
@@ -1290,13 +1232,13 @@ CNF_STATE ParaFROST::search()
 		}
 		else {
 			// solving restart policy
-			if (SH == 2 && lbdQ.isFull() && ((lbdQ.average() * RF) > (lbdSum / maxConflicts))) { // LBD restarts
+			if (SH == 2 && lbdQ.full() && ((lbdQ.average() * RF) > (lbdSum / maxConflicts))) { // LBD restarts
 				lbdQ.reset();
-				cancel_assigns(ROOT_LEVEL);
+				cancelAssigns(ROOT_LEVEL);
 				return UNSOLVED;
 			}
 			else if (SH < 2 && confs >= maxConflicts) { // luby/power restarts
-				cancel_assigns(ROOT_LEVEL);
+				cancelAssigns(ROOT_LEVEL);
 				return UNSOLVED;
 			}
 			// simplify (satisfied clauses)
@@ -1320,8 +1262,9 @@ CNF_STATE ParaFROST::search()
 
 void ParaFROST::solve()
 {
+	timer->start();
 	if (pre_en && !pre_delay) {	preprocess(); pre_en = false; }
-	PDM_init();
+	PDMInit();
 	CNF_STATE status = UNSOLVED;
 	double rest_fact = 1.0;
 	while (status == UNSOLVED) {
@@ -1331,26 +1274,18 @@ void ParaFROST::solve()
 		}
 		// special restart for preprocessing
 		if (pre_en && restarts >= 1 && restarts % pre_delay == 0) {
-			preprocess(); PDM_init();
+			preprocess(); PDMInit();
 			pre_en = false; progRate = opt_progress;
 		}
 		status = search();
 		restarts++;
 		PDM_fuse();
 	}
+	timer->stop();
+	timer->solve = timer->cpuTime();
+	timer->solve -= timer->pre;
 	if (proof_en) proofFile.close();
 	wrapUp(status);
-}
-
-void ParaFROST::solver_init()
-{
-	assert(UNKNOWN == 0);
-	assert(UNDEFINED < 0 && ROOT_LEVEL == 0);
-	srand(seed);
-	restarts = starts = UNKNOWN;
-	if (SH == 2) { lbdQ.alloc(lbdRestBase); trailQ.alloc(blockRestBase); }
-	cl_params.init();
-	init();
 }
 
 bool ParaFROST::consistent(BCNF& cnf, WT& wt)
@@ -1437,44 +1372,28 @@ bool ParaFROST::consistent(LCNF& cnf, WT& wt)
 	return true;
 }
 
-void ParaFROST::print_reports()
+void ParaFROST::printReport()
 {
 	if (perf_en) {
-		printf("c |\nc |                      Solver Report                        \n");
-		if (simp_perf_en) {
-			printf("c | VO + OT              : %.3f sec\n", (double)timer->vo + timer->ot);
-			printf("c | BVE                  : %.3f sec\n", timer->bve);
-			printf("c | SUB                  : %.3f sec\n", timer->hse);
-			printf("c | BCE                  : %.3f sec\n", timer->bce);
-			printf("c | HRE                  : %.3f sec\n", timer->hre);
-		}
-		printf("c | PDM                  : %.3f sec\n", timer->pdm);
-		printf("c | BCP                  : %.3f sec\n", timer->bcp);
-		printf("c | Backjump             : %.3f sec\n", timer->bj);
-		printf("c | CNF Reduce           : %.3f sec\n", timer->red);
-		printf("c | -----------------------------------\n");
-		double simp_t = 0;
-		if (simp_perf_en) {
-			simp_t = (double)timer->vo + timer->ot + timer->bve + timer->hse + timer->bce + timer->hre;
-			printf("c | Simpifier time       : %.3f sec\n", simp_t);
-		}
-		double sol_t = (double)timer->pdm + timer->red + timer->bcp + timer->bj;
-		printf("c | Solving time         : %.3f sec\n", sol_t + simp_t);
+		printf("c |\nc |\t\t\tSolver Report\n");
+		printf("c | Simplifier time      : %.3f sec\n", timer->pre);
+		printf("c | Solver time          : %.3f sec\n", timer->solve);
+		printf("C | Solver memory        : %.3f MB\n", ((double)sysMemUsed() / MBYTE));
 		printf("c | PDM calls            : %-10d\n", stats.pdm_calls);
 		printf("c | Restarts             : %-10d\n", starts);
 		printf("c | Blocked restarts     : %-10d\n", stats.nRestartStops);
 		printf("c | Chronological BT     : %-10d\n", stats.cbt);
 		printf("c | Non-chronological BT : %-10d\n", stats.ncbt);
-		printf("c | Parallel Decisions   : %-10lld  (%.1f dec/sec)\n", stats.n_pds, (stats.n_pds / sol_t));
-		printf("c | Follow-Up Decisions  : %-10lld  (%.1f dec/sec)\n", stats.n_fuds, (stats.n_fuds / sol_t));
-		printf("c | Propagations         : %-10lld  (%.1f prop/sec)\n", stats.n_props, (stats.n_props / sol_t));
-		printf("c | Conflicts            : %-10lld  (%.1f conf/sec)\n", nConflicts, (nConflicts / sol_t));
+		printf("c | Parallel Decisions   : %-10lld  (%.1f dec/sec)\n", stats.n_pds, (stats.n_pds / timer->solve));
+		printf("c | Follow-Up Decisions  : %-10lld  (%.1f dec/sec)\n", stats.n_fuds, (stats.n_fuds / timer->solve));
+		printf("c | Propagations         : %-10lld  (%.1f prop/sec)\n", stats.n_props, (stats.n_props / timer->solve));
+		printf("c | Conflicts            : %-10lld  (%.1f conf/sec)\n", nConflicts, (nConflicts / timer->solve));
 		printf("c | Conflict literals    : %-10lld  (%.2f %% deleted)\n", stats.tot_lits, (stats.max_lits - stats.tot_lits) * 100 / (double)stats.tot_lits);
 		printf("c |--------------------------------------------------------------------------------------|\n");
 	}
 }
 
-void ParaFROST::print_model()
+void ParaFROST::printModel()
 {
 	printf("v ");
 	for (int i = 0; i < removed.size(); i++) { // print any saved assignments
@@ -1500,29 +1419,27 @@ void ParaFROST::wrapUp(const CNF_STATE &status)
 {
 	// print results
 	if (verbose >= 1) printf("c |--------------------------------------------------------------------------------------|\nc |\n");
-	//double simp_t = (double)timer->vo + timer->ot + timer->bve + timer->hse + timer->bce + timer->hre;
-	//double sol_t = (double)timer->pdm + timer->red + timer->bcp + timer->bj;
 	if (status == SAT) {
 		if (!quiet_en) printf("c |\n");
-		//printf("%s: ", path.c_str()); printf("s SATISFIABLE (time=%.3f)\n", simp_t + sol_t);
+		//printf("%s: ", path.c_str()); printf("s SATISFIABLE (time=%.3f)\n", timer->solve);
 		printf("s SATISFIABLE\n");
 		if (!quiet_en) printf("c |\n");
 		if (model_en) {
-			print_model();
+			printModel();
 			if (!quiet_en) printf("\nc |\n");
 			else printf("\n");
 		}
 	}
 	else if (status == UNSAT) {
 		if (!quiet_en) printf("c |\n");
-		//printf("%s: ", path.c_str()); printf("s UNSATISFIABLE (time=%.3f)\n", simp_t + sol_t);
+		//printf("%s: ", path.c_str()); printf("s UNSATISFIABLE (time=%.3f)\n", timer->solve);
 		printf("s UNSATISFIABLE\n");
 		if (!quiet_en) printf("c |\n");
 	}
 	else if (status == TERMINATE) {
-		//printf("%s: ", path.c_str()); printf("s UNKNOWN (time=%.3f)\n", simp_t + sol_t);
+		//printf("%s: ", path.c_str()); printf("s UNKNOWN (time=%.3f)\n", timer->solve);
 		printf("s UNKNOWN\n");
 		if (!quiet_en) printf("c |\n");
 	}
-	if (perf_en) print_reports();
+	if (perf_en) printReport();
 }

@@ -21,20 +21,15 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 #include "pfdefs.h"
 
-// global 
+// global
 bool isQuiet(void);
 void parseArguments(int& argc, char** argv);
 void printUsage(int  argc, char** argv, bool verbose = false);
-template<class T>
-bool eq(T& in, const char* ref) {
-	while (*ref != '\0') { if (*ref != *in) return false; ref++; in++; }
-	return true;
-}
 
 class ARG
 {
 protected:
-	const char* arg, * text, * type;
+	arg_t arg, text, type;
 	bool parsed;
 	struct ARG_CMP {
 		bool operator()(const ARG* x, const ARG* y) {
@@ -43,7 +38,7 @@ protected:
 		}
 	};
 	ARG() { arg = ""; text = ""; type = ""; parsed = false; }
-	ARG(const char* a, const char* x, const char* t) {
+	ARG(arg_t a, arg_t x, arg_t t) {
 		arg = a; text = x; type = t; parsed = false;
 		insert(this);
 	}
@@ -54,7 +49,7 @@ public:
 	friend void printUsage(int  argc, char** argv, bool verbose);
 	// derived methods
 	virtual ~ARG() {}
-	virtual bool parse(const char* input) = 0;
+	virtual bool parse(arg_t input) = 0;
 	virtual void help(bool verbose = false) = 0;
 	virtual void printArgument() = 0;
 	// local
@@ -88,45 +83,41 @@ protected:
 	int val;
 
 public:
-	INT_OPT(const char* a, const char* x, int val = 0, INT32R r = INT32R(INT32_MIN, INT32_MAX))
+	INT_OPT(arg_t a, arg_t x, int val = 0, INT32R r = INT32R(INT32_MIN, INT32_MAX))
 		: ARG(a, x, "<int>"), r(r), val(val) {}
 
 	operator int (void) const { return val; }
 	operator int& (void) { return val; }
 	INT_OPT& operator= (int x) { val = x; return *this; }
 
-	virtual bool parse(const char* input) {
-		const char* strVal = input;
+	virtual bool parse(arg_t input) {
+		arg_t strVal = input;
 		if (!eq(strVal, "--") || !eq(strVal, arg) || !eq(strVal, "="))
 			return false;
 		char* end;
 		int tmpVal = strtol(strVal, &end, 10);
 		if (end == NULL)
 			return false;
-		else if (tmpVal > r.t) {
-			fprintf(stderr, "ERROR - maximum value exceeded for option \"%s\".\n", arg);
-			exit(EXIT_FAILURE);
-		}
-		else if (tmpVal < r.h) {
-			fprintf(stderr, "ERROR - minimum value exceeded for option \"%s\".\n", arg);
-			exit(EXIT_FAILURE);
-		}
+		else if (tmpVal > r.t)
+			printf("ERROR - maximum value exceeded for option \"%s\".\n", arg), exit(EXIT_FAILURE);
+		else if (tmpVal < r.h)
+			printf("ERROR - minimum value exceeded for option \"%s\".\n", arg), exit(EXIT_FAILURE);
 		val = tmpVal;
 		parsed = true;
 		return true;
 	}
 
 	virtual void help(bool verbose = false) {
-		fprintf(stderr, "c |  --%-15s = %-8s [", arg, type);
-		if (r.h == INT32_MIN) fprintf(stderr, "%-5s", "-I32");
-		else fprintf(stderr, "%-5d", r.h);
-		fprintf(stderr, " .. ");
-		if (r.t == INT32_MAX) fprintf(stderr, "%-5s", "+I32");
-		else fprintf(stderr, "%5d", r.t);
-		fprintf(stderr, "] (default: %6d)\n", val);
+		printf("c |  --%-15s = %-8s [", arg, type);
+		if (r.h == INT32_MIN) printf("%-5s", "-I32");
+		else printf("%-5d", r.h);
+		printf(" .. ");
+		if (r.t == INT32_MAX) printf("%-5s", "+I32");
+		else printf("%5d", r.t);
+		printf("] (default: %6d)\n", val);
 		if (verbose) {
-			fprintf(stderr, "c |   %s\n", text);
-			fprintf(stderr, "c |\n");
+			printf("c |   %s\n", text);
+			printf("c |\n");
 		}
 	}
 
@@ -140,15 +131,15 @@ protected:
 	int64  val;
 
 public:
-	INT64_OPT(const char* a, const char* x, int64 val = 0LL, INT64R r = INT64R(INT64_MIN, INT64_MAX))
+	INT64_OPT(arg_t a, arg_t x, int64 val = 0LL, INT64R r = INT64R(INT64_MIN, INT64_MAX))
 		: ARG(a, x, "<int64>"), r(r), val(val) {}
 
 	operator int64 (void) const { return val; }
 	operator int64& (void) { return val; }
 	INT64_OPT& operator= (int64 x) { val = x; return *this; }
 
-	virtual bool parse(const char* input) {
-		const char* strVal = input;
+	virtual bool parse(arg_t input) {
+		arg_t strVal = input;
 
 		if (!eq(strVal, "--") || !eq(strVal, arg) || !eq(strVal, "="))
 			return false;
@@ -158,30 +149,26 @@ public:
 
 		if (end == NULL)
 			return false;
-		else if (tmpVal > r.t) {
-			fprintf(stderr, "ERROR - maximum value exceeded for option \"%s\".\n", arg);
-			exit(EXIT_FAILURE);
-		}
-		else if (tmpVal < r.h) {
-			fprintf(stderr, "ERROR - minimum value exceeded for option \"%s\".\n", arg);
-			exit(EXIT_FAILURE);
-		}
+		else if (tmpVal > r.t)
+			printf("ERROR - maximum value exceeded for option \"%s\".\n", arg), exit(EXIT_FAILURE);
+		else if (tmpVal < r.h)
+			printf("ERROR - minimum value exceeded for option \"%s\".\n", arg), exit(EXIT_FAILURE);
 		val = tmpVal;
 		parsed = true;
 		return true;
 	}
 
 	virtual void help(bool verbose = false) {
-		fprintf(stderr, "c |  --%-15s = %-8s [", arg, type);
-		if (r.h == INT64_MIN) fprintf(stderr, "%-5s", "-I64");
-		else fprintf(stderr, "%5lld", r.h);
-		fprintf(stderr, " .. ");
-		if (r.t == INT64_MAX) fprintf(stderr, "%5s", "+I64");
-		else fprintf(stderr, "%5lld", r.t);
-		fprintf(stderr, "] (default: %6lld)\n", val);
+		printf("c |  --%-15s = %-8s [", arg, type);
+		if (r.h == INT64_MIN) printf("%-5s", "-I64");
+		else printf("%5lld", r.h);
+		printf(" .. ");
+		if (r.t == INT64_MAX) printf("%5s", "+I64");
+		else printf("%5lld", r.t);
+		printf("] (default: %6lld)\n", val);
 		if (verbose) {
-			fprintf(stderr, "c |   %s\n", text);
-			fprintf(stderr, "c |\n");
+			printf("c |   %s\n", text);
+			printf("c |\n");
 		}
 	}
 
@@ -194,45 +181,41 @@ class DOUBLE_OPT : public ARG
 	double val;
 
 public:
-	DOUBLE_OPT(const char* a, const char* x, double val = 0.0, FP64R r = FP64R(-INFINITY, INFINITY)) 
+	DOUBLE_OPT(arg_t a, arg_t x, double val = 0.0, FP64R r = FP64R(-INFINITY, INFINITY)) 
 	: ARG(a, x, "<double>"), r(r), val(val) {}
 
 	operator double(void) const { return val; }
 	operator double& (void) { return val; }
 	DOUBLE_OPT& operator=(double x) { val = x; return *this; }
 
-	virtual bool parse(const char* input) {
-		const char* strVal = input;
+	virtual bool parse(arg_t input) {
+		arg_t strVal = input;
 		if (!eq(strVal, "--") || !eq(strVal, arg) || !eq(strVal, "="))
 			return false;
 		char* end;
 		double tmpVal = strtod(strVal, &end);
 		if (end == NULL)
 			return false;
-		else if (tmpVal >= r.t) {
-			fprintf(stderr, "ERROR - maximum value exceeded for option \"%s\".\n", arg);
-			exit(EXIT_FAILURE);
-		}
-		else if (tmpVal <= r.h) {
-			fprintf(stderr, "ERROR - minimum value exceeded for option \"%s\".\n", arg);
-			exit(EXIT_FAILURE);
-		}
+		else if (tmpVal > r.t)
+			printf("ERROR - maximum value exceeded for option \"%s\".\n", arg), exit(EXIT_FAILURE);
+		else if (tmpVal < r.h)
+			printf("ERROR - minimum value exceeded for option \"%s\".\n", arg), exit(EXIT_FAILURE);
 		val = tmpVal;
 		parsed = true;
 		return true;
 	}
 
 	virtual void help(bool verbose = false) {
-		fprintf(stderr, "c |  --%-15s = %-8s [", arg, type);
-		if (r.h == -INFINITY) fprintf(stderr, "%-6s", "-inf");
-		else fprintf(stderr, "%6.2f", r.h);
-		fprintf(stderr, " .. ");
-		if (r.t == INFINITY) fprintf(stderr, "%6s", "inf");
-		else fprintf(stderr, "%6.2f", r.t);
-		fprintf(stderr, "] (default: %6.2f)\n", val);
+		printf("c |  --%-15s = %-8s [", arg, type);
+		if (r.h == -INFINITY) printf("%-6s", "-inf");
+		else printf("%6.2f", r.h);
+		printf(" .. ");
+		if (r.t == INFINITY) printf("%6s", "inf");
+		else printf("%6.2f", r.t);
+		printf("] (default: %6.2f)\n", val);
 		if (verbose) {
-			fprintf(stderr, "c |   %s\n", text);
-			fprintf(stderr, "c |\n");
+			printf("c |   %s\n", text);
+			printf("c |\n");
 		}
 	}
 
@@ -241,30 +224,33 @@ public:
 
 class STRING_OPT : public ARG
 {
-	const char* val;
+	arg_t val;
+
 public:
-	STRING_OPT(const char* a, const char* x, const char* val = NULL)
+	STRING_OPT(arg_t a, arg_t x, arg_t val = NULL)
 		: ARG(a, x, "<string>"), val(val) {}
 
-	operator const char* (void) const { return val; }
-	operator const char*& (void) { return val; }
-	STRING_OPT& operator=(const char* x) { val = x; return *this; }
+	operator arg_t (void) const { return val; }
+	operator arg_t& (void) { return val; }
+	STRING_OPT& operator=(arg_t x) { val = x; return *this; }
 
 	virtual bool parse(const char *input) {
-		const char* strVal = input;
+		arg_t strVal = input;
 		if (!eq(strVal, "--") || !eq(strVal, arg) || !eq(strVal, "="))
 			return false;
 		val = strVal;
 		parsed = true;
 		return true;
 	}
+
 	virtual void help(bool verbose = false) {
-		fprintf(stderr, "c |  --%-15s = %8s  (default: %s)\n", arg, type, val);
+		printf("c |  --%-15s = %8s  (default: %s)\n", arg, type, val);
 		if (verbose) {
-			fprintf(stderr, "c |   %s\n", text);
-			fprintf(stderr, "c |\n");
+			printf("c |   %s\n", text);
+			printf("c |\n");
 		}
 	}
+
 	virtual void printArgument() { printf(" %s<%s> ", arg, val); }
 };
 
@@ -273,7 +259,7 @@ class BOOL_OPT : public ARG
 	bool val;
 
 public:
-	BOOL_OPT(const char* a, const char* x, bool val = false)
+	BOOL_OPT(arg_t a, arg_t x, bool val = false)
 		: ARG(a, x, "<bool>"), val(val) {}
 
 	operator bool(void) const { return val; }
@@ -282,7 +268,7 @@ public:
 	bool operator!() { return !val;}
 
 	virtual bool parse(const char *input) {
-		const char* strVal = input;
+		arg_t strVal = input;
 		if (eq(strVal, "-")) {
 			bool bVal = !eq(strVal, "no-");
 			if (strcmp(strVal, arg) == 0) {
@@ -295,12 +281,12 @@ public:
 	}
 
 	virtual void help(bool verbose = false) {
-		fprintf(stderr, "c |  -%-10s -no-%-10s", arg, arg);
-		fprintf(stderr, "                 ");
-		fprintf(stderr, "(default: %s)\n", val ? "on" : "off");
+		printf("c |  -%-10s -no-%-10s", arg, arg);
+		printf("                 ");
+		printf("(default: %s)\n", val ? "on" : "off");
 		if (verbose) {
-			fprintf(stderr, "c |   %s\n", text);
-			fprintf(stderr, "c |\n");
+			printf("c |   %s\n", text);
+			printf("c |\n");
 		}
 	}
 

@@ -48,14 +48,15 @@ int main(int argc, char **argv)
 		if (g_pFrost->timeout > 0) set_timeout(pFrost->timeout);
 		sig_handler(handler_mercy_intr, handler_mercy_timeout);
 		pFrost->solve();
+		g_pFrost = NULL;
 		delete pFrost;
-		return EXIT_SUCCESS;
+		exit(EXIT_SUCCESS);
 	}
 	catch (MEMOUTEXCEPTION&) {
 		printf("c |\n");
 		printf("c |%45s\n", "Memoryout");
 		printf("c |\n");
 		printf("s UNKNOWN\n");
-		exit(EXIT_FAILURE);
+		exit(EXIT_SUCCESS);
 	}
 }

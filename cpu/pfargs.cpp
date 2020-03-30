@@ -21,10 +21,6 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 Vec<ARG*> options; // container for all options available
 
-void ARG::insert(ARG* opt) {
-    options.push(this);
-}
-
 bool isQuiet(void) 
 {
     for (int i = 0; i < options.size(); i++) {
@@ -32,6 +28,24 @@ bool isQuiet(void)
             return true;
     }
     return false;
+}
+
+void printUsage(int argc, char** argv, bool verbose)
+{
+    printf("c |--------------------------------------------------------------------------------------|");
+    printf("c | Usage: parafrost [<option> ...][<infile>.<cnf>][<option> ...]");
+    Sort(options, ARG::ARG_CMP());
+    arg_t prev_type = NULL;
+    printf("c |\nc | Options (simplification + solve):\n");
+    for (int i = 0; i < options.size(); i++) {
+        if (options[i]->type != prev_type) printf("c |\n");
+        options[i]->help(verbose);
+        prev_type = options[i]->type;
+    }
+    printf("c |\nc |  -h or --help  print available options.\n");
+    printf("c |  --help-more   print available options with verbose message.\n");
+    printf("c |\nc |--------------------------------------------------------------------------------------|\n");
+    exit(EXIT_SUCCESS);
 }
 
 void parseArguments(int& argc, char** argv)
@@ -52,7 +66,7 @@ void parseArguments(int& argc, char** argv)
             while (k < options.size() && !(parsed = options[k++]->parse(argv[i])));
             if (!parsed) {
                 if (eq(argv[i], "--"))
-                    fprintf(stderr, "ERROR - Unknown flag \"%s\". Use '-h or --help' for help.\n", argv[i]), exit(EXIT_FAILURE);
+                    printf("ERROR - Unknown input \"%s\". Use '-h or --help' for help.\n", argv[i]), exit(EXIT_FAILURE);
                 else
                     argv[j++] = argv[i];
             }
@@ -61,21 +75,4 @@ void parseArguments(int& argc, char** argv)
     argc -= (i - j);
 }
 
-void printUsage(int argc, char** argv, bool verbose)
-{
-    cout << "c |--------------------------------------------------------------------------------------|" << endl;
-    cout << "c | Usage: parafrost [<option> ...][<infile>.<cnf>][<option> ...]" << endl;
-    Sort(options, ARG::ARG_CMP());
-    const char* prev_type = NULL;
-    fprintf(stderr, "c |\nc | Options (simplification + solve):\n");
-    for (int i = 0; i < options.size(); i++) {
-        const char* type = options[i]->type;
-        if (type != prev_type) fprintf(stderr, "c |\n");
-        options[i]->help(verbose);
-        prev_type = options[i]->type;
-    }
-    fprintf(stderr, "c |\nc |  -h or --help  print available options.\n");
-    fprintf(stderr, "c |  --help-more   print available options with verbose message.\n");
-    fprintf(stderr, "c |\nc |--------------------------------------------------------------------------------------|\n");
-    exit(EXIT_SUCCESS);
-}
+void ARG::insert(ARG* opt) { options.push(this); }

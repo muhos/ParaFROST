@@ -26,14 +26,12 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 #include <cstdint>
 #include <cstring>
 #include <locale>
-#include <iomanip>
 #include <cassert>
 #include <cmath>
 #include <cstdio>
 #include <fstream>
 #include <climits>
 #include <cstdlib>
-#include <random>
 #include <csignal>
 #include "Vec.h"
 using std::cout;
@@ -49,8 +47,7 @@ using std::ifstream;
 #define KBYTE 0x00000400
 #define GBYTE 0x40000000
 #define LIT_LEN 32
-#define BUFFER_SIZE (MBYTE << 3)
-#define MAX_CL_SZ 0x0000FFFF
+#define BUFFER_SIZE (MBYTE << 1)
 #define NEG_SIGN 0x00000001
 #define HASH_MASK 0x0000001F
 #define TAUTOLOGY 0
@@ -75,7 +72,6 @@ using std::ifstream;
 #define IMP_RST (int8_t)0xFB  // xxxx-x0xx
 #define DEL_RST (int8_t)0xF7  // xxxx-0xxx
 #define BIN_RST (int8_t)0xEF  // xxx0-xxxx
-#define MAX(x,y) ((x > y) ? x : y)
 #define MAPHASH(x) (1UL << HASH(x))
 #define POS(x) (x & 0xFFFFFFFE)
 #define ROOT_LEVEL 0
@@ -89,6 +85,8 @@ using std::ifstream;
 
 // data types
 typedef unsigned char Byte;
+typedef Byte* addr_t;
+typedef const char* arg_t;
 typedef unsigned int uint32;
 typedef signed long long int int64;
 typedef unsigned long long int uint64;
@@ -110,9 +108,12 @@ void sig_handler(void h_intr(int), void h_timeout(int) = NULL);
 /* Platform-related directives */
 #ifdef __linux__ 
 #include <sys/resource.h>
+#include <sys/mman.h>
+#include <sys/sysinfo.h>
 #include <unistd.h>
 #elif _WIN32
 #include <windows.h>
+#include <psapi.h>
 #endif
 
 //====================================================//
@@ -120,7 +121,7 @@ void sig_handler(void h_intr(int), void h_timeout(int) = NULL);
 //====================================================//
 /*****************************************************/
 /*  Name:     CNF_INFO                               */
-/*  Usage:    collecting information about BCNF       */
+/*  Usage:    collecting information about CNF       */
 /*  Scope:    host only                              */
 /*  Memory:   system memory                          */
 /*  Dependency:  none                                */
@@ -148,10 +149,44 @@ struct CNF_INFO {
 	}
 };
 extern CNF_INFO cnf_stats;
+
+struct OCCUR {
+	uint32 ps, ns;
+	OCCUR() : ps(0), ns(0) {}
+	void reset(void) { ps = 0; ns = 0; }
+};
+
+struct SCORE {
+	uint32 v, sc;
+	SCORE() : v(0), sc(0) {}
+};
+
+class TIMER {
+private:
+	clock_t _start, _stop;
+	float _cpuTime;
+
+public:
+	float par, solve, pre;
+
+	TIMER() {
+		_start = 0, _stop = 0, _cpuTime = 0;
+		par = 0, solve = 0, pre = 0;
+	}
+	~TIMER() { _cpuTime = 0; }
+
+	void start() { _start = clock(); }
+	void stop() { _stop = clock(); }
+	float cpuTime() { return _cpuTime = ((float)abs(_stop - _start)) / CLOCKS_PER_SEC; }
+};
+
+//====================================================//
+//                 Global Inline helpers              //
+//====================================================//
 inline uint32 nOrgVars() {
 	return cnf_stats.n_org_vars;
 }
-inline uint32 nOrgClauses() {
+inline uint32 nOrgCls() {
 	return cnf_stats.n_org_cls;
 }
 inline uint32 nOrgBins() {
@@ -178,40 +213,11 @@ inline int64 nLiterals() {
 inline int64 nLearntLits() {
 	return cnf_stats.n_added_lits;
 }
-
-struct OCCUR {
-	uint32 ps, ns;
-	OCCUR() : ps(0), ns(0) {}
-	void reset(void) { ps = 0; ns = 0; }
-};
-
-struct SCORE {
-	uint32 v, sc;
-	SCORE() : v(0), sc(0) {}
-};
-
-class TIMER {
-private:
-	clock_t _start, _stop;
-	float cpuTime;
-
-public:
-	float par, vo, pdm;
-	float bcp, bj, red;
-	float ot, lcve, bve, hse, bce, hre;
-
-	TIMER() {
-		_start = 0, _stop = 0, cpuTime = 0;
-		par = 0, vo = 0, pdm = 0;
-		bcp = 0, bj = 0, red = 0;
-		lcve = 0, ot = 0, bve = 0, hse = 0, bce = 0, hre = 0;
-	}
-	~TIMER() { cpuTime = 0; }
-
-	void start() { _start = clock(); }
-	void stop() { _stop = clock(); }
-	float CPU_time() { return cpuTime = ((float)abs(_stop - _start)) / CLOCKS_PER_SEC; }
-};
+template<class T>
+inline bool eq(T& in, arg_t ref) {
+	while (*ref != '\0') { if (*ref != *in) return false; ref++; in++; }
+	return true;
+}
 
 #endif // __GL_DEFS_
 

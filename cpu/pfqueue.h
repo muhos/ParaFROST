@@ -28,18 +28,16 @@ class BQUEUE {
 	int h, t, _bound, _sz;
 
 public:
-	BQUEUE(void){
-		h = 0, t = 0, _bound = 0, _sz = 0, _sum = 0ULL;
-	}
-	~BQUEUE() {}
+	BQUEUE(){ h = 0, t = 0, _bound = 0, _sz = 0, _sum = 0ULL; }
+	~BQUEUE() { h = 0, t = 0, _bound = 0, _sz = 0, _sum = 0ULL; }
 
-	void alloc(int cap) {
+	inline void alloc(int cap) {
 		_bound = cap;
 		data.resize(_bound, 0);
 		reset();
 	}
 
-	void push(T x) {
+	inline void push(T x) {
 		if (_sz == _bound) {
 			assert(t == h); 
 			_sum -= data[t++];
@@ -51,31 +49,21 @@ public:
 		if (h == _bound) { h = 0, t = 0; }
 	}
 
-	void pop() { 
+	inline void pop() {
 		_sum -= data[t++]; 
 		if (t == _bound) t = 0;
 		_sz--; 
 	}
 
-	int bound() { return _bound; }
-
-	bool isFull() { return _sz == _bound; }
-
-	T tail() { assert(_sz > 0); return data[t]; }
-
-	int size() { return _sz; }
-
-	void reset() { h = 0, t = 0, _sz = 0, _sum = 0ULL; }
-
-	void clear(bool dealloc = false) { 
-		data.clear(dealloc); 
-		reset();
-	}
-	
+	inline int bound() { return _bound; }
+	inline bool full() { return _sz == _bound; }
+	inline T tail() { assert(_sz > 0); return data[t]; }
+	inline int size() { return _sz; }
+	inline void reset() { h = 0, t = 0, _sz = 0, _sum = 0ULL; }
+	inline void clear(bool dealloc = false) { data.clear(dealloc), reset(); }
 	// stats calculation
-	uint64 sum() { return _sum; }
-
-	uint32 average() { return (uint32)(_sum / (uint64)_sz); }
+	inline uint64 sum() { return _sum; }
+	inline uint32 average() { return (uint32)(_sum / (uint64)_sz); }
 };
 
 #endif // __BQ_

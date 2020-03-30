@@ -19,9 +19,8 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 #include "pfsort.h"
 #include "pfsolve.h" 
 
-void ParaFROST::var_order()
+void ParaFROST::varOrder()
 {
-	timer->start();
 	scores.resize(nOrgVars());
 	occurs.resize(nOrgVars());
 	hist(orgs, true);
@@ -41,32 +40,20 @@ void ParaFROST::var_order()
 			printf("c | var(%d).occurs = %d\n", scores[i].v + 1, scores[i].sc);
 		}
 	}
-	timer->stop();
-	timer->pdm += timer->CPU_time();
 }
 
-void ParaFROST::hist(BCNF& cnf, bool rst)
+void ParaFROST::hist(BCNF& cnf, const bool& rst)
 {
 	if (cnf.size() == 0) return;
 	if (rst) { for (int i = 0; i < occurs.size(); i++) occurs[i].reset(); }
 	for (int i = 0; i < cnf.size(); i++) clHist(cnf[i]);
 }
 
-void ParaFROST::hist(LCNF& cnf, bool rst)
+void ParaFROST::hist(LCNF& cnf, const bool& rst)
 {
 	if (cnf.size() == 0) return;
 	if (rst) { for (int i = 0; i < occurs.size(); i++) occurs[i].reset(); }
 	for (int i = 0; i < cnf.size(); i++) clHist(cnf[i]);
-}
-
-void ParaFROST::PDM_fuse()
-{
-	if ((!pdm_freq && SH == 2 && (starts % ((maxConflicts / 1000) + 1)) == 0) ||
-		(!pdm_freq && SH < 2 && starts % maxConflicts == 0) ||
-		(pdm_freq && starts % pdm_freq == 0)) {
-		ref_vars = UNKNOWN;
-		R = pdm_rounds;
-	}
 }
 
 void ParaFROST::pumpFrozen()
@@ -86,14 +73,13 @@ void ParaFROST::pumpFrozen()
 	}
 }
 
-void ParaFROST::PDM_init()
+void ParaFROST::PDMInit()
 {
 	if (!pdm_rounds) return;
 	R = pdm_rounds;
-	if (verbose >= 2) printf("c | Electing decisions (R=%d)..\n", R);
+	if (verbose >= 3) printf("c | Electing decisions (R=%d)..\n", R);
 	stats.pdm_calls++;
-	var_order(); // initial variable ordering
-	timer->start();
+	varOrder(); // initial variable ordering
 	if (mcv_en) { // prefer the most-constrained variables
 		for (int v = (int)nOrgVars() - 1; v >= 0; v--) {
 			uint32 cand = scores[v].v;
@@ -137,20 +123,16 @@ void ParaFROST::PDM_init()
 	bool* f = sp->frozen, * f_end = f + nOrgVars();
 	while (f != f_end) *f++ = 0;
 	// update pdm counter
-	ref_vars = nOrgVars() - nPDs;
-	R--;
+	ref_vars = nOrgVars() - nPDs, R--;
 	stats.n_pds += nPDs;
 	// FUD Prioritization
 	if (fdp_en) pumpFrozen();
-	timer->stop();
-	timer->pdm += timer->CPU_time();
 }
 
 void ParaFROST::PDM()
 {
-	if (verbose >= 2) printf("c | Electing decisions..\n");
+	if (verbose >= 3) printf("c | Electing decisions (R=%d)..\n", R);
 	stats.pdm_calls++;
-	timer->start();
 	eligibility();
 	assert(sp->numFree > 0);
 	uint32* v = sp->free_decs, * v_e = v + sp->numFree;
@@ -179,11 +161,8 @@ void ParaFROST::PDM()
 	}
 	bool* f = sp->frozen, * f_end = f + nOrgVars();
 	while (f != f_end) *f++ = 0;
-	ref_vars = nOrgVars() - nPDs;
-	R--;
+	ref_vars = nOrgVars() - nPDs, R--;
 	stats.n_pds += nPDs;
-	timer->stop();
-	timer->pdm += timer->CPU_time();
 }
 
 bool ParaFROST::depFreeze_init(WL& ws, const uint32& cand) {

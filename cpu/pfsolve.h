@@ -44,7 +44,7 @@ public:
 	SOL() { _assigns = NULL, _level = NULL, numVars = 0; }
 	~SOL() { _assigns = NULL, _level = NULL, numVars = 0; }
 
-	void allocMem(Byte** _mem, const uint32& sz) {
+	void allocMem(addr_t* _mem, const uint32& sz) {
 		numVars = sz;
 		assert(numVars > 0);
 		_assigns = (ASSIGN_ST*)(*_mem);
@@ -587,8 +587,8 @@ protected:
 	int* board;	uint32* tmp_stack, *simpLearnt;
 	uVector1D learnt_cl, learntLits; vector1D trail_sz;
 	LEARN lrn; CL_PARAM cl_params; STATS stats;
-	Byte* sysMem; size_t sysMem_sz;
-	double sysMemTot, sysMemCons;
+	addr_t sysMem; size_t sysMem_sz;
+	int64 sysMemAvail, sysMemCons;
 	int64 maxConflicts, nConflicts;
 	int starts, restarts, R, ref_vars, reductions, marker;
 	BQUEUE<uint32> lbdQ, trailQ; float lbdSum; 
@@ -659,28 +659,12 @@ public:
 		}
 		return lbd;
 	}
-	inline void init(bool re = true) {
-		if (SH == 2) {
-			maxConflicts = UNKNOWN;
-			marker = UNKNOWN;
-			reductions = 1;
-			lrn.nClsReduce = nClsReduce;
-			lbdQ.reset();
-			trailQ.reset();
-		}
-		nConflicts = UNKNOWN;
-		ref_vars = UNKNOWN;
-		cnf_stats.n_added_lits = cnf_stats.global_n_gcs = UNKNOWN;
-		lrn.init();
-		stats.reset();
-		var_heap->init(var_inc, var_decay);
-		var_heap->build(nOrgVars());
-		if (re) {
-			for (uint32 v = 0; v < nOrgVars(); v++) { sp->pol[v] = true; sol->init(v); }
-		}
-		else {
-			for (uint32 v = 0; v < nOrgVars(); v++) { sp->pol[v] = true; sp->lock[v] = false; source[v] = NULL; sol->init(v); }
-			sp->reset_trail();
+	inline void PDM_fuse() {
+		if ((!pdm_freq && SH == 2 && (starts % ((maxConflicts / 1000) + 1)) == 0) ||
+			(!pdm_freq && SH < 2 && starts % maxConflicts == 0) ||
+			(pdm_freq && starts % pdm_freq == 0)) {
+			ref_vars = UNKNOWN;
+			R = pdm_rounds;
 		}
 	}
 	inline void printWatched(const uint32& v_idx) {
@@ -702,48 +686,49 @@ public:
 	inline void printStats(bool p) {
 		if (verbose == 1 && p) {
 			int remainedVars = (int)nOrgVars() - (int)nRemVars();
-			printf("c | %9d %9d %8d %10lld %6d %9d %8d %10lld %7.0f |\n",
+			int l2c = learnts.size() == 0 ? 0 : int(nLearntLits() / learnts.size());
+			printf("c | %9d %9d %9d %10lld %6d %9d %8d %10lld %6d |\n",
 				remainedVars, nClauses(), nBins(), nLiterals(),
 				starts,
-				learnts.size(), nGlues(), nLearntLits(), learnts.size() == 0 ? 0 : nLearntLits() / (float)learnts.size());
+				learnts.size(), nGlues(), nLearntLits(), l2c);
 			progRate += progRate / 4;
 		}
 	}
 	//=============================================
+	int64 sysMemUsed(void);
 	void sysFree(void);
-	void CNF_rewriter(const string&);
-	void var_order(void);
-	void hist(BCNF&, bool rst = false);
-	void hist(LCNF&, bool rst = false);
+	void killSolver(const CNF_STATE& status = TERMINATE);
+	void resetSolver(const bool& re = true);
+	void allocSolver(const bool& re = false);
+	void initSolver(void);
+	void cnfrewriter(const string&);
+	void varOrder(void);
+	void hist(BCNF&, const bool& rst = false);
+	void hist(LCNF&, const bool& rst = false);
 	void attachClause(B_REF);
 	void attachClause(C_REF);
-	void WT_alloc(bool re = false);
-	void solver_alloc(bool re = false);
-	void solver_init(void);
 	int simplify(BCNF&);
 	int simplify(LCNF&);
 	void simplify(void);
-	void simplify_top(void);
 	void solve(void);
-	CNF_STATE CNF_parser(const string&);
+	CNF_STATE parser(const string&);
 	CNF_STATE search(void);
 	CNF_STATE decide(void);
 	void pumpFrozen(void);
-	void PDM_init(void);
+	void PDMInit(void);
 	void PDM(void);
-	void PDM_fuse(void);
 	bool depFreeze_init(WL&, const uint32&);
 	bool depFreeze(WL&, const uint32&);
 	void eligibility(void);
 	C_REF BCP(void);
 	void enqueue(const uint32&, const int& pLevel = ROOT_LEVEL, const G_REF = NULL);
-	void bt_level(void);
+	void btLevel(void);
 	void binSelfsub(void);
-	void simp_learnt(void);
+	void selfsub(void);
 	bool selfsub(const uint32&, uint32*, CL_LEN&, const uint32&);
-	void cbt_level(C_REF);
+	void cbtLevel(C_REF);
 	void analyze(C_REF);
-	void cancel_assigns(const int&);
+	void cancelAssigns(const int&);
 	void backJump(const int&);
 	void remWatch(WL&, const G_REF);
 	void shrinkClause(G_REF);
@@ -752,15 +737,15 @@ public:
 	void lReduce(void);
 	bool consistent(BCNF&, WT&);
 	bool consistent(LCNF&, WT&);
-	void print_reports(void);
-	void print_model(void);
+	void printReport(void);
+	void printModel(void);
 	void wrapUp(const CNF_STATE&);
 	/* flags */
 	bool quiet_en, parse_only_en, rewriter_en, perf_en;
 	bool mcv_en, model_en, proof_en, fdp_en, cbt_en;
 	int progRate, verbose, seed, timeout;
 	int pdm_rounds, pdm_freq, pdm_order;
-	int SH, polarity, restart_base, lbdRestBase, blockRestBase;
+	int SH, polarity, restart_base, lbdRestBase, blockRestBase, VSIDSDecayFreq;
 	int nClsReduce, lbdFrozen, lbdMinReduce, lbdMinClSize, incReduceSmall, incReduceBig;
 	int cbt_dist, cbt_conf_max;
 	double var_inc, var_decay;
@@ -801,7 +786,7 @@ public:
 			else occurs[V2IDX(c->lit(i))].ps++;
 		}
 	}
-	inline void cnt_cls(void) {
+	inline void countCls(void) {
 		cnf_stats.n_cls_after = 0;
 		cnf_stats.n_lits_after = 0;
 		for (int i = 0; i < scnf.size(); i++)
@@ -810,13 +795,13 @@ public:
 				cnf_stats.n_lits_after += scnf[i]->size();
 			}
 	}
-	inline void cnt_lits(void) {
+	inline void countLits(void) {
 		cnf_stats.n_lits_after = 0;
 		for (int i = 0; i < scnf.size(); i++)
 			if (scnf[i]->status() != DELETED)
 				cnf_stats.n_lits_after += scnf[i]->size();
 	}
-	inline void eval_reds(void) {
+	inline void evalReds(void) {
 		cnf_stats.n_del_vars = 0;
 		cnf_stats.n_cls_after = 0;
 		cnf_stats.n_lits_after = 0;
@@ -841,10 +826,10 @@ public:
 		if (cnf_stats.n_lits_after > nLiterals()) printf("c |  Literals after = %lld (+%lld)\n", cnf_stats.n_lits_after, cnf_stats.n_lits_after - nLiterals());
 		else printf("c |  Literals after = %lld (-%lld)\n", cnf_stats.n_lits_after, nLiterals() - cnf_stats.n_lits_after);
 	}
-	inline void print_pstats() {
+	inline void printPStats() {
 		if (verbose == 1 && SH == 2) {
 			int remainedVars = (int)nOrgVars() - (int)nRemVars();
-			printf("c |p %8d %9d %8s %10lld %6d %9s %8s %10s %7s |\n",
+			printf("c |p %8d %9d %9s %10lld %6d %9s %8s %10s %6s |\n",
 				remainedVars, nClauses(), "---", nLiterals(), starts, "---", "---", "---", "---");
 		}
 		if (verbose == 1 && SH < 2) {
@@ -854,22 +839,21 @@ public:
 		}
 	}
 	//==============================================
-	void killSolver();
-	void opt_simp();
-	void hist(const SCNF&, bool rst = false);
-	void var_reorder(void);
+	void optSimp();
+	void hist(const SCNF&, const bool& rst = false);
+	void varReorder(void);
 	void extractBins(void);
 	bool awaken(void);
 	void cleanSlate(void);
 	void reduce_ol(OL&);
 	void reduce_ot(void);
-	void create_ot(bool rst = true);
+	void create_ot(const bool& rst = true);
 	CNF_STATE prop(void);
 	void strengthen(S_REF, const uint32&);
 	bool propClause(S_REF c, const uint32&);
 	void attachClause(S_REF, const bool& added = true);
 	void reattachClause(B_REF);
-	void shrinkCNF(const bool countVars = false);
+	void shrinkCNF(const bool& countVars = false);
 	void _simplify(void);
 	void preprocess(void);
 	void depFreeze(const OL&, const uint32&, const int&, const int&);
@@ -882,7 +866,7 @@ public:
 	void SUB(void);
 	bool consistent(const SCNF&, const OT&);
 	/* flags */
-	bool pre_en, lpre_en, simp_perf_en, ve_en, ve_plus_en, sub_en, bce_en, hre_en, all_en;
+	bool pre_en, lpre_en, ve_en, ve_plus_en, sub_en, bce_en, hre_en, all_en;
 	int pre_delay, mu_pos, mu_neg, phases, cnf_free_freq;
 };
 extern ParaFROST* g_pFrost;

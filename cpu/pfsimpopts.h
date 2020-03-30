@@ -21,7 +21,6 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 #include "pfargs.h"
 
-BOOL_OPT opt_simp_perf_en("perf-simp", "print simplifier full performance report", true);
 BOOL_OPT opt_ve_en("bve", "enable bounded variable elimination (BVE)", true);
 BOOL_OPT opt_sub_en("sub", "enable hybrid subsumption elimination (HSE) with high bounds in LCVE", false);
 BOOL_OPT opt_ve_plus_en("bve+", "enable (BVE + HSE) untill no literals can be removed", true);

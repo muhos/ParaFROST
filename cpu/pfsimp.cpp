@@ -19,17 +19,9 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 #include "pfsimp.h"
 #include "pfsimpopts.h"
 
-void ParaFROST::killSolver() 
-{ 
-	wrapUp(TERMINATE); 
-	this->~ParaFROST(); 
-	exit(EXIT_SUCCESS); 
-}
-
-void ParaFROST::opt_simp()
+void ParaFROST::optSimp()
 {
 	assert(pre_en);
-	simp_perf_en = opt_simp_perf_en;
 	ve_en = opt_ve_en || opt_ve_plus_en;
 	ve_plus_en = opt_ve_plus_en;
 	sub_en = opt_sub_en;
@@ -45,7 +37,7 @@ void ParaFROST::opt_simp()
 	if (phases && !ve_en) phases = 0;
 }
 
-void ParaFROST::hist(const SCNF& cnf, bool rst)
+void ParaFROST::hist(const SCNF& cnf, const bool& rst)
 {
 	if (cnf.size() == 0) return;
 	if (rst) { for (int i = 0; i < occurs.size(); i++) occurs[i].reset(); }
@@ -55,9 +47,8 @@ void ParaFROST::hist(const SCNF& cnf, bool rst)
 	}
 }
 
-void ParaFROST::var_reorder()
+void ParaFROST::varReorder()
 {
-	timer->start();
 	scores.resize(nOrgVars());
 	occurs.resize(nOrgVars());
 	assert(!scnf.empty());
@@ -76,8 +67,6 @@ void ParaFROST::var_reorder()
 			printf("c | var(%d).occurs = %d\n", scores[i].v + 1, scores[i].sc);
 		}
 	}
-	timer->stop();
-	timer->vo += timer->CPU_time();
 }
 
 void ParaFROST::attachClause(S_REF c, const bool& added)
@@ -216,9 +205,8 @@ CNF_STATE ParaFROST::prop()
 	return UNSOLVED;
 }
 
-void ParaFROST::create_ot(bool rst)
+void ParaFROST::create_ot(const bool& rst)
 {
-	timer->start();
 	// reset ot
 	if (rst) {
 		for (uint32 v = 0; v < nOrgVars(); v++) { 
@@ -239,8 +227,6 @@ void ParaFROST::create_ot(bool rst)
 			}
 		}
 	}
-	timer->stop();
-	timer->ot += timer->CPU_time();
 	assert(consistent(scnf, ot));
 }
 
@@ -256,15 +242,12 @@ void ParaFROST::reduce_ol(OL& ol)
 
 void ParaFROST::reduce_ot()
 {
-	timer->start();
 	for (uint32 v = 0; v < nOrgVars(); v++) {
 		if (pv->melted[v] || sp->lock[v]) continue;
 		uint32 p = V2D(v + 1), n = NEG(p);
 		reduce_ol(ot[p]);
 		reduce_ol(ot[n]);
 	}
-	timer->stop();
-	timer->ot += timer->CPU_time();
 	assert(consistent(scnf, ot));
 }
 
@@ -277,7 +260,6 @@ void ParaFROST::_simplify()
 	assert(sp->trail_head == sp->trail_size);
 	assert(sol->assign(V2IDX(sp->trail[sp->trail_size - 1])) != UNDEFINED);
 	if (verbose >= 2) printf("c | Simplifying CNF..");
-	timer->start();
 	// reduce watch table
 	for (int i = sp->trail_offset; i < sp->trail_size; i++) {
 		uint32 assign = sp->trail[i], assign_f = FLIP(assign);
@@ -285,10 +267,9 @@ void ParaFROST::_simplify()
 		WL& ws = wt[assign_f];
 		for (int j = 0; j < ws.size(); j++) {
 			B_REF c = (B_REF)ws[j].c_ref;
-			if (c->orgBin()) { // original binary
+			if (c->orgBin()) { 
 				assert(c->size() == 2);
 				assert(c->status() == UNKNOWN);
-				//printf("c | Removing bin clause "); c->print();
 				uint32 w_lit = (assign == c->w1_lit()) ? c->w0_lit() : c->w1_lit();
 				remWatch(wt[FLIP(w_lit)], c);
 				delete c;
@@ -306,70 +287,54 @@ void ParaFROST::_simplify()
 	orgs.resize(cnf_stats.global_n_cls);
 	cnf_stats.global_n_del_vars += (sp->trail_size - sp->trail_offset);
 	sp->trail_offset = sp->trail_size;
-	timer->stop();
-	timer->red += timer->CPU_time();
 	if (verbose >= 2) printf(" ==> done\n");
-	//print(wt);
 }
 
 void ParaFROST::extractBins()
 {
-	if (pre_delay) {
-		if (nOrgBins()) {
-			bins.clear(), bins.resize(nBins());  // for garbage collection
-			uint32 nbins = 0;
-			for (uint32 v = 0; v < nOrgVars(); v++) {
-				uint32 p = V2D(v + 1), n = NEG(p);
-				WL& posBins = wt[n];
-				for (int j = 0; j < posBins.size(); j++) {
-					assert(posBins[j].c_ref != NULL);
-					B_REF c = (B_REF)posBins[j].c_ref;
-					if (c->size() == 2 && !c->orgBin() && !c->molten()) { // collect learnt bins
-						bins[nbins++] = c;
-						c->melt();
-					}
-					if (c->orgBin()) {
-						assert(c->status() == UNKNOWN);
-						S_REF sc = new SCLAUSE();
-						sc->copyLitsFrom(*c, 2);
-						attachClause(sc, false);
-						c->reset_orgBin();
-						c->melt();
-						bins[nbins++] = c;
-					}
+	if (nOrgBins()) {
+		bins.clear(), bins.resize(nBins());  // for garbage collection
+		uint32 nbins = 0;
+		for (uint32 v = 0; v < nOrgVars(); v++) {
+			uint32 p = V2D(v + 1), n = NEG(p);
+			WL& posBins = wt[n];
+			for (int j = 0; j < posBins.size(); j++) {
+				assert(posBins[j].c_ref != NULL);
+				B_REF c = (B_REF)posBins[j].c_ref;
+				if (c->size() == 2 && !c->orgBin() && !c->molten()) { // collect learnt bins
+					bins[nbins++] = c;
+					c->melt();
 				}
-				WL& negBins = wt[p];
-				for (int j = 0; j < negBins.size(); j++) {
-					assert(negBins[j].c_ref != NULL);
-					B_REF c = (B_REF)negBins[j].c_ref;
-					if (c->size() == 2 && !c->orgBin() && !c->molten()) {
-						bins[nbins++] = c;
-						c->melt();
-					}
-					if (c->orgBin()) {
-						assert(c->status() == UNKNOWN);
-						S_REF sc = new SCLAUSE();
-						sc->copyLitsFrom(*c, 2);
-						attachClause(sc, false);
-						c->reset_orgBin();
-						c->melt();
-						bins[nbins++] = c;
-					}
+				if (c->orgBin()) {
+					assert(c->status() == UNKNOWN);
+					S_REF sc = new SCLAUSE();
+					sc->copyLitsFrom(*c, 2);
+					attachClause(sc, false);
+					c->reset_orgBin();
+					c->melt();
+					bins[nbins++] = c;
 				}
 			}
-			for (uint32 i = 0; i < nbins; i++) delete bins[i];
-		}
-	}
-	else {
-		for (int i = 0; i < bins.size(); i++) {
-			if (bins[i]->orgBin()) {
-				assert(bins[i]->status() == UNKNOWN);
-				S_REF sc = new SCLAUSE();
-				sc->copyLitsFrom(*bins[i], 2);
-				attachClause(sc, false);
+			WL& negBins = wt[p];
+			for (int j = 0; j < negBins.size(); j++) {
+				assert(negBins[j].c_ref != NULL);
+				B_REF c = (B_REF)negBins[j].c_ref;
+				if (c->size() == 2 && !c->orgBin() && !c->molten()) {
+					bins[nbins++] = c;
+					c->melt();
+				}
+				if (c->orgBin()) {
+					assert(c->status() == UNKNOWN);
+					S_REF sc = new SCLAUSE();
+					sc->copyLitsFrom(*c, 2);
+					attachClause(sc, false);
+					c->reset_orgBin();
+					c->melt();
+					bins[nbins++] = c;
+				}
 			}
-			delete bins[i];
 		}
+		for (uint32 i = 0; i < nbins; i++) delete bins[i];
 	}
 	bins.clear(true);
 	wt.clear(true);
@@ -378,29 +343,31 @@ void ParaFROST::extractBins()
 bool ParaFROST::awaken()
 { 
 	// bcp/simplify any remained facts at root level
-	if (pre_delay) _simplify(); 
+	_simplify(); 
 	// alloc memory for occur. table
-	size_t maxVars = V2D(size_t(nOrgVars()) + 1);
-	double ot_cap = (double)maxVars * sizeof(S_REF);
-	sysMemCons += ot_cap;
-	if (sysMemCons >= sysMemTot) { // to catch memout problems before exception does
-		if (verbose > 1) cout << "\nc | Not enough system memory for occur. table (Max: " << sysMemTot / MBYTE << ", Consumed: " << sysMemCons / MBYTE << " MB)" << endl;
-		sysMemCons -= ot_cap;
+	int64 maxEntries = nLiterals() + ((int64)nBins() << 1); // overestimation
+	int64 ot_cap = maxEntries * sizeof(S_REF);
+	sysMemCons = sysMemUsed() + ot_cap;
+	if (verbose >= 2) printf("C | Memory consumed after OT alloc = %lld MB\n", sysMemCons / MBYTE);
+	if (sysMemCons > sysMemAvail) { // to catch memout problems before exception does
+		if (verbose >= 2) printf("c | Not enough memory for OT (available: %lld, consumed: %lld)\n", sysMemAvail / MBYTE, sysMemCons / MBYTE);
+		sysMemCons = 0LL;
 		return false;
 	}
-	ot.resize(maxVars);
+	assert(ot.empty());
+	ot.resize(V2D(nOrgVars() + 1LL));
 	// alloc memory for scnf
-	assert(scnf.empty());
 	assert(orgs.size() == nClauses());
-	int scnf_sz = nOrgClauses();
-	double scnf_cap = (double)scnf_sz * sizeof(S_REF) + nOrgLits() * sizeof(uint32);
+	int64 scnf_cap = (int64)nOrgCls() * sizeof(S_REF) + maxEntries * sizeof(uint32);
 	sysMemCons += scnf_cap;
-	if (sysMemCons >= sysMemTot) {
-		if (verbose > 1) cout << "\nc | Not enough system memory for SCNF (Max: " << sysMemTot / MBYTE << ", Consumed: " << scnf_cap / MBYTE << " MB)" << endl;
-		sysMemCons -= scnf_cap;
+	if (verbose >= 2) printf("C | Memory consumed after SCNF alloc = %lld MB\n", sysMemCons / MBYTE);
+	if (sysMemCons > sysMemAvail) {
+		if (verbose >= 2) printf("c | Not enough memory for SCNF (available: %lld, consumed: %lld)\n", sysMemAvail / MBYTE, sysMemCons / MBYTE);
+		sysMemCons = 0LL;
 		return false;
 	}
-	scnf.resize(scnf_sz);
+	assert(scnf.empty());
+	scnf.resize(nOrgCls());
 	// append orgs/bins to scnf
 	cnf_stats.global_n_cls = 0;
 	cnf_stats.global_n_lits = 0;
@@ -421,13 +388,13 @@ bool ParaFROST::awaken()
 	// reset vars states
 	for (uint32 v = 0; v < nOrgVars(); v++) { sp->lock[v] = false; sp->seen[v] = false; sol->init(v); }
 	sp->reset_trail();
-	print_pstats();
+	printPStats();
 	// create occur. table initially
 	create_ot(false);
 	return true;
 }
 
-void ParaFROST::shrinkCNF(bool countVars)
+void ParaFROST::shrinkCNF(const bool& countVars)
 {
 	cnf_stats.global_n_cls = 0;
 	cnf_stats.global_n_lits = 0;
@@ -467,6 +434,7 @@ void ParaFROST::shrinkCNF(bool countVars)
 
 void ParaFROST::preprocess()
 {
+	timer->start();
 	/********************************/
 	/*         awaken sigma         */
 	/********************************/
@@ -484,7 +452,7 @@ void ParaFROST::preprocess()
 		if (verbose > 1) cout << "c |\t\tPhase-" << phase << " Variable Elections" << endl;
 		LCVE(); 
 		VE(); // perform an extended BVE
-		cnt_lits(); // count number of remaining literals 
+		countLits(); // count number of remaining literals 
 		if (phase >= 2 && cnf_stats.n_lits_after > lits_before) {
 			if (verbose > 1) cout << "c | WARNING: literals are increasing --> exit procedure." << endl;
 			reduce_ot();
@@ -514,7 +482,7 @@ void ParaFROST::preprocess()
 	if (interrupted()) killSolver();
 	ot.clear(true);
 	shrinkCNF(true); 
-	print_pstats();
+	printPStats();
 	cnf_stats.n_org_cls = nClauses();
 	cnf_stats.n_org_lits = nLiterals();
 	if (nRemVars() - simpVars != 0) { // variables removed by preprocess? then map
@@ -528,6 +496,9 @@ void ParaFROST::preprocess()
 		assert(nRemVars() == simpVars);
 		cleanSlate();
 	}
+	timer->stop();
+	timer->pre = timer->cpuTime();
+	if (verbose >= 2) printf("C | Memory consumed in freeing OT/SCNF = %lld MB\n", sysMemUsed() / MBYTE);
 }
 
 void ParaFROST::cleanSlate()
@@ -536,7 +507,8 @@ void ParaFROST::cleanSlate()
 	cnf_stats.global_n_cls = 0;
 	cnf_stats.global_n_lits = 0;
 	cnf_stats.max_org_cl_width = 0;
-	WT_alloc(true);
+	assert(wt.empty());
+	wt.resize((int64)V2D(nOrgVars() + 1LL));
 	if (mapped) {
 		cnf_stats.global_n_del_vars = 0;
 		for (int i = 0; i < scnf.size(); i++) {
@@ -549,8 +521,8 @@ void ParaFROST::cleanSlate()
 		}
 		scnf.clear(true);
 		mappedVars.clear(true);
-		solver_alloc(true);
-		init();
+		allocSolver(true);
+		resetSolver();
 	}
 	else {
 		for (int i = 0; i < scnf.size(); i++) {
@@ -562,7 +534,7 @@ void ParaFROST::cleanSlate()
 			delete scnf[i];
 		}
 		scnf.clear(true);
-		init(false);
+		resetSolver(false);
 		for (int i = 0; i < removed.size(); i++) {
 			uint32 remVar = V2IDX(removed[i]);
 			if (var_heap->has(remVar)) var_heap->remove(remVar);
@@ -589,9 +561,8 @@ void ParaFROST::depFreeze(const OL& ol, const uint32& cand, const int& p_temp, c
 void ParaFROST::LCVE()
 {
 	// reorder variables
-	var_reorder();
+	varReorder();
 	// extended LCVE
-	timer->start();
 	pv->nPVs = 0;
 	for (uint32 v = 0; v < nOrgVars(); v++) {
 		uint32 cand = scores[v].v;
@@ -615,14 +586,11 @@ void ParaFROST::LCVE()
 	}
 	bool* f = sp->frozen, * f_end = f + nOrgVars();
 	while (f != f_end) *f++ = 0;
-	timer->stop();
-	timer->lcve += timer->CPU_time();
 }
 
 void ParaFROST::bve()
 {
 	if (interrupted()) killSolver();
-	timer->start();
 	for (int v = 0; v < pv->nPVs; v++) {
 		register uint32 x = pv->PVs[v];
 		assert(!pv->melted[x]);
@@ -639,13 +607,7 @@ void ParaFROST::bve()
 			ot[p].clear(true), ot[n].clear(true);
 		}
 	}
-	if (prop() == UNSAT) {
-		wrapUp(UNSAT);
-		this->~ParaFROST();
-		exit(EXIT_SUCCESS);
-	}
-	timer->stop();
-	timer->bve += timer->CPU_time();
+	if (prop() == UNSAT) killSolver(UNSAT);
 }
 
 void ParaFROST::VE()
@@ -659,9 +621,9 @@ void ParaFROST::VE()
 	}
 	if (verbose > 1) cout << "c | Eliminating variables for round-0." << endl;
 	bve();
-	if (verbose > 1) { eval_reds(); printf("c |\t\tBVE Reductions\n"); logReductions(); }
+	if (verbose > 1) { evalReds(); printf("c |\t\tBVE Reductions\n"); logReductions(); }
 	if (ve_plus_en) {
-		cnt_lits();
+		countLits();
 		int64 lits_before = cnf_stats.n_lits_after;
 		int64 lits_removed = nLiterals() - cnf_stats.n_lits_after;
 		int64 lits_removed_pre = lits_removed;
@@ -680,7 +642,7 @@ void ParaFROST::VE()
 			// HSE 
 			if (verbose > 1) cout << "c | HSE-ing non-eliminated variables..";
 			HSE();
-			cnt_lits(); // count remained literals
+			countLits(); // count remained literals
 			lits_removed = lits_before - cnf_stats.n_lits_after;
 			lits_before = cnf_stats.n_lits_after;
 			if (verbose > 1) cout << "(Literals removed: -" << lits_removed << ") ==> done." << endl;
@@ -689,7 +651,7 @@ void ParaFROST::VE()
 			if (verbose > 1) cout << "c | Eliminating variables in new round..";
 			reduce_ot(); // discard deleted clauses
 			bve();
-			cnt_lits(); // count remained literals
+			countLits(); // count remained literals
 			lits_removed = (lits_before > cnf_stats.n_lits_after) ? lits_before - cnf_stats.n_lits_after : cnf_stats.n_lits_after - lits_before;
 			if (verbose > 1) {
 				if (lits_before > cnf_stats.n_lits_after) cout << "(literals reduction: -" << lits_removed << ") ==> done." << endl;
@@ -697,72 +659,54 @@ void ParaFROST::VE()
 			}
 			lits_before = cnf_stats.n_lits_after;
 		}
-		if (lits_removed_pre != lits_removed && verbose > 1) { eval_reds(); printf("c |\t\tBVE+ Reductions\n"); logReductions(); }
+		if (lits_removed_pre != lits_removed && verbose > 1) { evalReds(); printf("c |\t\tBVE+ Reductions\n"); logReductions(); }
 	}
 }
 
 void ParaFROST::HSE()
 {
 	if (interrupted()) killSolver();
-	timer->start();
 	for (int v = 0; v < pv->nPVs; v++) {
 		register uint32 x = pv->PVs[v];
 		uint32 p = V2D(x + 1), n = NEG(p);
 		if (!pv->melted[x]) self_sub_x(p, ot[p], ot[n]);
 	}
-	if (prop() == UNSAT) {
-		wrapUp(UNSAT);
-		this->~ParaFROST();
-		exit(EXIT_SUCCESS);
-	}
-	timer->stop();
-	timer->hse += timer->CPU_time();
+	if (prop() == UNSAT) killSolver(UNSAT);
 }
 
 void ParaFROST::SUB()
 {
 	if (interrupted()) killSolver();
 	if (verbose > 1) cout << "c | SUB-ing variables..";
-	timer->start();
 	for (int v = 0; v < pv->nPVs; v++) {
 		register uint32 x = pv->PVs[v];
 		assert(!pv->melted[x]);
 		uint32 p = V2D(x + 1), n = NEG(p);
 		self_sub_x(p, ot[p], ot[n]);
 	}
-	if (prop() == UNSAT) {
-		wrapUp(UNSAT);
-		this->~ParaFROST();
-		exit(EXIT_SUCCESS);
-	}
-	timer->stop();
-	timer->hse += timer->CPU_time();
+	if (prop() == UNSAT) killSolver(UNSAT);
 	if (verbose > 1) cout << " ==> done." << endl;
-	if (verbose > 1) { cnt_cls(); printf("c |\t\t\t SUB Reductions\n"); logReductions(); }
+	if (verbose > 1) { countCls(); printf("c |\t\t\t SUB Reductions\n"); logReductions(); }
 }
 
 void ParaFROST::BCE()
 {
 	if (interrupted()) killSolver();
 	if (verbose > 1) cout << "c | Eliminating blocked clauses..";
-	timer->start();
 	for (int v = 0; v < pv->nPVs; v++) {
 		register uint32 x = pv->PVs[v];
 		assert(!pv->melted[x]);
 		uint32 p = V2D(x + 1), n = NEG(p);
 		blocked_x(x + 1, ot[p], ot[n]);
 	}
-	timer->stop();
-	timer->bce += timer->CPU_time();
 	if (verbose > 1) cout << " ==> done." << endl;
-	if (verbose > 1) { cnt_cls(); printf("c |\t\t\t BCE Reductions\n"); logReductions(); }
+	if (verbose > 1) { countCls(); printf("c |\t\t\t BCE Reductions\n"); logReductions(); }
 }
 
 void ParaFROST::HRE()
 {
 	if (interrupted()) killSolver();
 	if (verbose > 1) cout << "c | Eliminating hidden redundances..";
-	timer->start();
 	for (int v = 0; v < pv->nPVs; v++) {
 		assert(!pv->melted[pv->PVs[v]]);
 		uint32 posY = V2D(pv->PVs[v] + 1);
@@ -785,10 +729,8 @@ void ParaFROST::HRE()
 			} // end-for (negs_list)
 		} // end-for (poss_list)
 	}
-	timer->stop();
-	timer->hre += timer->CPU_time();
 	if (verbose > 1) cout << " ==> done." << endl;
-	if (verbose > 1) { cnt_cls(); printf("c |\t\t\t HRE Reductions\n"); logReductions(); }
+	if (verbose > 1) { countCls(); printf("c |\t\t\t HRE Reductions\n"); logReductions(); }
 }
 
 bool ParaFROST::consistent(const SCNF& cnf, const OT& ot)
