@@ -1,2 +1,2 @@
 # ParaFROST
-SAT Solver 
+SAT Solver with GPU-Enabled Simplifications
