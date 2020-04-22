@@ -26,7 +26,7 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /********************************/
 CNF_INFO cnf_stats;
 cudaDeviceProp devProp;
-int maxGPUThreads = 0;
+uint32 verb = 0, maxGPUThreads = 0;
 LIT_ST* assigns = NULL;
 int* levels = NULL;
 ParaFROST* gpfrost = NULL;
@@ -128,21 +128,27 @@ ParaFROST::ParaFROST(const string& path) :
 	sysMem_sz = 0ULL, sysMemCons = 0LL;
 	sysMemAvail = getAvailSysMem();
 	CHECK(cudaGetDeviceCount(&devCount));
+	size_t _gfree = 0, _gtot = 0;
 	if (devCount == 0) printf("Error - no available GPU(s) that support CUDA\n"), exit(EXIT_FAILURE);
 	else {
 		printf("c | Detected (%d) CUDA-enabled GPU(s)\n", devCount);
 		CHECK(cudaGetDeviceProperties(&devProp, MASTER_GPU));
+		CHECK(cudaMemGetInfo(&_gfree, &_gtot));
 		maxGPUThreads = devProp.multiProcessorCount * devProp.maxThreadsPerMultiProcessor;
 		cnf = NULL, ot = NULL, pv = NULL, d_occurs = NULL, d_scores = NULL, raw_hist = NULL;
 		gstats = NULL, streams = NULL;
 	}
 	if (!quiet_en) {
+		printf("c | Free system memory = %lld GB\n", sysMemAvail / GBYTE);
 		printf("c | GPU: \"%s\" (compute cap: %d.%d)\n", devProp.name, devProp.major, devProp.minor);
 		printf("c |  - Multiprocessors = %d MPs (%d cores/MP)\n", devProp.multiProcessorCount, SM2Cores(devProp.major, devProp.minor));
-		printf("c |  - Available Global memory = %zd GB\n", devProp.totalGlobalMem / GBYTE);
-		printf("c |  - Available Shared memory = %zd KB\n", devProp.sharedMemPerBlock / KBYTE);
-		printf("c | Available system memory = %lld GB\n", sysMemAvail / GBYTE);
+		printf("c |  - Free Global memory = %zd GB\n", _gfree / GBYTE);
+		printf("c |  - Free Shared memory = %zd KB\n", devProp.sharedMemPerBlock / KBYTE);
 		printf("c |--------------------------------------------------------------------------------------|\n");
+	}
+	if (_gfree <= 200 * MBYTE) {
+		printf("c | WARNING - not enough GPU memory (free = %zd MB), simplifications will be disabled\n", _gfree / MBYTE);
+		pre_en = lpre_en = false;
 	}
 	if (quiet_en) verbose = 0, perf_en = false;
 	if (SH < 2 && restPolicy == "lbd") restPolicy = "luby";
@@ -179,6 +185,7 @@ ParaFROST::ParaFROST(const string& path) :
 		}
 		printf("c |--------------------------------------------------------------------------------------|\n");
 	}
+	verb = verbose;
 }
 
 ParaFROST::~ParaFROST()

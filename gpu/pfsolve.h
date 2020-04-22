@@ -391,13 +391,13 @@ public:
 		gMemCNF_sz = 0ULL, gMemOT_sz = 0ULL, cap = 0ULL;
 	}
 	~cuMM() { }
-	void allocPV(PV* pv, const uint32&);
-	void allocVO(OCCUR**, SCORE**, const uint32&);
-	void allocStats(GSTATS**, const uint32&);
-	CNF* resizeCNF(CNF*, const uint32&, const uint64&, const bool& _pc = false);
+	bool allocPV(PV*, const uint32&);
+	bool allocVO(OCCUR*&, SCORE*&, const uint32&);
+	bool allocStats(GSTATS*&, const uint32&);
+	bool resizeCNF(CNF*&, const uint32&, const uint64&, const int& phase = 0);
 	OT* resizeOT(uint32*, const uint32&, const int64&);
-	__host__ __device__ inline bool empty(void) const { return cap == 0; }
-	__host__ __device__ inline size_t capacity(void) const { return cap; }
+	_PFROST_H_D_ bool empty(void) const { return cap == 0; }
+	_PFROST_H_D_ size_t capacity(void) const { return cap; }
 };
 
 class ParaFROST {
@@ -606,7 +606,6 @@ protected:
 	uVec1D removed;
 	Vec1D mappedVars, reverseVars;
 	std::ofstream outputFile;
-	double gMemCons, gMemMax;
 	int devCount;
 public:
 	inline void createStreams(void) { 
@@ -665,10 +664,10 @@ public:
 	void GPU_occurs(const int64&, const bool& init = false);
 	void GPU_VO(void);
 	void GPU_CNF_fill(void);
-	void GPU_VE(void);
+	CNF_STATE GPU_VE(void);
+	void GPU_SUB(void);
 	void GPU_HRE(void);
 	void GPU_BCE(void);
-	void GPU_SUB(void);
 	void GPU_preprocess(void);
 	// options
 	bool quiet_en, parse_only_en, rewriter_en, perf_en;
@@ -689,6 +688,7 @@ public:
 /*     Aliases    */
 /******************/
 extern ParaFROST* gpfrost; // global solver
+extern uint32 verb;
 //====================================================//
 //                  HELPER Functions                  //
 //====================================================//

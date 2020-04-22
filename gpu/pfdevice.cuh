@@ -2,11 +2,12 @@
 #define __SIGMA_DEVICE_
 
 #include "pfsimp.h"
+#include "pfatomics.cuh"
 
 #define SS_DBG 0
 #define VE_DBG 0
 
-__device__ inline void pClauseSet(CNF& cnf, OL& poss, OL& negs)
+_PFROST_D_ void pClauseSet(CNF& cnf, OL& poss, OL& negs)
 {
 	for (uint32 i = 0; i < poss.size(); i++) {
 		SCLAUSE& pos = cnf[poss[i]];
@@ -18,7 +19,7 @@ __device__ inline void pClauseSet(CNF& cnf, OL& poss, OL& negs)
 	}
 }
 
-__device__ inline void pClauseSet(CNF& cnf, OL& ol)
+_PFROST_D_ void pClauseSet(CNF& cnf, OL& ol)
 {
 	for (uint32 i = 0; i < ol.size(); i++) {
 		SCLAUSE& c = cnf[ol[i]];
@@ -26,7 +27,7 @@ __device__ inline void pClauseSet(CNF& cnf, OL& ol)
 	}
 }
 
-__device__ inline void pSharedClause(uint32* c, const uint32& sz)
+_PFROST_D_ void pSharedClause(uint32* c, const uint32& sz)
 {
 	printf("(");
 	for (LIT_POS l = 0; l < sz; l++) {
@@ -38,7 +39,7 @@ __device__ inline void pSharedClause(uint32* c, const uint32& sz)
 }
 
 #if SS_DBG
-__device__ inline void DBG_updateOL(const uint32& x, CNF& cnf, OL& ol)
+_PFROST_D_ void DBG_updateOL(const uint32& x, CNF& cnf, OL& ol)
 {
 	if (ol.size() == 0) return;
 	int idx = 0, ol_sz = ol.size();
@@ -53,7 +54,7 @@ __device__ inline void DBG_updateOL(const uint32& x, CNF& cnf, OL& ol)
 }
 #endif
 
-__device__ inline bool isCoherent(const uint32& x, SCLAUSE& g_c, uint32* sh_c, const CL_LEN& size)
+_PFROST_D_ bool isCoherent(const uint32& x, SCLAUSE& g_c, uint32* sh_c, const CL_LEN& size)
 {
 	uint32 it = 0;
 	if (g_c.size() != size) {
@@ -74,55 +75,142 @@ __device__ inline bool isCoherent(const uint32& x, SCLAUSE& g_c, uint32* sh_c, c
 	return true;
 }
 
-__device__ inline void OL::push(const uint32& cl_idx)
-{
-	uint32 idx = atomicAdd(&sz, 1);
-	assert(idx < cap);
-	*(ol + idx) = cl_idx;
+template<typename T>
+_PFROST_D_ void warpReduce(T* smem, T& val) {
+	if (threadIdx.x < warpSize) {
+		if (blockDim.x >= 64) val += smem[threadIdx.x + warpSize];
+		for (int i = 16; i >= 1; i >>= 1) val += __shfl_xor_sync(FULLWARP, val, i, warpSize);
+	}
 }
 
-__device__ inline uint32 CNF::jumpCls(const uint32& offset)
-{
-	uint32 accVal = atomicAdd(&n_cls, offset);
-	assert(accVal < nCls_cap);
-	return accVal;
+template<typename T1, typename T2>
+_PFROST_D_ void warpReduce(T1* smem1, T1& val1, T2* smem2, T2& val2) {
+	if (threadIdx.x < warpSize) {
+		if (blockDim.x >= 64) {
+			val1 += smem1[threadIdx.x + warpSize];
+			val2 += smem2[threadIdx.x + warpSize];
+		}
+		for (int i = 16; i >= 1; i >>= 1) {
+			val1 += __shfl_xor_sync(FULLWARP, val1, i, warpSize);
+			val2 += __shfl_xor_sync(FULLWARP, val2, i, warpSize);
+		}
+	}
 }
 
-__device__ inline uint64 CNF::jumpLits(const uint64& offset)
-{
-	uint64 accVal = atomicAdd(&n_lits, offset);
-	assert(accVal < nLits_cap);
-	return accVal;
+template<typename T, typename S>
+_PFROST_D_ void loadShared(T* smem, const T& val, const S& size) {
+	smem[threadIdx.x] = (threadIdx.x < size) ? val : 0;
+	__syncthreads();
 }
 
-__device__ inline void insertion_sort(uint32* arr, const CL_LEN& size)
+template<typename T1, typename T2, typename S>
+_PFROST_D_ void loadShared(T1* smem1, const T1& val1, T2* smem2, const T2& val2, const S& size) {
+	if (threadIdx.x < size) { smem1[threadIdx.x] = val1, smem2[threadIdx.x] = val2; }
+	else { smem1[threadIdx.x] = 0, smem2[threadIdx.x] = 0; }
+	__syncthreads();
+}
+
+template<typename T>
+_PFROST_D_ void sharedReduce(T* smem, T& val) {
+	if (blockDim.x >= 512) {
+		if (threadIdx.x < 256) smem[threadIdx.x] = val = val + smem[threadIdx.x + 256];
+		__syncthreads();
+	}
+	if (blockDim.x >= 256) {
+		if (threadIdx.x < 128) smem[threadIdx.x] = val = val + smem[threadIdx.x + 128];
+		__syncthreads();
+	}
+	if (blockDim.x >= 128) {
+		if (threadIdx.x < 64) smem[threadIdx.x] = val = val + smem[threadIdx.x + 64];
+		__syncthreads();
+	}
+}
+
+template<typename T1, typename T2>
+_PFROST_D_ void sharedReduce(T1* smem1, T1& val1, T2* smem2, T2& val2) {
+	if (blockDim.x >= 512) {
+		if (threadIdx.x < 256) {
+			smem1[threadIdx.x] = val1 = val1 + smem1[threadIdx.x + 256];
+			smem2[threadIdx.x] = val2 = val2 + smem2[threadIdx.x + 256];
+		}
+		__syncthreads();
+	}
+	if (blockDim.x >= 256) {
+		if (threadIdx.x < 128) {
+			smem1[threadIdx.x] = val1 = val1 + smem1[threadIdx.x + 128];
+			smem2[threadIdx.x] = val2 = val2 + smem2[threadIdx.x + 128];
+		}
+		__syncthreads();
+	}
+	if (blockDim.x >= 128) {
+		if (threadIdx.x < 64) {
+			smem1[threadIdx.x] = val1 = val1 + smem1[threadIdx.x + 64];
+			smem2[threadIdx.x] = val2 = val2 + smem2[threadIdx.x + 64];
+		}
+		__syncthreads();
+	}
+}
+
+_PFROST_D_ void devSort(uint32* data, const CL_LEN& size)
 {
 	if (size == 2) {
-		uint32 val0 = *arr, val1 = *(arr + 1);
+		uint32 val0 = *data, val1 = *(data + 1);
 		if (val0 > val1) {
-			*arr = val1;
-			*(arr + 1) = val0;
+			*data = val1;
+			*(data + 1) = val0;
 		}
 	}
 	else {
 		LIT_POS i, j;
 #pragma unroll
 		for (i = 1; i < size; i++) {
-			uint32 tmp = arr[i];
-			for (j = i; j > 0 && arr[j - 1] > tmp; j--) arr[j] = arr[j - 1];
-			arr[j] = tmp;
+			uint32 tmp = data[i];
+#pragma unroll
+			for (j = i; j > 0 && data[j - 1] > tmp; j--) data[j] = data[j - 1];
+			data[j] = tmp;
 		}
 	}
 }
 
-__device__ inline void calcSig(uint32* data, const int& size, uint32& _sig)
+_PFROST_D_ void cuVecU::insert(const uint32& val)
+{
+	uint32 idx = atomicInc(&sz, cap);
+	assert(idx < cap);
+	_mem[idx] = val;
+}
+
+_PFROST_D_ void cuVecU::push(const uint32& val) {
+	uint32 idx = atomicAggInc(&sz);
+	assert(idx < cap);
+	_mem[idx] = val;
+}
+
+_PFROST_D_ void cuVecU::pop(void) { uint32 idx = atomicSub(&sz, 1); assert(idx < UINT32_MAX); }
+
+_PFROST_D_ void cuVecU::shrink(const uint32& n) { uint32 idx = atomicSub(&sz, n); assert(idx < UINT32_MAX); }
+
+_PFROST_D_ uint32 CNF::jumpCls(const uint32& offset)
+{
+	uint32 accVal = atomicAdd(&n_cls, offset);
+	assert(accVal < nCls_cap);
+	return accVal;
+}
+
+_PFROST_D_ uint64 CNF::jumpLits(const uint64& offset)
+{
+	uint64 accVal = atomicAdd(&n_lits, offset);
+	assert(accVal < nLits_cap);
+	return accVal;
+}
+
+_PFROST_D_ void calcSig(uint32* data, const int& size, uint32& _sig)
 {
 	assert(_sig == 0);
 #pragma unroll
 	for (int k = 0; k < size; k++) _sig |= MAPHASH(data[k]);
 }
 
-__device__ inline bool isTautology(const uint32& x, SCLAUSE& c1, SCLAUSE& c2)
+_PFROST_D_ bool isTautology(const uint32& x, SCLAUSE& c1, SCLAUSE& c2)
 {
 	assert(x);
 	assert(c1.status() != DELETED);
@@ -145,7 +233,7 @@ __device__ inline bool isTautology(const uint32& x, SCLAUSE& c1, SCLAUSE& c2)
 	return false;
 }
 
-__device__ inline bool isTautology(const uint32& x, SCLAUSE& c1, uint32* c2, const CL_LEN& n2)
+_PFROST_D_ bool isTautology(const uint32& x, SCLAUSE& c1, uint32* c2, const CL_LEN& n2)
 {
 	assert(x);
 	assert(c1.status() != DELETED);
@@ -167,7 +255,7 @@ __device__ inline bool isTautology(const uint32& x, SCLAUSE& c1, uint32* c2, con
 	return false;
 }
 
-__device__ inline bool merge(const uint32& x, SCLAUSE& c1, SCLAUSE& c2, SCLAUSE& out_c)
+_PFROST_D_ bool merge(const uint32& x, SCLAUSE& c1, SCLAUSE& c2, SCLAUSE& out_c)
 {
 	assert(x);
 	assert(c1.status() != DELETED);
@@ -208,7 +296,7 @@ __device__ inline bool merge(const uint32& x, SCLAUSE& c1, SCLAUSE& c2, SCLAUSE&
 	return true;
 }
 
-__device__ inline CL_LEN merge(const uint32& x, SCLAUSE& c1, SCLAUSE& c2, uint32* out_c)
+_PFROST_D_ CL_LEN merge(const uint32& x, SCLAUSE& c1, SCLAUSE& c2, uint32* out_c)
 {
 	assert(x);
 	assert(c1.status() != DELETED);
@@ -245,7 +333,7 @@ __device__ inline CL_LEN merge(const uint32& x, SCLAUSE& c1, SCLAUSE& c2, uint32
 	return len;
 }
 
-__device__ inline CL_LEN merge(const uint32& x, uint32* c1, const CL_LEN& n1, SCLAUSE& c2, uint32* out_c)
+_PFROST_D_ CL_LEN merge(const uint32& x, uint32* c1, const CL_LEN& n1, SCLAUSE& c2, uint32* out_c)
 {
 	assert(x);
 	assert(c2.status() != DELETED);
@@ -280,7 +368,7 @@ __device__ inline CL_LEN merge(const uint32& x, uint32* c1, const CL_LEN& n1, SC
 	return len;
 }
 
-__device__ inline bool isTautology_and(SCLAUSE& org, uint32* defs, const CL_LEN& nDefs)
+_PFROST_D_ bool isTautology_and(SCLAUSE& org, uint32* defs, const CL_LEN& nDefs)
 {
 	assert(org.status() != DELETED);
 	assert(org.size() > 1);
@@ -292,7 +380,7 @@ __device__ inline bool isTautology_and(SCLAUSE& org, uint32* defs, const CL_LEN&
 	return false;
 }
 
-__device__ inline bool isTautology_or(SCLAUSE& org, uint32* defs, const CL_LEN& nDefs)
+_PFROST_D_ bool isTautology_or(SCLAUSE& org, uint32* defs, const CL_LEN& nDefs)
 {
 	assert(org.status() != DELETED);
 	assert(org.size() > 1);
@@ -304,7 +392,7 @@ __device__ inline bool isTautology_or(SCLAUSE& org, uint32* defs, const CL_LEN& 
 	return false;
 }
 
-__device__ inline bool clause_extend_and(const uint32& neg_x, SCLAUSE& org, uint32* defs, const CL_LEN& nDefs, SCLAUSE& out_c)
+_PFROST_D_ bool clause_extend_and(const uint32& neg_x, SCLAUSE& org, uint32* defs, const CL_LEN& nDefs, SCLAUSE& out_c)
 {
 	assert(neg_x);
 	assert(org.status() != DELETED);
@@ -325,7 +413,7 @@ __device__ inline bool clause_extend_and(const uint32& neg_x, SCLAUSE& org, uint
 		else out_c.push(lit);
 	}
 	// attach 
-	insertion_sort(out_c, out_c.size());
+	devSort(out_c, out_c.size());
 	out_c.filter();
 	out_c.set_status(LEARNT);
 	assert(out_c.hasZero() < 0);
@@ -333,7 +421,7 @@ __device__ inline bool clause_extend_and(const uint32& neg_x, SCLAUSE& org, uint
 	return true;
 }
 
-__device__ inline CL_LEN clause_extend_and(const uint32& neg_x, SCLAUSE& org, uint32* defs, const CL_LEN& nDefs, uint32* out_c)
+_PFROST_D_ CL_LEN clause_extend_and(const uint32& neg_x, SCLAUSE& org, uint32* defs, const CL_LEN& nDefs, uint32* out_c)
 {
 	assert(neg_x);
 	assert(org.status() != DELETED);
@@ -352,11 +440,11 @@ __device__ inline CL_LEN clause_extend_and(const uint32& neg_x, SCLAUSE& org, ui
 		}
 		else out_c[len++] = lit;
 	}
-	insertion_sort(out_c, len);
+	devSort(out_c, len);
 	return len;
 }
 
-__device__ inline bool clause_extend_or(const uint32& x, SCLAUSE& org, uint32* defs, const CL_LEN& nDefs, SCLAUSE& out_c)
+_PFROST_D_ bool clause_extend_or(const uint32& x, SCLAUSE& org, uint32* defs, const CL_LEN& nDefs, SCLAUSE& out_c)
 {
 	assert(x);
 	assert(org.status() != DELETED);
@@ -377,7 +465,7 @@ __device__ inline bool clause_extend_or(const uint32& x, SCLAUSE& org, uint32* d
 		else out_c.push(lit);
 	}
 	// attach 
-	insertion_sort(out_c, out_c.size());
+	devSort(out_c, out_c.size());
 	out_c.filter();
 	out_c.set_status(LEARNT);
 	assert(out_c.hasZero() < 0);
@@ -385,7 +473,7 @@ __device__ inline bool clause_extend_or(const uint32& x, SCLAUSE& org, uint32* d
 	return true;
 }
 
-__device__ inline CL_LEN clause_extend_or(const uint32& x, SCLAUSE& org, uint32* defs, const CL_LEN& nDefs, uint32* out_c)
+_PFROST_D_ CL_LEN clause_extend_or(const uint32& x, SCLAUSE& org, uint32* defs, const CL_LEN& nDefs, uint32* out_c)
 {
 	assert(x);
 	assert(org.status() != DELETED);
@@ -405,11 +493,11 @@ __device__ inline CL_LEN clause_extend_or(const uint32& x, SCLAUSE& org, uint32*
 		}
 		else out_c[len++] = lit;
 	}
-	insertion_sort(out_c, len);
+	devSort(out_c, len);
 	return len;
 }
 
-__device__ inline bool clause_split_and(const uint32& x, const uint32& def, SCLAUSE& org, SCLAUSE& out_c)
+_PFROST_D_ bool clause_split_and(const uint32& x, const uint32& def, SCLAUSE& org, SCLAUSE& out_c)
 {
 	assert(x);
 	assert(def);
@@ -427,7 +515,7 @@ __device__ inline bool clause_split_and(const uint32& x, const uint32& def, SCLA
 		else { out_c.push(lit); sig |= MAPHASH(lit); }
 	}
 	// attach
-	insertion_sort(out_c, out_c.size());
+	devSort(out_c, out_c.size());
 	out_c.set_sig(sig);
 	out_c.set_status(LEARNT);
 	assert(out_c.isSorted());
@@ -435,7 +523,7 @@ __device__ inline bool clause_split_and(const uint32& x, const uint32& def, SCLA
 	return true;
 }
 
-__device__ inline CL_LEN clause_split_and(const uint32& x, const uint32& def, SCLAUSE& org, uint32* out_c)
+_PFROST_D_ CL_LEN clause_split_and(const uint32& x, const uint32& def, SCLAUSE& org, uint32* out_c)
 {
 	assert(x);
 	assert(def);
@@ -450,11 +538,11 @@ __device__ inline CL_LEN clause_split_and(const uint32& x, const uint32& def, SC
 		if (lit == x) out_c[len++] = def;
 		else out_c[len++] = lit;
 	}
-	insertion_sort(out_c, len);
+	devSort(out_c, len);
 	return len;
 }
 
-__device__ inline bool clause_split_or(const uint32& neg_x, const uint32& def, SCLAUSE& org, SCLAUSE& out_c)
+_PFROST_D_ bool clause_split_or(const uint32& neg_x, const uint32& def, SCLAUSE& org, SCLAUSE& out_c)
 {
 	assert(neg_x);
 	assert(def);
@@ -472,7 +560,7 @@ __device__ inline bool clause_split_or(const uint32& neg_x, const uint32& def, S
 		else { out_c.push(lit); sig |= MAPHASH(lit); }
 	}
 	// attach
-	insertion_sort(out_c, out_c.size());
+	devSort(out_c, out_c.size());
 	out_c.set_sig(sig);
 	out_c.set_status(LEARNT);
 	assert(out_c.isSorted());
@@ -480,7 +568,7 @@ __device__ inline bool clause_split_or(const uint32& neg_x, const uint32& def, S
 	return true;
 }
 
-__device__ inline CL_LEN clause_split_or(const uint32& neg_x, const uint32& def, SCLAUSE& org, uint32* out_c)
+_PFROST_D_ CL_LEN clause_split_or(const uint32& neg_x, const uint32& def, SCLAUSE& org, uint32* out_c)
 {
 	assert(neg_x);
 	assert(def);
@@ -495,11 +583,11 @@ __device__ inline CL_LEN clause_split_or(const uint32& neg_x, const uint32& def,
 		if (lit == neg_x) out_c[len++] = FLIP(def);
 		else out_c[len++] = lit;
 	}
-	insertion_sort(out_c, len);
+	devSort(out_c, len);
 	return len;
 }
 
-__device__ inline void calcResolvents(const uint32& x, CNF& cnf, OL& poss, OL& negs, uint32& addedCls)
+_PFROST_D_ void calcResolvents(const uint32& x, CNF& cnf, OL& poss, OL& negs, uint32& addedCls)
 {
 	assert(x);
 	uint32 ps = poss.size(), ns = negs.size(), nTs = 0;
@@ -513,7 +601,7 @@ __device__ inline void calcResolvents(const uint32& x, CNF& cnf, OL& poss, OL& n
 	addedCls += ps * ns - nTs;
 }
 
-__device__ inline void calcResolvents(const uint32& x, CNF& cnf, OL& poss, OL& negs, uint32& addedCls, uint64& addedLits)
+_PFROST_D_ void calcResolvents(const uint32& x, CNF& cnf, OL& poss, OL& negs, uint32& addedCls, uint64& addedLits)
 {
 	assert(x);
 	uint32 ps = poss.size(), ns = negs.size(), nTs = 0;
@@ -528,7 +616,7 @@ __device__ inline void calcResolvents(const uint32& x, CNF& cnf, OL& poss, OL& n
 	addedCls += ps * ns - nTs;
 }
 
-__device__ inline void deleteClauses(CNF& cnf, OL& poss, OL& negs)
+_PFROST_D_ void deleteClauses(CNF& cnf, OL& poss, OL& negs)
 {
 #pragma unroll
 	for (uint32 i = 0; i < poss.size(); i++) cnf[poss[i]].markDeleted();
@@ -536,7 +624,7 @@ __device__ inline void deleteClauses(CNF& cnf, OL& poss, OL& negs)
 	for (uint32 i = 0; i < negs.size(); i++) cnf[negs[i]].markDeleted();
 }
 
-__device__ inline void countLitsBefore(CNF& cnf, OL& poss, OL& negs, uint64& nLitsBefore)
+_PFROST_D_ void countLitsBefore(CNF& cnf, OL& poss, OL& negs, uint64& nLitsBefore)
 {
 #pragma unroll
 	for (uint32 i = 0; i < poss.size(); i++) nLitsBefore += cnf[poss[i]].size();
@@ -544,7 +632,7 @@ __device__ inline void countLitsBefore(CNF& cnf, OL& poss, OL& negs, uint64& nLi
 	for (uint32 i = 0; i < negs.size(); i++) nLitsBefore += cnf[negs[i]].size();
 }
 
-__device__ inline bool isEqual(SCLAUSE& c1, uint32* c2, const CL_LEN& size)
+_PFROST_D_ bool isEqual(SCLAUSE& c1, uint32* c2, const CL_LEN& size)
 {
 	LIT_POS it = 0;
 #pragma unroll
@@ -555,18 +643,18 @@ __device__ inline bool isEqual(SCLAUSE& c1, uint32* c2, const CL_LEN& size)
 	return true;
 }
 
-__device__ inline bool sub(const uint32& A, const uint32& B)
+_PFROST_D_ bool sub(const uint32& A, const uint32& B)
 {
 	return (A & ~B) == 0;
 }
 
-__device__ inline bool selfSub(const uint32& A, const uint32& B)
+_PFROST_D_ bool selfSub(const uint32& A, const uint32& B)
 {
 	uint32 B_tmp = B | ((B & 0xAAAAAAAAUL) >> 1) | ((B & 0x55555555UL) << 1);
 	return (A & ~B_tmp) == 0;
 }
 
-__device__ inline bool sub(SCLAUSE& sm, SCLAUSE& lr)
+_PFROST_D_ bool sub(SCLAUSE& sm, SCLAUSE& lr)
 {
 	assert(sm.status() != DELETED);
 	assert(lr.status() != DELETED);
@@ -583,7 +671,7 @@ __device__ inline bool sub(SCLAUSE& sm, SCLAUSE& lr)
 	return false;
 }
 
-__device__ inline bool sub(SCLAUSE& sm, uint32* lr, const CL_LEN& lr_sz)
+_PFROST_D_ bool sub(SCLAUSE& sm, uint32* lr, const CL_LEN& lr_sz)
 {
 	assert(lr_sz > 1);
 	LIT_POS it1 = 0, it2 = 0, sub = 0;
@@ -597,7 +685,7 @@ __device__ inline bool sub(SCLAUSE& sm, uint32* lr, const CL_LEN& lr_sz)
 	return false;
 }
 
-__device__ inline bool selfSub(const uint32& x, SCLAUSE& sm, SCLAUSE& lr)
+_PFROST_D_ bool selfSub(const uint32& x, SCLAUSE& sm, SCLAUSE& lr)
 {
 	assert(sm.status() != DELETED);
 	assert(lr.status() != DELETED);
@@ -625,7 +713,7 @@ __device__ inline bool selfSub(const uint32& x, SCLAUSE& sm, SCLAUSE& lr)
 	return false;
 }
 
-__device__ inline bool selfSub(const uint32& x, SCLAUSE& sm, uint32* lr, const CL_LEN& lr_sz)
+_PFROST_D_ bool selfSub(const uint32& x, SCLAUSE& sm, uint32* lr, const CL_LEN& lr_sz)
 {
 	assert(sm.status() != DELETED);
 	assert(sm.size() > 1);
@@ -651,7 +739,7 @@ __device__ inline bool selfSub(const uint32& x, SCLAUSE& sm, uint32* lr, const C
 	return false;
 }
 
-__device__ inline void strengthen(GSOL* sol, SCLAUSE& c, uint32* sh_c, uint32 self_lit)
+_PFROST_D_ void strengthen(GSOL* sol, SCLAUSE& c, uint32* sh_c, uint32 self_lit)
 {
 	CL_LEN n = 0;
 	uint32 sig = 0;
@@ -679,7 +767,7 @@ __device__ inline void strengthen(GSOL* sol, SCLAUSE& c, uint32* sh_c, uint32 se
 #endif
 }
 
-__device__ inline void strengthen(GSOL* sol, SCLAUSE& c, uint32 self_lit)
+_PFROST_D_ void strengthen(GSOL* sol, SCLAUSE& c, uint32 self_lit)
 {
 	CL_LEN n = 0;
 	uint32 sig = 0;
@@ -703,7 +791,7 @@ __device__ inline void strengthen(GSOL* sol, SCLAUSE& c, uint32 self_lit)
 #endif
 }
 
-__device__ inline void updateOL(CNF& cnf, OL& ol)
+_PFROST_D_ void updateOL(CNF& cnf, OL& ol)
 {
 	if (ol.size() == 0) return;
 	int idx = 0, ol_sz = ol.size();
@@ -716,7 +804,7 @@ __device__ inline void updateOL(CNF& cnf, OL& ol)
 	ol.resize(ol_sz);
 }
 
-__device__ inline void self_sub_x(const uint32& x, CNF& cnf, OL& poss, OL& negs, GSOL* sol, uint32* sh_c)
+_PFROST_D_ void self_sub_x(const uint32& x, CNF& cnf, OL& poss, OL& negs, GSOL* sol, uint32* sh_c)
 {
 	// positives vs negatives
 #pragma unroll
@@ -846,7 +934,7 @@ __device__ inline void self_sub_x(const uint32& x, CNF& cnf, OL& poss, OL& negs,
 #endif
 }
 
-__device__ inline void forward_equ(CNF& cnf, OT& ot, uint32* m_c, const int64& m_sig, const uint32& m_len)
+_PFROST_D_ void forward_equ(CNF& cnf, OT& ot, uint32* m_c, const int64& m_sig, const uint32& m_len)
 {
 #pragma unroll
 	for (LIT_POS k = 0; k < m_len; k++) {
@@ -863,7 +951,7 @@ __device__ inline void forward_equ(CNF& cnf, OT& ot, uint32* m_c, const int64& m
 	}
 }
 
-__device__ inline void blocked_x(const uint32& x, CNF& cnf, OL& poss, OL& negs, uint32* sh_c)
+_PFROST_D_ void blocked_x(const uint32& x, CNF& cnf, OL& poss, OL& negs, uint32* sh_c)
 {
 	uint32 ps = poss.size(), ns = negs.size(), nTs = 0;
 	if (ps <= ns) {  // start with positives
@@ -922,7 +1010,7 @@ __device__ inline void blocked_x(const uint32& x, CNF& cnf, OL& poss, OL& negs, 
 	}
 }
 
-__device__ bool substitute_AND(const uint32& x, CNF& cnf, OL& poss, OL& negs, GSOL* sol, uint32* defs, const CL_LEN& nDefs, uint32* out_c)
+_PFROST_D_ bool substitute_AND(const uint32& x, CNF& cnf, OL& poss, OL& negs, GSOL* sol, uint32* defs, const CL_LEN& nDefs, uint32* out_c)
 {
 	uint32 ps = poss.size(), ns = negs.size();
 	uint32 nAddedCls = 0;
@@ -1025,7 +1113,7 @@ __device__ bool substitute_AND(const uint32& x, CNF& cnf, OL& poss, OL& negs, GS
 	return true; // AND-substitution successful
 }
 
-__device__ bool substitute_OR(const uint32& x, CNF& cnf, OL& poss, OL& negs, GSOL* sol, uint32* defs, const CL_LEN& nDefs, uint32* out_c)
+_PFROST_D_ bool substitute_OR(const uint32& x, CNF& cnf, OL& poss, OL& negs, GSOL* sol, uint32* defs, const CL_LEN& nDefs, uint32* out_c)
 {
 	uint32 ps = poss.size(), ns = negs.size();
 	uint32 nAddedCls = 0;
@@ -1128,7 +1216,7 @@ __device__ bool substitute_OR(const uint32& x, CNF& cnf, OL& poss, OL& negs, GSO
 	return true; // OR-substitution successful
 }
 
-__device__ bool gateReasoning_x(const uint32& x, CNF& cnf, OL& poss, OL& negs, GSOL* sol, uint32* defs, uint32* out_c)
+_PFROST_D_ bool gateReasoning_x(const uint32& x, CNF& cnf, OL& poss, OL& negs, GSOL* sol, uint32* defs, uint32* out_c)
 {
 	uint32 ps = poss.size(), ns = negs.size();
 	uint32 imp = 0, sig = 0;
@@ -1155,7 +1243,7 @@ __device__ bool gateReasoning_x(const uint32& x, CNF& cnf, OL& poss, OL& negs, G
 		assert(nImps <= FAN_LMT - 1);
 		out_c[nImps++] = x;
 		sig |= MAPHASH(x);
-		insertion_sort(out_c, nImps);
+		devSort(out_c, nImps);
 #pragma unroll
 		for (uint32 i = 0; i < ps; i++) {
 			SCLAUSE& pos = cnf[poss[i]];
@@ -1196,7 +1284,7 @@ __device__ bool gateReasoning_x(const uint32& x, CNF& cnf, OL& poss, OL& negs, G
 		assert(nImps <= FAN_LMT - 1);
 		out_c[nImps++] = FLIP(x);
 		sig |= MAPHASH(FLIP(x));
-		insertion_sort(out_c, nImps);
+		devSort(out_c, nImps);
 #pragma unroll
 		for (uint32 i = 0; i < ns; i++) {
 			SCLAUSE& neg = cnf[negs[i]];
@@ -1217,7 +1305,7 @@ __device__ bool gateReasoning_x(const uint32& x, CNF& cnf, OL& poss, OL& negs, G
 	return false;
 }
 
-__device__ bool resolve_x(const uint32& x, CNF& cnf, OL& poss, OL& negs, GSOL* sol, uint32* out_c, const bool& bound = false)
+_PFROST_D_ bool resolve_x(const uint32& x, CNF& cnf, OL& poss, OL& negs, GSOL* sol, uint32* out_c, const bool& bound = false)
 {
 	uint32 ps = poss.size(), ns = negs.size();
 	uint32 nAddedCls = 0;

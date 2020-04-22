@@ -8,34 +8,17 @@
 #include <device_launch_parameters.h>
 #include "pfdtypes.h"
 
-#define SHAREDMEM_ALLOWED 0x3000
+#if !defined(_PFROST_D_)
+#define _PFROST_D_ __forceinline __device__
+#endif
+#if !defined(_PFROST_H_D_)
+#define _PFROST_H_D_ inline __host__ __device__
+#endif
 #define MASTER_GPU 0
 #define BLOCK1D 256
+#define FULLWARP 0xFFFFFFFFU
 
-// macros for CUDA errors check 
-inline cudaError_t CHECK(cudaError_t result)
-{
-#if defined(DEBUG) || defined(_DEBUG)
-	if (result != cudaSuccess) {
-		fprintf(stderr, "CUDA Runtime Error: %s\n", cudaGetErrorString(result));
-		assert(result == cudaSuccess);
-	}
-#endif
-	return result;
-}
-inline void _getLstErr(const char* errorMessage, const char* file, const int line) {
-#if defined(DEBUG) || defined(_DEBUG)
-	cudaError_t err = cudaGetLastError();
-	if (cudaSuccess != err) {
-		fprintf(stderr, "%s(%i) : Last CUDA error : %s : (%d) %s.\n", file, line, errorMessage, static_cast<int>(err), cudaGetErrorString(err));
-		cudaDeviceReset();
-		exit(1);
-	}
-#endif
-}
-#define LOGERR(msg) _getLstErr(msg, __FILE__, __LINE__)
-// Compute #cores per SM (only for GPU info printing) 
-inline int SM2Cores(int major, int minor) {
+__forceinline int SM2Cores(int major, int minor) {
 	// Defines for GPU Architecture types (using the SM version to determine # of cores per SM)
 	typedef struct {
 		int SM;  // arch defined in hex
@@ -71,5 +54,26 @@ inline int SM2Cores(int major, int minor) {
 		major, minor, nCores[index - 1].Cores);
 	return nCores[index - 1].Cores;
 }
+__forceinline cudaError_t CHECK(cudaError_t result)
+{
+#if defined(DEBUG) || defined(_DEBUG)
+	if (result != cudaSuccess) {
+		fprintf(stderr, "CUDA Runtime Error: %s\n", cudaGetErrorString(result));
+		assert(result == cudaSuccess);
+	}
+#endif
+	return result;
+}
+__forceinline void _getLstErr(const char* errorMessage, const char* file, const int line) {
+#if defined(DEBUG) || defined(_DEBUG)
+	cudaError_t err = cudaGetLastError();
+	if (cudaSuccess != err) {
+		fprintf(stderr, "%s(%i) : Last CUDA error : %s : (%d) %s.\n", file, line, errorMessage, static_cast<int>(err), cudaGetErrorString(err));
+		cudaDeviceReset();
+		exit(1);
+	}
+#endif
+}
+#define LOGERR(msg) _getLstErr(msg, __FILE__, __LINE__)
 
 #endif

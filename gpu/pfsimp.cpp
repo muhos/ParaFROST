@@ -146,11 +146,11 @@ bool ParaFROST::awaken()
 	_simplify();
 	// alloc fixed-size memory
 	pv = new PV();
-	cuMem.allocPV(pv, nOrgVars());
-	cuMem.allocVO(&d_occurs, &d_scores, nOrgVars());
-	cuMem.allocStats(&gstats, nOrgVars());
+	if (!cuMem.allocStats(gstats, nOrgVars()) ||
+		!cuMem.allocPV(pv, nOrgVars()) ||
+		!cuMem.allocVO(d_occurs, d_scores, nOrgVars())) return false;
 	// alloc memory for scnf
-	cnf = cuMem.resizeCNF(cnf, nClauses() + nBins(), nLiterals() + ((int64)nBins() << 1));
+	if (!cuMem.resizeCNF(cnf, nClauses() + nBins(), nLiterals() + ((int64)nBins() << 1))) return false;
 	// append orgs/bins to scnf
 	GPU_CNF_fill();
 	// alloc mmeory for variable stats
@@ -158,6 +158,7 @@ bool ParaFROST::awaken()
 	histogram.resize(V2D(nOrgVars() + 1ULL)), raw_hist = thrust::raw_pointer_cast(histogram.data());
 	// alloc memory for occur. table
 	GPU_occurs(nLiterals(), true), ot = cuMem.resizeOT(raw_hist, nOrgVars(), nLiterals());
+	if (ot == NULL) return false;
 	// create streams
 	createStreams();
 	// reset vars states
@@ -185,16 +186,15 @@ void ParaFROST::GPU_preprocess()
 		if (verbose > 1) printf("c |\t\tPhase-%d Variable Elections\n", phase);
 		if (!LCVE()) goto writeBack;
 		calc_added(cnf, ot, pv, gstats);
-		if (phase == 0) cnf = cuMem.resizeCNF(cnf, nClauses() + maxAddedCls(), nLiterals() + maxAddedLits(), 1);
-		else {
-			cnf = cuMem.resizeCNF(cnf, nClauses() + maxAddedCls(), nLiterals() + maxAddedLits());
-			create_ot(cnf, ot, p_ot_en);
-		}
-		GPU_VE(); 
+		if (!cuMem.resizeCNF(cnf, nClauses() + maxAddedCls(), nLiterals() + maxAddedLits(), phase)) goto writeBack;
+		if (phase) create_ot(cnf, ot, p_ot_en);
+		CNF_STATE veRet = GPU_VE(); 
+		if (veRet == TERMINATE) goto writeBack;
 		countCls(cnf, gstats); 
 		cnf_stats.global_n_cls = cnf_stats.n_cls_after, cnf_stats.global_n_lits = cnf_stats.n_lits_after;
 		lits_diff = lits_before - nLiterals(), lits_before = nLiterals();
 		GPU_occurs(nLiterals()), ot = cuMem.resizeOT(raw_hist, nOrgVars(), nLiterals());
+		if (ot == NULL) goto writeBack;
 		phase++, pv->mu_inc++;
 		pv->sol->assigns->print(true);
 	}
@@ -265,7 +265,7 @@ void ParaFROST::GPU_hist()
 	thrust::adjacent_difference(histogram.begin(), histogram.end(), histogram.begin());
 }
 
-void ParaFROST::GPU_VE()
+CNF_STATE ParaFROST::GPU_VE()
 {
 	if (interrupted()) killSolver();
 	if (verbose > 1) cout << "c | Eliminating variables for round-0." << endl;
@@ -286,6 +286,7 @@ void ParaFROST::GPU_VE()
 			pv->numPVs = n, pv->pVars->resize(n);
 			// Resizing OT (discard deleted, add resolvents)
 			GPU_occurs(lits_before), ot = cuMem.resizeOT(raw_hist, nOrgVars(), lits_before);
+			if (ot == NULL) return TERMINATE;
 			create_ot(cnf, ot, p_ot_en);
 			// HSE 
 			GPU_SUB();
@@ -301,6 +302,7 @@ void ParaFROST::GPU_VE()
 		}
 		if (lits_removed_pre != lits_removed && verbose > 1) { evalReds(cnf, gstats); printf("c |\t\tBVE+ Reductions\n"); logReductions(); }
 	}
+	return UNSOLVED;
 }
 
 void ParaFROST::GPU_SUB()
@@ -372,7 +374,7 @@ bool ParaFROST::LCVE()
 	bool* f = sp->frozen, * f_end = f + nOrgVars();
 	while (f != f_end) *f++ = 0;
 	if (pv->numPVs < MIN_PVARS) {
-		if (verbose > 1) printf("c | WARNING - Parallel variables not enough\n");
+		if (verbose > 1) printf("c | WARNING - parallel variables not enough, simplifications will be terminated\n");
 		return false;
 	}
 	return true;

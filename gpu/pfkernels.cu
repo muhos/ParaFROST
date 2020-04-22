@@ -14,19 +14,6 @@ __global__ void reset_ot_k(OT* ot)
 	while (v < ot->size()) { (*ot)[v].clear(); v += blockDim.x * gridDim.x; }
 }
 
-__global__ void create_ot_k(CNF* cnf, OT* ot, uint32 size)
-{
-	uint32 i = blockDim.x * blockIdx.x + threadIdx.x;
-	while (i < size) {
-		SCLAUSE& c = (*cnf)[i];
-		if (c.status() == ORIGINAL || c.status() == LEARNT) {
-#pragma unroll
-			for (LIT_POS l = 0; l < c.size(); l++) (*ot)[c[l]].push(i);
-		}
-		i += blockDim.x * gridDim.x;
-	}
-}
-
 __global__ void create_ot_k(CNF* cnf, OT* ot)
 {
 	uint32 i = blockDim.x * blockIdx.x + threadIdx.x;
@@ -34,7 +21,7 @@ __global__ void create_ot_k(CNF* cnf, OT* ot)
 		SCLAUSE& c = (*cnf)[i];
 		if (c.status() == ORIGINAL || c.status() == LEARNT) {
 #pragma unroll
-			for (LIT_POS l = 0; l < c.size(); l++) (*ot)[c[l]].push(i);
+			for (LIT_POS l = 0; l < c.size(); l++) (*ot)[c[l]].insert(i);
 		}
 		i += blockDim.x * gridDim.x;
 	}
@@ -81,11 +68,10 @@ __global__ void copy_if_k(uint32* dest, CNF* src, GSTATS* gstats)
 	}
 }
 
-__global__ void calc_added_cls_k(CNF* cnf, OT* ot, cuVec<uint32>* pVars, GSTATS* gstats)
+__global__ void calc_added_cls_k(CNF* cnf, OT* ot, cuVecU* pVars, GSTATS* gstats)
 {
 	uint32* sh_rCls = SharedMemory<uint32>();
-	uint32 tx = threadIdx.x;
-	uint32 v = blockIdx.x * (blockDim.x << 1) + tx;
+	uint32 v = blockIdx.x * (blockDim.x << 1) + threadIdx.x;
 	uint32 stride = (blockDim.x << 1) * gridDim.x;
 	uint32 x, p, n, nCls = 0;
 	while (v < pVars->size()) {
@@ -97,31 +83,17 @@ __global__ void calc_added_cls_k(CNF* cnf, OT* ot, cuVec<uint32>* pVars, GSTATS*
 		}
 		v += stride;
 	}
-	// write local sum in shared memory
-	sh_rCls[tx] = (tx < pVars->size()) ? nCls : 0;
-	__syncthreads();
-	// do reduction in shared memory
-	if ((blockDim.x >= 512) && (tx < 256)) sh_rCls[tx] = nCls = nCls + sh_rCls[tx + 256];
-	__syncthreads();
-	if ((blockDim.x >= 256) && (tx < 128)) sh_rCls[tx] = nCls = nCls + sh_rCls[tx + 128];
-	__syncthreads();
-	if ((blockDim.x >= 128) && (tx < 64)) sh_rCls[tx] = nCls = nCls + sh_rCls[tx + 64];
-	__syncthreads();
-	if (tx < warpSize) {
-		if (blockDim.x >= 64) nCls += sh_rCls[tx + warpSize];
-		for (int i = (warpSize >> 1); i > 0; i >>= 1)
-			nCls += __shfl_xor_sync(0xffffffff, nCls, i, warpSize);
-	}
-	// write result for this block to global mem
-	if (tx == 0) atomicAdd(&gstats->numClauses, nCls);
+	loadShared(sh_rCls, nCls, pVars->size());
+	sharedReduce(sh_rCls, nCls);
+	warpReduce(sh_rCls, nCls);
+	if (threadIdx.x == 0) atomicAdd(&gstats->numClauses, nCls);
 }
 
-__global__ void calc_added_all_k(CNF* cnf, OT* ot, cuVec<uint32>* pVars, GSTATS* gstats)
+__global__ void calc_added_all_k(CNF* cnf, OT* ot, cuVecU* pVars, GSTATS* gstats)
 {
 	uint32* sh_rCls = SharedMemory<uint32>();
 	uint64* sh_rLits = (uint64*)(sh_rCls + blockDim.x);
-	uint32 tx = threadIdx.x;
-	uint32 v = blockIdx.x * (blockDim.x << 1) + tx;
+	uint32 v = blockIdx.x * (blockDim.x << 1) + threadIdx.x;
 	uint32 stride = (blockDim.x << 1) * gridDim.x;
 	uint32 x, p, n, nCls = 0;
 	uint64 nLits = 0;
@@ -134,38 +106,10 @@ __global__ void calc_added_all_k(CNF* cnf, OT* ot, cuVec<uint32>* pVars, GSTATS*
 		}
 		v += stride;
 	}
-	// write local sum in shared memory
-	sh_rCls[tx] = (tx < pVars->size()) ? nCls : 0;
-	sh_rLits[tx] = (tx < pVars->size()) ? nLits : 0;
-	__syncthreads();
-	// do reduction in shared memory
-	if ((blockDim.x >= 512) && (tx < 256)) {
-		sh_rCls[tx] = nCls = nCls + sh_rCls[tx + 256];
-		sh_rLits[tx] = nLits = nLits + sh_rLits[tx + 256];
-	}
-	__syncthreads();
-	if ((blockDim.x >= 256) && (tx < 128)) {
-		sh_rCls[tx] = nCls = nCls + sh_rCls[tx + 128];
-		sh_rLits[tx] = nLits = nLits + sh_rLits[tx + 128];
-	}
-	__syncthreads();
-	if ((blockDim.x >= 128) && (tx < 64)) {
-		sh_rCls[tx] = nCls = nCls + sh_rCls[tx + 64];
-		sh_rLits[tx] = nLits = nLits + sh_rLits[tx + 64];
-	}
-	__syncthreads();
-	if (tx < warpSize) {
-		if (blockDim.x >= 64) {
-			nCls += sh_rCls[tx + warpSize];
-			nLits += sh_rLits[tx + warpSize];
-		}
-		for (int i = (warpSize >> 1); i > 0; i >>= 1) {
-			nCls += __shfl_xor_sync(0xffffffff, nCls, i, warpSize);
-			nLits += __shfl_xor_sync(0xffffffff, nLits, i, warpSize);
-		}
-	}
-	// write result for this block to global mem
-	if (tx == 0) {
+	loadShared(sh_rCls, nCls, sh_rLits, nLits, pVars->size());
+	sharedReduce(sh_rCls, nCls, sh_rLits, nLits);
+	warpReduce(sh_rCls, nCls, sh_rLits, nLits);
+	if (threadIdx.x == 0) {
 		atomicAdd(&gstats->numClauses, nCls);
 		atomicAdd(&gstats->numLits, nLits);
 	}
@@ -174,8 +118,7 @@ __global__ void calc_added_all_k(CNF* cnf, OT* ot, cuVec<uint32>* pVars, GSTATS*
 __global__ void cnt_del_vars(GSTATS* gstats, uint32 size)
 {
 	uint32* sh_delVars = SharedMemory<uint32>();
-	uint32 tx = threadIdx.x;
-	uint32 i = blockIdx.x * (blockDim.x << 1) + tx;
+	uint32 i = blockIdx.x * (blockDim.x << 1) + threadIdx.x;
 	uint32 stride = (blockDim.x << 1) * gridDim.x;
 	uint32 nDelVars = 0;
 	while (i < size) {
@@ -183,28 +126,17 @@ __global__ void cnt_del_vars(GSTATS* gstats, uint32 size)
 		if (i + blockDim.x < size && !gstats->seen[i + blockDim.x]) nDelVars++;
 		i += stride;
 	}
-	sh_delVars[tx] = (tx < size) ? nDelVars : 0;
-	__syncthreads();
-	if ((blockDim.x >= 512) && (tx < 256)) sh_delVars[tx] = nDelVars = nDelVars + sh_delVars[tx + 256];
-	__syncthreads();
-	if ((blockDim.x >= 256) && (tx < 128)) sh_delVars[tx] = nDelVars = nDelVars + sh_delVars[tx + 128];
-	__syncthreads();
-	if ((blockDim.x >= 128) && (tx < 64)) sh_delVars[tx] = nDelVars = nDelVars + sh_delVars[tx + 64];
-	__syncthreads();
-	if (tx < warpSize) {
-		if (blockDim.x >= 64) nDelVars += sh_delVars[tx + warpSize];
-		for (int i = (warpSize >> 1); i > 0; i >>= 1)
-			nDelVars += __shfl_xor_sync(0xffffffff, nDelVars, i, warpSize);
-	}
-	if (tx == 0) atomicAdd(&gstats->numDelVars, nDelVars);
+	loadShared(sh_delVars, nDelVars, size);
+	sharedReduce(sh_delVars, nDelVars);
+	warpReduce(sh_delVars, nDelVars);
+	if (threadIdx.x == 0) atomicAdd(&gstats->numDelVars, nDelVars);
 }
 
 __global__ void cnt_reds(CNF* cnf, GSTATS* gstats)
 {
 	uint32* sh_rCls = SharedMemory<uint32>();
 	uint64* sh_rLits = (uint64*)(sh_rCls + blockDim.x);
-	uint32 tx = threadIdx.x;
-	uint32 i = blockIdx.x * (blockDim.x << 1) + tx;
+	uint32 i = blockIdx.x * (blockDim.x << 1) + threadIdx.x;
 	uint32 stride = (blockDim.x << 1) * gridDim.x;
 	uint32 nCls = 0;
 	uint64 nLits = 0;
@@ -222,38 +154,10 @@ __global__ void cnt_reds(CNF* cnf, GSTATS* gstats)
 		}
 		i += stride;
 	}
-	// write local sum in shared memory
-	sh_rCls[tx] = (tx < cnf->size()) ? nCls : 0;
-	sh_rLits[tx] = (tx < cnf->size()) ? nLits : 0;
-	__syncthreads();
-	// do reduction in shared memory
-	if ((blockDim.x >= 512) && (tx < 256)) {
-		sh_rCls[tx] = nCls = nCls + sh_rCls[tx + 256];
-		sh_rLits[tx] = nLits = nLits + sh_rLits[tx + 256];
-	}
-	__syncthreads();
-	if ((blockDim.x >= 256) && (tx < 128)) {
-		sh_rCls[tx] = nCls = nCls + sh_rCls[tx + 128];
-		sh_rLits[tx] = nLits = nLits + sh_rLits[tx + 128];
-	}
-	__syncthreads();
-	if ((blockDim.x >= 128) && (tx < 64)) {
-		sh_rCls[tx] = nCls = nCls + sh_rCls[tx + 64];
-		sh_rLits[tx] = nLits = nLits + sh_rLits[tx + 64];
-	}
-	__syncthreads();
-	if (tx < warpSize) {
-		if (blockDim.x >= 64) {
-			nCls += sh_rCls[tx + warpSize];
-			nLits += sh_rLits[tx + warpSize];
-		}
-		for (int i = (warpSize >> 1); i > 0; i >>= 1) {
-			nCls += __shfl_xor_sync(0xffffffff, nCls, i, warpSize);
-			nLits += __shfl_xor_sync(0xffffffff, nLits, i, warpSize);
-		}
-	}
-	// write result for this block to global mem
-	if (tx == 0) {
+	loadShared(sh_rCls, nCls, sh_rLits, nLits, cnf->size());
+	sharedReduce(sh_rCls, nCls, sh_rLits, nLits);
+	warpReduce(sh_rCls, nCls, sh_rLits, nLits);
+	if (threadIdx.x == 0) {
 		atomicAdd(&gstats->numClauses, nCls);
 		atomicAdd(&gstats->numLits, nLits);
 	}
@@ -262,8 +166,7 @@ __global__ void cnt_reds(CNF* cnf, GSTATS* gstats)
 __global__ void cnt_lits(CNF* cnf, GSTATS* gstats)
 {
 	uint64* sh_rLits = SharedMemory<uint64>();
-	uint32 tx = threadIdx.x;
-	uint32 i = blockIdx.x * (blockDim.x << 1) + tx;
+	uint32 i = blockIdx.x * (blockDim.x << 1) + threadIdx.x;
 	uint32 stride = (blockDim.x << 1) * gridDim.x;
 	uint64 nLits = 0;
 	while (i < cnf->size()) {
@@ -272,28 +175,17 @@ __global__ void cnt_lits(CNF* cnf, GSTATS* gstats)
 		if (i + blockDim.x < cnf->size() && (c2.status() == LEARNT || c2.status() == ORIGINAL)) nLits += c2.size();
 		i += stride;
 	}
-	sh_rLits[tx] = (tx < cnf->size()) ? nLits : 0;
-	__syncthreads();
-	if ((blockDim.x >= 512) && (tx < 256)) sh_rLits[tx] = nLits = nLits + sh_rLits[tx + 256];
-	__syncthreads();
-	if ((blockDim.x >= 256) && (tx < 128)) sh_rLits[tx] = nLits = nLits + sh_rLits[tx + 128];
-	__syncthreads();
-	if ((blockDim.x >= 128) && (tx < 64)) sh_rLits[tx] = nLits = nLits + sh_rLits[tx + 64];
-	__syncthreads();
-	if (tx < warpSize) {
-		if (blockDim.x >= 64) nLits += sh_rLits[tx + warpSize];
-		for (int i = (warpSize >> 1); i > 0; i >>= 1)
-			nLits += __shfl_xor_sync(0xffffffff, nLits, i, warpSize);
-	}
-	if (tx == 0) atomicAdd(&gstats->numLits, nLits);
+	loadShared(sh_rLits, nLits, cnf->size());
+	sharedReduce(sh_rLits, nLits);
+	warpReduce(sh_rLits, nLits);
+	if (threadIdx.x == 0) atomicAdd(&gstats->numLits, nLits);
 }
 
 __global__ void cnt_cls_lits(CNF* cnf, GSTATS* gstats)
 {
 	uint32* sh_rCls = SharedMemory<uint32>();
 	uint64* sh_rLits = (uint64*)(sh_rCls + blockDim.x);
-	uint32 tx = threadIdx.x;
-	uint32 i = blockIdx.x * (blockDim.x << 1) + tx;
+	uint32 i = blockIdx.x * (blockDim.x << 1) + threadIdx.x;
 	uint32 stride = (blockDim.x << 1) * gridDim.x;
 	uint32 nCls = 0;
 	uint64 nLits = 0;
@@ -304,42 +196,16 @@ __global__ void cnt_cls_lits(CNF* cnf, GSTATS* gstats)
 			(c2.status() == LEARNT || c2.status() == ORIGINAL)) { nCls++, nLits += c2.size(); }
 		i += stride;
 	}
-	sh_rCls[tx] = (tx < cnf->size()) ? nCls : 0;
-	sh_rLits[tx] = (tx < cnf->size()) ? nLits : 0;
-	__syncthreads();
-	if ((blockDim.x >= 512) && (tx < 256)) {
-		sh_rCls[tx] = nCls = nCls + sh_rCls[tx + 256];
-		sh_rLits[tx] = nLits = nLits + sh_rLits[tx + 256];
-	}
-	__syncthreads();
-	if ((blockDim.x >= 256) && (tx < 128)) {
-		sh_rCls[tx] = nCls = nCls + sh_rCls[tx + 128];
-		sh_rLits[tx] = nLits = nLits + sh_rLits[tx + 128];
-	}
-	__syncthreads();
-	if ((blockDim.x >= 128) && (tx < 64)) {
-		sh_rCls[tx] = nCls = nCls + sh_rCls[tx + 64];
-		sh_rLits[tx] = nLits = nLits + sh_rLits[tx + 64];
-	}
-	__syncthreads();
-	if (tx < warpSize) {
-		if (blockDim.x >= 64) {
-			nCls += sh_rCls[tx + warpSize];
-			nLits += sh_rLits[tx + warpSize];
-		}
-		for (int i = (warpSize >> 1); i > 0; i >>= 1) {
-			nCls += __shfl_xor_sync(0xffffffff, nCls, i, warpSize);
-			nLits += __shfl_xor_sync(0xffffffff, nLits, i, warpSize);
-		}
-	}
-	// write result for this block to global mem
-	if (tx == 0) {
+	loadShared(sh_rCls, nCls, sh_rLits, nLits, cnf->size());
+	sharedReduce(sh_rCls, nCls, sh_rLits, nLits);
+	warpReduce(sh_rCls, nCls, sh_rLits, nLits);
+	if (threadIdx.x == 0) {
 		atomicAdd(&gstats->numClauses, nCls);
 		atomicAdd(&gstats->numLits, nLits);
 	}
 }
 
-__global__ void ve_k(CNF *cnf, OT* ot, cuVec<uint32>* pVars, GSOL* sol)
+__global__ void ve_k(CNF *cnf, OT* ot, cuVecU* pVars, GSOL* sol)
 {
 	uint32 tx = threadIdx.x;
 	uint32 v = blockDim.x * blockIdx.x + threadIdx.x;
@@ -367,7 +233,7 @@ __global__ void ve_k(CNF *cnf, OT* ot, cuVec<uint32>* pVars, GSOL* sol)
 	}
 }
 
-__global__ void hse_k(CNF *cnf, OT* ot, cuVec<uint32>* pVars, GSOL* sol)
+__global__ void hse_k(CNF *cnf, OT* ot, cuVecU* pVars, GSOL* sol)
 {
 	uint32 v = blockDim.x * blockIdx.x + threadIdx.x;
 	__shared__ uint32 sh_cls[BLSIMP * SHARED_CL_LEN];
@@ -379,7 +245,7 @@ __global__ void hse_k(CNF *cnf, OT* ot, cuVec<uint32>* pVars, GSOL* sol)
 	}
 }
 
-__global__ void bce_k(CNF *cnf, OT* ot, cuVec<uint32>* pVars, GSOL* sol)
+__global__ void bce_k(CNF *cnf, OT* ot, cuVecU* pVars, GSOL* sol)
 {
 	uint32 v = blockDim.x * blockIdx.x + threadIdx.x;
 	__shared__ uint32 sh_cls[BLSIMP * CL_MAX_LEN_BCE];
@@ -391,7 +257,7 @@ __global__ void bce_k(CNF *cnf, OT* ot, cuVec<uint32>* pVars, GSOL* sol)
 	}
 }
 
-__global__ void hre_k(CNF *cnf, OT* ot, cuVec<uint32>* pVars, GSOL* sol)
+__global__ void hre_k(CNF *cnf, OT* ot, cuVecU* pVars, GSOL* sol)
 {
 	uint32 v = blockDim.y * blockIdx.y + threadIdx.y;
 	uint32* smem = SharedMemory<uint32>();
