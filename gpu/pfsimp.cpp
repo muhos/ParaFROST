@@ -4,12 +4,20 @@
 #include "pfsolve.h"
 #include "pfsort.h"
 
-void ParaFROST::free_master()
+void ParaFROST::masterFree()
 {
-	
+	cnf->~CNF(), cnf = NULL;
+	ot->~OT(), ot = NULL;
+	pv->~PV(), pv = NULL;
+	gstats->~GSTATS(), gstats = NULL;
+	raw_hist = NULL, d_occurs = NULL, d_scores = NULL;
+	histogram.clear(), rawLits.clear();
+	histogram.shrink_to_fit(), rawLits.shrink_to_fit();
+	destroyStreams();
+	cuMem.~cuMM();
 }
 
-void ParaFROST::free_slaves()
+void ParaFROST::slavesFree()
 {
 	
 }
@@ -190,6 +198,7 @@ void ParaFROST::GPU_preprocess()
 		if (phase) create_ot(cnf, ot, p_ot_en);
 		CNF_STATE veRet = GPU_VE(); 
 		if (veRet == TERMINATE) goto writeBack;
+		if (veRet == UNSAT) killSolver(UNSAT);
 		countCls(cnf, gstats); 
 		cnf_stats.global_n_cls = cnf_stats.n_cls_after, cnf_stats.global_n_lits = cnf_stats.n_lits_after;
 		lits_diff = lits_before - nLiterals(), lits_before = nLiterals();
@@ -218,9 +227,7 @@ writeBack:
 	timer->stop();
 	timer->pre = timer->cpuTime();
 	printf("Pre time = %f\n", timer->cpuTime());
-	destroyStreams();
-	histogram.clear();
-	exit(0);
+	killSolver();
 	// call initial PDM again 
 	PDMInit();
 	pre_en = false;
@@ -269,15 +276,16 @@ CNF_STATE ParaFROST::GPU_VE()
 {
 	if (interrupted()) killSolver();
 	if (verbose > 1) cout << "c | Eliminating variables for round-0." << endl;
-	ve(cnf, ot, pv);
+	if (ve(cnf, ot, pv) == UNSAT) return UNSAT;
 	if (verbose > 1) { evalReds(cnf, gstats); printf("c |\t\tBVE Reductions\n"); logReductions(); }
 	if (ve_plus_en) {
 		countLits(cnf, gstats);
 		int64 lits_before = cnf_stats.n_lits_after;
 		int64 lits_removed = nLiterals() - cnf_stats.n_lits_after, lits_removed_pre = lits_removed;
 		while (lits_removed > LIT_REM_THR) {
-			// discard value variables
+			// discard valued variables
 			uint32 n = 0;
+			assert(pv->numPVs == pv->pVars->size());
 			for (uint32 v = 0; v < pv->numPVs; v++) {
 				uint32 x = pv->pVars->at(v);
 				if (pv->sol->value[x] == UNDEFINED) (*pv->pVars)[n++] = x;
@@ -291,7 +299,8 @@ CNF_STATE ParaFROST::GPU_VE()
 			// HSE 
 			GPU_SUB();
 			if (verbose > 1) printf("c | Eliminating variables in new round..");
-			ve(cnf, ot, pv);
+			reduce_ot(cnf, ot, p_ot_en);
+			if (ve(cnf, ot, pv) == UNSAT) return UNSAT;
 			countLits(cnf, gstats); 
 			lits_removed = (lits_before > cnf_stats.n_lits_after) ? lits_before - cnf_stats.n_lits_after : cnf_stats.n_lits_after - lits_before;
 			if (verbose > 1) {
@@ -309,7 +318,7 @@ void ParaFROST::GPU_SUB()
 {
 	if (interrupted()) killSolver();
 	if (verbose > 1) printf("c | HSE-ing parallel variables..");
-	hse(cnf, ot, pv);
+	if (hse(cnf, ot, pv) == UNSAT) killSolver(UNSAT);
 	if (verbose > 1) printf(" ==> done\n");
 	if (verbose > 1) { evalReds(cnf, gstats); printf("c |\t\tHSE Reductions\n"); logReductions(); }
 }

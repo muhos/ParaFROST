@@ -129,7 +129,7 @@ ParaFROST::ParaFROST(const string& path) :
 	sysMemAvail = getAvailSysMem();
 	CHECK(cudaGetDeviceCount(&devCount));
 	size_t _gfree = 0, _gtot = 0;
-	if (devCount == 0) printf("Error - no available GPU(s) that support CUDA\n"), exit(EXIT_FAILURE);
+	if (devCount == 0) printf("Error - no GPU(s) available that support CUDA\n"), exit(EXIT_FAILURE);
 	else {
 		printf("c | Detected (%d) CUDA-enabled GPU(s)\n", devCount);
 		CHECK(cudaGetDeviceProperties(&devProp, MASTER_GPU));
@@ -190,8 +190,11 @@ ParaFROST::ParaFROST(const string& path) :
 
 ParaFROST::~ParaFROST()
 {
-	if (verbose >= 1) cout << "c | Freeing up Host memory...";
+	if (verbose >= 1) cout << "c | Freeing up Host/Device memory...";
 	sysFree();
+	masterFree();
+	slavesFree();
+	CHECK(cudaDeviceReset());
 	if (verbose >= 1) cout << " done." << endl;
 	if (verbose >= 1) cout << "c |--------------------------------------------------------------------------------------|" << endl;
 }
@@ -329,31 +332,23 @@ void ParaFROST::killSolver(const CNF_STATE& status)
 
 void ParaFROST::sysFree()
 {
-	occurs.clear(true);
-	scores.clear(true);
 	learntLits.clear(true);
 	learnt_cl.clear(true);
 	trail_sz.clear(true);
-	wt.clear(true);
+	occurs.clear(true);
+	scores.clear(true);
 	bins.clear(true);
 	orgs.clear(true);
+	wt.clear(true);
 	gcr.clear(true);
 	lbdQ.clear(true);
 	trailQ.clear(true);
+	removed.clear(true);
 	mappedVars.clear(true);
 	reverseVars.clear(true);
-	if (sysMem != NULL) {
-		free(sysMem);
-		sysMem = NULL;
-	}
-	if (var_heap != NULL) {
-		delete var_heap;
-		var_heap = NULL;
-	}
-	if (timer != NULL) {
-		delete timer;
-		timer = NULL;
-	}
+	if (timer != NULL) delete timer, timer = NULL;
+	if (sysMem != NULL) free(sysMem), sysMem = NULL;
+	if (var_heap != NULL) delete var_heap, var_heap = NULL;
 }
 
 void ParaFROST::allocSolver(const bool& re)
@@ -1420,7 +1415,8 @@ void ParaFROST::printReport()
 		printf("c |\nc |\t\t\tSolver Report\n");
 		printf("c | Simplifier time      : %.3f sec\n", timer->pre);
 		printf("c | Solver time          : %.3f sec\n", timer->solve);
-		printf("C | Solver memory        : %.3f MB\n", ((double)sysMemUsed() / MBYTE));
+		printf("C | System memory        : %.3f MB\n", ((double)sysMemUsed() / MBYTE));
+		printf("C | GPU memory           : %.3f MB\n", ((double)cuMem.capacity() / MBYTE));
 		printf("c | PDM calls            : %-10d\n", stats.pdm_calls);
 		printf("c | Restarts             : %-10d\n", starts);
 		printf("c | Blocked restarts     : %-10d\n", stats.nRestartStops);

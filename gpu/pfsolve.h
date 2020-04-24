@@ -390,7 +390,7 @@ public:
 		gMemPV_sz = 0ULL, gMemSol_sz = 0ULL, gMemVOrd_sz = 0ULL, gMemStats_sz = 0ULL;
 		gMemCNF_sz = 0ULL, gMemOT_sz = 0ULL, cap = 0ULL;
 	}
-	~cuMM() { }
+	~cuMM();
 	bool allocPV(PV*, const uint32&);
 	bool allocVO(OCCUR*&, SCORE*&, const uint32&);
 	bool allocStats(GSTATS*&, const uint32&);
@@ -652,8 +652,8 @@ public:
 		}
 	}
 	//========================================
-	void free_master(void);
-	void free_slaves(void);
+	void masterFree(void);
+	void slavesFree(void);
 	void optSimp(void);
 	void extractBins(void);
 	bool awaken(void);

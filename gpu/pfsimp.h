@@ -8,7 +8,6 @@
 #include <thrust/iterator/counting_iterator.h>
 #include "pfcudefs.h"
 #include "pfdefs.h"
-//#include "pfdvec.h"
 typedef thrust::device_vector<uint32> uTHRVector;
 extern cudaDeviceProp devProp;
 extern uint32 maxGPUThreads;
@@ -20,10 +19,10 @@ extern uint32 maxGPUThreads;
 #define MAX_GL_RES_LEN 60
 #define MAX_SH_RES_LEN 120
 #define FAN_LMT 64
-#define SHARED_CL_LEN 180
+#define SH_MAX_HSE_IN 180
+#define SH_MAX_BCE_IN 180 
 #define SH_MAX_HRE_IN 100
 #define SH_MAX_HRE_OUT 250
-#define CL_MAX_LEN_BCE 180 
 #define BLUB 256
 #define BLSIMP 64
 
@@ -31,43 +30,43 @@ template<typename T>
 class SharedMemory
 {
 public:
-	__device__ inline operator T* () {
-		extern __shared__ int __smem[];
-		return (T*)__smem;
+	_PFROST_D_ operator T* () {
+		extern __shared__ int _smem[];
+		return (T*)_smem;
 	}
-
-	__device__ inline operator const T* () const {
-		extern __shared__ int __smem[];
-		return (T*)__smem;
+	_PFROST_D_ operator const T* () const {
+		extern __shared__ int _smem[];
+		return (T*)_smem;
 	}
 };
 
-class cuVecU {
-	uint32* _mem;
+template<typename T>
+class cuVec {
+	T* _mem;
 	uint32 sz, cap;
 public:
-	cuVecU() { _mem = NULL, sz = 0, cap = 0; }
-	~cuVecU() { _mem = NULL, sz = 0, cap = 0; }
-	__forceinline__ void _push(const uint32& val) { _mem[sz++] = val; }
-	__forceinline__ void _pop(void) { sz--; }
-	__forceinline__ void _shrink(const uint32& n) { sz -= n; }
-	_PFROST_D_ void insert(const uint32&);
-	_PFROST_D_ void push(const uint32&);
+	_PFROST_H_D_ cuVec() { _mem = NULL, sz = 0, cap = 0; }
+	_PFROST_H_D_ ~cuVec() { clear(true); }
 	_PFROST_D_ void shrink(const uint32&);
+	_PFROST_D_ void insert(const T&);
+	_PFROST_D_ void push(const T&);
 	_PFROST_D_ void pop(void);
-	_PFROST_D_ void copyFrom(cuVecU& src) {
+	_PFROST_D_ void copyFrom(cuVec<T>& src) {
 		sz = src.size();
 		assert(sz <= cap);
-		uint32* d = _mem, * e = d + sz, * s = src;
+		T* d = _mem, * e = d + sz, * s = src;
 		while (d != e) *d++ = *s++;
 	}
-	_PFROST_H_D_ void alloc(uint32* head, const uint32& cap) { _mem = head, this->cap = cap; }
-	_PFROST_H_D_ cuVecU& operator=(cuVecU& rhs) { return *this; }
-	_PFROST_H_D_ const uint32& operator [] (const uint32& idx) const { assert(idx < sz); return _mem[idx]; }
-	_PFROST_H_D_ uint32& operator [] (const uint32& idx) { assert(idx < sz); return _mem[idx]; }
-	_PFROST_H_D_ operator uint32* (void) { return _mem; }
-	_PFROST_H_D_ uint32* data(void) { return _mem; }
-	_PFROST_H_D_ uint32& at(const uint32& idx) { assert(idx < sz); return _mem[idx]; }
+	_PFROST_H_D_ void _pop(void) { sz--; }
+	_PFROST_H_D_ void _shrink(const uint32& n) { sz -= n; }
+	_PFROST_H_D_ void _push(const T& val) { _mem[sz++] = val; }
+	_PFROST_H_D_ void alloc(T* head, const uint32& cap) { _mem = head, this->cap = cap; }
+	_PFROST_H_D_ cuVec<T>& operator=(cuVec<T>& rhs) { return *this; }
+	_PFROST_H_D_ const T& operator [] (const uint32& idx) const { assert(idx < sz); return _mem[idx]; }
+	_PFROST_H_D_ T& operator [] (const uint32& idx) { assert(idx < sz); return _mem[idx]; }
+	_PFROST_H_D_ operator T* (void) { return _mem; }
+	_PFROST_H_D_ T* data(void) { return _mem; }
+	_PFROST_H_D_ T& at(const uint32& idx) { assert(idx < sz); return _mem[idx]; }
 	_PFROST_H_D_ bool empty(void) const { return sz == 0; }
 	_PFROST_H_D_ uint32 size(void) const { return sz; }
 	_PFROST_H_D_ uint32 capacity(void) const { return cap; }
@@ -94,6 +93,8 @@ public:
 		printf("]\n");
 	}
 };
+typedef cuVec<uint32> cuVecU;
+typedef cuVecU OL;
 
 class SCLAUSE {
 	uint32* _lits;
@@ -158,7 +159,7 @@ public:
 		assert(_sz > 1);
 		uint32* d = dest, *s = _lits, *e = s + _sz;
 		while (s != e) *d++ = *s++;
-		assert(d - dest <= SHARED_CL_LEN && d - dest == _sz);
+		assert(d - dest == _sz);
 	}
 	_PFROST_H_D_ bool has(const uint32& lit) const { // binary search
 		if (_sz == 2) {
@@ -221,15 +222,19 @@ class CNF {
 	uint32 nCls_cap, n_cls;
 	uint64 nLits_cap, n_lits;
 public:
-	_PFROST_H_D_ CNF() { cls = NULL, lits = NULL, nCls_cap = 0, n_cls = 0, nLits_cap = 0, n_lits = 0; }
-	_PFROST_H_D_ ~CNF() { for (uint32 i = 0; i < n_cls; i++) cls[i].~SCLAUSE(); cls = NULL, lits = NULL; }
-	_PFROST_H_D_ void allocMem(const uint32& clsCap, const uint64& litsCap) {
+	CNF() { cls = NULL, lits = NULL, nCls_cap = 0, n_cls = 0, nLits_cap = 0, n_lits = 0; }
+	~CNF();
+	_PFROST_D_ void allocMem(const uint32& clsCap, const uint64& litsCap) {
 		assert(clsCap > 0);
 		assert(litsCap > 0);
 		nCls_cap = clsCap, nLits_cap = litsCap;
 		cls = (S_REF)(this + 1);
 		lits = (uint32*)(cls + nCls_cap);
 	}
+	_PFROST_D_ uint32 jumpCls(const uint32& offset);
+	_PFROST_D_ uint64 jumpLits(const uint64& offset);
+	_PFROST_D_ void resize(const uint32& nCls) { n_cls = nCls; }
+	_PFROST_D_ void resizeData(const uint64& nLits) { n_lits = nLits; }
 	_PFROST_H_D_ SCLAUSE& operator [] (const uint32& i) { return cls[i]; }
 	_PFROST_H_D_ SCLAUSE operator [] (const uint32& i) const { return cls[i]; }
 	_PFROST_H_D_ operator S_REF (void) { return cls; }
@@ -240,10 +245,6 @@ public:
 		c->set_status(ORIGINAL);
 		n_cls++, n_lits += clSize;
 	}
-	_PFROST_D_ uint32 jumpCls(const uint32& offset);
-	_PFROST_D_ uint64 jumpLits(const uint64& offset);
-	_PFROST_D_ void resize(const uint32& nCls) { n_cls = nCls; }
-	_PFROST_D_ void resizeData(const uint64& nLits) { n_lits = nLits; }
 	_PFROST_H_D_ uint32 size() const { return n_cls; }
 	_PFROST_H_D_ uint32 capacity() const { return nCls_cap; }
 	_PFROST_H_D_ uint64 numLits() const { return n_lits; }
@@ -304,41 +305,14 @@ public:
 	}
 };
 
-class OL : public cuVecU {
-public:
-	_PFROST_H_D_ OL() : cuVecU() {}
-	_PFROST_H_D_ ~OL() { clear(true); };
-	_PFROST_H_D_ void printClauses(CNF& cnf) {
-		for (uint32 i = 0; i < size(); i++)
-			printf("c | "), cnf[at(i)].print();
-	}
-};
-
 class OT {
 	OL* lists;
 	uint32* occurs;
 	int64 maxLists, maxEntries;
 public:
-	_PFROST_H_D_ OT() {
-		lists = NULL, occurs = NULL;
-		maxLists = 0, maxEntries = 0;
-	}
-	_PFROST_H_D_ ~OT() {
-		for (int64 i = 0; i < maxLists; i++) lists[i].~OL();
-		lists = NULL, occurs = NULL;
-		maxLists = 0, maxEntries = 0;
-	}
-	_PFROST_H_D_ void allocMem(addr_t* _mem, const int64& maxLists, const int64& maxEntries) {
-		assert(maxLists > 0);
-		assert(maxEntries > 0);
-		this->maxLists = maxLists;
-		this->maxEntries = maxEntries;
-		lists = (OL*)(*_mem);
-		*_mem += maxLists * sizeof(OL);
-		occurs = (uint32*)(*_mem);
-		*_mem += maxEntries * sizeof(uint32);
-	}
-	_PFROST_H_D_ void allocMem(const int64& nlists, const int64& nEntries) {
+	OT() { lists = NULL, occurs = NULL, maxLists = 0, maxEntries = 0; }
+	~OT();
+	_PFROST_D_ void allocMem(const int64& nlists, const int64& nEntries) {
 		assert(nlists > 0);
 		assert(nEntries > 0);
 		maxLists = nlists;
@@ -378,22 +352,28 @@ struct GSTATS {
 	Byte* seen;
 	uint64 numLits;	
 	uint32 numDelVars, numClauses;
+	GSTATS() : seen(NULL), numDelVars(0), numClauses(0), numLits(0) {}
+	~GSTATS() { seen = NULL; }
 };
 struct GSOL {
 	cuVecU* assigns;
 	LIT_ST* value;
 	uint32 head;
+	GSOL() : assigns(NULL), value(NULL), head(0) {}
+	~GSOL() { assigns->~cuVec(), assigns = NULL, value = NULL; }
 };
 struct PV {
 	GSOL* sol;
 	cuVecU* pVars;
 	uint32 numPVs, mu_inc;
 	PV() : sol(NULL), pVars(NULL), numPVs(0), mu_inc(0) {}
-	~PV() { sol = NULL, pVars = NULL; }
+	~PV() { sol->~GSOL(), pVars->~cuVec(), sol = NULL, pVars = NULL; }
 };
 //=================================================================================//
 //                           GPU Wrappers Declaration                              //
 //=================================================================================//
+void clearClauses(CNF*);
+void clearLists(OT*);
 void mem_set(addr_t, const Byte&, const size_t&);
 void mem_set(LIT_ST*, const LIT_ST&, const size_t&);
 void copy(uint32*, CNF*, const int64&);
@@ -402,8 +382,9 @@ void calc_vscores(OCCUR*, SCORE*, uint32*);
 void calc_added(CNF*, OT*, PV*, GSTATS*);
 void calc_sig(CNF*, const uint32&, const uint32&);
 void create_ot(CNF*, OT*, const bool&);
-void ve(CNF*, OT*, PV*);
-void hse(CNF*, OT*, PV*);
+void reduce_ot(CNF*, OT*, const bool&);
+CNF_STATE ve(CNF*, OT*, PV*);
+CNF_STATE hse(CNF*, OT*, PV*);
 void bce(CNF*, OT*, PV*);
 void hre(CNF*, OT*, PV*);
 void evalReds(CNF*, GSTATS*);

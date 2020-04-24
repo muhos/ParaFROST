@@ -1,9 +1,9 @@
 
 #include "pfsolve.h"
+
 //========================//
 //	GPU memory management //
 //========================//
-
 __global__ void set_cnf_ptrs(CNF* cnf, uint32 clsCap, uint64 litsCap) { 
 	assert(blockDim.x * gridDim.x == 1);
 	cnf->allocMem(clsCap, litsCap); 
@@ -48,6 +48,16 @@ __global__ void ot_ptrs_k(OT* ot, uint32* hist, int64 nLists, int64 nEntries, ui
 		(*ot)[n].alloc(ot->data(idx), ns), idx += ns;
 	}
 	assert(idx <= ot->capacity());
+}
+__global__ void clear_cls(CNF* cnf)
+{
+	uint32 i = blockDim.x * blockIdx.x + threadIdx.x;
+	while (i < cnf->size()) { (*cnf)[i].~SCLAUSE(); i += blockDim.x * gridDim.x; }
+}
+__global__ void clear_lists(OT* ot)
+{
+	int64 v = blockDim.x * blockIdx.x + threadIdx.x;
+	while (v < ot->size()) { (*ot)[v].~cuVec(); v += blockDim.x * gridDim.x; }
 }
 
 bool cuMM::allocStats(GSTATS*& gstats, const uint32& maxVars) {
@@ -97,6 +107,7 @@ bool cuMM::allocPV(PV* pv, const uint32& maxVars) {
 	pv->pVars = (cuVecU*)gMemPV;
 	pv->pVars->alloc((uint32*)(gMemPV + cuVec_sz), maxVars);
 	pv->sol = (GSOL*)gMemSol;
+	pv->sol->head = 0;
 	pv->sol->assigns = (cuVecU*)(gMemSol + sol_sz);
 	pv->sol->assigns->alloc((uint32*)(gMemSol + sol_sz + cuVec_sz), maxVars);
 	pv->sol->value = (LIT_ST*)(gMemSol + sol_sz + uintVec_sz);
@@ -212,4 +223,27 @@ OT* cuMM::resizeOT(uint32* hist, const uint32& maxVars, const int64& maxEntries)
 	LOGERR("Assigning OT pointers failed");
 	CHECK(cudaDeviceSynchronize());
 	return tmp_ot;
+}
+cuMM::~cuMM() {
+	if (gMemOT != NULL) CHECK(cudaFree(gMemOT)), gMemOT = NULL;
+	if (gMemPV != NULL) CHECK(cudaFree(gMemPV)), gMemPV = NULL;
+	if (gMemCNF != NULL) CHECK(cudaFree(gMemCNF)), gMemCNF = NULL;
+	if (gMemSol != NULL) CHECK(cudaFree(gMemSol)), gMemSol = NULL;
+	if (gMemVOrd != NULL) CHECK(cudaFree(gMemVOrd)), gMemVOrd = NULL;
+	if (gMemStats != NULL) CHECK(cudaFree(gMemStats)), gMemStats = NULL;
+	cap = 0;
+}
+CNF::~CNF() {
+	int nBlocks = MIN((n_cls + BLOCK1D - 1) / BLOCK1D, maxGPUThreads / BLOCK1D);
+	clear_cls << <nBlocks, BLOCK1D >> > (this);
+	LOGERR("Clearing clauses failed");
+	CHECK(cudaDeviceSynchronize());
+	cls = NULL, lits = NULL;
+}
+OT::~OT() {
+	int nBlocks = MIN((V2D(nOrgVars() + 1) + BLOCK1D - 1) / BLOCK1D, maxGPUThreads / BLOCK1D);
+	clear_lists << <nBlocks, BLOCK1D >> > (this);
+	LOGERR("Clearing occurrence lists failed");
+	CHECK(cudaDeviceSynchronize());
+	lists = NULL, occurs = NULL;
 }

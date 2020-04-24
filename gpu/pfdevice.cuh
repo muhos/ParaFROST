@@ -6,8 +6,22 @@
 
 #define SS_DBG 0
 #define VE_DBG 0
+#define BCP_DBG 1
 
-_PFROST_D_ void pClauseSet(CNF& cnf, OL& poss, OL& negs)
+_PFROST_H_D_ void pLit(const uint32& l) { printf("%d", ISNEG(l) ? -int(ABS(l)) : ABS(l)); }
+
+_PFROST_H_D_ void pSharedClause(uint32* c, const uint32& sz)
+{
+	printf("(");
+	for (LIT_POS l = 0; l < sz; l++) {
+		int lit = int(ABS(c[l]));
+		lit = (ISNEG(c[l])) ? -lit : lit;
+		printf("%4d ", lit);
+	}
+	printf(")\n");
+}
+
+_PFROST_H_D_ void pClauseSet(CNF& cnf, OL& poss, OL& negs)
 {
 	for (uint32 i = 0; i < poss.size(); i++) {
 		SCLAUSE& pos = cnf[poss[i]];
@@ -19,23 +33,12 @@ _PFROST_D_ void pClauseSet(CNF& cnf, OL& poss, OL& negs)
 	}
 }
 
-_PFROST_D_ void pClauseSet(CNF& cnf, OL& ol)
+_PFROST_H_D_ void pClauseSet(CNF& cnf, OL& ol)
 {
 	for (uint32 i = 0; i < ol.size(); i++) {
 		SCLAUSE& c = cnf[ol[i]];
 		printf("c | "), c.print();
 	}
-}
-
-_PFROST_D_ void pSharedClause(uint32* c, const uint32& sz)
-{
-	printf("(");
-	for (LIT_POS l = 0; l < sz; l++) {
-		int lit = int(ABS(c[l]));
-		lit = (ISNEG(c[l])) ? -lit : lit;
-		printf("%4d ", lit);
-	}
-	printf(")\n");
 }
 
 #if SS_DBG
@@ -45,8 +48,7 @@ _PFROST_D_ void DBG_updateOL(const uint32& x, CNF& cnf, OL& ol)
 	int idx = 0, ol_sz = ol.size();
 	while (idx < ol_sz) {
 		SCLAUSE& c = cnf[ol[idx]];
-		if (c.status() == DELETED) { printf("c | SUB(%d): ", ABS(x)), c.print(); ol[idx] = ol[--ol_sz]; }
-		else if (c.molten()) { c.freeze(); ol[idx] = ol[--ol_sz]; }
+		if (c.molten()) { c.freeze(); ol[idx] = ol[--ol_sz]; }
 		else idx++;
 	}
 	if (ol_sz != ol.size()) { printf("c | Updated list:\n"); pClauseSet(cnf, ol); printf("c | == End of list ==\n"); }
@@ -79,7 +81,11 @@ template<typename T>
 _PFROST_D_ void warpReduce(T* smem, T& val) {
 	if (threadIdx.x < warpSize) {
 		if (blockDim.x >= 64) val += smem[threadIdx.x + warpSize];
-		for (int i = 16; i >= 1; i >>= 1) val += __shfl_xor_sync(FULLWARP, val, i, warpSize);
+		val += __shfl_xor_sync(FULLWARP, val, 16, warpSize);
+		val += __shfl_xor_sync(FULLWARP, val, 8, warpSize);
+		val += __shfl_xor_sync(FULLWARP, val, 4, warpSize);
+		val += __shfl_xor_sync(FULLWARP, val, 2, warpSize);
+		val += __shfl_xor_sync(FULLWARP, val, 1, warpSize);
 	}
 }
 
@@ -90,10 +96,16 @@ _PFROST_D_ void warpReduce(T1* smem1, T1& val1, T2* smem2, T2& val2) {
 			val1 += smem1[threadIdx.x + warpSize];
 			val2 += smem2[threadIdx.x + warpSize];
 		}
-		for (int i = 16; i >= 1; i >>= 1) {
-			val1 += __shfl_xor_sync(FULLWARP, val1, i, warpSize);
-			val2 += __shfl_xor_sync(FULLWARP, val2, i, warpSize);
-		}
+		val1 += __shfl_xor_sync(FULLWARP, val1, 16, warpSize);
+		val2 += __shfl_xor_sync(FULLWARP, val2, 16, warpSize);
+		val1 += __shfl_xor_sync(FULLWARP, val1, 8, warpSize);
+		val2 += __shfl_xor_sync(FULLWARP, val2, 8, warpSize);
+		val1 += __shfl_xor_sync(FULLWARP, val1, 4, warpSize);
+		val2 += __shfl_xor_sync(FULLWARP, val2, 4, warpSize);
+		val1 += __shfl_xor_sync(FULLWARP, val1, 2, warpSize);
+		val2 += __shfl_xor_sync(FULLWARP, val2, 2, warpSize);
+		val1 += __shfl_xor_sync(FULLWARP, val1, 1, warpSize);
+		val2 += __shfl_xor_sync(FULLWARP, val2, 1, warpSize);
 	}
 }
 
@@ -151,6 +163,39 @@ _PFROST_D_ void sharedReduce(T1* smem1, T1& val1, T2* smem2, T2& val2) {
 	}
 }
 
+template<typename T>
+_PFROST_D_ void cuVec<T>::insert(const T& val)
+{
+	uint32 idx = atomicInc(&sz, cap);
+	assert(idx < cap);
+	_mem[idx] = val;
+}
+
+template<typename T>
+_PFROST_D_ void cuVec<T>::push(const T& val) {
+	uint32 idx = atomicAggInc(&sz);
+	assert(idx < cap);
+	_mem[idx] = val;
+}
+
+template<typename T>
+_PFROST_D_ void cuVec<T>::pop(void) { uint32 idx = atomicSub(&sz, 1); assert(idx < UINT32_MAX); }
+
+template<typename T>
+_PFROST_D_ void cuVec<T>::shrink(const uint32& n) { uint32 idx = atomicSub(&sz, n); assert(idx < UINT32_MAX); }
+
+_PFROST_D_ uint32 CNF::jumpCls(const uint32& offset) {
+	uint32 accVal = atomicAdd(&n_cls, offset);
+	assert(accVal < nCls_cap);
+	return accVal;
+}
+
+_PFROST_D_ uint64 CNF::jumpLits(const uint64& offset) {
+	uint64 accVal = atomicAdd(&n_lits, offset);
+	assert(accVal < nLits_cap);
+	return accVal;
+}
+
 _PFROST_D_ void devSort(uint32* data, const CL_LEN& size)
 {
 	if (size == 2) {
@@ -165,42 +210,10 @@ _PFROST_D_ void devSort(uint32* data, const CL_LEN& size)
 #pragma unroll
 		for (i = 1; i < size; i++) {
 			uint32 tmp = data[i];
-#pragma unroll
 			for (j = i; j > 0 && data[j - 1] > tmp; j--) data[j] = data[j - 1];
 			data[j] = tmp;
 		}
 	}
-}
-
-_PFROST_D_ void cuVecU::insert(const uint32& val)
-{
-	uint32 idx = atomicInc(&sz, cap);
-	assert(idx < cap);
-	_mem[idx] = val;
-}
-
-_PFROST_D_ void cuVecU::push(const uint32& val) {
-	uint32 idx = atomicAggInc(&sz);
-	assert(idx < cap);
-	_mem[idx] = val;
-}
-
-_PFROST_D_ void cuVecU::pop(void) { uint32 idx = atomicSub(&sz, 1); assert(idx < UINT32_MAX); }
-
-_PFROST_D_ void cuVecU::shrink(const uint32& n) { uint32 idx = atomicSub(&sz, n); assert(idx < UINT32_MAX); }
-
-_PFROST_D_ uint32 CNF::jumpCls(const uint32& offset)
-{
-	uint32 accVal = atomicAdd(&n_cls, offset);
-	assert(accVal < nCls_cap);
-	return accVal;
-}
-
-_PFROST_D_ uint64 CNF::jumpLits(const uint64& offset)
-{
-	uint64 accVal = atomicAdd(&n_lits, offset);
-	assert(accVal < nLits_cap);
-	return accVal;
 }
 
 _PFROST_D_ void calcSig(uint32* data, const int& size, uint32& _sig)
@@ -616,6 +629,12 @@ _PFROST_D_ void calcResolvents(const uint32& x, CNF& cnf, OL& poss, OL& negs, ui
 	addedCls += ps * ns - nTs;
 }
 
+_PFROST_H_D_ void deleteClauseSet(CNF& cnf, OL& ol)
+{
+#pragma unroll
+	for (uint32 i = 0; i < ol.size(); i++) cnf[ol[i]].markDeleted();
+}
+
 _PFROST_D_ void deleteClauses(CNF& cnf, OL& poss, OL& negs)
 {
 #pragma unroll
@@ -634,19 +653,14 @@ _PFROST_D_ void countLitsBefore(CNF& cnf, OL& poss, OL& negs, uint64& nLitsBefor
 
 _PFROST_D_ bool isEqual(SCLAUSE& c1, uint32* c2, const CL_LEN& size)
 {
-	LIT_POS it = 0;
+	assert(c1.status() != DELETED);
+	assert(c1.size() > 1);
 #pragma unroll
-	while (it < size) {
-		if (c1[it] != c2[it]) return false;
-		else it++;
-	}
+	for (LIT_POS it = 0; it < size; it++) if (c1[it] != c2[it]) return false;
 	return true;
 }
 
-_PFROST_D_ bool sub(const uint32& A, const uint32& B)
-{
-	return (A & ~B) == 0;
-}
+_PFROST_D_ bool sub(const uint32& A, const uint32& B) { return (A & ~B) == 0; }
 
 _PFROST_D_ bool selfSub(const uint32& A, const uint32& B)
 {
@@ -658,8 +672,6 @@ _PFROST_D_ bool sub(SCLAUSE& sm, SCLAUSE& lr)
 {
 	assert(sm.status() != DELETED);
 	assert(lr.status() != DELETED);
-	assert(sm.size() > 1);
-	assert(lr.size() > 1);
 	LIT_POS it1 = 0, it2 = 0;
 	CL_LEN sm_sz = sm.size(), lr_sz = lr.size(), sub = 0;
 	while (it1 < sm_sz && it2 < lr_sz) {
@@ -673,7 +685,7 @@ _PFROST_D_ bool sub(SCLAUSE& sm, SCLAUSE& lr)
 
 _PFROST_D_ bool sub(SCLAUSE& sm, uint32* lr, const CL_LEN& lr_sz)
 {
-	assert(lr_sz > 1);
+	assert(sm.status() != DELETED);
 	LIT_POS it1 = 0, it2 = 0, sub = 0;
 	CL_LEN sm_sz = sm.size();
 	while (it1 < sm_sz && it2 < lr_sz) {
@@ -717,6 +729,7 @@ _PFROST_D_ bool selfSub(const uint32& x, SCLAUSE& sm, uint32* lr, const CL_LEN& 
 {
 	assert(sm.status() != DELETED);
 	assert(sm.size() > 1);
+	assert(lr_sz > 1);
 	LIT_POS it1 = 0, it2 = 0;
 	CL_LEN sm_sz = sm.size(), sub = 0;
 	bool self = false;
@@ -741,6 +754,9 @@ _PFROST_D_ bool selfSub(const uint32& x, SCLAUSE& sm, uint32* lr, const CL_LEN& 
 
 _PFROST_D_ void strengthen(GSOL* sol, SCLAUSE& c, uint32* sh_c, uint32 self_lit)
 {
+	assert(c.status() != DELETED);
+	assert(c.size() > 1);
+	assert(self_lit);
 	CL_LEN n = 0;
 	uint32 sig = 0;
 	bool check = false;
@@ -756,7 +772,7 @@ _PFROST_D_ void strengthen(GSOL* sol, SCLAUSE& c, uint32* sh_c, uint32 self_lit)
 	}
 	assert(check);
 	assert(n == c.size() - 1);
-	assert(n <= SHARED_CL_LEN);
+	assert(n <= SH_MAX_HSE_IN);
 	assert(c.hasZero() < 0);
 	assert(c.isSorted());
 	c.set_sig(sig);
@@ -769,6 +785,9 @@ _PFROST_D_ void strengthen(GSOL* sol, SCLAUSE& c, uint32* sh_c, uint32 self_lit)
 
 _PFROST_D_ void strengthen(GSOL* sol, SCLAUSE& c, uint32 self_lit)
 {
+	assert(c.status() != DELETED);
+	assert(c.size() > 1);
+	assert(self_lit);
 	CL_LEN n = 0;
 	uint32 sig = 0;
 	bool check = false;
@@ -780,7 +799,7 @@ _PFROST_D_ void strengthen(GSOL* sol, SCLAUSE& c, uint32 self_lit)
 	}
 	assert(check);
 	assert(n == c.size() - 1);
-	assert(n <= SHARED_CL_LEN);
+	assert(n <= SH_MAX_HSE_IN);
 	assert(c.hasZero() < 0);
 	assert(c.isSorted());
 	c.set_sig(sig);
@@ -791,14 +810,39 @@ _PFROST_D_ void strengthen(GSOL* sol, SCLAUSE& c, uint32 self_lit)
 #endif
 }
 
+_PFROST_H_D_ bool propClause(GSOL* sol, SCLAUSE& c, const uint32& f_assign)
+{
+	assert(c.status() != DELETED);
+	assert(c.size() > 1);
+	assert(f_assign);
+	uint32 sig = 0;
+	CL_LEN n = 0;
+	bool check = false;
+#pragma unroll
+	for (LIT_POS k = 0; k < c.size(); k++) {
+		uint32 lit = c[k];
+		if (lit != f_assign) {
+			if (sol->value[V2X(lit)] == !ISNEG(lit)) return true;
+			c[n++] = lit, sig |= MAPHASH(lit);
+		}
+		else check = true;
+	}
+	assert(check);
+	assert(n == c.size() - 1);
+	assert(c.hasZero() < 0);
+	assert(c.isSorted());
+	c.set_sig(sig);
+	c.pop();
+	return false;
+}
+
 _PFROST_D_ void updateOL(CNF& cnf, OL& ol)
 {
 	if (ol.size() == 0) return;
 	int idx = 0, ol_sz = ol.size();
 	while (idx < ol_sz) {
 		SCLAUSE& c = cnf[ol[idx]];
-		if (c.status() == DELETED) ol[idx] = ol[--ol_sz];
-		else if (c.molten()) { c.freeze(); ol[idx] = ol[--ol_sz]; }
+		if (c.molten()) { c.freeze(); ol[idx] = ol[--ol_sz]; }
 		else idx++;
 	}
 	ol.resize(ol_sz);
@@ -812,7 +856,7 @@ _PFROST_D_ void self_sub_x(const uint32& x, CNF& cnf, OL& poss, OL& negs, GSOL* 
 		SCLAUSE& pos = cnf[poss[i]];
 		if (pos.status() == DELETED) continue;
 		// self-subsumption check
-		if (pos.size() > SHARED_CL_LEN) { // use global memory 
+		if (pos.size() > SH_MAX_HSE_IN) { // use global memory 
 #pragma unroll
 			for (uint32 j = 0; j < negs.size(); j++) {
 				SCLAUSE& neg = cnf[negs[j]];
@@ -824,7 +868,6 @@ _PFROST_D_ void self_sub_x(const uint32& x, CNF& cnf, OL& poss, OL& negs, GSOL* 
 				}
 				else if (neg.size() > 1 && neg.size() == pos.size() &&
 					selfSub(neg.sig(), pos.sig()) && selfSub(x, neg, pos)) {
-					// shorten the positive occur and delete the negative occur subsumed by the former
 					strengthen(sol, pos, x);
 					pos.melt();
 					neg.markDeleted();
@@ -880,7 +923,7 @@ _PFROST_D_ void self_sub_x(const uint32& x, CNF& cnf, OL& poss, OL& negs, GSOL* 
 	for (uint32 i = 0; i < negs.size(); i++) {
 		SCLAUSE& neg = cnf[negs[i]];
 		if (neg.status() == DELETED) continue;
-		if (neg.size() > SHARED_CL_LEN) { // use global memory
+		if (neg.size() > SH_MAX_HSE_IN) { // use global memory
 			// self-subsumption check
 #pragma unroll
 			for (uint32 j = 0; j < poss.size(); j++) {
@@ -961,7 +1004,7 @@ _PFROST_D_ void blocked_x(const uint32& x, CNF& cnf, OL& poss, OL& negs, uint32*
 			if (pos.status() != DELETED) {
 				CL_LEN pos_size = pos.size();
 				nTs = 0;
-				if (pos_size <= CL_MAX_LEN_BCE) { // use shared memory 
+				if (pos_size <= SH_MAX_BCE_IN) { // use shared memory 
 					uint32* sh_pos = sh_c;
 					pos.shareTo(sh_pos);
 #pragma unroll
@@ -988,7 +1031,7 @@ _PFROST_D_ void blocked_x(const uint32& x, CNF& cnf, OL& poss, OL& negs, uint32*
 			if (neg.status() != DELETED) {
 				CL_LEN neg_size = neg.size();
 				nTs = 0;
-				if (neg_size <= CL_MAX_LEN_BCE) { // use shared memory
+				if (neg_size <= SH_MAX_BCE_IN) { // use shared memory
 					uint32* sh_neg = sh_c;
 					neg.shareTo(sh_neg);
 #pragma unroll

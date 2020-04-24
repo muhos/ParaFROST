@@ -14,6 +14,23 @@ __global__ void reset_ot_k(OT* ot)
 	while (v < ot->size()) { (*ot)[v].clear(); v += blockDim.x * gridDim.x; }
 }
 
+__global__ void reduce_ot_k(CNF* cnf, OT* ot)
+{
+	int64 v = blockDim.x * blockIdx.x + threadIdx.x;
+	while (v < ot->size()) { 
+		OL& ol = (*ot)[v];
+		if (ol.size()) {
+			int idx = 0, ol_sz = ol.size();
+			while (idx < ol_sz) {
+				if ((*cnf)[ol[idx]].status() == DELETED) ol[idx] = ol[--ol_sz];
+				else idx++;
+			}
+			ol.resize(ol_sz);
+		}
+		v += blockDim.x * gridDim.x; 
+	}
+}
+
 __global__ void create_ot_k(CNF* cnf, OT* ot)
 {
 	uint32 i = blockDim.x * blockIdx.x + threadIdx.x;
@@ -217,17 +234,17 @@ __global__ void ve_k(CNF *cnf, OT* ot, cuVecU* pVars, GSOL* sol)
 		if ((*ot)[p].size() == 0 || (*ot)[n].size() == 0) { // pure
 			deleteClauses(*cnf, (*ot)[p], (*ot)[n]);
 			sol->value[x] = (*ot)[p].size() ? 1 : 0;
-			(*ot)[p].clear(), (*ot)[n].clear();
+			(*ot)[p].clear(true), (*ot)[n].clear(true);
 		}
 		else if ((*ot)[p].size() == 1 || (*ot)[n].size() == 1) {
 			resolve_x(x + 1, *cnf, (*ot)[p], (*ot)[n], sol, &outs[tx * MAX_SH_RES_LEN]);
 			sol->value[x] = 1;
-			(*ot)[p].clear(), (*ot)[n].clear();
+			(*ot)[p].clear(true), (*ot)[n].clear(true);
 		}
 		else if (gateReasoning_x(p, *cnf, (*ot)[p], (*ot)[n], sol, &defs[tx * FAN_LMT], &outs[tx * MAX_SH_RES_LEN])
 			  || resolve_x(x + 1, *cnf, (*ot)[p], (*ot)[n], sol, &outs[tx * MAX_SH_RES_LEN], true)) {
 			sol->value[x] = 1;
-			(*ot)[p].clear(), (*ot)[n].clear();
+			(*ot)[p].clear(true), (*ot)[n].clear(true);
 		}
 		v += blockDim.x * gridDim.x;
 	}
@@ -236,11 +253,11 @@ __global__ void ve_k(CNF *cnf, OT* ot, cuVecU* pVars, GSOL* sol)
 __global__ void hse_k(CNF *cnf, OT* ot, cuVecU* pVars, GSOL* sol)
 {
 	uint32 v = blockDim.x * blockIdx.x + threadIdx.x;
-	__shared__ uint32 sh_cls[BLSIMP * SHARED_CL_LEN];
+	__shared__ uint32 sh_cls[BLSIMP * SH_MAX_HSE_IN];
 	while (v < pVars->size()) {
 		assert(sol->value[pVars->at(v)] == UNDEFINED);
 		uint32 p = V2D(pVars->at(v) + 1), n = NEG(p);
-		self_sub_x(p, *cnf, (*ot)[p], (*ot)[n], sol, &sh_cls[threadIdx.x * SHARED_CL_LEN]);
+		self_sub_x(p, *cnf, (*ot)[p], (*ot)[n], sol, &sh_cls[threadIdx.x * SH_MAX_HSE_IN]);
 		v += blockDim.x * gridDim.x;
 	}
 }
@@ -248,11 +265,11 @@ __global__ void hse_k(CNF *cnf, OT* ot, cuVecU* pVars, GSOL* sol)
 __global__ void bce_k(CNF *cnf, OT* ot, cuVecU* pVars, GSOL* sol)
 {
 	uint32 v = blockDim.x * blockIdx.x + threadIdx.x;
-	__shared__ uint32 sh_cls[BLSIMP * CL_MAX_LEN_BCE];
+	__shared__ uint32 sh_cls[BLSIMP * SH_MAX_BCE_IN];
 	while (v < pVars->size()) {
 		uint32 x = (*pVars)[v], p = V2D(x + 1), n = NEG(p);
 		assert(sol->value[x] == UNDEFINED);
-		blocked_x(x + 1, *cnf, (*ot)[p], (*ot)[n], &sh_cls[threadIdx.x * CL_MAX_LEN_BCE]);
+		blocked_x(x + 1, *cnf, (*ot)[p], (*ot)[n], &sh_cls[threadIdx.x * SH_MAX_BCE_IN]);
 		v += blockDim.x * gridDim.x;
 	}
 }
@@ -312,10 +329,48 @@ __global__ void hre_k(CNF *cnf, OT* ot, cuVecU* pVars, GSOL* sol)
 	}
 }
 
-__global__ void prop_k() 
+__global__ void prop_k(CNF* cnf, OT* ot, cuVecU* pVars, GSOL* sol)
 {
-
+	
 }
+
+#if BCP_DBG
+void prop(CNF* cnf, OT* ot, cuVecU* pVars, GSOL* sol)
+{
+	while (sol->head < sol->assigns->size()) { // propagate units
+		uint32 assign = sol->assigns->at(sol->head), assign_idx = V2X(assign), f_assign = FLIP(assign);
+		assert(assign > 0);
+		LIT_ST assign_val = !ISNEG(assign);
+		if (sol->value[assign_idx] != assign_val) { // not propagated before
+			assert(sol->value[assign_idx] == UNDEFINED);
+			sol->value[assign_idx] = assign_val;
+			//printf("c | Propagating assign("), pLit(assign), printf("):\n"), pClauseSet(*cnf, (*ot)[assign]), pClauseSet(*cnf, (*ot)[f_assign]);
+			deleteClauseSet(*cnf, (*ot)[assign]); // remove satisfied
+			for (uint32 i = 0; i < (*ot)[f_assign].size(); i++) { // reduce unsatisfied 
+				SCLAUSE& c = (*cnf)[(*ot)[f_assign][i]];
+				assert(c.size());
+				if (c.status() == DELETED || propClause(sol, c, f_assign)) continue; // clause satisfied
+				if (c.size() == 0) return; // conflict on top level
+				if (c.size() == 1) {
+					assert(*c > 1);
+					if (sol->value[V2X(*c)] == UNDEFINED) sol->assigns->_push(*c); // new unit
+					else return;  // conflict on top level
+				}
+			}
+			//pClauseSet(*cnf, (*ot)[assign]), pClauseSet(*cnf, (*ot)[f_assign]);
+			(*ot)[assign].clear(true), (*ot)[f_assign].clear(true);
+		}
+		sol->head++;
+	}
+	// discard propagated variables
+	uint32 n = 0;
+	for (uint32 v = 0; v < pVars->size(); v++) {
+		uint32 x = pVars->at(v);
+		if (sol->value[x] == UNDEFINED) (*pVars)[n++] = x;
+	}
+	pVars->resize(n);
+}
+#endif
 //==============================================//
 //          ParaFROST Wrappers/helpers          //
 //==============================================//
@@ -393,7 +448,23 @@ void create_ot(CNF* cnf, OT* ot, const bool& p)
 		cout << "c |==========================|" << endl;
 	}
 }
-void ve(CNF *cnf, OT* ot, PV *pv)
+void reduce_ot(CNF* cnf, OT* ot, const bool& p)
+{
+	assert(cnf != NULL);
+	assert(ot != NULL);
+	int nBlocks = MIN((V2D(nOrgVars() + 1) + BLOCK1D - 1) / BLOCK1D, maxGPUThreads / BLOCK1D);
+	reduce_ot_k << <nBlocks, BLOCK1D >> > (cnf, ot);
+	LOGERR("Occurrence table reduction failed");
+	CHECK(cudaDeviceSynchronize());
+	assert(ot->accViolation());
+	if (p) {
+		cout << "c |==========================|" << endl;
+		cout << "c |==== occurrence table ====|" << endl;
+		ot->print();
+		cout << "c |==========================|" << endl;
+	}
+}
+CNF_STATE ve(CNF *cnf, OT* ot, PV *pv)
 {   
 	assert(pv->numPVs > 0);
 	int nBlocks = MIN((pv->numPVs + BLSIMP - 1) / BLSIMP, maxGPUThreads / BLSIMP);
@@ -402,11 +473,19 @@ void ve(CNF *cnf, OT* ot, PV *pv)
 #else
 	ve_k << <nBlocks, BLSIMP >> > (cnf, ot, pv->pVars, pv->sol);
 #endif
-	//if (prop() == UNSAT) killSolver(UNSAT);
+#if BCP_DBG
+	CHECK(cudaDeviceSynchronize());
+	prop(cnf, ot, pv->pVars, pv->sol);
+#else
+	prop_k << <1, 1 >> > (cnf, ot, pv->sol);
+#endif
 	LOGERR("Parallel BVE failed");
 	CHECK(cudaDeviceSynchronize());
+	if (pv->sol->head < pv->sol->assigns->size()) return UNSAT;
+	pv->numPVs = pv->pVars->size();
+	return UNSOLVED;
 }
-void hse(CNF *cnf, OT* ot, PV *pv)
+CNF_STATE hse(CNF *cnf, OT* ot, PV *pv)
 {
 	assert(pv->numPVs > 0);
 	int nBlocks = MIN((pv->numPVs + BLSIMP - 1) / BLSIMP, maxGPUThreads / BLSIMP);
@@ -415,9 +494,17 @@ void hse(CNF *cnf, OT* ot, PV *pv)
 #else
 	hse_k << <nBlocks, BLSIMP >> > (cnf, ot, pv->pVars, pv->sol);
 #endif
-	//if (prop() == UNSAT) killSolver(UNSAT);
+#if BCP_DBG
+	CHECK(cudaDeviceSynchronize());
+	prop(cnf, ot, pv->pVars, pv->sol);
+#else
+	prop_k << <1, 1 >> > (cnf, ot, pv->sol);
+#endif
 	LOGERR("Parallel HSE failed");
 	CHECK(cudaDeviceSynchronize());
+	if (pv->sol->head < pv->sol->assigns->size()) return UNSAT;
+	pv->numPVs = pv->pVars->size();
+	return UNSOLVED;
 }
 void bce(CNF *cnf, OT* ot, PV *pv)
 {
