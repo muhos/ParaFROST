@@ -51,7 +51,7 @@
 \maketitle
 
 \begin{abstract}
-Flood-it is a puzzle in which, the player aims to fill the game board (flood) with a minimum number of flooding moves. Finding an optimal solution to this game is an NP-Complete problem. In this paper, we describe a possible encoding of the game to propositional SAT formulas. 
+Flood-it is a puzzle in which, the player aims to fill the game board (flood) with a minimum number of flooding moves. Finding an optimal solution to this game is an NP-Complete problem. In this paper, we describe a possible encoding of the game to propositional Satisfiability problem. 
 \end{abstract}
 
 \section{Introduction}
@@ -60,11 +60,9 @@ Flood-It is a board game in which the player is given an $\bSize\times\bSize$ bo
 Each move dictates the player to choose a color. In turn, all flooded fields change their color to the chosen color. This procedure is recursive as any field touching the flooded region with the same color is also flooded. As the flooded region grows, new neighbors will be eligible for flooding in the next move. The process continues until the whole board is filled with a single color with lowest possible moves.
 
 \section{SAT Encoding}
-The intuition of solving the game in SAT, is to let a SAT solver find the shortest sequence of moves that completes the puzzle. In this section, we briefly describe a strategy which is proposed by the first author in his bachelor thesis\cite{thesis} to formulate the game rules with a set of predicates in Conjunctive Normal Form (CNF), represented in DIMACS format\cite{dimacs}.
+The intuition of solving the game in SAT, is to let a SAT solver find the shortest sequence of moves that completes the puzzle. In this section, we briefly describe a strategy which is proposed by the first author in his bachelor thesis\cite{thesis} to formulate the game rules with a set of predicates in Conjunctive Normal Form (CNF).
 
-Nevertheless, solving a single SAT encoding gives only part of the answer to the question \quotes{how many minimal moves is needed to solve Flood-It puzzle?}. The minimal solution is rather logarithmically approached by choosing a value \nMoves that allows the corresponding SAT formula satisfiable.
-%Let $m$ be the maximum number of moves that can be made to complete the game and $k$, the number of colors available. Since the goal of the puzzle is to find a minimum $m$, the game difficulty can be adjusted for players by increasing the number of moves they are allowed to
-%make.
+Nevertheless, solving a single encoding gives only part of the answer to the question \quotes{how many minimal moves is needed to solve Flood-It puzzle?}. The minimal solution is rather logarithmically approached by choosing a value \nMoves that allows the corresponding SAT formula satisfiable.
 \subsection{Game Properties}
 The properties of the game are expressed in the following predicates: 
 \begin{itemize}
@@ -72,21 +70,20 @@ The properties of the game are expressed in the following predicates:
 	\item \move{\turn}{\clr} is true if a color \clr is chosen at turn \turn. 
 	\item \touch{\turn}{\field} is true if \field is next to a flooded field at \turn. 
 \end{itemize}
-These predicates define the Boolean variables of the SAT formula that encodes Flood-It puzzle. 
 
-The assignments of the \emph{move} predicates $\mathcal{D}$, along with the following conditions, give a possible sequence of moves that we need to solve the game. 
+These predicates define the Boolean variables of the SAT formula that encodes Flood-It puzzle. The assignments of the \emph{move} predicates $\mathcal{D}$, along with the proposed conditions, give a possible sequence of moves that we need to solve the game. 
 \subsection{Flood Conditions}
-The proposed conditions in this section are designed in such a way to strictly follow the rules of Flood-It. This grantees a tangible solution of the puzzle via a satisfying assignment to the corresponding SAT problem.
+The following conditions are designed in such a way to strictly follow the rules of Flood-It. This grantees a tangible solution of the puzzle via a satisfying assignment to the corresponding SAT problem.
 \begin{enumerate}
-	\item A cluster \cluster of orthogonal fields is flooded at the start of the game (precondition).
+	\item A cluster \cluster of orthogonal fields is flooded at \turn = 0 starting from the top-left-corner field \field = 0 (precondition).
 	\begin{equation}
 	\bigwedge_{\field=0}^{{\bSize^2}-1}
 	\begin{cases}
-	\flood{0}{\field}&, \text{if\:} \turn=0\wedge\field\in\cluster\\
+	\flood{0}{\field}&, \text{if\:} \field\in\cluster\\
 	\neg\flood{0}{\field}&, \text{otherwise}\\
 	\end{cases}
 	\end{equation}
-	\item Each move is made with exactly one color and a move may not have more than one color at once.
+	\item One move can be made at a turn with exactly one color. The notations \nMoves and \nColors denote the maximum number of moves allowed and the number of colors available respectively.
 	\begin{equation}
 	\bigwedge_{\turn=0}^{\nMoves-1}
 	\bigvee_{\clr=0}^{\nColors-1}
@@ -105,20 +102,20 @@ The proposed conditions in this section are designed in such a way to strictly f
 	\bigwedge_{\field=0}^{{\bSize^2}-1}
 	\flood{\turn}{\field}\Rightarrow\flood{\turn+1}{\field}
 	\end{equation}
-	\item if a field \field is not already flooded and not touched by any other field $g_i$ in some cluster \cluster such that $1\leq i \leq k$ then \field will not be flooded. The notation $k$ denotes the number of colors available.
+	\item If a field \field is not already flooded and not touched by any other field $g_i$ such that $1\leq i \leq k$, then \field will not be flooded. 
 	\begin{multline}
 	\bigwedge_{\turn=0}^{\nMoves}
 	\bigwedge_{\field=0}^{{\bSize^2}-1}
 	\neg\flood{\turn}{\field}\wedge\neg\touch{\turn}{g_1}\wedge\dots\wedge\neg\touch{\turn}{g_k}\\
 	\Rightarrow\neg\flood{\turn+1}{\field}
 	\end{multline}
-	\item If a move is made with a \field's color ($\clr_\field$), and that field touches the flooded region, it is flooded.
+	\item If a move is made with an \field's color ($\clr_\field$), and that field touches the flooded region, it is flooded.
 	\begin{equation}
 	\bigwedge_{\turn=0}^{\nMoves-1}
 	\bigwedge_{\field=0}^{{\bSize^2}-1}
 	\move{\turn}{\clr_\field}\wedge\touch{\turn}{\field}\Rightarrow\flood{\turn+1}{\field}
 	\end{equation}
-	\item If a move is made of not  \field's color and \field was not flooded already, \field is not flooded
+	\item If a move is made of not  $\clr_\field$ and \field is not flooded already, then \field is not flooded.
 	\begin{equation}
 	\bigwedge_{\turn=0}^{\nMoves-1}
 	\bigwedge_{\field=0}^{{\bSize^2}-1}
@@ -130,13 +127,13 @@ The proposed conditions in this section are designed in such a way to strictly f
 	\bigwedge_{\field=0}^{{\bSize^2}-1}
 	\flood{\turn}{\field}\Leftrightarrow\flood{\turn}{g_1}\vee\dots\vee\flood{\turn}{g_k}
 	\end{equation} 
-	\item A field is flooded iff it touches a direct neighbor ($\bSize_1\dots \bSize_k$). Again neighbors are orthogonal.
+	\item A field is flooded iff it touches a direct orthogonal neighbor ($\bSize_1\dots \bSize_k$).
 	\begin{equation}
 	\bigwedge_{\turn=0}^{\nMoves}
 	\bigwedge_{\field=0}^{{\bSize^2}-1}
 	\touch{\turn}{\field}\Leftrightarrow\flood{\turn}{n_1}\vee\dots\vee\flood{\turn}{n_k}
 	\end{equation} 
-	\item All fields are flooded after a maximum number of moves $\nMoves+1$.
+	\item All fields are flooded after a maximum number of moves \nMoves at $\turn=\nMoves+1$ (postcondition).
 	\begin{equation}
 	\bigwedge_{\field=0}^{{\bSize^2}-1}
 	\flood{\nMoves+1}{\field}
