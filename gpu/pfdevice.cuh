@@ -1,24 +1,20 @@
 #ifndef __SIGMA_DEVICE_
 #define __SIGMA_DEVICE_
 
-#include "pfsimp.h"
+#include "pfgrid.cuh"
 #include "pfatomics.cuh"
+#include "pfsimp.h"
 
 #define SS_DBG 0
 #define VE_DBG 0
-#define BCP_DBG 1
 
 _PFROST_H_D_ void pLit(const uint32& l) { printf("%d", ISNEG(l) ? -int(ABS(l)) : ABS(l)); }
 
-_PFROST_H_D_ void pSharedClause(uint32* c, const uint32& sz)
+_PFROST_H_D_ void pSharedClause(uint32* c, const CL_LEN& sz)
 {
-	printf("(");
-	for (LIT_POS l = 0; l < sz; l++) {
-		int lit = int(ABS(c[l]));
-		lit = (ISNEG(c[l])) ? -lit : lit;
-		printf("%4d ", lit);
-	}
-	printf(")\n");
+	printf("Shared Clause (size = %d)->[", sz);
+	for (LIT_POS k = 0; k < sz; k++) pLit(c[k]), printf("  ");
+	printf("]\n");
 }
 
 _PFROST_H_D_ void pClauseSet(CNF& cnf, OL& poss, OL& negs)
@@ -48,7 +44,8 @@ _PFROST_D_ void DBG_updateOL(const uint32& x, CNF& cnf, OL& ol)
 	int idx = 0, ol_sz = ol.size();
 	while (idx < ol_sz) {
 		SCLAUSE& c = cnf[ol[idx]];
-		if (c.molten()) { c.freeze(); ol[idx] = ol[--ol_sz]; }
+		if (c.status() == DELETED) ol[idx] = ol[--ol_sz];
+		else if (c.molten()) { c.freeze(); ol[idx] = ol[--ol_sz]; }
 		else idx++;
 	}
 	if (ol_sz != ol.size()) { printf("c | Updated list:\n"); pClauseSet(cnf, ol); printf("c | == End of list ==\n"); }
@@ -185,15 +182,15 @@ template<typename T>
 _PFROST_D_ void cuVec<T>::shrink(const uint32& n) { uint32 idx = atomicSub(&sz, n); assert(idx < UINT32_MAX); }
 
 _PFROST_D_ uint32 CNF::jumpCls(const uint32& offset) {
-	uint32 accVal = atomicAdd(&n_cls, offset);
-	assert(accVal < nCls_cap);
-	return accVal;
+	uint32 idx = atomicAdd(&n_cls, offset);
+	assert(idx < nCls_cap);
+	return idx;
 }
 
 _PFROST_D_ uint64 CNF::jumpLits(const uint64& offset) {
-	uint64 accVal = atomicAdd(&n_lits, offset);
-	assert(accVal < nLits_cap);
-	return accVal;
+	uint64 idx = atomicAdd(&n_lits, offset);
+	assert(idx < nLits_cap);
+	return idx;
 }
 
 _PFROST_D_ void devSort(uint32* data, const CL_LEN& size)
@@ -216,11 +213,22 @@ _PFROST_D_ void devSort(uint32* data, const CL_LEN& size)
 	}
 }
 
-_PFROST_D_ void calcSig(uint32* data, const int& size, uint32& _sig)
+_PFROST_D_ void calcSig(SCLAUSE& c)
 {
-	assert(_sig == 0);
+	if (c.size() <= 1) return;
+	uint32 sig = 0;
 #pragma unroll
-	for (int k = 0; k < size; k++) _sig |= MAPHASH(data[k]);
+	for (LIT_POS k = 0; k < c.size(); k++) sig |= MAPHASH(c[k]);
+	c.set_sig(sig);
+}
+
+_PFROST_D_ void calcSig(uint32* data, const CL_LEN& size, uint32& _sig)
+{
+	if (size <= 1) return;
+	assert(_sig == 0);
+	uint32* end = data + size;
+#pragma unroll
+	while (data != end) _sig |= MAPHASH(*data++);
 }
 
 _PFROST_D_ bool isTautology(const uint32& x, SCLAUSE& c1, SCLAUSE& c2)
@@ -302,7 +310,7 @@ _PFROST_D_ bool merge(const uint32& x, SCLAUSE& c1, SCLAUSE& c2, SCLAUSE& out_c)
 		if (ABS(lit2) == x) it2++;
 		else { it2++; out_c.push(lit2); }
 	}
-	out_c.calcSig();
+	calcSig(out_c);
 	out_c.set_status(LEARNT);
 	assert(out_c.isSorted());
 	assert(out_c.hasZero() < 0);
@@ -349,6 +357,7 @@ _PFROST_D_ CL_LEN merge(const uint32& x, SCLAUSE& c1, SCLAUSE& c2, uint32* out_c
 _PFROST_D_ CL_LEN merge(const uint32& x, uint32* c1, const CL_LEN& n1, SCLAUSE& c2, uint32* out_c)
 {
 	assert(x);
+	assert(n1 > 1);
 	assert(c2.status() != DELETED);
 	assert(c2.size() > 1);
 	CL_LEN n2 = c2.size();
@@ -629,12 +638,6 @@ _PFROST_D_ void calcResolvents(const uint32& x, CNF& cnf, OL& poss, OL& negs, ui
 	addedCls += ps * ns - nTs;
 }
 
-_PFROST_H_D_ void deleteClauseSet(CNF& cnf, OL& ol)
-{
-#pragma unroll
-	for (uint32 i = 0; i < ol.size(); i++) cnf[ol[i]].markDeleted();
-}
-
 _PFROST_D_ void deleteClauses(CNF& cnf, OL& poss, OL& negs)
 {
 #pragma unroll
@@ -655,6 +658,7 @@ _PFROST_D_ bool isEqual(SCLAUSE& c1, uint32* c2, const CL_LEN& size)
 {
 	assert(c1.status() != DELETED);
 	assert(c1.size() > 1);
+	assert(size > 1);
 #pragma unroll
 	for (LIT_POS it = 0; it < size; it++) if (c1[it] != c2[it]) return false;
 	return true;
@@ -752,7 +756,7 @@ _PFROST_D_ bool selfSub(const uint32& x, SCLAUSE& sm, uint32* lr, const CL_LEN& 
 	return false;
 }
 
-_PFROST_D_ void strengthen(GSOL* sol, SCLAUSE& c, uint32* sh_c, uint32 self_lit)
+_PFROST_D_ void strengthen(cuVecU* units, SCLAUSE& c, uint32* sh_c, uint32 self_lit)
 {
 	assert(c.status() != DELETED);
 	assert(c.size() > 1);
@@ -777,13 +781,13 @@ _PFROST_D_ void strengthen(GSOL* sol, SCLAUSE& c, uint32* sh_c, uint32 self_lit)
 	assert(c.isSorted());
 	c.set_sig(sig);
 	c.pop();
-	if (c.size() == 1) sol->assigns->push(*c);
+	if (c.size() == 1) units->push(*c);
 #if SS_DBG
 	if (c.size() == 1) printf("c | SS(%d): ", ABS(self_lit)), c.print();
 #endif
 }
 
-_PFROST_D_ void strengthen(GSOL* sol, SCLAUSE& c, uint32 self_lit)
+_PFROST_D_ void strengthen(cuVecU* units, SCLAUSE& c, uint32 self_lit)
 {
 	assert(c.status() != DELETED);
 	assert(c.size() > 1);
@@ -804,36 +808,21 @@ _PFROST_D_ void strengthen(GSOL* sol, SCLAUSE& c, uint32 self_lit)
 	assert(c.isSorted());
 	c.set_sig(sig);
 	c.pop();
-	if (c.size() == 1) sol->assigns->push(*c);
+	if (c.size() == 1) units->push(*c);
 #if SS_DBG
 	if (c.size() == 1) printf("c | SS(%d): ", ABS(self_lit)), c.print();
 #endif
 }
 
-_PFROST_H_D_ bool propClause(GSOL* sol, SCLAUSE& c, const uint32& f_assign)
+_PFROST_D_ void reduceOL(CNF& cnf, OL& ol) 
 {
-	assert(c.status() != DELETED);
-	assert(c.size() > 1);
-	assert(f_assign);
-	uint32 sig = 0;
-	CL_LEN n = 0;
-	bool check = false;
-#pragma unroll
-	for (LIT_POS k = 0; k < c.size(); k++) {
-		uint32 lit = c[k];
-		if (lit != f_assign) {
-			if (sol->value[V2X(lit)] == !ISNEG(lit)) return true;
-			c[n++] = lit, sig |= MAPHASH(lit);
-		}
-		else check = true;
+	if (ol.size() == 0) return;
+	int idx = 0, ol_sz = ol.size();
+	while (idx < ol_sz) {
+		if (cnf[ol[idx]].status() == DELETED) { ol[idx] = ol[--ol_sz]; }
+		else idx++;
 	}
-	assert(check);
-	assert(n == c.size() - 1);
-	assert(c.hasZero() < 0);
-	assert(c.isSorted());
-	c.set_sig(sig);
-	c.pop();
-	return false;
+	ol.resize(ol_sz);
 }
 
 _PFROST_D_ void updateOL(CNF& cnf, OL& ol)
@@ -842,13 +831,14 @@ _PFROST_D_ void updateOL(CNF& cnf, OL& ol)
 	int idx = 0, ol_sz = ol.size();
 	while (idx < ol_sz) {
 		SCLAUSE& c = cnf[ol[idx]];
-		if (c.molten()) { c.freeze(); ol[idx] = ol[--ol_sz]; }
+		if (c.status() == DELETED) ol[idx] = ol[--ol_sz];
+		else if (c.molten()) { c.freeze(); ol[idx] = ol[--ol_sz]; }
 		else idx++;
 	}
 	ol.resize(ol_sz);
 }
 
-_PFROST_D_ void self_sub_x(const uint32& x, CNF& cnf, OL& poss, OL& negs, GSOL* sol, uint32* sh_c)
+_PFROST_D_ void self_sub_x(const uint32& x, CNF& cnf, OL& poss, OL& negs, cuVecU* units, uint32* sh_c)
 {
 	// positives vs negatives
 #pragma unroll
@@ -863,12 +853,12 @@ _PFROST_D_ void self_sub_x(const uint32& x, CNF& cnf, OL& poss, OL& negs, GSOL* 
 				if (neg.status() == DELETED) continue;
 				if (neg.size() > 1 && neg.size() < pos.size() &&
 					selfSub(neg.sig(), pos.sig()) && selfSub(x, neg, pos)) {
-					strengthen(sol, pos, x);
+					strengthen(units, pos, x);
 					pos.melt(); // mark for fast recongnition in ot update 
 				}
 				else if (neg.size() > 1 && neg.size() == pos.size() &&
 					selfSub(neg.sig(), pos.sig()) && selfSub(x, neg, pos)) {
-					strengthen(sol, pos, x);
+					strengthen(units, pos, x);
 					pos.melt();
 					neg.markDeleted();
 				}
@@ -892,12 +882,12 @@ _PFROST_D_ void self_sub_x(const uint32& x, CNF& cnf, OL& poss, OL& negs, GSOL* 
 				if (neg.status() == DELETED) continue;
 				if (neg.size() > 1 && neg.size() < pos.size() &&
 					selfSub(neg.sig(), pos.sig()) && selfSub(x, neg, sh_pos, pos.size())) {
-					strengthen(sol, pos, sh_pos, x);
+					strengthen(units, pos, sh_pos, x);
 					pos.melt();
 				}
 				else if (neg.size() > 1 && neg.size() == pos.size() &&
 					selfSub(neg.sig(), pos.sig()) && selfSub(x, neg, sh_pos, pos.size())) {
-					strengthen(sol, pos, sh_pos, x);
+					strengthen(units, pos, sh_pos, x);
 					pos.melt();
 					neg.markDeleted();
 				}
@@ -916,7 +906,7 @@ _PFROST_D_ void self_sub_x(const uint32& x, CNF& cnf, OL& poss, OL& negs, GSOL* 
 #if SS_DBG
 	DBG_updateOL(x, cnf, poss); // discard (self)-subsumed clauses
 #else
-	updateOL(cnf, poss); // discard (self)-subsumed clauses
+	updateOL(cnf, poss); // discard deleted or (self)-subsumed clauses
 #endif
 	// negatives vs positives
 #pragma unroll
@@ -931,7 +921,7 @@ _PFROST_D_ void self_sub_x(const uint32& x, CNF& cnf, OL& poss, OL& negs, GSOL* 
 				if (pos.status() == DELETED) continue;
 				if (pos.size() > 1 && pos.size() < neg.size() &&
 					selfSub(pos.sig(), neg.sig()) && selfSub(NEG(x), pos, neg)) {
-					strengthen(sol, neg, NEG(x));
+					strengthen(units, neg, NEG(x));
 					neg.melt();
 				}
 			}
@@ -954,7 +944,7 @@ _PFROST_D_ void self_sub_x(const uint32& x, CNF& cnf, OL& poss, OL& negs, GSOL* 
 				if (pos.size() > 1 && pos.size() < neg.size() &&
 					selfSub(pos.sig(), neg.sig()) &&
 					selfSub(NEG(x), pos, sh_neg, neg.size())) {
-					strengthen(sol, neg, sh_neg, NEG(x));
+					strengthen(units, neg, sh_neg, NEG(x));
 					neg.melt();
 				}
 			}
@@ -973,13 +963,12 @@ _PFROST_D_ void self_sub_x(const uint32& x, CNF& cnf, OL& poss, OL& negs, GSOL* 
 #if SS_DBG
 	DBG_updateOL(x, cnf, negs); // discard (self)-subsumed clauses
 #else
-	updateOL(cnf, negs); // discard (self)-subsumed clauses
+	updateOL(cnf, negs); // discard  deleted or (self)-subsumed clauses
 #endif
 }
 
 _PFROST_D_ void forward_equ(CNF& cnf, OT& ot, uint32* m_c, const int64& m_sig, const uint32& m_len)
 {
-#pragma unroll
 	for (LIT_POS k = 0; k < m_len; k++) {
 		assert(m_c[k]);
 		OL& ol = ot[m_c[k]];
@@ -1053,7 +1042,7 @@ _PFROST_D_ void blocked_x(const uint32& x, CNF& cnf, OL& poss, OL& negs, uint32*
 	}
 }
 
-_PFROST_D_ bool substitute_AND(const uint32& x, CNF& cnf, OL& poss, OL& negs, GSOL* sol, uint32* defs, const CL_LEN& nDefs, uint32* out_c)
+_PFROST_D_ bool substitute_AND(const uint32& x, CNF& cnf, OL& poss, OL& negs, cuVecU* units, uint32* defs, const CL_LEN& nDefs, uint32* out_c)
 {
 	uint32 ps = poss.size(), ns = negs.size();
 	uint32 nAddedCls = 0;
@@ -1084,7 +1073,6 @@ _PFROST_D_ bool substitute_AND(const uint32& x, CNF& cnf, OL& poss, OL& negs, GS
 		return true;
 	}
 	if (nAddedCls > ps + ns) return false;
-	if (nAddedLits > (nAddedCls * MAX_GL_RES_LEN)) return false; // global memory GUARD
 #if VE_DBG
 	printf("c | AND(%d): added = %d, deleted = %d\n", ABS(x), nAddedCls, ps + ns), pClauseSet(cnf, poss, negs);
 #endif
@@ -1098,24 +1086,28 @@ _PFROST_D_ bool substitute_AND(const uint32& x, CNF& cnf, OL& poss, OL& negs, GS
 		SCLAUSE& neg = cnf[negs[i]];
 		CL_LEN max_sz = neg.size() + nDefs - 1;
 		SCLAUSE& added = cnf[cls_idx];
-		if (max_sz > MAX_SH_RES_LEN) { // use global memory
+		if (max_sz > SH_MAX_BVE_OUT) { // use global memory
 			added.set_ptr(cnf.data(lits_idx));
-			if (clause_extend_and(NEG(x), neg, defs, nDefs, added)) { checksum++, cls_idx++, lits_idx += added.size(); }
+			if (clause_extend_and(NEG(x), neg, defs, nDefs, added)) {
+				if (added.size() == 1) units->push(*added);
+				checksum++, cls_idx++, lits_idx += added.size(); 
+			}
 		}
 		else { // use shared memory
 			CL_LEN ext_sz = 0;
 			if ((ext_sz = clause_extend_and(NEG(x), neg, defs, nDefs, out_c))) {
-				assert(ext_sz <= MAX_SH_RES_LEN);
+				assert(ext_sz <= SH_MAX_BVE_OUT);
 				added.set_ptr(cnf.data(lits_idx));
 				added.set_status(LEARNT);
 				added.copyShared(out_c, ext_sz);
+				if (ext_sz == 1) units->push(*out_c);
 				assert(added.isSorted());
 				assert(added.hasZero() < 0);
 				checksum++, cls_idx++, lits_idx += added.size();
 			}
 		}
-		if (added.size() == 1) sol->assigns->push(*added);
 #if VE_DBG
+		if (added.size() == 1) printf("== AND(%d)-> unit %d\n", ABS(x), ISNEG(*added) ? -int(ABS(*added)) : ABS(*added));
 		if (added.size()) printf("c | "), added.print();
 #endif
 	}
@@ -1127,25 +1119,31 @@ _PFROST_D_ bool substitute_AND(const uint32& x, CNF& cnf, OL& poss, OL& negs, GS
 			SCLAUSE& pos = cnf[poss[i]];
 			CL_LEN max_sz = pos.size();
 			SCLAUSE& added = cnf[cls_idx];
-			if (max_sz > MAX_SH_RES_LEN) { // use global memory
+			if (max_sz > SH_MAX_BVE_OUT) { // use global memory
 				added.set_ptr(cnf.data(lits_idx));
-				if (clause_split_and(x, defs[d], pos, added)) { checksum++, cls_idx++, lits_idx += added.size(); }
+				if (clause_split_and(x, defs[d], pos, added)) { 
+					if (added.size() == 1) units->push(*added);
+					checksum++, cls_idx++, lits_idx += added.size(); 
+				}
 			}
 			else { // use shared memory
 				CL_LEN split_sz = 0;
 				if (split_sz = clause_split_and(x, defs[d], pos, out_c)) {
-					assert(split_sz <= MAX_SH_RES_LEN);
+					assert(split_sz <= SH_MAX_BVE_OUT);
+					uint32 sig = 0;
+					calcSig(out_c, split_sz, sig);
 					added.set_ptr(cnf.data(lits_idx));
 					added.set_status(LEARNT);
+					added.set_sig(sig);
 					added.copyFrom(out_c, split_sz);
-					added.calcSig();
+					if (split_sz == 1) units->push(*out_c);
 					assert(added.isSorted());
 					assert(added.hasZero() < 0);
 					checksum++, cls_idx++, lits_idx += split_sz;
 				}
 			}
-			if (added.size() == 1) sol->assigns->push(*added);
 #if VE_DBG
+			if (added.size() == 1) printf("== AND(%d)-> unit %d\n", ABS(x), ISNEG(*added) ? -int(ABS(*added)) : ABS(*added));
 			if (added.size()) printf("c | "), added.print();
 #endif
 		}
@@ -1156,7 +1154,7 @@ _PFROST_D_ bool substitute_AND(const uint32& x, CNF& cnf, OL& poss, OL& negs, GS
 	return true; // AND-substitution successful
 }
 
-_PFROST_D_ bool substitute_OR(const uint32& x, CNF& cnf, OL& poss, OL& negs, GSOL* sol, uint32* defs, const CL_LEN& nDefs, uint32* out_c)
+_PFROST_D_ bool substitute_OR(const uint32& x, CNF& cnf, OL& poss, OL& negs, cuVecU* units, uint32* defs, const CL_LEN& nDefs, uint32* out_c)
 {
 	uint32 ps = poss.size(), ns = negs.size();
 	uint32 nAddedCls = 0;
@@ -1187,7 +1185,6 @@ _PFROST_D_ bool substitute_OR(const uint32& x, CNF& cnf, OL& poss, OL& negs, GSO
 		return true;
 	}
 	if (nAddedCls > ps + ns) return false;
-	if (nAddedLits > (nAddedCls * MAX_GL_RES_LEN)) return false; // global memory GUARD
 #if VE_DBG
 	printf("c | OR(%d): added = %d, deleted = %d\n", ABS(x), nAddedCls, ps + ns), pClauseSet(cnf, poss, negs);
 #endif
@@ -1201,24 +1198,28 @@ _PFROST_D_ bool substitute_OR(const uint32& x, CNF& cnf, OL& poss, OL& negs, GSO
 		SCLAUSE& pos = cnf[poss[i]];
 		CL_LEN max_sz = pos.size() + nDefs - 1;
 		SCLAUSE& added = cnf[cls_idx];
-		if (max_sz > MAX_SH_RES_LEN) { // use global memory
+		if (max_sz > SH_MAX_BVE_OUT) { // use global memory
 			added.set_ptr(cnf.data(lits_idx));
-			if (clause_extend_or(x, pos, defs, nDefs, added)) { checksum++, cls_idx++, lits_idx += added.size(); }
+			if (clause_extend_or(x, pos, defs, nDefs, added)) { 
+				if (added.size() == 1) units->push(*added);
+				checksum++, cls_idx++, lits_idx += added.size(); 
+			}
 		}
 		else { // use shared memory
 			CL_LEN ext_sz = 0;
 			if ((ext_sz = clause_extend_or(x, pos, defs, nDefs, out_c))) {
-				assert(ext_sz <= MAX_SH_RES_LEN);
+				assert(ext_sz <= SH_MAX_BVE_OUT);
 				added.set_ptr(cnf.data(lits_idx));
 				added.set_status(LEARNT);
 				added.copyShared(out_c, ext_sz);
+				if (ext_sz == 1) units->push(*out_c);
 				assert(added.isSorted());
 				assert(added.hasZero() < 0);
 				checksum++, cls_idx++, lits_idx += added.size();
 			}
 		}
-		if (added.size() == 1) sol->assigns->push(*added);
 #if VE_DBG
+		if (added.size() == 1) printf("== OR(%d)-> unit %d\n", ABS(x), ISNEG(*added) ? -int(ABS(*added)) : ABS(*added));
 		if (added.size()) printf("c | "), added.print();
 #endif
 	}
@@ -1230,25 +1231,31 @@ _PFROST_D_ bool substitute_OR(const uint32& x, CNF& cnf, OL& poss, OL& negs, GSO
 			SCLAUSE& neg = cnf[negs[i]];
 			CL_LEN max_sz = neg.size();
 			SCLAUSE& added = cnf[cls_idx];
-			if (max_sz > MAX_SH_RES_LEN) { // use global memory
+			if (max_sz > SH_MAX_BVE_OUT) { // use global memory
 				added.set_ptr(cnf.data(lits_idx));
-				if (clause_split_or(NEG(x), defs[d], neg, added)) { checksum++, cls_idx++, lits_idx += added.size(); }
+				if (clause_split_or(NEG(x), defs[d], neg, added)) { 
+					if (added.size() == 1) units->push(*added);
+					checksum++, cls_idx++, lits_idx += added.size(); 
+				}
 			}
 			else { // use shared memory
 				CL_LEN split_sz = 0;
 				if (split_sz = clause_split_or(NEG(x), defs[d], neg, out_c)) {
-					assert(split_sz <= MAX_SH_RES_LEN);
+					assert(split_sz <= SH_MAX_BVE_OUT);
+					uint32 sig = 0;
+					calcSig(out_c, split_sz, sig);
 					added.set_ptr(cnf.data(lits_idx));
 					added.set_status(LEARNT);
+					added.set_sig(sig);
 					added.copyFrom(out_c, split_sz);
-					added.calcSig();
+					if (split_sz == 1) units->push(*out_c);
 					assert(added.isSorted());
 					assert(added.hasZero() < 0);
 					checksum++, cls_idx++, lits_idx += split_sz;
 				}
 			}
-			if (added.size() == 1) sol->assigns->push(*added);
 #if VE_DBG
+			if (added.size() == 1) printf("== OR(%d)-> unit %d\n", ABS(x), ISNEG(*added) ? -int(ABS(*added)) : ABS(*added));
 			if (added.size()) printf("c | "), added.print();
 #endif
 		}
@@ -1259,7 +1266,7 @@ _PFROST_D_ bool substitute_OR(const uint32& x, CNF& cnf, OL& poss, OL& negs, GSO
 	return true; // OR-substitution successful
 }
 
-_PFROST_D_ bool gateReasoning_x(const uint32& x, CNF& cnf, OL& poss, OL& negs, GSOL* sol, uint32* defs, uint32* out_c)
+_PFROST_D_ bool gateReasoning_x(const uint32& x, CNF& cnf, OL& poss, OL& negs, cuVecU* units, uint32* defs, uint32* out_c)
 {
 	uint32 ps = poss.size(), ns = negs.size();
 	uint32 imp = 0, sig = 0;
@@ -1300,7 +1307,7 @@ _PFROST_D_ bool gateReasoning_x(const uint32& x, CNF& cnf, OL& poss, OL& negs, G
 				}
 				assert(nDefs < FAN_LMT);
 				assert(nDefs == pos_size - 1);
-				if (substitute_AND(x, cnf, poss, negs, sol, defs, nDefs, out_c)) return true;
+				if (substitute_AND(x, cnf, poss, negs, units, defs, nDefs, out_c)) return true;
 			}
 		}
 	}
@@ -1341,14 +1348,14 @@ _PFROST_D_ bool gateReasoning_x(const uint32& x, CNF& cnf, OL& poss, OL& negs, G
 				}
 				assert(nDefs < FAN_LMT);
 				assert(nDefs == neg_size - 1);
-				if (substitute_OR(x, cnf, poss, negs, sol, defs, nDefs, out_c)) return true;
+				if (substitute_OR(x, cnf, poss, negs, units, defs, nDefs, out_c)) return true;
 			}
 		}
 	}
 	return false;
 }
 
-_PFROST_D_ bool resolve_x(const uint32& x, CNF& cnf, OL& poss, OL& negs, GSOL* sol, uint32* out_c, const bool& bound = false)
+_PFROST_D_ bool resolve_x(const uint32& x, CNF& cnf, OL& poss, OL& negs, cuVecU* units, uint32* out_c)
 {
 	uint32 ps = poss.size(), ns = negs.size();
 	uint32 nAddedCls = 0;
@@ -1359,12 +1366,9 @@ _PFROST_D_ bool resolve_x(const uint32& x, CNF& cnf, OL& poss, OL& negs, GSOL* s
 		return true;
 	}
 	if (nAddedCls > ps + ns) return false;
-	if (bound) {
-		uint64 nLitsBefore = 0;
-		countLitsBefore(cnf, poss, negs, nLitsBefore);
-		if (nAddedLits > nLitsBefore) return false;
-	}
-	if (nAddedLits > (nAddedCls * MAX_GL_RES_LEN)) return false; // global memory GUARD
+	uint64 nLitsBefore = 0;
+	countLitsBefore(cnf, poss, negs, nLitsBefore);
+	if (nAddedLits > nLitsBefore) return false;
 #if VE_DBG
 	printf("c | Resolving %d: added = %d, deleted = %d\n", x, nAddedCls, ps + ns), pClauseSet(cnf, poss, negs);
 #endif
@@ -1381,25 +1385,31 @@ _PFROST_D_ bool resolve_x(const uint32& x, CNF& cnf, OL& poss, OL& negs, GSOL* s
 			SCLAUSE& neg = cnf[negs[j]];
 			CL_LEN max_sz = pos.size() + neg.size() - 2;
 			SCLAUSE& added = cnf[cls_idx];
-			if (max_sz > MAX_SH_RES_LEN) { // use global memory
+			if (max_sz > SH_MAX_BVE_OUT) { // use global memory
 				added.set_ptr(cnf.data(lits_idx));
-				if (merge(x, pos, neg, added)) { checksum++, cls_idx++, lits_idx += added.size(); }
+				if (merge(x, pos, neg, added)) { 
+					if (added.size() == 1) units->push(*added);
+					checksum++, cls_idx++, lits_idx += added.size(); 
+				}
 			}
 			else { // use shared memory
 				CL_LEN merged_sz = 0;
 				if ((merged_sz = merge(x, pos, neg, out_c))) {
-					assert(merged_sz <= MAX_SH_RES_LEN);
+					assert(merged_sz <= SH_MAX_BVE_OUT);
+					uint32 sig = 0;
+					calcSig(out_c, merged_sz, sig);
 					added.set_ptr(cnf.data(lits_idx));
 					added.set_status(LEARNT);
+					added.set_sig(sig);
 					added.copyFrom(out_c, merged_sz);
-					added.calcSig();
+					if (merged_sz == 1) units->push(*out_c);
 					assert(added.isSorted());
 					assert(added.hasZero() < 0);
 					checksum++, cls_idx++, lits_idx += merged_sz;
 				}
 			}
-			if (added.size() == 1) sol->assigns->push(*added);
 #if VE_DBG
+			if (added.size() == 1) printf("== Res(%d)-> unit %d\n", x, ISNEG(*added) ? -int(ABS(*added)) : ABS(*added));
 			if (added.size()) printf("c | "), added.print();
 #endif
 		}

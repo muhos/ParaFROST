@@ -9,7 +9,7 @@
 #include "pfdtypes.h"
 
 #if !defined(_PFROST_D_)
-#define _PFROST_D_ __forceinline __device__
+#define _PFROST_D_ __forceinline__ __device__
 #endif
 #if !defined(_PFROST_H_D_)
 #define _PFROST_H_D_ inline __host__ __device__
@@ -18,7 +18,7 @@
 #define BLOCK1D 256
 #define FULLWARP 0xFFFFFFFFU
 
-__forceinline int SM2Cores(int major, int minor) {
+__forceinline__ int SM2Cores(int major, int minor) {
 	// Defines for GPU Architecture types (using the SM version to determine # of cores per SM)
 	typedef struct {
 		int SM;  // arch defined in hex
@@ -54,17 +54,17 @@ __forceinline int SM2Cores(int major, int minor) {
 		major, minor, nCores[index - 1].Cores);
 	return nCores[index - 1].Cores;
 }
-__forceinline cudaError_t CHECK(cudaError_t result)
+__forceinline__ void CHECK(cudaError_t result)
 {
 #if defined(DEBUG) || defined(_DEBUG)
 	if (result != cudaSuccess) {
 		fprintf(stderr, "CUDA Runtime Error: %s\n", cudaGetErrorString(result));
-		assert(result == cudaSuccess);
+		cudaDeviceReset();
+		exit(1);
 	}
 #endif
-	return result;
 }
-__forceinline void _getLstErr(const char* errorMessage, const char* file, const int line) {
+__forceinline__ void _getLstErr(const char* errorMessage, const char* file, const int line) {
 #if defined(DEBUG) || defined(_DEBUG)
 	cudaError_t err = cudaGetLastError();
 	if (cudaSuccess != err) {

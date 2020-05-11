@@ -3,14 +3,14 @@
 
 #include "pfcudefs.h"
 
-__device__ __forceinline__ uint32 lanemask() {
+_PFROST_D_ uint32 laneMask_lt() {
     uint32 lanemask;
     asm ("mov.u32 %0, %%lanemask_lt;" : "=r"(lanemask));
-    return (lanemask);
+    return lanemask;
 }
 
-__device__ __forceinline__ uint32 atomicAggInc(uint32* counter) {
-    uint32 mask = __activemask(), total = __popc(mask), prefix = __popc(mask & lanemask());
+_PFROST_D_ uint32 atomicAggInc(uint32* counter) {
+    uint32 mask = __activemask(), total = __popc(mask), prefix = __popc(mask & laneMask_lt());
     int lowest_lane = __ffs(mask) - 1;
     uint32 warpRes = 0;
     if (prefix == 0) warpRes = atomicAdd(counter, total);
@@ -19,8 +19,8 @@ __device__ __forceinline__ uint32 atomicAggInc(uint32* counter) {
     return thread_offset;
 }
 
-__device__ __forceinline__ int atomicAggInc(int* counter) {
-    uint32 mask = __activemask(), total = __popc(mask), prefix = __popc(mask & lanemask());
+_PFROST_D_ int atomicAggInc(int* counter) {
+    uint32 mask = __activemask(), total = __popc(mask), prefix = __popc(mask & laneMask_lt());
     int lowest_lane = __ffs(mask) - 1;
     int warpRes = 0;
     if (prefix == 0) warpRes = atomicAdd(counter, total);

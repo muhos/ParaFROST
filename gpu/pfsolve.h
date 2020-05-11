@@ -25,50 +25,49 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 #include "pfqueue.h"
 #include "pfdefs.h"
 
+// global variables
+class ParaFROST;
+extern ParaFROST* gpfrost; // global solver
+extern uint32 verb;
 
 class SOL
 {
-	LIT_ST* _assigns;
+	LIT_ST* _values;
 	int* _level;
-	uint32 numVars;
 public:
-	SOL() { _assigns = NULL, _level = NULL, numVars = 0; }
-	~SOL() { _assigns = NULL, _level = NULL, numVars = 0; }
-	void allocMem(addr_t* _mem, const uint32& sz) {
-		numVars = sz;
-		assert(numVars > 0);
-		_assigns = (LIT_ST*)(*_mem);
-		*_mem += numVars * sizeof(LIT_ST);
+	SOL() { _values = NULL, _level = NULL; }
+	~SOL() { _values = NULL, _level = NULL; }
+	void allocMem(addr_t* _mem) {
+		_values = (LIT_ST*)(*_mem);
+		*_mem += nOrgVars() * sizeof(LIT_ST);
 		_level = (int*)(*_mem);
-		*_mem += numVars * sizeof(int);
+		*_mem += nOrgVars() * sizeof(int);
 	}
-	inline uint32 size() { return numVars; }
-	inline uint32 size() const { return numVars; }
-	inline LIT_ST* assigns_ptr() { return _assigns; }
+	inline LIT_ST* values_ptr() { return _values; }
 	inline int* levels_ptr() { return _level; }
-	inline void init(const uint32& idx) { _assigns[idx] = UNDEFINED, _level[idx] = UNDEFINED; }
-	inline void init_assign(const uint32& idx) { _assigns[idx] = UNDEFINED; }
+	inline void init(const uint32& idx) { _values[idx] = UNDEFINED, _level[idx] = UNDEFINED; }
+	inline void init_assign(const uint32& idx) { _values[idx] = UNDEFINED; }
 	inline void init_level(const uint32& idx) { _level[idx] = UNDEFINED; }
-	inline void set_assign(const uint32& idx, const LIT_ST& asg) { _assigns[idx] = asg; }
-	inline LIT_ST assign(const uint32& idx) { return _assigns[idx]; }
+	inline void set_value(const uint32& idx, const LIT_ST& asg) { _values[idx] = asg; }
+	inline LIT_ST value(const uint32& idx) { return _values[idx]; }
 	inline int level(const uint32& idx) { return _level[idx]; }
 	inline void set_level(const uint32& idx, const int& dl) { _level[idx] = dl; }
 
 	inline void copyAssignsTo(LIT_ST* dest) {
-		LIT_ST* a = _assigns, * dest_a = dest, * a_e = a + numVars;
+		LIT_ST* a = _values, * dest_a = dest, * a_e = a + nOrgVars();
 		while (a != a_e) *dest_a++ = *a++;
 	}
 
 	inline void print_assign(const uint32& idx) {
-		printf("c | var(%d@%d) = %d\n", idx + 1, _level[idx], (int)_assigns[idx]);
+		PFLOG("var(%d@%d) = %d\n", idx + 1, _level[idx], (int)_values[idx]);
 	}
 
 	inline void print_sol(uint32* vars, const uint32& numVars) {
-		printf("c | Assigned vars: \n");
+		PFLOG("Assigned vars: \n");
 		for (uint32 i = 0; i < numVars; i++) {
 			uint32 x = vars[i];
-			if (_assigns[x] != UNDEFINED)
-				printf("c | var(%d@%d) = %d\n", x + 1, _level[x], (int)_assigns[x]);
+			if (_values[x] != UNDEFINED)
+				PFLOG("var(%d@%d) = %d\n", x + 1, _level[x], (int)_values[x]);
 		}
 		printf("c |\n");
 	}
@@ -90,9 +89,7 @@ public:
 	virtual ~BCLAUSE() { clear(true); }
 	uint32& operator [] (LIT_POS i) { assert(i < _sz); return _lits[i]; }
 	uint32  operator [] (LIT_POS i) const { assert(i < _sz); return _lits[i]; }
-	uint32 lit(uint32 i) { return _lits[i]; }
 	operator uint32* (void) { assert(_sz != 0); return _lits; }
-	inline uint32* d_ptr() { return _lits; }
 	inline CL_LEN size() const { return _sz; }
 	inline void pop() { _sz--; }
 	inline void shrink(const CL_LEN& n) { _sz -= n; }
@@ -114,10 +111,14 @@ public:
 	inline bool molten() const { return (_st & DEL_MASK); } // is removable
 	inline bool isWatchedVar(const uint32& v_idx) const { assert(_sz > 1); return (V2X(*_lits) == v_idx || V2X(*(_lits + 1)) == v_idx); }
 	inline void copyLitsFrom(uVec1D& src) {
-		assert(_sz <= src.size());
-		uint32* d = _lits, * end = d + _sz, * s = src;
+		assert(src.size() <= _sz);
+		uint32* d = _lits, * end = d + _sz, *s = src;
 		while (d != end) *d++ = *s++;
 		assert(int(d - _lits) == _sz);
+	}
+	inline void copyLitsFrom(uint32* src) {
+		uint32* d = _lits, *end = d + _sz;
+		while (d != end) *d++ = *src++;
 	}
 	inline bool satisfied(const LIT_ST* assigns) const {
 		if (status() == DELETED) return true;
@@ -141,15 +142,14 @@ public:
 		_lits[p2] = tmp;
 	}
 	inline void clear(bool _free = false) {
-		if (_free && _lits != NULL) { delete _lits; _lits = NULL; }
-		_sz = UNKNOWN; _st = UNKNOWN;
+		if (_free && _lits != NULL) { delete[] _lits; _lits = NULL; }
+		_sz = 0;
 	}
-	void print() const {
-		printf("(");
+	inline void print() const {
+		putc('(', stdout);
 		for (LIT_POS l = 0; l < _sz; l++) {
-			int lit = int(ABS(_lits[l]));
-			lit = (ISNEG(_lits[l])) ? -lit : lit;
-			printf("%4d ", lit);
+			int lit = ISNEG(_lits[l]) ? -int(ABS(_lits[l])) : ABS(_lits[l]);
+			printf("%4d", lit);
 		}
 		if (this->status() == ORIGINAL) printf(") O, r=%d\n", reason());
 		else if (this->status() == LEARNT) printf(") A, r=%d\n", reason());
@@ -166,24 +166,22 @@ class LCLAUSE : public BCLAUSE {
 public:
 	LCLAUSE() : BCLAUSE(), _lbd(UNKNOWN), _act(0.0) {}
 	explicit LCLAUSE(const CL_LEN& sz) : BCLAUSE(sz), _lbd(UNKNOWN), _act(0.0) {}
-	~LCLAUSE() { _act = 0.0; _lbd = UNKNOWN; }
-
+	~LCLAUSE() {}
 	inline void set_LBD(const uint32& lbd) { _lbd = lbd; }
 	inline uint32 LBD() const { return _lbd; }
 	inline float activity() const { return _act; }
 	inline void inc_act(const float& act) { _act += act; }
 	inline void sca_act(const float& act) { _act *= act; }
 	inline void set_act(const float& act) { _act = act; }
-	void print() {
-		printf("(");
+	inline void print() {
+		putc('(', stdout);
 		for (LIT_POS l = 0; l < size(); l++) {
-			int lit = int(ABS((*this)[l]));
-			lit = (ISNEG((*this)[l])) ? -lit : lit;
-			printf("%4d ", lit);
+			int lit = ISNEG((*this)[l]) ? -int(ABS((*this)[l])) : ABS((*this)[l]);
+			printf("%4d", lit);
 		}
-		if (this->status() == ORIGINAL) printf(") O:%d, g=%d, a=%.2f\n", reason(), LBD(), activity());
-		else if (this->status() == LEARNT) printf(") A:%d, g=%d, a=%.2f\n", reason(), LBD(), activity());
-		else if (this->status() == DELETED) printf(") X:%d, g=%d, a=%.2f\n", reason(), LBD(), activity());
+		if (status() == ORIGINAL) printf(") O:%d, g=%d, a=%.2f\n", reason(), LBD(), activity());
+		else if (status() == LEARNT) printf(") A:%d, g=%d, a=%.2f\n", reason(), LBD(), activity());
+		else if (status() == DELETED) printf(") X:%d, g=%d, a=%.2f\n", reason(), LBD(), activity());
 		else printf(") U:%d, g=%d, a=%.2f\n", reason(), LBD(), activity());
 	}
 };
@@ -212,13 +210,12 @@ typedef Vec<WATCH> WL;
 class WT {
 	Vec<WL, int64> wt;
 	Vec<uint32> garbage;
-	Vec<bool> collected;
-	uint32 nVars;
+	Vec<bool, int64> collected;
 public:
-	WT() { nVars = 0; }
+	WT() {}
 	WL& operator[](const uint32& lit) { assert(lit > 1); return wt[lit]; }
 	const WL& operator[](const uint32& lit) const { assert(lit > 1); return wt[lit]; }
-	inline void allocMem(const uint32& sz) { assert(sz); nVars = sz; wt.resize((int64)V2D(nVars + 1LL)); collected.resize((int64)V2D(nVars + 1LL), 0); }
+	inline void allocMem(void) { assert(nDualVars()); wt.resize(nDualVars()); collected.resize(nDualVars(), 0); }
 	inline int64 size() const { return wt.size(); }
 	inline bool empty() const { return wt.size() == 0; }
 	inline void destroy(const uint32& lit) { wt[lit].clear(true); }
@@ -253,7 +250,7 @@ public:
 	void print(const uint32& lit) {
 		WL& ws = wt[lit];
 		for (int i = 0; i < ws.size(); i++) {
-			printf("c | ");
+			PFLOGN(" ");
 			if (((B_REF)ws[i].c_ref)->status() == LEARNT) {
 				C_REF cl = (C_REF)ws[i].c_ref;
 				cl->print();
@@ -263,22 +260,21 @@ public:
 		}
 	}
 	void print(void) {
-		printf("c | Negative occurs:\n");
-		for (uint32 v = 0; v < nVars; v++) {
+		PFLOG(" Negative occurs:");
+		for (uint32 v = 0; v < nOrgVars(); v++) {
 			uint32 p = V2D(v + 1);
-			if (wt[p].size() != 0) printf("c | Var(%d):\n", -int(v + 1)), print(p);
+			if (wt[p].size() != 0) { PFLOG(" Var(%d):", -int(v + 1)); print(p); }
 		}
-		printf("c | Positive occurs:\n");
-		for (uint32 v = 0; v < nVars; v++) {
+		PFLOG(" Positive occurs:");
+		for (uint32 v = 0; v < nOrgVars(); v++) {
 			uint32 n = NEG(V2D(v + 1));
-			if (wt[n].size() != 0) printf("c | Var(%d):\n", v + 1), print(n);
+			if (wt[n].size() != 0) { PFLOG(" Var(%d):", v + 1); print(n); }
 		}
 	}
 	void clear(bool _free = true) {
 		wt.clear(_free);
 		collected.clear(_free);
 		garbage.clear(_free);
-		nVars = 0;
 	}
 };
 
@@ -303,15 +299,15 @@ public:
 		init();
 	}
 	void print() {
-		if (empty()) { printf("c | Garbage is empty\n"); return; }
-		printf("c |\t\tgarbage (size = %d):\n", size());
-		printf("c | %11s\t %10s\n", "address", "clause");
+		if (empty()) { PFLOG(" Garbage is empty"); return; }
+		PFLOG("\t\tgarbage (size = %d):", size());
+		PFLOG("%11s\t %10s", "address", "clause");
 		for (int i = 0; i < size(); i++) {
-			printf("c | %11llx->", (int64)garbage[i]);
+			PFLOGN("%11llx->", (int64)garbage[i]);
 			if (((B_REF)garbage[i])->status() != LEARNT) ((B_REF)garbage[i])->print();
 			else ((C_REF)garbage[i])->print();
 		}
-		printf("c |--------------------------------------------------------------------------------------|\n");
+		PFLOGR('-', RULELEN);
 	}
 };
 
@@ -373,31 +369,74 @@ struct LEARN {
 		adjust_inc = 1.5;
 		adjust_start_conf = 100;
 		size_factor_cls = 1.0 / 3.1;
-		simp_props = UNKNOWN;
 		adjust_conf = adjust_start_conf;
 		adjust_cnt = (uint32)adjust_conf;
 	}
 };
 
 class cuMM {
-	addr_t gMemPV, gMemSol, gMemVOrd, gMemStats; // fixed pools
+	addr_t hMemCNF, gMemPVars, gMemVSt; // fixed pools
 	addr_t gMemCNF, gMemOT;  // dynamic pools
-	size_t gMemPV_sz, gMemSol_sz, gMemVOrd_sz, gMemStats_sz, gMemCNF_sz, gMemOT_sz;
-	size_t cap;
+	size_t hMemCNF_sz, gMemPVars_sz, gMemVSt_sz, gMemCNF_sz, gMemOT_sz;
+	size_t _free, _tot, _used, cap;
+	uint32 otBlocks;
+	// pointer aliases
+	Byte* seen;
+	uint32* rawLits, *rawUnits, *numDelVars;
+	S_REF rawCls;
+	inline bool hasFreeMem(const char* _func) { // memory query for <_func> call
+		_free = 0, _tot = 0;
+		CHECK(cudaMemGetInfo(&_free, &_tot));
+		_used = (_tot - _free) + cap;
+		if (verb > 1) PFLOG(" Used/total GPU memory after %s call = %zd/%zd MB", _func, _used / MBYTE, _tot / MBYTE);
+		if (_used >= _tot) {
+			PFLOGW("not enough GPU memory for %s (used/total = %zd/%zd MB) -> skip simp.", _func, _used / MBYTE, _tot / MBYTE);
+			return false;
+		}
+		return true;
+	}
 public:
 	cuMM() { 
-		gMemPV = NULL, gMemSol = NULL, gMemVOrd = NULL, gMemStats = NULL, gMemCNF = NULL, gMemOT = NULL;
-		gMemPV_sz = 0ULL, gMemSol_sz = 0ULL, gMemVOrd_sz = 0ULL, gMemStats_sz = 0ULL;
-		gMemCNF_sz = 0ULL, gMemOT_sz = 0ULL, cap = 0ULL;
+		gMemPVars = NULL, gMemVSt = NULL, hMemCNF = NULL, gMemCNF = NULL, gMemOT = NULL;
+		gMemPVars_sz = 0ULL, gMemVSt_sz = 0ULL;
+		hMemCNF_sz = 0ULL, gMemCNF_sz = 0ULL, gMemOT_sz = 0ULL;
+		_free = 0ULL, _tot = 0ULL, _used = 0ULL, cap = 0ULL;
+		seen = NULL, rawCls = NULL, rawLits = NULL, rawUnits = NULL, numDelVars = NULL;
+		otBlocks = 0;
 	}
 	~cuMM();
-	bool allocPV(PV*, const uint32&);
-	bool allocVO(OCCUR*&, SCORE*&, const uint32&);
-	bool allocStats(GSTATS*&, const uint32&);
-	bool resizeCNF(CNF*&, const uint32&, const uint64&, const int& phase = 0);
-	OT* resizeOT(uint32*, const uint32&, const int64&);
-	_PFROST_H_D_ bool empty(void) const { return cap == 0; }
-	_PFROST_H_D_ size_t capacity(void) const { return cap; }
+	inline bool empty(void) const { return cap == 0; }
+	inline size_t capacity(void) const { return cap; }
+	inline Byte* seenLEA(void) { return seen; }
+	inline uint32* dvarsLEA(void) { return numDelVars; }
+	inline uint32* unitsLEA(void) { return rawUnits; }
+	inline uint32* litsLEA(const size_t& off = 0) { return rawLits + off; }
+	inline S_REF clsLEA(const size_t& off = 0) { return rawCls + off; }
+	inline void calcOTBlocks(void) {
+		assert(maxGPUThreads > 0 && maxGPUThreads < UINT32_MAX);
+		assert(nOrgVars());
+		otBlocks = MIN((nOrgVars() + BLOCK1D - 1) / BLOCK1D, maxGPUThreads / BLOCK1D);
+		assert(otBlocks);
+	}
+	inline void prefetchCNF(const cudaStream_t& _s = (cudaStream_t)0) {
+		if (devProp.major > 5) {
+			CHECK(cudaMemAdvise(gMemCNF, gMemCNF_sz, cudaMemAdviseSetPreferredLocation, MASTER_GPU));
+			CHECK(cudaMemPrefetchAsync(gMemCNF, gMemCNF_sz, MASTER_GPU, _s));
+		}
+	}
+	inline void copyCNFToHost(const size_t& off, const size_t& size, const cudaStream_t& _s = (cudaStream_t)0) {
+		assert(hMemCNF != NULL);
+		assert(gMemCNF != NULL);
+		assert(hMemCNF_sz >= size);
+		assert(gMemCNF_sz >= size);
+		CHECK(cudaMemcpyAsync(hMemCNF + off, gMemCNF + off, size, cudaMemcpyDeviceToHost, _s));
+	}
+	bool allocPV(PV*);
+	bool resizeCNF(CNF*&, const uint32&, const uint64&);
+	bool resizeOTAsync(OT*&, uint32*, const int64&, const cudaStream_t& _s = (cudaStream_t)0);
+	void resetOTCapAsync(OT*, const cudaStream_t& _s = (cudaStream_t)0);
+	CNF* allocHostCNF(void);
+	void freeHostCNF(void);
 };
 
 class ParaFROST {
@@ -428,6 +467,8 @@ protected:
 	int starts, restarts, R, ref_vars, reductions, marker;
 	BQUEUE<uint32> lbdQ, trailQ;
 	double lbdSum;
+	size_t solLineLen, preLineLen;
+	string solLine, preLine;
 	std::ofstream proofFile;
 	bool intr, units_f;
 public:
@@ -468,7 +509,7 @@ public:
 		}
 		return lbd;
 	}
-	inline void PDM_fuse() {
+	inline void PDMFuse() {
 		if ((!pdm_freq && SH == 2 && (starts % ((maxConflicts / 1000) + 1)) == 0) ||
 			(!pdm_freq && SH < 2 && starts % maxConflicts == 0) ||
 			(pdm_freq && starts % pdm_freq == 0)) {
@@ -491,7 +532,7 @@ public:
 			cl_params.cl_inc *= (float)1e-30;
 		}
 	}
-	inline double luby_seq(double y, int x) {
+	inline double lubySeq(double y, int x) {
 		int size, seq;
 		for (size = 1, seq = 0; size < x + 1; seq++, size = (size << 1) + 1);
 		while (size - 1 != x) {
@@ -500,32 +541,6 @@ public:
 			x = x % size;
 		}
 		return pow(y, seq);
-	}
-	inline void printWatched(const uint32& v_idx) {
-		printf("c |\t\tWL of v(%d)\n", v_idx + 1);
-		uint32 p = V2D(v_idx + 1);
-		wt.print(p), wt.print(NEG(p));
-		printf("c |---------------------------------\n");
-	}
-	inline void printStats() {
-		if (verbose == 1) {
-			int remainedVars = (int)nOrgVars() - (int)nRemVars();
-			printf("c | %9d %9d %10lld | %10lld %10lld %10lld %10lld %7.0f |\n",
-				remainedVars, nClauses(), nLiterals(),
-				nConflicts, lrn.max_learnt_cls,
-				(int64)learnts.size(), nLearntLits(), (float)nLearntLits() / learnts.size());
-		}
-	}
-	inline void printStats(bool p) {
-		if (verbose == 1 && p) {
-			int remainedVars = (int)nOrgVars() - (int)nRemVars();
-			int l2c = learnts.size() == 0 ? 0 : int(nLearntLits() / learnts.size());
-			printf("c | %9d %9d %9d %10lld %6d %9d %8d %10lld %6d |\n",
-				remainedVars, nClauses(), nBins(), nLiterals(),
-				starts,
-				learnts.size(), nGlues(), nLearntLits(), l2c);
-			progRate += (progRate >> 2);
-		}
 	}
 	inline void write_proof(uint32* lits, const CL_LEN& len) {
 		assert(len > 0);
@@ -538,7 +553,116 @@ public:
 			write_proof(Byte(b));
 		}
 	}
-	//=============================================
+	inline void printTable() {
+		const char* header = " Progress ";
+		size_t len = strlen(header);
+		if (RULELEN < len) PFLOGE("ruler length is smaller than the table title");
+		size_t gap = (RULELEN - strlen(header)) / 2;
+		PFLOGN(""); REPCH('-', gap); printf("%s", header);
+		REPCH('-', gap); putc('|', stdout), putc('\n', stdout);
+		string h = "";
+		if (SH == 2) {
+			const char* leq = u8"\u2264";
+#ifdef _WIN32
+			SetConsoleOutputCP(65001);
+#endif
+			h = "                  ORG                       Restarts                  Learnt";
+			if (RULELEN < h.size()) PFLOGE("ruler length is smaller than the table header");
+			PFLOGN(h.c_str()); REPCH(' ', RULELEN - h.size()); putc('|', stdout), putc('\n', stdout);
+			h = "     Vars      Cls     Bins(+/-)    Lits               Cls      GC(%s2)      Lits     L/C";
+			if (RULELEN < h.size()) PFLOGE("ruler length is smaller than the table header");
+			PFLOGN(h.c_str(), leq); REPCH(' ', RULELEN - h.size() + 1); putc('|', stdout), putc('\n', stdout);
+			solLine = "  %9d %9d %9d %10lld %7d %9d %9d %10lld %6d";
+			preLine = "p %9d %9d %9s %10lld %7d %9s %9s %10s %5s";
+			solLineLen = 88, preLineLen = solLineLen - 1;
+			if (RULELEN < solLineLen) PFLOGE("ruler length is smaller than the progress line");
+		}
+		else {
+			h = "             ORG              | Conflicts  |    Limit   |             Learnt";
+			if (RULELEN < h.size()) PFLOGE("ruler length is smaller than the table header");
+			PFLOGN(h.c_str()); REPCH(' ', RULELEN - h.size()); putc('|', stdout), putc('\n', stdout);
+			h = "   Vars      Cls      Lits    |            |     Cls    |     Cls      Lits     L/C";
+			if (RULELEN < h.size()) PFLOGE("ruler length is smaller than the table header");
+			PFLOGN(h.c_str()); REPCH(' ', RULELEN - h.size()); putc('|', stdout), putc('\n', stdout);
+			solLine = "  %9d %9d %10lld | %10lld %10lld %10d %10lld %6d";
+			preLine = "p %9d %9d %10lld | %10s %10s %10s %10s %5d";
+			solLineLen = 85, preLineLen = solLineLen - 1;
+			if (RULELEN < solLineLen) PFLOGE("ruler length is smaller than the progress line");
+		}
+		PFLOGR('-', RULELEN);
+	}
+	inline void printStats() {
+		if (verbose == 1) {
+			int l2c = learnts.size() == 0 ? 0 : int(nLearntLits() / learnts.size());
+			PFLOGN(solLine.c_str(), nVarsRemained(), nClauses(), nLiterals(),
+									nConflicts, lrn.max_learnt_cls,
+									learnts.size(), nLearntLits(), l2c);
+			REPCH(' ', RULELEN - solLineLen); printf("|\n");
+		}
+	}
+	inline void printStats(bool p) {
+		if (verbose == 1 && p) {
+			int l2c = learnts.size() == 0 ? 0 : int(nLearntLits() / learnts.size());
+			PFLOGN(solLine.c_str(), nVarsRemained(), nClauses(), nBins(), nLiterals(),
+									starts,
+									learnts.size(), nGlues(), nLearntLits(), l2c);
+			REPCH(' ', RULELEN - solLineLen); printf("|\n");
+			progRate += (progRate >> 2);
+		}
+	}
+	inline void printLit(const uint32& lit) { printf("%d", ISNEG(lit) ? -int(ABS(lit)) : ABS(lit)); }
+	inline void printLevel(const uint32& lit) { printf("@%d", levels[V2X(lit)]); }
+	inline void printClause(const uVec1D& cl) {
+		putc('(', stdout);
+		for (int i = 0; i < cl.size(); i++) {
+			printLit(cl[i]);
+			if (i < cl.size() - 1) putc(' ', stdout);
+		}
+		putc(')', stdout), putc('\n', stdout);
+	}
+	inline void printVars(const uint32* arr, const int& size, const bool& _assign = false) {
+		printf("(size = %d)->[", size);
+		for (int i = 0; i < size; i++) {
+			if (_assign) printLit(arr[i]), printf("  ");
+			else printf("%d  ", arr[i]);
+			if (i && i < size - 1 && i % 8 == 0) { putc('\n', stdout); PFLOGN("\t\t"); }
+		}
+		putc(']', stdout), putc('\n', stdout);
+	}
+	inline void printTrail(const int& off = 0)
+	{
+		assert(off < sp->trail_size);
+		uint32* x = sp->trail + off;
+		PFLOGN(" Trail (size = %d)->[", sp->trail_size);
+		for (int i = 0; i < sp->trail_size; i++) {
+			printLit(x[i]), printLevel(x[i]), printf("  ");
+			if (i && i < sp->trail_size - 1 && i % 8 == 0) { putc('\n', stdout); PFLOGN("\t\t"); }
+		}
+		putc(']', stdout), putc('\n', stdout);
+	}
+	inline void printLearnt(void) {
+		PFLOGN(" Learnt(");
+		for (LIT_POS n = 0; n < learnt_cl.size(); n++) 
+			printLit(learnt_cl[n]), printLevel(learnt_cl[n]), putc(' ', stdout), putc(' ', stdout);
+		putc(')', stdout), putc('\n', stdout);
+	}
+	template<class T>
+	inline void printCNF(const Vec<T>& cnf, const int& off = 0) {
+		PFLOG("\tHost CNF(size = %d)", cnf.size());
+		for (int c = off; c < cnf.size(); c++) {
+			if (cnf[c]->size() > 0) {
+				PFLOGN(" C(%d)->", c);
+				cnf[c]->print();
+			}
+		}
+		PFLOG("--------------------------");
+	}
+	inline void printWatched(const uint32& v_idx) {
+		PFLOG("\tWL of v(%d)", v_idx + 1);
+		uint32 p = V2D(v_idx + 1);
+		wt.print(p), wt.print(NEG(p));
+		PFLOG("--------------------------");
+	}
 	ParaFROST(const string&);
 	~ParaFROST(void);
 	int64 sysMemUsed(void);
@@ -548,12 +672,12 @@ public:
 	void allocSolver(const bool& re = false);
 	void initSolver(void);
 	void recycle(void);
-	void cnfrewriter(const string&);
 	void varOrder(void);
 	void hist(BCNF&, const bool& rst = false);
 	void hist(LCNF&, const bool& rst = false);
 	void attachClause(B_REF&);
 	void attachClause(C_REF&);
+	void reattachClause(B_REF&);
 	void shrinkClause(G_REF);
 	void removeClause(B_REF&, const bool& gc = true);
 	void removeClause(C_REF&, const bool& gc = true);
@@ -593,70 +717,132 @@ public:
 	/*****************************/
 protected:
 	cuMM cuMem;
-	CNF* cnf;
+	CNF* cnf, *h_cnf;
 	OT* ot;
 	PV* pv;
-	OCCUR* d_occurs;
-	SCORE* d_scores;
+	uVec1D rawBins;
+	Vec<uint32, int64> rawOrgs;
 	uTHRVector histogram, rawLits;
-	uint32* raw_hist;
-	GSTATS* gstats;
+	uint32* h_hist, *d_hist;
 	cudaStream_t* streams;
 	bool mapped;
+	Vec<LIT_ST> simpVal;
 	uVec1D removed;
 	Vec1D mappedVars, reverseVars;
 	std::ofstream outputFile;
 	int devCount;
 public:
 	inline void createStreams(void) { 
-		assert(streams == NULL);
-		streams = new cudaStream_t[nstreams];
-		for (int i = 0; i < nstreams; i++) cudaStreamCreate(streams + i); 
+		if (streams == NULL) {
+			streams = new cudaStream_t[nstreams];
+			for (int i = 0; i < nstreams; i++) cudaStreamCreate(streams + i);
+		}
 	}
 	inline void destroyStreams(void) { 
-		for (int i = 0; i < nstreams; i++) cudaStreamDestroy(streams[i]); 
-		if (streams != NULL) delete[] streams;
+		if (streams != NULL) {
+			for (int i = 0; i < nstreams; i++) cudaStreamDestroy(streams[i]);
+			delete[] streams;
+		}
 	}
+	inline uint32 revLit(const uint32& mapLit) { return (V2D(reverseVars[ABS(mapLit)]) | ISNEG(mapLit)); }
 	inline uint32 mapLit(const uint32& orgLit) {
 		static int maxVar = 1;
 		assert(!mappedVars.empty());
+		assert(orgLit);
 		register int orgVar = ABS(orgLit);
-		assert(!pv->sol->value[orgVar - 1]);
 		assert(orgVar > 0 && orgVar < mappedVars.size());
-		if (mappedVars[orgVar] == 0) { reverseVars[maxVar] = orgVar; mappedVars[orgVar] = maxVar++; }
+		if (mappedVars[orgVar] == 0) reverseVars[maxVar] = orgVar, mappedVars[orgVar] = maxVar++;
 		assert(maxVar - 1 <= (int)nOrgVars());
 		return (V2D(mappedVars[orgVar]) | ISNEG(orgLit));
 	}
-	inline uint32 revLit(const uint32& mapLit) { return (V2D(reverseVars[ABS(mapLit)]) | ISNEG(mapLit)); }
+	inline uint32* mapCPtr(const S_REF c) { return h_cnf->data() + (*c - cuMem.litsLEA()); }
+	inline void mapClause(BCLAUSE& dest, uint32* src) {
+		assert(dest.size() > 1);
+		for (LIT_POS k = 0; k < dest.size(); k++) dest[k] = mapLit(src[k]);
+	}
+	inline void mapTile(const size_t& off, const uint32& size) {
+		for (uint32 i = 0; i < size; i++) {
+			S_REF s = *h_cnf + off + i;
+			if (s->status() == ORIGINAL || s->status() == LEARNT) {
+				assert(s->size() > 1);
+				B_REF org = new BCLAUSE(s->size());
+				mapClause(*org, mapCPtr(s));
+				reattachClause(org);
+			}
+		}
+	}
+	inline void copTile(const size_t& off, const uint32& size) {
+		for (uint32 i = 0; i < size; i++) {
+			S_REF s = *h_cnf + off + i;
+			if (s->status() == ORIGINAL || s->status() == LEARNT) {
+				assert(s->size() > 1);
+				B_REF org = new BCLAUSE(s->size());
+				org->copyLitsFrom(mapCPtr(s));
+				reattachClause(org);
+			}
+		}
+	}
+	inline bool propClause(SCLAUSE& c, const uint32& f_unit) {
+		assert(c.status() != DELETED);
+		assert(f_unit);
+		register uint32 sig = 0;
+		register CL_LEN n = 0;
+		bool check = false;
+		for (LIT_POS k = 0; k < c.size(); k++) {
+			register uint32 lit = c[k];
+			if (lit != f_unit) {
+				if (simpVal[V2X(lit)] == !ISNEG(lit)) return true;
+				c[n++] = lit, sig |= MAPHASH(lit);
+			}
+			else check = true;
+		}
+		assert(check);
+		assert(n == c.size() - 1);
+		assert(c.hasZero() < 0);
+		assert(c.isSorted());
+		c.set_sig(sig);
+		c.pop();
+		return false;
+	}
+	inline bool filterPVs(void) {
+		register int idx = 0, n = pv->pVars->size();
+		while (idx < n) {
+			if ((*pv->pVars)[idx] == 0 || simpVal[(*pv->pVars)[idx] - 1] != UNDEFINED) 
+				(*pv->pVars)[idx] = (*pv->pVars)[--n]; // not eliminated or propagated
+			else idx++;
+		}
+		pv->pVars->resize(n), pv->numPVs = n;
+		return n > 0;
+	}
 	inline bool verifyLCVE(void) { 
 		for (uint32 v = 0; v < pv->numPVs; v++) if (sp->frozen[pv->pVars->at(v)]) return false;
 		return true;
 	}
-	inline void logReductions(void) {
-		printf("c |  Parallel variables = %d\n", pv->numPVs);
-		printf("c |  Variables after = %d (-%d)\n", nOrgVars() - cnf_stats.n_del_vars, cnf_stats.n_del_vars);
-		printf("c |  Clauses after = %d (-%d)\n", cnf_stats.n_cls_after, nClauses() - cnf_stats.n_cls_after);
-		if (cnf_stats.n_lits_after > nLiterals()) printf("c |  Literals after = %lld (+%lld)\n", cnf_stats.n_lits_after, cnf_stats.n_lits_after - nLiterals());
-		else printf("c |  Literals after = %lld (-%lld)\n", cnf_stats.n_lits_after, nLiterals() - cnf_stats.n_lits_after);
+	inline void logReductions(const bool& _no_vars = false) {
+		PFLOG("  Parallel variables = %d", pv->numPVs);
+		if (!_no_vars) PFLOG("  Variables after = %d (-%d)", nOrgVars() - cnf_stats.n_del_vars, cnf_stats.n_del_vars);
+		PFLOG("  Clauses after = %d (-%d)", cnf_stats.n_cls_after, nClauses() - cnf_stats.n_cls_after);
+		if (cnf_stats.n_lits_after > nLiterals()) PFLOG("  Literals after = %lld (+%lld)", cnf_stats.n_lits_after, cnf_stats.n_lits_after - nLiterals());
+		else PFLOG("  Literals after = %lld (-%lld)", cnf_stats.n_lits_after, nLiterals() - cnf_stats.n_lits_after);
 	}
 	inline void printPStats(void) {
 		if (verbose == 1 && SH == 2) {
-			int remainedVars = (int)nOrgVars() - (int)nRemVars();
-			printf("c |p %8d %9d %9s %10lld %6d %9s %8s %10s %6s |\n",
-				remainedVars, nClauses(), "---", nLiterals(), starts, "---", "---", "---", "---");
+			const char* na = "---";
+			PFLOGN(preLine.c_str(), nVarsRemained(), nClauses() + nBins(), na, nLiterals() + ((int64)nBins() << 1), starts, na, na, na, na);
+			REPCH(' ', RULELEN - solLineLen + 1); printf("|\n");
 		}
 		if (verbose == 1 && SH < 2) {
-			int remainedVars = (int)nOrgVars() - (int)nRemVars();
-			printf("c |p %8d %9d %10lld | %10lld %10s %10s %10s %7s |\n",
-				remainedVars, nClauses(), nLiterals(), nConflicts, "---", "---", "---", "---");
+			const char* na = "---";
+			PFLOGN(preLine.c_str(), nVarsRemained(), nClauses(), nLiterals(), na, na, na, na, na);
+			REPCH(' ', RULELEN - solLineLen + 1); printf("|\n");
 		}
 	}
-	//========================================
 	void masterFree(void);
 	void slavesFree(void);
 	void optSimp(void);
 	void extractBins(void);
 	bool awaken(void);
+	void cleanSlate(void);
 	void _simplify(void);
 	void depFreeze(const OL&, const uint32&, const uint32&, const uint32&);
 	bool LCVE(void);
@@ -664,13 +850,14 @@ public:
 	void GPU_occurs(const int64&, const bool& init = false);
 	void GPU_VO(void);
 	void GPU_CNF_fill(void);
-	CNF_STATE GPU_VE(void);
+	CNF_STATE prop(void);
+	void GPU_VE(void);
 	void GPU_SUB(void);
 	void GPU_HRE(void);
 	void GPU_BCE(void);
 	void GPU_preprocess(void);
 	// options
-	bool quiet_en, parse_only_en, rewriter_en, perf_en;
+	bool quiet_en, parse_only_en, perf_en;
 	bool mcv_en, model_en, proof_en, fdp_en, cbt_en, csr_en;
 	int progRate, initProgRate, verbose, seed, timeout;
 	int pdm_rounds, pdm_freq, pdm_order;
@@ -678,68 +865,11 @@ public:
 	int nClsReduce, lbdFrozen, lbdMinReduce, lbdMinClSize, incReduceSmall, incReduceBig;
 	int cbt_dist, cbt_conf_max;
 	double var_inc, var_decay;
-	double RF, RB, restart_inc, gperc;
+	double RF, RB, restart_inc, gperc, litsCopyR;
 	string restPolicy, proof_path;
 	bool p_cnf_en, p_ot_en;
-	bool pre_en, lpre_en, ve_en, ve_plus_en, res_en, subst_en, sub_en, bce_en, hre_en, all_en;
-	int pre_delay, mu_pos, mu_neg, phases, cnf_free_freq, ngpus, nstreams;
+	bool pre_en, lpre_en, solve_en, ve_en, ve_plus_en, res_en, subst_en, sub_en, bce_en, hre_en, cls_en, all_en;
+	int pre_delay, mu_pos, mu_neg, phases, cnf_free_freq, ngpus, nstreams, clsTile;
 };
-/******************/
-/*     Aliases    */
-/******************/
-extern ParaFROST* gpfrost; // global solver
-extern uint32 verb;
-//====================================================//
-//                  HELPER Functions                  //
-//====================================================//
-inline void printLit(const uint32& l) { printf("%d@%d", (ISNEG(l)) ? -int(ABS(l)) : ABS(l), levels[ABS(l) - 1]); }
-inline void printVars(const uint32* arr, const int& size)
-{
-	printf("c | [");
-	for (int i = 0; i < size; i++) {
-		printf("%4d ", arr[i] + 1);
-	}
-	printf("]\n");
-}
-inline void printAssigns(const uint32* arr, const int& size)
-{
-	printf("c | [");
-	for (int i = 0; i < size; i++) {
-		printf("%4d ", ISNEG(arr[i]) ? -int(ABS(arr[i])) : ABS(arr[i]));
-	}
-	printf("]\n");
-}
-inline void printTrail(const uint32* trail, const int& size)
-{
-	for (int i = 0; i < size; i++)
-		printf("c | trail[%d] = %d@%d\n", i, ISNEG(trail[i]) ? -int(ABS(trail[i])) : ABS(trail[i]), levels[V2X(trail[i])]);
-}
-inline void printClause(const uVec1D& cl)
-{
-	printf("c | (");
-	for (int i = 0; i < cl.size(); i++) {
-		printf("%4d ", ISNEG(cl[i]) ? -int(ABS(cl[i])) : ABS(cl[i]));
-	}
-	printf(")\n");
-}
-inline void printLearnt(const uVec1D& cl)
-{
-	printf("c | Learnt(");
-	for (LIT_POS n = 0; n < cl.size(); n++) {
-		printf(" %d@%d ", (ISNEG(cl[n])) ? -int(ABS(cl[n])) : ABS(cl[n]), levels[V2X(cl[n])]);
-	}
-	printf(")\n");
-}
-template<class T>
-inline void printCNF(const Vec<T>& cnf, const int& offset = 0) {
-	printf("c |               Host CNF(sz = %d)\n", cnf.size());
-	for (int c = offset; c < cnf.size(); c++) {
-		if (cnf[c]->size() > 0) {
-			printf("c | C(%d)->", c);
-			cnf[c]->print();
-		}
-	}
-	printf("c |=================================================|\n");
-}
 
-#endif // !__CUSAT_SIMP_
+#endif 

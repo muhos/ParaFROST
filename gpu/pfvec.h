@@ -33,41 +33,37 @@ class Vec {
 	S sz, cap;
 	bool check(const S& idx) const {
 		if (idx >= sz) {
-			std::cout << "Error - index is out of vector boundry (type: " << typeid(T).name() <<
-				", idx: " << (long long)idx << ", sz:" << (long long)sz << std::endl;
-			return false;
-		}
-		return true;
-	}
-	bool checkCap() const {
-		if (cap < sz) {
-			printf("Error - capacity overflow during memory growth: (cap = %lld, sz = %lld)\n", cap, sz);
+			std::cout << "ERROR - index is out of vector boundary:" << std::endl;
+			std::cout << " - type  : " << typeid(T).name() << std::endl <<
+				         " - index : " << (long long)idx << std::endl <<
+				         " - size  :" << (long long)sz << std::endl;
 			return false;
 		}
 		return true;
 	}
 public:
-	Vec() { _mem = NULL, sz = 0, cap = 0; }
-	explicit Vec(const S& size) { _mem = NULL, sz = 0, cap = 0; resize(size); }
-	Vec(const S&  size, const T& val) { _mem = NULL, sz = 0, cap = 0; resize(size, val); }
-	~Vec() { clear(true); }
-	Vec<T>& operator=(Vec<T>& rhs) { assert(0); }
-	const T& operator [] (const S& index) const { assert(check(index)); return _mem[index]; }
-	T& operator [] (const S& index) { assert(check(index)); return _mem[index]; }
-	operator T* (void) { return _mem; }
+	inline Vec() { _mem = NULL, sz = 0, cap = 0; }
+	inline explicit Vec(const S& size) { _mem = NULL, sz = 0, cap = 0; resize(size); }
+	inline Vec(const S&  size, const T& val) { _mem = NULL, sz = 0, cap = 0; resize(size, val); }
+	inline ~Vec() { clear(true); }
+	inline Vec<T>& operator=(Vec<T>& rhs) { assert(0); }
+	inline const T& operator [] (const S& index) const { assert(check(index)); return _mem[index]; }
+	inline T& operator [] (const S& index) { assert(check(index)); return _mem[index]; }
+	inline const T& back(void) const { assert(sz); return _mem[sz - 1]; }
+	inline operator T* (void) { return _mem; }
 	inline T* data(void) { return _mem; }
 	inline bool empty(void) const { return sz == 0; }
 	inline S size(void) const { return sz; }
 	inline S capacity(void) const { return cap; }
 	inline void push(const T& val) { if (sz == cap) reserve(sz + 1); new (_mem + sz) T(val); sz++; }
 	inline void pop(void) { assert(sz > 0); _mem[--sz].~T(); }
-	void reserve(const S& min_cap, const S& size) { reserve(min_cap); sz = size; }
-	void resize(const S& n) {
+	inline void reserve(const S& min_cap, const S& size) { reserve(min_cap); sz = size; }
+	inline void resize(const S& n) {
 		if (n == sz) return;
 		if (n < sz) shrink(sz - n);
 		else expand(n);
 	}
-	void resize(const S& n, const T& val) {
+	inline void resize(const S& n, const T& val) {
 		if (n == sz) {
 			for (S i = 0; i < sz; i++) _mem[i] = val;
 			return;
@@ -75,36 +71,44 @@ public:
 		if (n < sz) shrink(sz - n, val);
 		else expand(n, val);
 	}
-	void shrink(const S& n) {
+	inline void shrink(const S& n) {
 		assert(n <= sz);
 		for (S i = 0; i < n; i++) _mem[--sz].~T();
 	}
-	void shrink(const S& n, const T& val) {
+	inline void shrink(const S& n, const T& val) {
 		assert(n <= sz);
 		for (S i = 0; i < n; i++) _mem[--sz].~T();
 		for (S i = 0; i < sz; i++) _mem[i] = val;
 	}
-	void copyFrom(Vec<T>& copy) const {
+	inline void appendFrom(T* copy, const S& copy_sz, const bool& _new = 0) {
+		if (_new) for (S i = 0; i < copy_sz; i++) push(copy[i]);
+		else {
+			assert(copy_sz <= cap);
+			assert(sz + copy_sz <= cap);
+			for (S i = 0; i < copy_sz; i++) _mem[sz++] = copy[i];
+		}
+	}
+	inline void copyFrom(Vec<T>& copy) const {
 		assert(copy.size() <= sz);
 		for (S i = 0; i < sz; i++) _mem[i] = copy[i];
 	}
-	template<class SS> void copyFrom(T* copy, const SS& copy_sz) const {
+	template<class SS> inline void copyFrom(T* copy, const SS& copy_sz) const {
 		assert(copy_sz <= sz);
 		for (S i = 0; i < sz; i++) _mem[i] = copy[i];
 	}
-	void expand(const S& size) {
+	inline void expand(const S& size) {
 		if (sz >= size) return;
 		reserve(size);
 		for (S i = sz; i < size; i++) new (&_mem[i]) T();
 		sz = size;
 	}
-	void expand(const S& size, const T& val) {
+	inline void expand(const S& size, const T& val) {
 		if (sz >= size) return;
 		reserve(size);
 		for (S i = sz; i < size; i++) _mem[i] = val;
 		sz = size;
 	}
-	void reserve(const S& min_cap) {
+	inline void reserve(const S& min_cap) {
 		if (cap >= min_cap) return;
 		if (cap > (std::numeric_limits<S>::max() - cap)) cap = min_cap;
 		else { cap <<= 1; if (cap < min_cap) cap = min_cap; }
@@ -112,7 +116,7 @@ public:
 		if (__mem == NULL) throw MEMOUTEXCEPTION();
 		_mem = __mem;
 	}
-	void shrinkCap(void) {
+	inline void shrinkCap(void) {
 		if (sz == 0) { clear(true); return; }
 		T* __mem = NULL;
 		__mem = (T*)std::realloc(__mem, cap * sizeof(T));
@@ -122,7 +126,7 @@ public:
 		_mem = __mem;
 		cap = sz;
 	}
-	void clear(const bool& _free = false) {
+	inline void clear(const bool& _free = false) {
 		if (_mem != NULL) {
 			for (S i = 0; i < sz; i++) _mem[i].~T();
 			sz = 0;

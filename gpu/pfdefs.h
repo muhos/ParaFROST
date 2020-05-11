@@ -6,7 +6,7 @@
 #include <iostream>
 #include <algorithm>
 #include <cstdint>
-#include <string>
+#include <cstring>
 #include <locale>
 #include <cassert>
 #include <cmath>
@@ -15,6 +15,7 @@
 #include <climits>
 #include <csignal>
 #include "pfdtypes.h"
+#include "pflogging.h"
 
 using std::cout;
 using std::endl;
@@ -42,6 +43,7 @@ using std::ifstream;
 #define KBYTE 0x00000400
 #define GBYTE 0x40000000
 #define INIT_CAP 32
+#define DEFINED 2
 #define UNSOLVED -1
 #define UNDEFINED -1
 #define TERMINATE -2
@@ -87,18 +89,13 @@ void sig_handler(void h_intr(int), void h_timeout(int) = NULL);
 struct OCCUR { uint32 ps, ns; };
 struct SCORE { uint32 v, sc; };
 struct CNF_INFO {
-	uint32 max_added_cls, max_org_cls;
-	CL_LEN max_added_cl_width, max_org_cl_width;
-	uint32 n_org_vars, n_org_cls, n_org_bins, n_del_vars, n_cls_after;
+	uint32 n_org_vars, n_org_cls, n_org_bins, n_del_vars, n_cls_after, max_added_cls;
 	uint32 global_n_del_vars, global_n_bins, global_n_gcs, global_n_cls;
-	int64 max_org_lits, max_added_lits;
-	int64 n_org_lits, global_n_lits, n_added_lits;
-	int64 n_lits_before, n_lits_after;
+	int64 n_org_lits, global_n_lits, n_added_lits, n_dual_vars, max_added_lits, n_lits_after;
 	CNF_INFO() {
-		max_added_cl_width = 0, max_org_cl_width = 2;
-		max_added_cls = 0, max_org_cls = 0, max_org_lits = 0, max_added_lits = 0;
-		n_del_vars = 0, n_cls_after = 0, n_lits_after = 0, n_lits_before = 0, n_added_lits = 0;
-		n_org_vars = 0, n_org_cls = 0, n_org_bins = 0, n_org_lits = 0;
+		max_added_cls = 0, max_added_lits = 0;
+		n_del_vars = 0, n_cls_after = 0, n_lits_after = 0, n_added_lits = 0;
+		n_org_vars = 0, n_org_cls = 0, n_org_bins = 0, n_org_lits = 0, n_dual_vars = 0;
 		global_n_del_vars = 0, global_n_bins = 0, global_n_cls = 0, global_n_gcs = 0, global_n_lits = 0;
 	}
 };
@@ -124,6 +121,7 @@ public:
 };
 
 inline uint32 nOrgVars() { return cnf_stats.n_org_vars; }
+inline int64 nDualVars() { return cnf_stats.n_dual_vars; }
 inline uint32 nOrgCls() { return cnf_stats.n_org_cls; }
 inline uint32 nOrgBins() { return cnf_stats.n_org_bins; }
 inline int64 nOrgLits() { return cnf_stats.n_org_lits; }
@@ -131,7 +129,8 @@ inline uint32 maxAddedCls() { return cnf_stats.max_added_cls; }
 inline uint32 nClauses() { return cnf_stats.global_n_cls; }
 inline uint32 nBins() { return cnf_stats.global_n_bins; }
 inline uint32 nGlues() { return cnf_stats.global_n_gcs; }
-inline uint32 nRemVars() { return cnf_stats.global_n_del_vars; }
+inline uint32 nVarsDeleted() { return cnf_stats.global_n_del_vars; }
+inline uint32 nVarsRemained() { return cnf_stats.n_org_vars - cnf_stats.global_n_del_vars; }
 inline int64 maxAddedLits() { return cnf_stats.max_added_lits; }
 inline int64 nLiterals() { return cnf_stats.global_n_lits; }
 inline int64 nLearntLits() { return cnf_stats.n_added_lits; }

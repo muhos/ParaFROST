@@ -22,22 +22,19 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 int main(int argc, char** argv)
 {
 	Vec<ARG*>& options = ARG::opts();
-	if (argc == 1) { cout << "No input file specified." << endl; exit(EXIT_FAILURE); }
+	if (argc == 1) { PFLOGE("No input file specified"); exit(EXIT_FAILURE); }
 	try {
 		parseArguments(argc, argv);
 		if (!isQuiet()) {
-			cout << "c |--------------------------------------------------------------------------------------|" << endl;
-			cout << "c |                              ParaFROST SAT Solver                                    |" << endl;
-			cout << "c | Technische Universiteit Eindhoven (TU/e), all rights reserved.                       |" << endl;
-			cout << "c |--------------------------------------------------------------------------------------|" << endl;
-			cout << "c | Embedded options: ";
+			PFNAME("ParaFROST");
+			PFLOGN(" Embedded options: ");
 			for (int i = 0, j = 0; i < options.size(); i++) {
 				if (options[i]->isParsed()) {
 					options[i]->printArgument();
-					if (++j % 4 == 0) cout << "\nc |                   ";
+					if (++j % 4 == 0) { putc('\n', stdout); PFLOGN("\t\t\t"); }
 				}
 			}
-			cout << "\nc |--------------------------------------------------------------------------------------|" << endl;
+			putc('\n', stdout); PFLOGR('-', RULELEN);
 		}
 		string formula = argv[1];
 		if (formula.find(".cnf") == -1 && formula.find(".dimacs") == -1) {
@@ -55,10 +52,10 @@ int main(int argc, char** argv)
 		exit(EXIT_SUCCESS);
 	}
 	catch (MEMOUTEXCEPTION&) {
-		printf("c |\n");
-		printf("c |%45s\n", "Memoryout");
-		printf("c |\n");
-		printf("s UNKNOWN\n");
+		PFLOG("");
+		PFLOG("%45s", "Memoryout");
+		PFLOG("");
+		PFLOGS("UNKNOWN");
 		exit(EXIT_SUCCESS);
 	}
 }

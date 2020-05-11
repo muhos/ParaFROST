@@ -25,7 +25,6 @@ BOOL_OPT opt_quiet_en("q", "enable quiet mode, same as verbose=0", false);
 BOOL_OPT opt_pre_en("pre", "enable preprocessing", false);
 BOOL_OPT opt_lpre_en("lpre", "enable preprocessing on learnt cls if exist", false);
 BOOL_OPT opt_perf_en("perf", "allow performance report on stdout", true);
-BOOL_OPT opt_rew_en("rew", "rewrite the input formula without any special/illegal characters", false);
 BOOL_OPT opt_par_en("par", "parse only the input formula", false);
 BOOL_OPT opt_lcv_en("lcv", "use least-constrained variables to make parallel decisions", false);
 BOOL_OPT opt_fdp_en("fdp", "enable follow-up decision prioritization", true);

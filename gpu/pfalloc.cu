@@ -1,249 +1,163 @@
 
 #include "pfsolve.h"
+#include "pfgrid.cuh"
+#include "pfatomics.cuh"
 
+_PFROST_D_ uint32* OT::data(const uint32& offset) { return occurs + atomicAdd(&maxEntries, offset); }
+_PFROST_D_ void CNF::newClause(SCLAUSE& src) {
+	assert(src.size() > 0);
+	S_REF newC = cls + atomicAggInc(&n_cls);
+	newC->set_ptr(lits + atomicAdd(&n_lits, src.size()));
+	newC->copyFrom(src);
+}
+__global__ void resetOTCap_k(OT* ot) { ot->resetCap(); }
+__global__ void assignOTPtrs_k(OT* ot, uint64 tabSize) { ot->assignPtrs(tabSize); }
+__global__ void assignListPtrs_k(OT* ot, uint32* hist, uint32 size)
+{
+	uint32 v = global_tx();
+	while (v < size) {
+		uint32 p = V2D(v + 1), n = NEG(p);
+		uint32 ps = hist[p], ns = hist[n];
+		uint32* head = ot->data(ps + ns);
+		(*ot)[p].assignPtr(head, ps);
+		(*ot)[n].assignPtr(head + ps, ns);
+		v += stride_x();
+	}
+}
+__global__ void shrink_k(CNF* dest, CNF* src)
+{
+	uint32 i = global_tx();
+	while (i < src->size()) {
+		SCLAUSE& s = (*src)[i];
+		if (s.status() == LEARNT || s.status() == ORIGINAL) dest->newClause(s);
+		i += stride_x();
+	}
+}
+__global__ void assignCNFPtrs(CNF* cnf, uint32 clsCap, uint64 litsCap) { cnf->assignPtrs(clsCap, litsCap); }
 //========================//
 //	GPU memory management //
 //========================//
-__global__ void set_cnf_ptrs(CNF* cnf, uint32 clsCap, uint64 litsCap) { 
-	assert(blockDim.x * gridDim.x == 1);
-	cnf->allocMem(clsCap, litsCap); 
-}
-__global__ void copy_cls_k(CNF* dest, CNF* src, uint32 clsCap, uint64 litsCap) {
-	assert(blockDim.x * gridDim.x == 1);
-	dest->allocMem(clsCap, litsCap);
-	uint32 sz = src->size();
-	uint64 nLits = 0;
-	dest->resize(sz);
-	for (uint32 i = 0; i < sz; i++) {
-		uint32 c_sz = (*src)[i].size();
-		assert((*src)[i].status() == ORIGINAL);
-		(*dest)[i].set_ptr(dest->data(nLits));
-		(*dest)[i].set_status(ORIGINAL);
-		(*dest)[i].set_sig((*src)[i].sig());
-		(*dest)[i].resize(c_sz);
-		nLits += c_sz;
-	}
-	assert(nLits == src->numLits());
-	dest->resizeData(nLits);
-}
-__global__ void copy_cnf_k(CNF* dest, CNF* src)
-{
-	uint64 i = blockDim.x * blockIdx.x + threadIdx.x;
-	uint64 stride = blockDim.x * gridDim.x;
-	while (i < src->numLits()) { *dest->data(i) = *src->data(i); i += stride; }
-}
-__global__ void copy_cnf_k(CNF* dest, CNF* src, uint32 clsCap, uint64 litsCap) {
-	assert(blockDim.x * gridDim.x == 1);
-	dest->allocMem(clsCap, litsCap);
-	dest->copyFrom(src); 
-}
-__global__ void ot_ptrs_k(OT* ot, uint32* hist, int64 nLists, int64 nEntries, uint32 size)
-{
-	ot->allocMem(nLists, nEntries);
-	int64 idx = 0;
-	for (uint32 v = 0; v < size; v++) {
-		uint32 p = V2D(v + 1), n = NEG(p);
-		uint32 ps = hist[p], ns = hist[n];
-		(*ot)[p].alloc(ot->data(idx), ps), idx += ps;
-		(*ot)[n].alloc(ot->data(idx), ns), idx += ns;
-	}
-	assert(idx <= ot->capacity());
-}
-__global__ void clear_cls(CNF* cnf)
-{
-	uint32 i = blockDim.x * blockIdx.x + threadIdx.x;
-	while (i < cnf->size()) { (*cnf)[i].~SCLAUSE(); i += blockDim.x * gridDim.x; }
-}
-__global__ void clear_lists(OT* ot)
-{
-	int64 v = blockDim.x * blockIdx.x + threadIdx.x;
-	while (v < ot->size()) { (*ot)[v].~cuVec(); v += blockDim.x * gridDim.x; }
-}
-
-bool cuMM::allocStats(GSTATS*& gstats, const uint32& maxVars) {
-	assert(gMemStats == NULL);
-	assert(gstats == NULL);
-	gMemStats_sz = sizeof(GSTATS) + maxVars * sizeof(Byte);
-	assert(gMemStats_sz > 0);
-	cap += gMemStats_sz;
-	// memory query
-	size_t _free = 0, _tot = 0;
-	CHECK(cudaMemGetInfo(&_free, &_tot));
-	int64 _used = (_tot - _free) + cap;
-	if (verb > 1) printf("c | Used/total GPU memory after %s call = %lld/%zd MB\n", __func__, _used / MBYTE, _tot / MBYTE);
-	if (_used >= int64(_tot)) {
-		printf("c | WARNING - not enough GPU memory for %s (used/total = %lld/%zd MB), simplifications will be terminated\n", __func__, _used / MBYTE, _tot / MBYTE);
-		return false;
-	}
-	CHECK(cudaMallocManaged((void**)&gMemStats, gMemStats_sz));
-	gstats = (GSTATS*)gMemStats;
-	gstats->seen = gMemStats + sizeof(GSTATS);
-	return true;
-}
-bool cuMM::allocPV(PV* pv, const uint32& maxVars) {
-	assert(gMemPV == NULL);
-	assert(gMemSol == NULL);
+bool cuMM::allocPV(PV* pv) {
+	assert(gMemPVars == NULL);
+	assert(gMemVSt == NULL);
 	assert(pv->pVars == NULL);
-	assert(pv->sol == NULL);
-	size_t sol_sz = sizeof(GSOL);
+	assert(pv->units == NULL);
+	assert(pv->scores == NULL);
+	assert(pv->gsts == NULL);
+	size_t gsts_sz = sizeof(GSTATS);
 	size_t cuVec_sz = sizeof(cuVecU);
-	size_t uintVec_sz = cuVec_sz + (size_t)maxVars * sizeof(uint32);
-	size_t litStVec_sz = maxVars * sizeof(LIT_ST);
-	gMemPV_sz = uintVec_sz, gMemSol_sz = sol_sz + uintVec_sz + litStVec_sz;
-	assert(gMemPV_sz > 0);
-	assert(gMemSol_sz > 0);
-	cap += gMemPV_sz + gMemSol_sz;
-	// memory query
-	size_t _free = 0, _tot = 0;
-	CHECK(cudaMemGetInfo(&_free, &_tot));
-	int64 _used = (_tot - _free) + cap;
-	if (verb > 1) printf("c | Used/total GPU memory after %s call = %lld/%zd MB\n", __func__, _used / MBYTE, _tot / MBYTE);
-	if (_used >= int64(_tot)) {
-		printf("c | WARNING - not enough GPU memory for %s (used/total = %lld/%zd MB), simplifications will be terminated\n", __func__, _used / MBYTE, _tot / MBYTE);
-		return false;
+	size_t uintVec_sz = nOrgVars() * sizeof(uint32);
+	size_t scVec_sz = nOrgVars() * sizeof(SCORE);
+	gMemPVars_sz = ((cuVec_sz + uintVec_sz) << 1ULL) + scVec_sz;
+	gMemVSt_sz = gsts_sz + nOrgVars() + 1;
+	assert(gMemPVars_sz > 0);
+	assert(gMemVSt_sz > 0);
+	cap += gMemPVars_sz + gMemVSt_sz;
+	if (!hasFreeMem(__func__)) return false;
+	CHECK(cudaMallocManaged((void**)&gMemVSt, gMemVSt_sz));
+	CHECK(cudaMallocManaged((void**)&gMemPVars, gMemPVars_sz));
+	pv->gsts = (GSTATS*)gMemVSt, numDelVars = &pv->gsts->numDelVars;
+	seen = gMemVSt + gsts_sz, pv->gsts->seen = seen;
+	addr_t ea = gMemPVars, end = ea + gMemPVars_sz;
+	pv->pVars = (cuVecU*)ea, ea += cuVec_sz;
+	pv->units = (cuVecU*)ea, ea += cuVec_sz;
+	pv->pVars->assignPtr((uint32*)ea, nOrgVars()), ea += uintVec_sz, rawUnits = (uint32*)ea;
+	pv->units->assignPtr(rawUnits, nOrgVars()), ea += uintVec_sz;
+	pv->scores = (SCORE*)ea, ea += scVec_sz;
+	assert(ea == end);
+	if (devProp.major > 5) {
+		CHECK(cudaMemAdvise(gMemVSt, gMemVSt_sz, cudaMemAdviseSetPreferredLocation, MASTER_GPU));
+		CHECK(cudaMemAdvise(rawUnits, uintVec_sz + scVec_sz, cudaMemAdviseSetPreferredLocation, MASTER_GPU));
+		CHECK(cudaMemPrefetchAsync(rawUnits, uintVec_sz + scVec_sz, MASTER_GPU));
 	}
-	CHECK(cudaMallocManaged((void**)&gMemPV, gMemPV_sz));
-	CHECK(cudaMallocManaged((void**)&gMemSol, gMemSol_sz));
-	pv->pVars = (cuVecU*)gMemPV;
-	pv->pVars->alloc((uint32*)(gMemPV + cuVec_sz), maxVars);
-	pv->sol = (GSOL*)gMemSol;
-	pv->sol->head = 0;
-	pv->sol->assigns = (cuVecU*)(gMemSol + sol_sz);
-	pv->sol->assigns->alloc((uint32*)(gMemSol + sol_sz + cuVec_sz), maxVars);
-	pv->sol->value = (LIT_ST*)(gMemSol + sol_sz + uintVec_sz);
-	mem_set(pv->sol->value, LIT_ST(UNDEFINED), maxVars);
 	return true;
 }
-bool cuMM::allocVO(OCCUR*& occurs, SCORE*& scores, const uint32& maxVars) {
-	assert(gMemVOrd == NULL);
-	assert(occurs == NULL);
-	assert(scores == NULL);
-	gMemVOrd_sz = (size_t)maxVars * (sizeof(OCCUR) + sizeof(SCORE));
-	assert(gMemVOrd_sz > 0);
-	cap += gMemVOrd_sz;
-	// memory query
-	size_t _free = 0, _tot = 0;
-	CHECK(cudaMemGetInfo(&_free, &_tot));
-	int64 _used = (_tot - _free) + cap;
-	if (verb > 1) printf("c | Used/total GPU memory after %s call = %lld/%zd MB\n", __func__, _used / MBYTE, _tot / MBYTE);
-	if (_used >= int64(_tot)) {
-		printf("c | WARNING - not enough GPU memory for %s (used/total = %lld/%zd MB), simplifications will be terminated\n", __func__, _used / MBYTE, _tot / MBYTE);
-		return false;
-	}
-	CHECK(cudaMallocManaged((void**)&gMemVOrd, gMemVOrd_sz));
-	occurs = (OCCUR*)gMemVOrd;
-	scores = (SCORE*)(occurs + maxVars);
-	assert(addr_t(scores + maxVars) == gMemVOrd + gMemVOrd_sz);
-	return true;
-}
-bool cuMM::resizeCNF(CNF*& cnf, const uint32& clsCap, const uint64& litsCap, const int& phase) {
-	CNF* tmp_cnf = NULL;
+bool cuMM::resizeCNF(CNF*& cnf, const uint32& clsCap, const uint64& litsCap) {
+	assert(clsCap > 0);
+	assert(litsCap > 0);
 	if (gMemCNF_sz == 0) {
 		assert(cnf == NULL);
 		assert(gMemCNF == NULL);
-		assert(phase == 0);
 		gMemCNF_sz = sizeof(CNF) + (size_t)clsCap * sizeof(SCLAUSE) + litsCap * sizeof(uint32);
 		assert(gMemCNF_sz > 0);
 		cap += gMemCNF_sz;
-		// memory query
-		size_t _free = 0, _tot = 0;
-		CHECK(cudaMemGetInfo(&_free, &_tot));
-		int64 _used = (_tot - _free) + cap;
-		if (verb > 1) printf("c | Used/total GPU memory after %s call = %lld/%zd MB\n", __func__, _used / MBYTE, _tot / MBYTE);
-		if (_used >= int64(_tot)) {
-			printf("c | WARNING - not enough GPU memory for %s (used/total = %lld/%zd MB), simplifications will be terminated\n", __func__, _used / MBYTE, _tot / MBYTE);
-			return false;
-		}
+		if (!hasFreeMem(__func__)) return false;
 		CHECK(cudaMallocManaged((void**)&gMemCNF, gMemCNF_sz));
-		tmp_cnf = (CNF*)gMemCNF;
-		set_cnf_ptrs << <1, 1 >> > (tmp_cnf, clsCap, litsCap);
-		LOGERR("CNF pointers assignment failed");
-		CHECK(cudaDeviceSynchronize());
+		cnf = (CNF*)gMemCNF, cnf->assignPtrs(clsCap, litsCap);
+		rawCls = *cnf, rawLits = cnf->data();
 	}
 	else {
 		assert(cnf != NULL);
 		assert(gMemCNF != NULL);
-		assert(phase >= 0);
-		cap -= gMemCNF_sz;
-		gMemCNF_sz = sizeof(CNF) + (size_t)clsCap * sizeof(SCLAUSE) + litsCap * sizeof(uint32);
-		assert(gMemCNF_sz > 0);
-		cap += gMemCNF_sz;
-		// memory query
-		size_t _free = 0, _tot = 0;
-		CHECK(cudaMemGetInfo(&_free, &_tot));
-		int64 _used = (_tot - _free) + cap;
-		if (verb > 1) printf("c | Used/total GPU memory after %s call = %lld/%zd MB\n", __func__, _used / MBYTE, _tot / MBYTE);
-		if (_used >= int64(_tot)) {
-			printf("c | WARNING - not enough GPU memory for %s (used/total = %lld/%zd MB), simplifications will be terminated\n", __func__, _used / MBYTE, _tot / MBYTE);
-			return false;
+		size_t new_gMemCNF_sz = sizeof(CNF) + (size_t)clsCap * sizeof(SCLAUSE) + litsCap * sizeof(uint32);
+		assert(new_gMemCNF_sz > 0);
+		if (gMemCNF_sz >= new_gMemCNF_sz) cnf->shrink();
+		else {
+			cap -= gMemCNF_sz, cap += new_gMemCNF_sz;
+			if (!hasFreeMem(__func__)) return false;
+			addr_t gMemCNF_tmp = NULL;
+			CHECK(cudaMallocManaged((void**)&gMemCNF_tmp, new_gMemCNF_sz));
+			CNF* tmp_cnf = (CNF*)gMemCNF_tmp;
+			tmp_cnf->assignPtrs(clsCap, litsCap), rawCls = *tmp_cnf, rawLits = tmp_cnf->data();
+			tmp_cnf->copyFrom(cnf);
+			CHECK(cudaFree(gMemCNF));
+			gMemCNF = gMemCNF_tmp, gMemCNF_sz = new_gMemCNF_sz, cnf = tmp_cnf;
+			prefetchCNF();
 		}
-		addr_t gMemCNF_tmp = NULL;
-		CHECK(cudaMallocManaged((void**)&gMemCNF_tmp, gMemCNF_sz));
-		tmp_cnf = (CNF*)gMemCNF_tmp;
-		if (phase == 0) {
-			copy_cls_k << <1, 1 >> > (tmp_cnf, cnf, clsCap, litsCap);
-			int nBlocks = maxGPUThreads / BLOCK1D;
-			copy_cnf_k << <nBlocks, BLOCK1D >> > (tmp_cnf, cnf);
-		}
-		else copy_cnf_k << <1, 1 >> > (tmp_cnf, cnf, clsCap, litsCap);
-		LOGERR("Moving CNF failed");
-		CHECK(cudaDeviceSynchronize());
-		CHECK(cudaFree(gMemCNF));
-		gMemCNF = gMemCNF_tmp;
 	}
-	cnf = tmp_cnf;
 	return true;
 }
-OT* cuMM::resizeOT(uint32* hist, const uint32& maxVars, const int64& maxEntries) {
-	assert(hist != NULL);
-	OT* tmp_ot = NULL;
-	if (gMemOT_sz != 0) {
-		assert(gMemOT != NULL);
-		cap -= gMemOT_sz;
-		CHECK(cudaFree(gMemOT));
-		gMemOT = NULL;
+bool cuMM::resizeOTAsync(OT*& ot, uint32* d_hist, const int64& entriesCap, const cudaStream_t& _s) {
+	assert(d_hist != NULL);
+	assert(entriesCap > 0);
+	size_t tabSize = nDualVars();
+	size_t new_gMemOT_sz = sizeof(OT) + tabSize * sizeof(OL) + entriesCap * sizeof(uint32);
+	assert(new_gMemOT_sz > 0);
+	if (gMemOT_sz < new_gMemOT_sz) { // realloc
+		if (gMemOT_sz != 0) {
+			assert(gMemOT != NULL);
+			assert(ot != NULL);
+			CHECK(cudaFree(gMemOT));
+			gMemOT = NULL;
+		}
+		assert(gMemOT == NULL);
+		cap -= gMemOT_sz, cap += new_gMemOT_sz;
+		if (!hasFreeMem(__func__)) return false;
+		CHECK(cudaMallocManaged((void**)&gMemOT, new_gMemOT_sz));
+		if (devProp.major > 5) {
+			CHECK(cudaMemAdvise(gMemOT, new_gMemOT_sz, cudaMemAdviseSetPreferredLocation, MASTER_GPU));
+			CHECK(cudaMemPrefetchAsync(gMemOT, new_gMemOT_sz, MASTER_GPU));
+		}
+		ot = (OT*)gMemOT;
+		assignOTPtrs_k << <1, 1 >> > (ot, tabSize);
+		assignListPtrs_k << <otBlocks, BLOCK1D >> > (ot, d_hist, nOrgVars());
+		gMemOT_sz = new_gMemOT_sz;
 	}
-	assert(gMemOT == NULL);
-	size_t tabSize = V2D(maxVars + 1ULL);
-	gMemOT_sz = sizeof(OT) + tabSize * sizeof(OL) + maxEntries * sizeof(uint32);
-	assert(gMemOT_sz > 0);
-	cap += gMemOT_sz;
-	// memory query
-	size_t _free = 0, _tot = 0;
-	CHECK(cudaMemGetInfo(&_free, &_tot));
-	int64 _used = (_tot - _free) + cap;
-	if (verb > 1) printf("c | Used/total GPU memory after %s call = %lld/%zd MB\n", __func__, _used / MBYTE, _tot / MBYTE);
-	if (_used >= int64(_tot)) {
-		printf("c | WARNING - not enough GPU memory for %s (used/total = %lld/%zd MB), simplifications will be terminated\n", __func__, _used / MBYTE, _tot / MBYTE);
-		return NULL;
-	}
-	CHECK(cudaMallocManaged((void**)&gMemOT, gMemOT_sz));
-	tmp_ot = (OT*)gMemOT;
-	ot_ptrs_k << <1, 1 >> > (tmp_ot, hist, tabSize, maxEntries, maxVars);
-	LOGERR("Assigning OT pointers failed");
-	CHECK(cudaDeviceSynchronize());
-	return tmp_ot;
+	else assignListPtrs_k << <otBlocks, BLOCK1D, 0, _s >> > (ot, d_hist, nOrgVars());
+	return true;
+}
+void cuMM::resetOTCapAsync(OT* ot, const cudaStream_t& _s) {
+	resetOTCap_k << <1, 1, 0, _s >> > (ot);
+}
+void cuMM::freeHostCNF() { if (hMemCNF != NULL) free(hMemCNF), hMemCNF = NULL; }
+CNF* cuMM::allocHostCNF() {
+	assert(gMemCNF != NULL);
+	assert(hMemCNF == NULL);
+	assert(hMemCNF_sz == 0);
+	hMemCNF_sz = gMemCNF_sz;
+	assert(hMemCNF_sz > 0);
+	hMemCNF = (addr_t)malloc(hMemCNF_sz);
+	CHECK(cudaMemcpy(hMemCNF, gMemCNF, sizeof(CNF), cudaMemcpyDeviceToHost));
+	CNF* cnf = (CNF*)hMemCNF;
+	cnf->assignPtrs();
+	return cnf;
 }
 cuMM::~cuMM() {
+	rawLits = NULL, rawUnits = NULL, rawCls = NULL;
+	freeHostCNF();
 	if (gMemOT != NULL) CHECK(cudaFree(gMemOT)), gMemOT = NULL;
-	if (gMemPV != NULL) CHECK(cudaFree(gMemPV)), gMemPV = NULL;
 	if (gMemCNF != NULL) CHECK(cudaFree(gMemCNF)), gMemCNF = NULL;
-	if (gMemSol != NULL) CHECK(cudaFree(gMemSol)), gMemSol = NULL;
-	if (gMemVOrd != NULL) CHECK(cudaFree(gMemVOrd)), gMemVOrd = NULL;
-	if (gMemStats != NULL) CHECK(cudaFree(gMemStats)), gMemStats = NULL;
+	if (gMemVSt != NULL) CHECK(cudaFree(gMemVSt)), gMemVSt = NULL;
+	if (gMemPVars != NULL) CHECK(cudaFree(gMemPVars)), gMemPVars = NULL;
 	cap = 0;
-}
-CNF::~CNF() {
-	int nBlocks = MIN((n_cls + BLOCK1D - 1) / BLOCK1D, maxGPUThreads / BLOCK1D);
-	clear_cls << <nBlocks, BLOCK1D >> > (this);
-	LOGERR("Clearing clauses failed");
-	CHECK(cudaDeviceSynchronize());
-	cls = NULL, lits = NULL;
-}
-OT::~OT() {
-	int nBlocks = MIN((V2D(nOrgVars() + 1) + BLOCK1D - 1) / BLOCK1D, maxGPUThreads / BLOCK1D);
-	clear_lists << <nBlocks, BLOCK1D >> > (this);
-	LOGERR("Clearing occurrence lists failed");
-	CHECK(cudaDeviceSynchronize());
-	lists = NULL, occurs = NULL;
 }

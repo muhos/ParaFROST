@@ -36,7 +36,7 @@ inline uint32 toInteger(char*& str, uint32 &sign)
 	sign = 0;
 	if (*str == '-') sign = 1, str++;
 	else if (*str == '+') str++;
-	if (!isDigit(*str)) { printf("Error - expected a digit but ASCII(%d) is found\n", *str), exit(EXIT_FAILURE); }
+	if (!isDigit(*str)) PFLOGE("expected a digit but ASCII(%d) is found", *str);
 	uint32 n = 0;
 	while (isDigit(*str)) n = n * 10 + (*str++ - '0');
 	return n;
@@ -47,7 +47,7 @@ inline void toClause(uVec1D& c, char*& str)
 	c.clear();
 	uint32 v = 0, s = 0;
 	while ((v = toInteger(str, s)) != 0) {
-		if (v > nOrgVars()) { printf("Error - too many variables\n"), exit(EXIT_FAILURE); }
+		if (v > nOrgVars()) PFLOGE("too many variables");
 		c.push(V2D(v) | s);
 	}
 }

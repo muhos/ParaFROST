@@ -31,11 +31,14 @@ BOOL_OPT opt_ve_plus_en("ve+", "enable (BVE + HSE) untill no literals can be rem
 BOOL_OPT opt_bce_en("bce", "enable blocked clause elimination", false);
 BOOL_OPT opt_hre_en("hre", "enable hidden redundancy elimination", false);
 BOOL_OPT opt_all_en("all", "enable all simplifications", false);
+BOOL_OPT opt_solve_en("solve", "proceed with solving after simplifications", true);
 INT_OPT opt_mu_pos("mu-pos", "set the positive freezing temperature in LCVE", 32, INT32R(10, INT32_MAX));
 INT_OPT opt_mu_neg("mu-neg", "set the negative freezing temperature in LCVE", 32, INT32R(10, INT32_MAX));
 INT_OPT opt_phases("phases", "set the number of phases in stage-1 reductions", 2, INT32R(0, INT32_MAX));
-INT_OPT opt_cnf_free("cnf-free-freq", "set the frequency of CNF memory shrinkage in SIGmA", 3, INT32R(0, 5));
+INT_OPT opt_cnf_free("cnf-free-freq", "set the frequency of CNF memory shrinkage in SIGmA", 2, INT32R(0, 3));
 INT_OPT opt_gpus("ngpus", "number of GPU(s) to be activated", 1, INT32R(1, MAX_GPU_COUNT));
 INT_OPT opt_streams("nstreams", "number of GPU streams to be created", 4, INT32R(1, MAX_STREAMS));
+INT_OPT opt_tile_size("tile-size", "tile size (in clauses) to copy asycnhronously to the host", 10000, INT32R(1, INT32_MAX));
+DOUBLE_OPT opt_lits_cop_r("copy-ratio", "literals fraction to copy asycnhronously to the host", 0.5, FP64R(0, 1));
 
 #endif

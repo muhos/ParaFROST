@@ -99,16 +99,16 @@ public:
 		if (end == NULL)
 			return false;
 		else if (tmpVal > r.t)
-			printf("ERROR - maximum value exceeded for option \"%s\".\n", arg), exit(EXIT_FAILURE);
+			PFLOGE("maximum value exceeded for option \"%s\".", arg);
 		else if (tmpVal < r.h)
-			printf("ERROR - minimum value exceeded for option \"%s\".\n", arg), exit(EXIT_FAILURE);
+			PFLOGE("minimum value exceeded for option \"%s\".", arg);
 		val = tmpVal;
 		parsed = true;
 		return true;
 	}
 
 	virtual void help(bool verbose = false) {
-		printf("c |  --%-15s = %-8s [", arg, type);
+		PFLOGN("  --%-15s = %-8s [", arg, type);
 		if (r.h == INT32_MIN) printf("%-5s", "-I32");
 		else printf("%-5d", r.h);
 		printf(" .. ");
@@ -116,11 +116,10 @@ public:
 		else printf("%5d", r.t);
 		printf("] (default: %6d)\n", val);
 		if (verbose) {
-			printf("c |   %s\n", text);
-			printf("c |\n");
+			PFLOG("   %s", text);
+			PFLOG("");
 		}
 	}
-
 	virtual void printArgument() { printf(" %s<%d> ", arg, val); }
 };
 
@@ -150,16 +149,16 @@ public:
 		if (end == NULL)
 			return false;
 		else if (tmpVal > r.t)
-			printf("ERROR - maximum value exceeded for option \"%s\".\n", arg), exit(EXIT_FAILURE);
+			PFLOGE("maximum value exceeded for option \"%s\".", arg);
 		else if (tmpVal < r.h)
-			printf("ERROR - minimum value exceeded for option \"%s\".\n", arg), exit(EXIT_FAILURE);
+			PFLOGE("minimum value exceeded for option \"%s\".", arg);
 		val = tmpVal;
 		parsed = true;
 		return true;
 	}
 
 	virtual void help(bool verbose = false) {
-		printf("c |  --%-15s = %-8s [", arg, type);
+		PFLOGN("  --%-15s = %-8s [", arg, type);
 		if (r.h == INT64_MIN) printf("%-5s", "-I64");
 		else printf("%5lld", r.h);
 		printf(" .. ");
@@ -167,11 +166,10 @@ public:
 		else printf("%5lld", r.t);
 		printf("] (default: %6lld)\n", val);
 		if (verbose) {
-			printf("c |   %s\n", text);
-			printf("c |\n");
+			PFLOG("   %s", text);
+			PFLOG("");
 		}
 	}
-
 	virtual void printArgument() { printf(" %s<%lld> ", arg, val); }
 };
 
@@ -197,16 +195,16 @@ public:
 		if (end == NULL)
 			return false;
 		else if (tmpVal > r.t)
-			printf("ERROR - maximum value exceeded for option \"%s\".\n", arg), exit(EXIT_FAILURE);
+			PFLOGE("maximum value exceeded for option \"%s\".", arg);
 		else if (tmpVal < r.h)
-			printf("ERROR - minimum value exceeded for option \"%s\".\n", arg), exit(EXIT_FAILURE);
+			PFLOGE("minimum value exceeded for option \"%s\".", arg);
 		val = tmpVal;
 		parsed = true;
 		return true;
 	}
 
 	virtual void help(bool verbose = false) {
-		printf("c |  --%-15s = %-8s [", arg, type);
+		PFLOGN("  --%-15s = %-8s [", arg, type);
 		if (r.h == -INFINITY) printf("%-6s", "-inf");
 		else printf("%6.2f", r.h);
 		printf(" .. ");
@@ -214,8 +212,8 @@ public:
 		else printf("%6.2f", r.t);
 		printf("] (default: %6.2f)\n", val);
 		if (verbose) {
-			printf("c |   %s\n", text);
-			printf("c |\n");
+			PFLOG("   %s", text);
+			PFLOG("");
 		}
 	}
 
@@ -244,10 +242,10 @@ public:
 	}
 
 	virtual void help(bool verbose = false) {
-		printf("c |  --%-15s = %8s  (default: %s)\n", arg, type, val);
+		PFLOG("  --%-15s = %8s  (default: %s)", arg, type, val);
 		if (verbose) {
-			printf("c |   %s\n", text);
-			printf("c |\n");
+			PFLOG("   %s", text);
+			PFLOG("");
 		}
 	}
 
@@ -281,12 +279,12 @@ public:
 	}
 
 	virtual void help(bool verbose = false) {
-		printf("c |  -%-10s -no-%-10s", arg, arg);
+		PFLOGN("  -%-10s -no-%-10s", arg, arg);
 		printf("                 ");
 		printf("(default: %s)\n", val ? "on" : "off");
 		if (verbose) {
-			printf("c |   %s\n", text);
-			printf("c |\n");
+			PFLOG("   %s", text);
+			PFLOG("");
 		}
 	}
 

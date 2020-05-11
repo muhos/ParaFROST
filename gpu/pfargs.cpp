@@ -30,19 +30,22 @@ bool isQuiet(void)
 
 void printUsage(int argc, char** argv, bool verbose)
 {
-    printf("c |--------------------------------------------------------------------------------------|\n");
-    printf("c | Usage: parafrost [<option> ...][<infile>.<cnf>][<option> ...]\n");
+    PFLOGR('-', RULELEN);
+    PFLOG(" Usage: parafrost [<option> ...][<infile>.<cnf>][<option> ...]");
     Sort(ARG::opts(), ARG::ARG_CMP());
     arg_t prev_type = NULL;
-    printf("c |\nc | Options (simplification + solve):\n");
+    PFLOG("");
+    PFLOG(" Options (simplification + solve):");
     for (int i = 0; i < ARG::opts().size(); i++) {
-        if (ARG::opts()[i]->type != prev_type) printf("c |\n");
+        if (ARG::opts()[i]->type != prev_type) PFLOG("");
         ARG::opts()[i]->help(verbose);
         prev_type = ARG::opts()[i]->type;
     }
-    printf("c |\nc |  -h or --help  print available options.\n");
-    printf("c |  --help-more   print available options with verbose message.\n");
-    printf("c |\nc |--------------------------------------------------------------------------------------|\n");
+    PFLOG("");
+    PFLOG("  -h or --help  print available options.");
+    PFLOG("  --help-more   print available options with verbose message.");
+    PFLOG("");
+    PFLOGR('-', RULELEN);
     exit(EXIT_SUCCESS);
 }
 
@@ -64,7 +67,7 @@ void parseArguments(int& argc, char** argv)
             while (k < ARG::opts().size() && !(parsed = ARG::opts()[k++]->parse(argv[i])));
             if (!parsed) {
                 if (eq(argv[i], "--"))
-                    printf("ERROR - Unknown input \"%s\". Use '-h or --help' for help.\n", argv[i]), exit(EXIT_FAILURE);
+                    PFLOGE("unknown input \"%s\". Use '-h or --help' for help.", argv[i]);
                 else
                     argv[j++] = argv[i];
             }
