@@ -1,4 +1,4 @@
-/***********************************************************************[pfsimpopts.cpp]
+/***********************************************************************[pfsimpopts.h]
 Copyright(c) 2020, Muhammad Osama - Anton Wijs,
 Technische Universiteit Eindhoven (TU/e).
 
@@ -21,15 +21,19 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 #include "pfargs.h"
 
-BOOL_OPT opt_ve_en("bve", "enable bounded variable elimination (BVE)", true);
-BOOL_OPT opt_sub_en("sub", "enable hybrid subsumption elimination (HSE) with high bounds in LCVE", false);
-BOOL_OPT opt_ve_plus_en("bve+", "enable (BVE + HSE) untill no literals can be removed", true);
-BOOL_OPT opt_bce_en("bce", "enable blocked clause elimination", false);
-BOOL_OPT opt_hre_en("hre", "enable hidden redundancy elimination", false);
-BOOL_OPT opt_all_en("all", "enable all simplifications", false);
-INT_OPT opt_mu_pos("mu-pos", "set the positive freezing temperature in LCVE", 32, INT32R(10, INT32_MAX));
-INT_OPT opt_mu_neg("mu-neg", "set the negative freezing temperature in LCVE", 32, INT32R(10, INT32_MAX));
-INT_OPT opt_phases("phases", "set the number of phases in stage-1 reductions", 2, INT32R(0, INT32_MAX));
-INT_OPT opt_cnf_free("cnf-free-freq", "set the frequency of CNF memory shrinkage in SIGmA", 3, INT32R(0, 5));
+namespace pFROST {
+
+	BOOL_OPT opt_ve_en("ve", "enable bounded variable elimination (BVE)", true);
+	BOOL_OPT opt_sub_en("sub", "enable hybrid subsumption elimination (HSE) with high bounds in LCVE", false);
+	BOOL_OPT opt_ve_plus_en("ve+", "enable (BVE + HSE) untill no literals can be removed", true);
+	BOOL_OPT opt_bce_en("bce", "enable blocked clause elimination", false);
+	BOOL_OPT opt_hre_en("hre", "enable hidden redundancy elimination", false);
+	BOOL_OPT opt_all_en("all", "enable all simplifications", false);
+	INT_OPT opt_mu_pos("mu-pos", "set the positive freezing temperature in LCVE", 32, INT32R(10, INT32_MAX));
+	INT_OPT opt_mu_neg("mu-neg", "set the negative freezing temperature in LCVE", 32, INT32R(10, INT32_MAX));
+	INT_OPT opt_phases("phases", "set the number of phases in stage-1 reductions", 2, INT32R(0, INT32_MAX));
+	INT_OPT opt_cnf_free("cnf-free-freq", "set the frequency of CNF memory shrinkage in SIGmA", 3, INT32R(0, 5));
+
+}
 
 #endif

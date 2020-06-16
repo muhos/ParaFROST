@@ -19,60 +19,58 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 #include "pfsort.h"
 #include "pfargs.h"
 
-Vec<ARG*> options; // container for all options available
+namespace pFROST {
 
-bool isQuiet(void) 
-{
-    for (int i = 0; i < options.size(); i++) {
-        if (options[i]->type == "<bool>" && options[i]->arg == "q" && options[i]->isParsed())
-            return true;
-    }
-    return false;
-}
+    Vec<ARG*, int> options; // container for all options available
 
-void printUsage(int argc, char** argv, bool verbose)
-{
-    printf("c |--------------------------------------------------------------------------------------|");
-    printf("c | Usage: parafrost [<option> ...][<infile>.<cnf>][<option> ...]");
-    Sort(options, ARG::ARG_CMP());
-    arg_t prev_type = NULL;
-    printf("c |\nc | Options (simplification + solve):\n");
-    for (int i = 0; i < options.size(); i++) {
-        if (options[i]->type != prev_type) printf("c |\n");
-        options[i]->help(verbose);
-        prev_type = options[i]->type;
-    }
-    printf("c |\nc |  -h or --help  print available options.\n");
-    printf("c |  --help-more   print available options with verbose message.\n");
-    printf("c |\nc |--------------------------------------------------------------------------------------|\n");
-    exit(EXIT_SUCCESS);
-}
-
-void parseArguments(int& argc, char** argv)
-{
-    int i, j;
-    for (i = j = 1; i < argc; i++) {
-        if (string(argv[i]) == "-h") printUsage(argc, argv);
-        char* arg = argv[i];
-        if (eq(arg, "--") && eq(arg, "help")) {
-            if (*arg == '\0')
-                printUsage(argc, argv);
-            else if (eq(arg, "-more"))
-                printUsage(argc, argv, true);
+    void printUsage(int argc, char** argv, bool verbose)
+    {
+        PFNAME("ParaFROST");
+        PFLOG0(" Usage: parafrost [<option> ...][<infile>.<cnf>][<option> ...]");
+        Sort(options.data(), options.size(), ARG::ARG_CMP());
+        arg_t prev_type = NULL;
+        PFLOG0("");
+        PFLOG0(" Options (simplification + solve):");
+        for (int i = 0; i < options.size(); i++) {
+            if (options[i]->type != prev_type) fprintf(stdout, "c |\n");
+            options[i]->help(verbose);
+            prev_type = options[i]->type;
         }
-        else {
-            int k = 0;
-            bool parsed = false;
-            while (k < options.size() && !(parsed = options[k++]->parse(argv[i])));
-            if (!parsed) {
-                if (eq(argv[i], "--"))
-                    printf("ERROR - Unknown input \"%s\". Use '-h or --help' for help.\n", argv[i]), exit(EXIT_FAILURE);
-                else
-                    argv[j++] = argv[i];
+        PFLOG0("");
+        PFLOG0("  -h or --help  print available options.");
+        PFLOG0("  --help-more   print available options with verbose message.");
+        PFLOG0("");
+        PFLOGR('-', RULELEN);
+        exit(EXIT_SUCCESS);
+    }
+
+    void parseArguments(int& argc, char** argv)
+    {
+        int i, j;
+        for (i = j = 1; i < argc; i++) {
+            if (string(argv[i]) == "-h") printUsage(argc, argv);
+            char* arg = argv[i];
+            if (eq(arg, "--") && eq(arg, "help")) {
+                if (*arg == '\0')
+                    printUsage(argc, argv);
+                else if (eq(arg, "-more"))
+                    printUsage(argc, argv, true);
+            }
+            else {
+                int k = 0;
+                bool parsed = false;
+                while (k < options.size() && !(parsed = options[k++]->parse(argv[i])));
+                if (!parsed) {
+                    if (eq(argv[i], "--"))
+                        PFLOGE("unknown input \"%s\". Use '-h or --help' for help.", argv[i]);
+                    else
+                        argv[j++] = argv[i];
+                }
             }
         }
+        argc -= (i - j);
     }
-    argc -= (i - j);
-}
 
-void ARG::insert(ARG* opt) { options.push(this); }
+    void ARG::insert(ARG* opt) { options.push(this); }
+
+}

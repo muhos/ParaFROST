@@ -73,7 +73,7 @@ The properties of the game are expressed in the following predicates:
 	\item \touch{\turn}{\field} is true if \field is next to a flooded field at \turn. 
 \end{itemize}
 
-These predicates define the Boolean variables of the SAT formula that encodes Flood-It puzzle. The assignments of the \emph{move} predicates $\mathcal{D}$, along with the proposed conditions, give a possible sequence of moves that we need to solve the game. 
+These predicates define the Boolean variables of the SAT formula that encodes Flood-It puzzle. The assignments of the \emph{move} predicates $\mathcal{M}$, along with the proposed conditions, give a possible sequence of moves that we need to solve the game. 
 \subsection{Flood Conditions}
 The following conditions are designed in such a way to strictly follow the rules of Flood-It. This grantees a tangible solution of the puzzle via a satisfying assignment to the corresponding SAT problem.
 \begin{enumerate}
@@ -142,7 +142,7 @@ The following conditions are designed in such a way to strictly follow the rules
 	\end{equation} 
 \end{enumerate}
 \section{Benchmarks}
-In benchmarks generation, we chose $\nColors=10$ and a set of different dimensions $n=\{40,41,42,43,44,45\}$. The maximum number of moves \nMoves is determined by running a greedy solver prior to SAT encoding. For these settings, 20 instances are generated randomly. All benchmarks are satisfiable and easy to solve (within 1-2 minutes).
+In benchmarks generation, we chose $\nColors=10, n=70$, and $m=\{225,229,230\}$. The maximum number of moves \nMoves can be used to control the hardness of the encoded problem. For these settings, 20 instances are generated randomly.
 %========== references ===========
 \bibliographystyle{IEEEtran}
 \bibliography{IEEEabrv,bench_refs}

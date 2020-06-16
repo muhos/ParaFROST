@@ -16,1430 +16,1100 @@ You should have received a copy of the GNU General Public License
 along with this program.  If not, see <https://www.gnu.org/licenses/>.
 **********************************************************************************/
 
-#include "pfsort.h"
 #include "pfsolve.h" 
 #include "pfdimacs.h"
 #include "pfopts.h"
 
-//=======================================//
-//     container for CNF info.           //
-//=======================================//
-CNF_INFO cnf_stats;
-/********************************/
-/*     Aliases Initialization   */
-/********************************/
-ASSIGN_ST* assigns = NULL;
-int* levels = NULL;
-ParaFROST* g_pFrost = NULL;
-/***********************************/
-/*     Resources queries           */
-/***********************************/
-int64 getAvailSysMem()
-{
-#ifdef __linux__ 
-	struct sysinfo memInfo;
-	sysinfo(&memInfo);
-	return (memInfo.freeram * (int64)memInfo.mem_unit);
-#elif _WIN32
-	MEMORYSTATUSEX memInfo;
-	memInfo.dwLength = sizeof(MEMORYSTATUSEX);
-	GlobalMemoryStatusEx(&memInfo);
-	return memInfo.ullAvailPhys;
-#endif
-}
+namespace pFROST {
 
-void set_timeout(int time_limit)
-{
+	CNF_INFO inf;
+	ParaFROST* pfrost = NULL;
+	/***********************************/
+	/*     Resources queries           */
+	/***********************************/
+	int64 getAvailSysMem()
+	{
 #ifdef __linux__ 
-	if (time_limit != 0) {
-		rlimit rl;
-		getrlimit(RLIMIT_CPU, &rl);
-		if (rl.rlim_max == RLIM_INFINITY || (rlim_t)time_limit < rl.rlim_max) {
-			rl.rlim_cur = time_limit;
-			if (setrlimit(RLIMIT_CPU, &rl) == -1) printf("WARNING - Timeout cannot be set\n");
+		struct sysinfo memInfo;
+		sysinfo(&memInfo);
+		return (memInfo.freeram * (int64)memInfo.mem_unit);
+#elif _WIN32
+		MEMORYSTATUSEX memInfo;
+		memInfo.dwLength = sizeof(MEMORYSTATUSEX);
+		GlobalMemoryStatusEx(&memInfo);
+		return memInfo.ullAvailPhys;
+#endif
+	}
+	void set_timeout(int time_limit)
+	{
+#ifdef __linux__ 
+		if (time_limit != 0) {
+			rlimit rl;
+			getrlimit(RLIMIT_CPU, &rl);
+			if (rl.rlim_max == RLIM_INFINITY || (rlim_t)time_limit < rl.rlim_max) {
+				rl.rlim_cur = time_limit;
+				if (setrlimit(RLIMIT_CPU, &rl) == -1) PFLOGW("timeout cannot be set");
+			}
 		}
-	}
 #elif _WIN32
-	printf("c | WARNING - timeout not supported on Windows.\n");
+		PFLOGW("timeout not supported on Windows");
 #endif
-}
-
-void handler_terminate(int)
-{
-	fflush(stdout);
-	printf("c |\n");
-	printf("c |%45s\n","Interrupted");
-	printf("c |\n");
-	printf("s UNKNOWN\n");
-	printf("c |\n");
-	printf("c |--------------------------------------------------------------------------------------|\n");
-	_exit(EXIT_FAILURE);
-}
-
-void handler_mercy_intr(int) 
-{
-	fflush(stdout);
-	if (!g_pFrost->quiet_en) {
-		printf("c |\n");
-		printf("c |%45s\n", "Interrupted");
-		printf("c |\n");
 	}
-	g_pFrost->interrupt(); 
-}
-
-void handler_mercy_timeout(int) 
-{
-	fflush(stdout);
-	if (!g_pFrost->quiet_en) {
-		printf("c |\n");
-		printf("c |%45s\n", "Timeout");
-		printf("c |\n");
+	void handler_terminate(int)
+	{
+		fflush(stdout);
+		if (!quiet_en) {
+			PFLOG0("");
+			PFLOG1("%45s", "Interrupted");
+			PFLOG0("");
+		}
+		PFLOGS("0");
+		if (!quiet_en) {
+			PFLOG0("");
+			PFLOGR('-', RULELEN);
+		}
+		_exit(EXIT_FAILURE);
 	}
-	g_pFrost->interrupt();
-}
-
-void sig_handler(void h_intr(int), void h_timeout(int))
-{
-	signal(SIGINT, h_intr);
-	signal(SIGTERM, h_intr);
+	void handler_mercy_intr(int)
+	{
+		fflush(stdout);
+		if (!quiet_en) {
+			PFLOG0("");
+			PFLOG1("%45s", "Interrupted");
+			PFLOG0("");
+		}
+		pfrost->interrupt();
+	}
+	void handler_mercy_timeout(int)
+	{
+		fflush(stdout);
+		if (!quiet_en) {
+			PFLOG0("");
+			PFLOG1("%45s", "Timeout");
+			PFLOG0("");
+		}
+		pfrost->interrupt();
+	}
+	void sig_handler(void h_intr(int), void h_timeout(int))
+	{
+		signal(SIGINT, h_intr);
+		signal(SIGTERM, h_intr);
 #ifdef SIGXCPU
-	if (h_timeout != NULL) signal(SIGXCPU, h_timeout);
+		if (h_timeout != NULL) signal(SIGXCPU, h_timeout);
 #endif
-}
-//============================//
-//  Specialized Comparators   //
-//============================//
-struct LEARNT_CMP {
-	bool operator () (C_REF a, C_REF b) {
-		if (a->LBD() != b->LBD()) return a->LBD() > b->LBD();
-		else return a->activity() != b->activity() ? a->activity() < b->activity() : a->size() > b->size();
 	}
-};
-struct LEARNT_SR {
-	bool operator () (C_REF a, C_REF b) {
-		return a->activity() > b->activity();
-	}
-};
-//=======================================//
-//		 ParaFROST defined members       //
-//=======================================//
-ParaFROST::ParaFROST(const string& path) :
-	timeout(opt_timeout), verbose(opt_verbose), progRate(opt_progress), seed(opt_seed),
-	quiet_en(opt_quiet_en), parse_only_en(opt_par_en), rewriter_en(opt_rew_en), perf_en(opt_perf_en),
-	mcv_en(!opt_lcv_en), model_en(opt_model_en), proof_en(opt_proof_en),
-	fdp_en(opt_fdp_en), cbt_en(opt_cbt_en), pre_en(opt_pre_en), lpre_en(opt_lpre_en), pre_delay(opt_pre_delay),
-	var_inc(opt_var_inc), var_decay(opt_var_decay), VSIDSDecayFreq(opt_var_dfreq),
-	pdm_rounds(opt_pdm_rounds), pdm_freq(opt_pdm_freq), pdm_order(opt_pdm_ord),
-	restart_base(opt_luby_base), restart_inc(opt_luby_inc), restPolicy(opt_restart), SH(opt_SH),
-	polarity(opt_pol), lbdFrozen(opt_lbd_frozen), lbdMinReduce(opt_lbd_min), lbdMinClSize(opt_lbd_min_size),
-	nClsReduce(opt_init_red), incReduceSmall(opt_inc_red_sm), incReduceBig(opt_inc_red_bg),
-	lbdRestBase(opt_lbd_rest_base), blockRestBase(opt_bl_rest_base), RF(opt_RF), RB(opt_RB),
-	cbt_dist(opt_cbt_dist), cbt_conf_max(opt_cbt_confs),
-	proof_path(opt_proof_out)
-{
-	intr = false;
-	sysMem_sz = 0ULL;
-	sysMemCons = 0LL;
-	sysMemAvail = getAvailSysMem();
-	if (sysMemAvail < MBYTE) printf("c | Not enough memory to run the solver (Available: %lld GB)\n", sysMemAvail / GBYTE), exit(EXIT_FAILURE);
-	if (verbose >= 1) printf("c | Available system memory = %lld GB\n", sysMemAvail / GBYTE);
-	if (quiet_en) verbose = 0, perf_en = false;
-	if (SH < 2 && restPolicy == "lbd") restPolicy = "luby";
-	if (SH == 2 && restPolicy != "lbd") restPolicy = "lbd";
-	if (pre_en) optSimp();
-	if (proof_en) {
-		proofFile.open(proof_path, std::ofstream::binary | std::ofstream::out);
-		if (!proofFile.is_open()) {
-			printf("Cannot open proof file %s\n", proof_path.c_str());
-			exit(EXIT_FAILURE);
+	//=======================================//
+	//		 ParaFROST defined members       //
+	//=======================================//
+	ParaFROST::ParaFROST(const string& _path) :
+		path					(_path)
+		, timeout				(opt_timeout)
+		, proof_path			(opt_proof_out)
+		, seed					(opt_seed)
+		, gc_perc				(opt_garbage_perc)
+		, parse_only_en			(opt_parseonly_en)
+		, report_en				(opt_report_en & !quiet_en)
+		, prograte				(opt_progress)
+		, vsids_en				(opt_vsids_en)
+		, vsidsonly_en			(opt_vsidsonly_en)
+		, mdmvsidsonly_en		(opt_mdmvsidsonly_en)
+		, mdmfusem_en			(opt_mdmfusem_en)
+		, mdmfuses_en			(opt_mdmfuses_en)
+		, mcv_en				(!opt_lcv_en)
+		, model_en				(opt_model_en)
+		, proof_en				(opt_proof_en)
+		, guess_en				(opt_guess_en)
+		, rephase_en			(opt_rephase_en)
+		, stable_en				(opt_stable_en)
+		, target_phase_en		(opt_targetphase_en)
+		, cbt_en				(opt_cbt_en)
+		, sigma_en				(opt_sig_pre_en)
+		, sigma_live_en			(opt_sig_live_en)
+		, shrink_min			(opt_shrink_min)
+		, map_min				(opt_map_min)
+		, var_inc				(opt_var_inc)
+		, var_decay				(opt_var_decay)
+		, cla_inc				(opt_cla_inc)
+		, cla_decay				(opt_cla_decay)
+		, mdm_vsids_pumps		(opt_mdm_vsidspumps)
+		, mdm_vmfq_pumps		(opt_mdm_vmfqpumps)
+		, mdm_rounds			(opt_mdm_rounds)
+		, mdm_freq				(opt_mdm_freq)
+		, mdm_minc				(opt_mdm_minc)
+		, mdm_sinc				(opt_mdm_sinc)
+		, mdm_div				(opt_mdm_div)
+		, stabrestart_r			(opt_stabrestart_r)
+		, stabrestart_inc		(opt_stabrestart_inc)
+		, luby_inc				(opt_luby_inc)
+		, luby_max				(opt_luby_max)
+		, restart_base			(opt_rest_base)
+		, restart_inc			(opt_rest_inc)
+		, polarity				(opt_polarity)
+		, rephase_inc			(opt_rephase_inc)
+		, lbd_freeze_min		(opt_lbd_frozen)
+		, lbd_reduce_min		(opt_lbd_min)
+		, lbd_csize_min			(opt_lbd_min_size)
+		, reduce_base			(opt_init_red)
+		, reduce_small_inc		(opt_inc_red_sm)
+		, reduce_big_inc		(opt_inc_red_bg)
+		, cbt_dist				(opt_cbt_dist)
+		, cbt_conf_max			(opt_cbt_confs)
+		, wt					(cm)
+		, wtBin					(cm)
+		, vHeap					(HEAP_CMP(varAct))
+		, starts				(1)
+		, nConflicts			(0)
+		, intr					(false)
+		, mapped				(false)
+		, search_guess			(false)
+		, conflict				(NOREF)
+		, cnfstate				(UNSOLVED)
+	{
+		stats.sysMemAvail = getAvailSysMem();
+		PFLOG2(1, " Available system memory = %lld GB", stats.sysMemAvail / GBYTE);
+		if (sigma_en) optSimp();
+		if (proof_en) {
+			proofFile.open(proof_path, std::ofstream::binary | std::ofstream::out);
+			if (!proofFile.is_open()) PFLOGE("cannot open proof file %s", proof_path.c_str());
 		}
+		if (parser() == UNSAT || BCP() != NOREF) { if (proof_en) wrProof('0'); cnfstate = UNSAT, killSolver(); }
+		if (parse_only_en) killSolver();
+		shrinkTop(), recycle();
+		if (verbose == 1) printTable();
 	}
-	this->path = path;
-	timer = new TIMER();
-	if (rewriter_en) { cnfrewriter(path); exit(EXIT_SUCCESS); }
-	// parse cnf & check top state
-	CNF_STATE top = parser(path);
-	if (top == TERMINATE || parse_only_en) killSolver();
-	else if (top == UNSAT || BCP() != NULL) { if (proof_en) write_proof('0'); killSolver(UNSAT); }
-	if (verbose == 1) {
-		printf("c |-------------------------------------- Progress --------------------------------------|\n");
-		if (SH == 2) {
-			const char* leq = u8"\u2264";
-#ifdef _WIN32
-			SetConsoleOutputCP(65001);
-#endif
-			printf("c |                    ORG                    Restarts                  Learnt           |\n");
-			printf("c |     Vars      Cls     Bins(+/-)    Lits               Cls     GC(%s2)     Lits    L/C |\n", leq);
-		}
-		else {
-			printf("c |               ORG              | Conflicts  |    Limit   |             Learnt        |\n");
-			printf("c |     Vars      Cls      Lits    |            |     Cls    |     Cls      Lits     L/C |\n");
-		}
-		printf("c |--------------------------------------------------------------------------------------|\n");
-	}
-}
 
-ParaFROST::~ParaFROST()
-{
-	if (verbose >= 1) cout << "c | Freeing up Host memory...";
-	sysFree();
-	if (verbose >= 1) cout << " done." << endl;
-	if (verbose >= 1) cout << "c |--------------------------------------------------------------------------------------|" << endl;
-}
-
-CNF_STATE ParaFROST::parser(const string& path) {
-	struct stat st;
-	stat(path.c_str(), &st);
-	size_t fsz = st.st_size;
-	if (verbose >= 1) printf("c | Parsing CNF file \"%s\" (size: %zd KB)\n", path.c_str(), fsz / KBYTE);
-	timer->start();
+	CNF_ST ParaFROST::parser() {
+		struct stat st;
+		stat(path.c_str(), &st);
+		size_t fsz = st.st_size;
+		PFLOG2(1, " Parsing CNF file \"%s\" (size: %zd KB)", path.c_str(), fsz / KBYTE);
+		timer.start();
 #ifdef __linux__
-	int fd = open(path.c_str(), O_RDONLY, 0);
-	if (fd == -1) printf("Cannot open input file\n"), exit(EXIT_FAILURE);
-	void* buffer = mmap(NULL, fsz, PROT_READ, MAP_PRIVATE, fd, 0);
-	char* str = (char*)buffer;
+		int fd = open(path.c_str(), O_RDONLY, 0);
+		if (fd == -1) PFLOGE("cannot open input file");
+		void* buffer = mmap(NULL, fsz, PROT_READ, MAP_PRIVATE, fd, 0);
+		char* str = (char*)buffer;
 #else
-	ifstream inputFile;
-	inputFile.open(path, ifstream::in);
-	if (!inputFile.is_open()) printf("Cannot open input file\n"), exit(EXIT_FAILURE);
-	char* buffer = new char[fsz + 1], *str = buffer;
-	inputFile.read(buffer, fsz);
-	buffer[fsz] = '\0';
+		ifstream inputFile;
+		inputFile.open(path, ifstream::in);
+		if (!inputFile.is_open()) PFLOGE("cannot open input file");
+		char* buffer = new char[fsz + 1], * str = buffer;
+		inputFile.read(buffer, fsz);
+		buffer[fsz] = '\0';
 #endif
-	uVector1D in_c, tmpCl;
-	int oldSz = 0;
-	char* eof = str + fsz;
-	while (str < eof) {
-		skipWS(str);
-		if (*str == '\0' || *str == '0' || *str == '%') break;
-		if (*str == 'c') skipLine(str);
-		else if (*str == 'p') {
-			if (!eq(str, "p cnf")) printf("Error - header has wrong format\n"), exit(EXIT_FAILURE);
-			cnf_stats.n_org_vars = toInteger(str);
-			cnf_stats.n_org_cls = toInteger(str);
-			if (cnf_stats.n_org_vars <= 0 || cnf_stats.n_org_cls <= 0) printf("Error - header has negative or zero value\n"), exit(EXIT_FAILURE);
-			if (verbose >= 1) printf("c | Found header %d %d\n", cnf_stats.n_org_vars, cnf_stats.n_org_cls);
-			assert(orgs.empty());
-			orgs.resize(cnf_stats.n_org_cls);
-			assert(wt.empty());
-			wt.resize((int64)V2D(nOrgVars() + 1LL));
-			allocSolver();
-			initSolver();
-		}
-		else {
-			toClause(in_c, str);
-			if (proof_en) {
-				oldSz = in_c.size();
-				tmpCl.clear(true);
-				tmpCl.resize(in_c.size());
-				tmpCl.copyFrom(in_c);
+		Lits_t in_c, tmpCl;
+		in_c.reserve(INIT_CAP);
+		PFLMEMCALL(this, 2);
+		int oldSz = 0;
+		char* eof = str + fsz;
+		while (str < eof) {
+			eatWS(str);
+			if (*str == '\0' || *str == '0' || *str == '%') break;
+			if (*str == 'c') eatLine(str);
+			else if (*str == 'p') {
+				if (!eq(str, "p cnf")) PFLOGE("header has wrong format");
+				uint32 sign = 0;
+				inf.maxVar = toInteger(str, sign);
+				if (sign) PFLOGE("number of variables in header is negative");
+				if (inf.maxVar == 0) PFLOGE("zero number of variables in header");
+				if (inf.maxVar >= INT_MAX - 1) PFLOGE("number of variables not supported");
+				inf.nOrgCls = toInteger(str, sign);
+				if (sign) PFLOGE("number of cls in header is negative");
+				if (inf.nOrgCls == 0) PFLOGE("zero number of cls in header");
+				PFLOG2(1, " Found header %d %d", inf.maxVar, inf.nOrgCls);
+				inf.nDualVars = v2l(inf.maxVar + 1LL);
+				assert(orgs.empty());
+				allocFixed();
+				initSolver();
 			}
-			if (checkClause(in_c)) { // clause not a tautology
-				if (proof_en && in_c.size() < oldSz) {
-					write_proof('a');
-					write_proof(in_c, in_c.size());
-					write_proof(0);
-					write_proof('d');
-					write_proof(tmpCl, in_c.size());
-					write_proof(0);
+			else {
+				toClause(in_c, str);
+				if (proof_en) {
+					oldSz = in_c.size();
+					tmpCl.clear(true), tmpCl.resize(in_c.size()), tmpCl.copyFrom(in_c);
 				}
-				if (in_c.size() == 1) {
-					assert(*in_c > 0);
-					uint32 v_idx = V2IDX(*in_c);
-					if (sol->assign(v_idx) == UNDEFINED) { var_heap->remove(v_idx); enqueue(*in_c); }
-					else if (sol->assign(v_idx) == ISNEG(*in_c)) return UNSAT;
-				}
-				else if (cnf_stats.global_n_cls + 1 > cnf_stats.n_org_cls) { printf("Error - too many clauses\n"); return TERMINATE; }
-				else {
-					B_REF org = new BCLAUSE();
-					org->copyLitsFrom(in_c, in_c.size());
-					attachClause(org);
+				if (checkClause(in_c)) { // clause not a tautology
+					if (proof_en && in_c.size() < oldSz) {
+						wrProof('a'), wrProof(in_c, in_c.size()), wrProof(0);
+						wrProof('d'), wrProof(tmpCl, in_c.size()), wrProof(0);
+					}
+					if (in_c.size() == 1) {
+						LIT_ST val = value(*in_c);
+						if (val < 0) enqueue(*in_c);
+						else if (!val) return UNSAT;
+					}
+					else if (inf.nClauses + 1 > inf.nOrgCls) PFLOGE("too many clauses");
+					else newClause(in_c);
 				}
 			}
 		}
-	}
-	timer->stop();
-	timer->par = timer->cpuTime();
 #ifdef __linux__
-	if (munmap(buffer, fsz) != 0) {
-		printf("Cannot clean input file %s mapping.\n", path.c_str());
-		exit(EXIT_FAILURE);
-	}
-	close(fd);
+		if (munmap(buffer, fsz) != 0) PFLOGE("cannot clean input file %s mapping", path.c_str());
+		close(fd);
 #else
-	delete[] buffer;
-	inputFile.close();
+		delete[] buffer;
+		inputFile.close();
 #endif
-	assert(nClauses() + nBins() <= nOrgCls());
-	cnf_stats.n_org_bins = nBins();
-	cnf_stats.n_org_lits = nLiterals() + ((int64)nBins() << 1);
-	if ((int)nClauses() < orgs.size()) orgs.resize(nClauses());
-	in_c.clear(true), tmpCl.clear(true);
-	if (verbose >= 1) printf("c | Read %d Vars, %d Cls, and %lld Lits in %.3f sec.\n", nOrgVars(), nClauses() + nOrgBins() + sp->trail_size, nOrgLits() + sp->trail_size, timer->par);
-	return UNSOLVED;
-}
+		assert(inf.nClauses + inf.nOrgBins <= inf.nOrgCls);
+		inf.nOrgLits = inf.nLiterals + (inf.nOrgBins << 1);
+		if (inf.nClauses < orgs.size()) orgs.resize(inf.nClauses);
+		in_c.clear(true), tmpCl.clear(true);
+		timer.stop();
+		timer.par = timer.cpuTime();
+		PFLOG2(1, " Read %d Vars, %d Cls, and %d Lits in %.2f seconds", inf.maxVar, inf.nClauses + inf.nOrgBins + trail.size(), inf.nOrgLits + trail.size(), timer.par);
+		return UNSOLVED;
+	}
 
-int64 ParaFROST::sysMemUsed()
-{
-	int64 memUsed = 0;
+	int64 ParaFROST::sysMemUsed()
+	{
+		int64 memUsed = 0;
 #ifdef __linux__ 
-	FILE* file = fopen("/proc/self/status", "r");
-	char line[128];
-	while (fgets(line, 128, file) != NULL) {
-		char* str = line;
-		if (eq(str, "VmRSS:")) {
-			skipWS(str);
-			memUsed = toInteger(str);
-			break;
+		FILE* file = fopen("/proc/self/status", "r");
+		char line[128];
+		uint32 sign = 0;
+		while (fgets(line, 128, file) != NULL) {
+			char* str = line;
+			if (eq(str, "VmRSS:")) {
+				eatWS(str);
+				memUsed = toInteger(str, sign);
+				break;
+			}
 		}
-	}
-	fclose(file);
-	return memUsed * KBYTE;
+		fclose(file);
+		return memUsed * KBYTE;
 #elif _WIN32
-	PROCESS_MEMORY_COUNTERS_EX memInfo;
-	GetProcessMemoryInfo(GetCurrentProcess(), (PROCESS_MEMORY_COUNTERS*)&memInfo, sizeof(PROCESS_MEMORY_COUNTERS_EX));
-	memUsed = memInfo.WorkingSetSize;
+		PROCESS_MEMORY_COUNTERS_EX memInfo;
+		GetProcessMemoryInfo(GetCurrentProcess(), (PROCESS_MEMORY_COUNTERS*)&memInfo, sizeof(PROCESS_MEMORY_COUNTERS_EX));
+		memUsed = memInfo.WorkingSetSize;
 #endif
-	return memUsed;
-}
+		return memUsed;
+	}
 
-void ParaFROST::killSolver(const CNF_STATE& status)
-{
-	wrapUp(status);
-	if (proof_en) proofFile.close();
-	this->~ParaFROST();
-	g_pFrost = NULL;
-	exit(EXIT_SUCCESS);
-}
+	void ParaFROST::killSolver()
+	{
+		wrapup();
+		this->~ParaFROST();
+		pfrost = NULL;
+		exit(EXIT_SUCCESS);
+	}
 
-void ParaFROST::sysFree()
-{
-	occurs.clear(true);
-	scores.clear(true);
-	learntLits.clear(true);
-	learnt_cl.clear(true);
-	trail_sz.clear(true);
-	wt.clear(true);
-	bins.clear(true);
-	orgs.clear(true);
-	lbdQ.clear(true);
-	trailQ.clear(true);
-	scnf.clear(true);
-	ot.clear(true);
-	removed.clear(true);
-	mappedVars.clear(true);
-	reverseVars.clear(true);
-	if (sysMem != NULL) {
-		free(sysMem);
-		sysMem = NULL;
+	void ParaFROST::allocFixed()
+	{
+		PFLOGN2(2, " Allocating solver memory for fixed arrays..");
+		assert(sizeof(C_REF) == sizeof(uint32));
+		assert(sizeof(LIT_ST) == 1);
+		assert(inf.maxVar);
+		uint32 maxSize = inf.maxVar + 1;
+		// search space
+		sp = new SP(maxSize);
+		// input database
+		cm.init(inf.nOrgCls);
+		orgs.reserve(inf.nOrgCls);
+		// watch tables
+		wt.resize(inf.nDualVars);
+		wtBin.resize(inf.nDualVars);
+		// others
+		toSimp.reserve(inf.maxVar >> 2);
+		varAct.resize(maxSize, 0.0);
+		varBumps.resize(maxSize, 0);
+		PFLDONE(2, 5);
+		PFLMEMCALL(this, 2);
 	}
-	if (var_heap != NULL) {
-		delete var_heap;
-		var_heap = NULL;
-	}
-	if (timer != NULL) {
-		delete timer;
-		timer = NULL;
-	}
-}
 
-void ParaFROST::allocSolver(const bool& re)
-{
-	if (re) {
-		assert(sysMem != NULL);
-		assert(var_heap != NULL);
-		free(sysMem);
-		delete var_heap;
+	void ParaFROST::initSolver()
+	{
+		assert(ORIGINAL && LEARNT && DELETED);
+		assert(UNDEFINED < 0 && ROOT_LEVEL == 0);
+		srand(seed);
+		model.init();
+		lbdrest.init(opt_lbd_rate, opt_lbdfast, opt_lbdslow);
+		if (stable_en && luby_inc) lubyrest.init(luby_inc, luby_max);
+		resetSolver();
 	}
-	lrn.max_cl_sz = nOrgVars();
-	sysMem_sz = sizeof(SOL) + sizeof(SP) + sizeof(PV) +
-		nOrgVars() * (sizeof(uint32) * 5 + sizeof(ASSIGN_ST) + sizeof(G_REF) + 5) +
-		lrn.max_cl_sz * sizeof(uint32) * 2;
-	sysMem = NULL;
-	sysMem = (addr_t)malloc(sysMem_sz);
-	memset(sysMem, 0, sysMem_sz);
-	addr_t bottom = sysMem + sysMem_sz;
-	// sol
-	sol = (SOL*)sysMem;
-	sysMem += sizeof(SOL);
-	assert(sysMem < bottom);
-	sol->allocMem(&sysMem, nOrgVars());
-	assigns = sol->assigns_ptr();
-	levels = sol->levels_ptr();
-	assert(sysMem < bottom);
-	// elections
-	pv = (PV*)sysMem;
-	sysMem += sizeof(PV);
-	assert(sysMem < bottom);
-	pv->PVs = (uint32*)sysMem;
-	sysMem += nOrgVars() * sizeof(uint32);
-	assert(sysMem < bottom);
-	pv->melted = (bool*)sysMem;
-	sysMem += nOrgVars();
-	assert(sysMem < bottom);
-	// search space
-	sp = (SP*)sysMem;
-	sysMem += sizeof(SP);
-	assert(sysMem < bottom);
-	sp->lock = (bool*)sysMem;
-	sp->frozen = sp->lock + nOrgVars();
-	sp->seen = sp->frozen + nOrgVars();
-	sp->pol = sp->seen + nOrgVars();
-	sysMem += ((size_t)nOrgVars() << 2);
-	assert(sysMem < bottom);
-	sp->trail = (uint32*)sysMem;
-	sp->free_decs = sp->trail + nOrgVars();
-	sysMem += ((size_t)nOrgVars() << 1) * sizeof(uint32);
-	// others
-	source = (G_REF*)sysMem;
-	sysMem += nOrgVars() * sizeof(G_REF);
-	assert(sysMem < bottom);
-	board = (int*)sysMem;
-	sysMem += nOrgVars() * sizeof(int);
-	assert(sysMem < bottom);
-	tmp_stack = (uint32*)sysMem;
-	sysMem += lrn.max_cl_sz * sizeof(uint32);
-	assert(sysMem < bottom);
-	simpLearnt = (uint32*)sysMem;
-	sysMem += lrn.max_cl_sz * sizeof(uint32);
-	assert(sysMem == bottom);
-	sysMem -= sysMem_sz;
-	// VSIDS heap
-	var_heap = NULL;
-	var_heap = new VAR_HEAP();
-	var_heap->allocMem(nOrgVars());
-	if (verbose >= 2) printf("C | Memory consumed after allocSolver call = %lld MB\n", sysMemUsed() / MBYTE);
-}
 
-void ParaFROST::resetSolver(const bool& re) {
-	if (SH == 2) {
-		maxConflicts = UNKNOWN;
-		marker = UNKNOWN;
-		reductions = 1;
-		lrn.nClsReduce = nClsReduce;
-		lbdQ.reset();
-		trailQ.reset();
+	void ParaFROST::resetSolver(const bool& rst) {
+		PFLOG2(2, " Resetting solver..");
+		lrn.bumped = 0;
+		lrn.numMDs = 0;
+		lrn.nRefVars = 0;
+		lrn.simpProps = 0;
+		lrn.reductions = 1;
+		lrn.var_inc = var_inc;
+		lrn.var_decay = var_decay;
+		lrn.target = lrn.best = 0;
+		lrn.cl_inc = float(cla_inc);
+		lrn.cl_decay = float(cla_decay);
+		lrn.rephased[0] = lrn.rephased[1] = 0;
+		lrn.rounds = mdm_rounds;
+		lrn.mdm_conf_max = mdm_minc;
+		lrn.reduce_conf_max = reduce_base;
+		lrn.rephase_conf_max = rephase_inc;
+		lrn.restarts_conf_max = restart_base;
+		lrn.stable_conf_max = stabrestart_inc;
+		lrn.stable = stable_en & (vsidsonly_en || mdm_rounds);
+		if (lrn.stable) PFLOG2(2, "  VSIDS with stable phasing is enabled");
+		else PFLOG2(2, "  VMFQ with initial unstable phasing is enabled");
+		if (rst) {
+			size_t maxSize = (size_t)inf.maxVar + 1;
+			memset(sp->value, UNDEFINED, inf.nDualVars);
+			memset(sp->ptarget, UNDEFINED, maxSize);
+			memset(sp->pbest, UNDEFINED, maxSize);
+			memset(sp->psaved, polarity, maxSize);
+			for (uint32 v = 1; v <= inf.maxVar; v++)
+				sp->level[v] = UNDEFINED, sp->source[v] = NOREF;
+		}
+		initQueue();
+		initHeap();
+		lbdrest.reset();
+		stats.reset();
+		PFLOG2(2, " Solver reset successfully");
 	}
-	nConflicts = UNKNOWN;
-	ref_vars = UNKNOWN;
-	cnf_stats.n_added_lits = cnf_stats.global_n_gcs = UNKNOWN;
-	lrn.init();
-	stats.reset();
-	var_heap->init(var_inc, var_decay);
-	var_heap->build(nOrgVars());
-	if (re) {
-		for (uint32 v = 0; v < nOrgVars(); v++) { sp->pol[v] = true; sol->init(v); }
-	}
-	else {
-		for (uint32 v = 0; v < nOrgVars(); v++) { sp->pol[v] = true; sp->lock[v] = false; source[v] = NULL; sol->init(v); }
-		sp->reset_trail();
-	}
-}
 
-void ParaFROST::initSolver()
-{
-	assert(UNKNOWN == 0);
-	assert(UNDEFINED < 0 && ROOT_LEVEL == 0);
-	srand(seed);
-	restarts = starts = UNKNOWN;
-	if (SH == 2) { lbdQ.alloc(lbdRestBase); trailQ.alloc(blockRestBase); }
-	cl_params.init();
-	resetSolver();
-}
-
-void ParaFROST::cnfrewriter(const string& path) {
-	ifstream inputFile;
-	inputFile.open(path + ".cnf", ifstream::in);
-	if (!inputFile.is_open()) {
-		cout << "c | Cannot open the input file: " << path << endl;
-		exit(EXIT_FAILURE);
-	}
-	std::ofstream outFile;
-	outFile.open(path + "_re.cnf", std::ofstream::out);
-	if (!inputFile.is_open()) {
-		cout << "c | Cannot open the output file: " << path << endl;
-		exit(EXIT_FAILURE);
-	}
-	char* line = new char[BUFFER_SIZE];
-	cnf_stats.global_n_cls = 0;
-	if (verbose >= 1) printf("c | Parsing CNF file \"%s\"\n", path.c_str());
-	outFile << "c rewritten formula by ParaFROST." << endl;
-	while (inputFile.getline(line, BUFFER_SIZE)) {
-		char* ch = line; int len = 0;
-		while (*ch) ch++;
-		len = ch - line;
-		if (len == 0 || (len == 1 && (*line == '0' || (*line >= '%' && *line <= '/')))) continue;
-		if (*line != 'c') {
-			if (*line == 'p') {
-				if (!eq(line, "p cnf")) printf("Error - header has wrong format\n"), exit(EXIT_FAILURE);
-				cnf_stats.n_org_vars = toInteger(line);
-				cnf_stats.n_org_cls = toInteger(line);
-				if (cnf_stats.n_org_vars <= 0 || cnf_stats.n_org_cls <= 0) printf("Error - header has negative or zero value\n"), exit(EXIT_FAILURE);
-				if (verbose >= 1) printf("c | Found header %d %d\n", cnf_stats.n_org_vars, cnf_stats.n_org_cls);
-				outFile << line << endl;
+	void ParaFROST::newClause(Lits_t& in_c, const CL_ST& type)
+	{
+		C_REF r = cm.alloc(in_c);
+		int sz = in_c.size();
+		assert(sz > 1);
+		assert(sz == cm[r].size());
+		assert(cm[r][0] > 1 && cm[r][1] > 1);
+		assert(cm[r][0] <= UINT32_MAX && cm[r][1] <= UINT32_MAX);
+		if (sz == 2) {
+			wtBin.newWatch(r, in_c[0], in_c[1]);
+			if (type == ORIGINAL) inf.nOrgBins++;
+			else inf.nLearntBins++;
+		}
+		else {
+			assert(sz > 2);
+			wt.newWatch(r, in_c[0], in_c[1]);
+			if (type == ORIGINAL) {
+				orgs.push(r);
+				inf.nClauses++;
+				inf.nLiterals += sz;
 			}
 			else {
-				cnf_stats.global_n_cls++;
-				outFile << line << endl;
+				assert(sp->learnt_lbd > 0);
+				CLAUSE& c = cm[r];
+				c.melt();
+				c.markReason();
+				c.set_act(lrn.cl_inc);
+				c.set_LBD(sp->learnt_lbd);
+				learnts.push(r);
+				inf.nLearntLits += sz;
+				if (sp->learnt_lbd <= 2) inf.nGlues++; // glues
 			}
 		}
+		if (type == ORIGINAL) cm[r].set_status(ORIGINAL);
+		else assert(type == LEARNT), cm[r].set_status(LEARNT), enqueue(*learntC, sp->bt_level, r); // enqueue must always use sp->bt_level
 	}
-	delete[] line;
-	assert(nClauses() <= nOrgCls());
-	inputFile.close();
-	outFile.close();
-}
 
-void ParaFROST::attachClause(B_REF c)
-{
-	CL_LEN sz = c->size();
-	assert(sz > 1);
-	assert(*c != NULL);
-	assert(**c > 0 && *(*c + 1) > 0);
-	assert(**c <= UINT32_MAX && *(*c + 1) <= UINT32_MAX);
-	wt[FLIP(**c)].push(WATCH(c, *(*c + 1)));
-	wt[FLIP(*(*c + 1))].push(WATCH(c, **c));
-	if (sz == 2) {
-		c->flag_orgBin();
-		bins.push(c);
-		cnf_stats.global_n_bins++;
-	}
-	else {
-		c->set_status(ORIGINAL);
-		orgs[cnf_stats.global_n_cls++] = c;
-		cnf_stats.global_n_lits += sz;
-		if (sz > cnf_stats.max_org_cl_width) cnf_stats.max_org_cl_width = sz;
-	}
-}
-
-void ParaFROST::attachClause(C_REF c)
-{
-	CL_LEN sz = c->size();
-	assert(sz > 2);
-	assert(*c != NULL);
-	assert(**c > 0 && *(*c + 1) > 0);
-	assert(**c <= UINT32_MAX && *(*c + 1) <= UINT32_MAX);
-	wt[FLIP(**c)].push(WATCH(c, *(*c + 1)));
-	wt[FLIP(*(*c + 1))].push(WATCH(c, **c));
-	c->set_status(LEARNT);
-	c->flag_reason();
-	if (SH == 1) { // csr
-		double act = sz;
-		if (sz > 12) act += drand();
-		c->set_act(float(act));
-	}
-	else c->set_act(cl_params.cl_inc);
-	if (SH == 2) { // lbd
-		assert(sp->learnt_lbd > 0); 
-		if (sp->learnt_lbd <= 2) cnf_stats.global_n_gcs++; // glues
-		c->melt(); // assume the clause is molten
-		c->set_LBD(sp->learnt_lbd); 	
-	}
-	learnts.push(c);
-	cnf_stats.n_added_lits += sz;
-}
-
-void ParaFROST::detachClause(B_REF c)
-{
-	assert(c->status() == ORIGINAL);
-	assert(c->size() > 2);
-	cnf_stats.global_n_lits -= c->size();
-	remWatch(wt[FLIP(c->w0_lit())], c);
-	remWatch(wt[FLIP(c->w1_lit())], c);
-	if (proof_en) {
-		write_proof('d');
-		write_proof(*c, c->size());
-		write_proof(0);
-	}
-	delete c;
-}
-
-void ParaFROST::detachClause(C_REF c)
-{
-	assert(c->status() == LEARNT);
-	assert(c->size() > 2);
-	cnf_stats.n_added_lits -= c->size();
-	remWatch(wt[FLIP(c->w0_lit())], c);
-	remWatch(wt[FLIP(c->w1_lit())], c);
-	if (proof_en) {
-		write_proof('d');
-		write_proof(*c, c->size());
-		write_proof(0);
-	}
-	delete c;
-}
-
-void ParaFROST::shrinkClause(G_REF gc)
-{
-	B_REF c = (B_REF)gc;
-	assert(c->size() > 2);
-	assert(assigns[V2IDX(c->w0_lit())] == UNDEFINED && assigns[V2IDX(c->w1_lit())] == UNDEFINED);
-	uVector1D& lits = *c;
-	CL_LEN sz = c->size();
-	uVector1D tmpCl;
-	if (proof_en) {
-		tmpCl.resize(sz);
-		tmpCl.copyFrom(lits);
-	}
-	if (sz == 3 && assigns[V2IDX(lits[2])] == ISNEG(lits[2]))
-		lits.pop();
-	else {
-		LIT_POS k = 2;
-		while (k < sz) {
-			if (assigns[V2IDX(lits[k])] == ISNEG(lits[k])) {
-				lits[k] = lits[sz - 1];
-				sz--;
-			}
-			else k++;
+	void ParaFROST::removeClause(C_REF& r, const bool& gc) {
+		CLAUSE& c = cm[r];
+		assert(c.size() > 1);
+		if (c.size() == 2) {
+			if (c.status() == ORIGINAL) inf.nOrgBins--;
+			else assert(c.status() == LEARNT), inf.nLearntBins--;
 		}
-		int remLits = c->size() - sz;
+		else {
+			if (c.status() == ORIGINAL) inf.nLiterals -= c.size();
+			else assert(c.status() == LEARNT), inf.nLearntLits -= c.size();
+			if (proof_en) {
+				wrProof('d');
+				wrProof(c, c.size());
+				wrProof(0);
+			}
+		}
+		detachClause(r, gc);
+		assert(!c.deleted());
+		c.markDeleted(), cm.collect(r);
+	}
+
+	void ParaFROST::shrinkClause(C_REF& r)
+	{
+		CLAUSE& c = cm[r];
+		assert(c.size() > 2);
+		assert(unassigned(c[0]) && unassigned(c[1]));
+		int sz = c.size();
+		Lits_t tmpCl;
+		if (proof_en) { tmpCl.resize(sz); tmpCl.copyFrom(c, sz); }
+		int k = 2;
+		while (k < sz) if (isFalse(c[k])) c[k] = c[--sz]; else k++;
+		int remLits = c.size() - sz;
+		if (remLits && sz == 2) { // clause shrinked to binary
+			wt.remWatch(flip(c[0]), r);
+			wt.remWatch(flip(c[1]), r);
+			wtBin.newWatch(r, c[0], c[1]);
+			if (c.status() == ORIGINAL) inf.nOrgBins++;
+			else assert(c.status() == LEARNT), inf.nLearntBins++;
+		}
 		if (proof_en && remLits) {
-			write_proof('a');
-			write_proof(*c, sz);
-			write_proof(0);
-			write_proof('d');
-			write_proof(tmpCl, c->size());
-			write_proof(0);
+			wrProof('a');
+			wrProof(c, sz);
+			wrProof(0);
+			wrProof('d');
+			wrProof(tmpCl, c.size());
+			wrProof(0);
 		}
-		lits.shrink(remLits);
+		c.shrink(remLits); // adjusts pos also
+		cm.collect(remLits);
+		assert(c.size() > 1);
 	}
-	assert(c->size() > 1);
-}
 
-int ParaFROST::simplify(BCNF& cnf)
-{
-	if (cnf.size() == 0) return 0;
-	int n = 0;
-	for (int i = 0; i < cnf.size(); i++) {
-		B_REF c = cnf[i];
-		if (c->satisfied(assigns))
-			detachClause(c);
-		else {
-			shrinkClause(c);
-			if (c->size() > 2) cnf[n++] = c;
+	void ParaFROST::shrinkWT()
+	{
+		for (uint32 i = sp->simplified; i < trail.size(); i++) {
+			uint32 assign = trail[i], assign_f = flip(assign);
+			wt.collect(assign), wt.collect(assign_f);
+			WL& ws = wtBin[assign_f];
+			for (WATCH* w = ws; w != ws.end(); w++) {
+				assert(!cm[w->ref].moved());
+				if (!cm[w->ref].deleted())
+					removeClause(w->ref);
+			}
+		}
+	}
+
+	void ParaFROST::shrinkTop()
+	{
+		if (trail.size() == sp->simplified) return;
+		PFLOGN2(2, " Shrinking CNF before solve..");
+		assert(trail.size() && DL() == ROOT_LEVEL);
+		assert(conflict == NOREF);
+		assert(cnfstate == UNSOLVED);
+		assert(sp->simplified == 0);
+		assert(sp->propagated == trail.size());
+		assert(!unassigned(trail.back()));
+		shrinkWT();
+		shrink(orgs);
+		inf.nClauses = orgs.size();
+		inf.nDelVars += (trail.size() - sp->simplified);
+		PFLENDING(2, 5, "(-%d variables)", trail.size() - sp->simplified);
+		sp->simplified = trail.size();
+		lrn.simpProps = inf.nLiterals + ((int64)inf.nOrgBins << 1);
+		stats.shrinkages++;
+	}
+
+	void ParaFROST::shrink()
+	{
+		// remove satisfied clauses & falsified literals
+		PFLOGN2(2, " Shrinking CNF..");
+		assert(trail.size() && DL() == ROOT_LEVEL);
+		assert(sp->propagated == trail.size());
+		assert(conflict == NOREF);
+		assert(cnfstate == UNSOLVED);
+		assert(!unassigned(trail.back()));
+		shrinkWT();
+		shrink(learnts);
+		shrink(orgs);
+		inf.nClauses = orgs.size();
+		inf.nDelVars += (trail.size() - sp->simplified);
+		PFLENDING(2, 5, "(-%d variables)", trail.size() - sp->simplified);
+		sp->simplified = trail.size();
+		lrn.simpProps = maxLiterals();
+		stats.shrinkages++;
+		recycle();
+		if (canMap()) map();
+	}
+
+	void ParaFROST::reduce()
+	{
+		// learnt clauses reduction
+		PFLOGN2(2, " Reducing learnt database..");
+		assert(sp->propagated == trail.size());
+		assert(conflict == NOREF);
+		assert(cnfstate == UNSOLVED);
+		assert(learnts.size());
+		Sort(learnts, LEARNT_CMP(cm));
+		uint32 pivot = learnts.size() / 2, n = 0;
+		if (cm[learnts[pivot]].LBD() <= 3) lrn.reduce_conf_max += reduce_big_inc;
+		for (uint32 i = 0; i < learnts.size(); i++) {
+			CLAUSE& c = cm[learnts[i]];
+			assert(c.size() > 2);
+			if (c.LBD() > GLUE && c.molten() && !c.reason() && i < pivot)
+				removeClause(learnts[i]);
 			else {
-				c->flag_orgBin();
-				c->set_status(UNKNOWN);
-				cnf_stats.global_n_bins++;
-				//printf("c | Clause became bin "); c->print();
+				if (!c.molten()) pivot++;
+				c.melt();
+				learnts[n++] = learnts[i];
 			}
 		}
+		learnts.resize(n);
+		// update counters
+		lrn.reductions = (nConflicts / lrn.reduce_conf_max) + 1;
+		lrn.reduce_conf_max += reduce_small_inc;
+		stats.reduces++;
+		PFLDONE(2, 5);
+		recycle();
 	}
-	return n;
-}
 
-int ParaFROST::simplify(LCNF& cnf)
-{
-	if (cnf.size() == 0) return 0;
-	int n = 0;
-	for (int i = 0; i < cnf.size(); i++) {
-		C_REF c = cnf[i];
-		if (c->satisfied(assigns))
-			detachClause(c);
-		else {
-			shrinkClause(c);
-			if (c->size() > 2) cnf[n++] = c;
-			else {
-				c->set_status(UNKNOWN);
-				cnf_stats.global_n_bins++;
-				//printf("c | Clause became bin "); c->print();
-			}
-		}
-	}
-	return n;
-}
-
-void ParaFROST::simplify()
-{
-	if (sp->trail_size == sp->trail_offset || lrn.simp_props > 0) return;
-	if (verbose >= 2) printf("c | Simplifying CNF..");
-	assert(sp->trail_head == sp->trail_size);
-	assert(nClauses() > 0);
-	assert(sp->trail_size > 0 && DL() == ROOT_LEVEL);
-	assert(sol->assign(V2IDX(sp->trail[sp->trail_size - 1])) != UNDEFINED);
-	// reduce watch table
-	for (int i = sp->trail_offset; i < sp->trail_size; i++) {
-		uint32 assign = sp->trail[i], assign_f = FLIP(assign);
-		// remove bins from WT
-		WL& ws = wt[assign_f];
-		for (int j = 0; j < ws.size(); j++) {
-			B_REF c = (B_REF)ws[j].c_ref;
-			if (c->status() == UNKNOWN && c->size() == 2) { // original or learnt binary clause 
-				//printf("c | Removing bin clause "); c->print();
-				uint32 w_lit = (assign == c->w1_lit()) ? c->w0_lit() : c->w1_lit();
-				remWatch(wt[FLIP(w_lit)], c);
-				delete c;
-				cnf_stats.global_n_bins--;
-			}
-		}
-		// remove root-level watch lists
-		wt[assign].clear(true);
-		wt[assign_f].clear(true);
-		uint32 assign_idx = V2IDX(assign);
-		if (var_heap->has(assign_idx)) var_heap->remove(assign_idx); // remove assign from the heap
-		if (pre_en) removed.push(assign); // save in case preprocessing mapped variables
-	}
-	// simplify input CNF
-	cnf_stats.global_n_cls = simplify(orgs); 
-	orgs.resize(cnf_stats.global_n_cls);
-	// simplify learnt CNF
-	int numLearnts = simplify(learnts);
-	learnts.resize(numLearnts);
-	cnf_stats.global_n_del_vars += (sp->trail_size - sp->trail_offset);
-	sp->trail_offset = sp->trail_size;
-	lrn.simp_props = nLiterals() + nLearntLits();
-	if (verbose >= 2) printf(" ==> done\n");
-}
-
-void ParaFROST::enqueue(const uint32& assign, const int& pLevel, const G_REF src)
-{
-	assert(assign > 0);
-	register uint32 assign_idx = V2IDX(assign);
-	source[assign_idx] = src;
-	sp->lock[assign_idx] = true;
-	sp->trail[sp->trail_size++] = assign;
-	sol->set_assign(assign_idx, !ISNEG(assign));
-	sol->set_level(assign_idx, pLevel);
-	if (verbose >= 3) printf("c | New %s: %d@%d.\n", src == NULL ? "decision" : "imp", (ISNEG(assign)) ? -int(ABS(assign)) : ABS(assign), pLevel);
-}
-
-void ParaFROST::binSelfsub() 
-{
-	marker++;
-	for (LIT_POS i = 1; i < learnt_cl.size(); i++) // mark all learnt literals except asserting
-		board[V2IDX(learnt_cl[i])] = marker;
-	// check binary clauses if subsuming learnt clause
-	uint32 parent = FLIP(learnt_cl[0]);
-	WL& ws = wt[parent];
-	int nLitsRem = 0;
-	for (int i = 0; i < ws.size(); i++) {
-		if (((B_REF)ws[i].c_ref)->size() == 2) {
-			uint32 imp = ws[i].blocker, imp_idx = V2IDX(imp);
-			if (board[imp_idx] == marker && sol->assign(imp_idx) == !ISNEG(imp)) {
-				board[imp_idx] = marker - 1; // unmark
+	void ParaFROST::selfsubBin()
+	{
+		assert(sp->learnt_lbd != 0);
+		stats.marker++;
+		for (int i = 1; i < learntC.size(); i++) // mark all learnt literals except asserting
+			sp->board[l2a(learntC[i])] = stats.marker;
+		// check binary clauses if subsuming learnt clause
+		uint32 parent = flip(learntC[0]);
+		WL& wBins = wtBin[parent];
+		int nLitsRem = 0;
+		for (int i = 0; i < wBins.size(); i++) {
+			uint32 v = l2a(wBins[i].imp);
+			if (sp->board[v] == stats.marker && isTrue(wBins[i].imp)) {
+				sp->board[v] = stats.marker - 1; // unmark
 				nLitsRem++;
-				//printClause(((B_REF)ws[i].c_ref)->clause());
 			}
 		}
-	}
-	int last = learnt_cl.size() - 1;
-	if (nLitsRem > 0) {
-		//printLearnt(learnt_cl);
-		for (int i = 1; i < learnt_cl.size() - nLitsRem; i++) {
-			if (board[V2IDX(learnt_cl[i])] != marker) {
-				uint32 tmpLit = learnt_cl[last];
-				learnt_cl[last] = learnt_cl[i];
-				learnt_cl[i] = tmpLit;
-				last--; i--;
-			}
-		}
-		//printLearnt(learnt_cl);
-		learnt_cl.shrink(nLitsRem);
-	}
-}
-
-bool ParaFROST::selfsub(const uint32& learntLit, uint32* tmp_stack, CL_LEN& tmp_tail, const uint32& min_level)
-{
-	assert(learntLit > 0);
-	assert(source[V2IDX(learntLit)] != NULL);
-	assert(sol->level(V2IDX(learntLit)) > ROOT_LEVEL);
-	CL_LEN tmp_size = tmp_tail;
-	uint32 *head = simpLearnt, *tail = simpLearnt + 1;
-	*head = learntLit;
-	while (head != tail) {
-		if (verbose >= 4) { printf("c | simpLearnt = "); printLit(*head); }
-		assert(*head > 0);
-		B_REF c = (B_REF)source[V2IDX(*head)];
-		assert(c != NULL);
-		assert(c->w0_lit() == FLIP(*head));
-		for (LIT_POS l = 1; l < c->size(); l++) {
-			uint32 parent = (*c)[l], parent_idx = V2IDX(parent);
-			int parent_dl = sol->level(parent_idx);
-			if (!sp->seen[parent_idx] && parent_dl > 0) {
-				if (source[parent_idx] != NULL && (MAPHASH(parent_dl) & min_level) != 0) {
-					sp->seen[parent_idx] = 1;
-					*tail++ = parent;
-					tmp_stack[tmp_tail++] = parent;
+		int last = learntC.size() - 1;
+		if (nLitsRem > 0) {
+			for (int i = 1; i < learntC.size() - nLitsRem; i++) {
+				if (sp->board[l2a(learntC[i])] != stats.marker) {
+					swap(learntC[last], learntC[i]);
+					last--, i--;
 				}
-				else {
-					for (uint32 *k = tmp_stack + tmp_size; k != tmp_stack + tmp_tail; k++)
-						sp->seen[V2IDX(*k)] = 0;
-					tmp_tail = tmp_size;
+			}
+			learntC.shrink(nLitsRem);
+			sp->learnt_lbd = calcLBD(learntC); // update learnt LBD
+			PFLLEARNT(this, 3);
+		}
+	}
+
+	bool ParaFROST::selfsub(const uint32& learntLit, uint32*& tail)
+	{
+		assert(minLevel);
+		assert(l2r(learntLit) != NOREF);
+		assert(l2dl(learntLit) > ROOT_LEVEL);
+		uint32* tmp_tail = tail;
+		toSimp.clear();
+		toSimp.push(learntLit);
+		for (uint32 n = 0; n < toSimp.size(); n++) {
+			uint32 next = toSimp[n];
+			assert(l2r(next) != NOREF);
+			CLAUSE& c = cm[l2r(next)];
+			if (c.size() == 2 && isFalse(*c)) {
+				assert(isTrue(c[1]));
+				c.swapWatched();
+			}
+			assert(*c == flip(next));
+			for (int j = 1; j < c.size(); j++) {
+				uint32 lit = c[j], v = l2a(lit);
+				int litLevel = sp->level[v];
+				LIT_ST& seen = sp->seen[v];
+				if (litLevel == ROOT_LEVEL || seen) continue;
+				if (sp->source[v] == NOREF || abortSub(litLevel)) {
+					while (tail != tmp_tail) sp->seen[l2a(*--tail)] = 0;
 					return false;
 				}
+				seen = 1;
+				*tail++ = lit;
+				toSimp.push(lit);
 			}
 		}
-		head++;
+		return true;
 	}
-	return true;
-}
 
-void ParaFROST::selfsub()
-{
-	assert(learnt_cl.size() > 1);
-	assert(lrn.max_cl_sz > learnt_cl.size());
-	if (verbose >= 3) printLearnt(learnt_cl);
-	register uint32* lit = learnt_cl, * tmp_lit = tmp_stack, * end = lit + learnt_cl.size();
-	while (lit != end) *tmp_lit++ = *lit++;
-	uint32 min_level = 0;
-	for (LIT_POS k = 1; k < learnt_cl.size(); k++)  min_level |= MAPHASH(sol->level(V2IDX(learnt_cl[k])));
-	CL_LEN new_sz = 1, tmp_sz = (CL_LEN)learnt_cl.size();
-	for (LIT_POS k = 1; k < learnt_cl.size(); k++) {
-		if (source[V2IDX(learnt_cl[k])] == NULL || !selfsub(learnt_cl[k], tmp_stack, tmp_sz, min_level))
-			learnt_cl[new_sz++] = learnt_cl[k];
+	void ParaFROST::selfsub()
+	{
+		assert(learntC.size() > 1);
+		register uint32* i = sp->tmp_stack, * tail = i + learntC.size(), * j = learntC, * end = learntC.end();
+		while (j != end) *i++ = *j++;
+		j = learntC + 1, minLevel = 0;
+		while (j != end)  minLevel |= l2hl(*j++);
+		j = learntC + 1, i = j;
+		for (; i != end; i++)
+			if (l2r(*i) == NOREF || !selfsub(*i, tail))	*j++ = *i;
+		int newSize = j - learntC;
+		learntC.resize(newSize);
+		PFLLEARNT(this, 3);
+		// minimize further using binaries
+		if (newSize > 1 && newSize <= lbd_csize_min && ((sp->learnt_lbd = calcLBD(learntC)) <= lbd_reduce_min))
+			selfsubBin();
+		// clear seen
+		i = sp->tmp_stack;
+		while (i != tail) sp->seen[l2a(*i++)] = 0;
 	}
-	tmp_lit = tmp_stack; end = tmp_stack + tmp_sz;
-	while (tmp_lit < end) sp->seen[V2IDX(*tmp_lit++)] = 0;
-	learnt_cl.resize(new_sz);
-}
 
-void ParaFROST::btLevel()
-{
-	if (learnt_cl.size() == 1) sp->bt_level = ROOT_LEVEL;
-	else if (learnt_cl.size() == 2) sp->bt_level = sol->level(V2IDX(learnt_cl[1]));
-	else {
-		LIT_POS max_k = 1;
-		for (LIT_POS k = 2; k < learnt_cl.size(); k++) {
-			if (sol->level(V2IDX(learnt_cl[k])) > sol->level(V2IDX(learnt_cl[max_k])))
-				max_k = k;
-		}
-		uint32 max_k_lit = learnt_cl[max_k];
-		learnt_cl[max_k] = learnt_cl[1];
-		learnt_cl[1] = max_k_lit;
-		sp->bt_level = sol->level(V2IDX(max_k_lit));
-	}
-}
-
-void ParaFROST::cbtLevel(C_REF c)
-{
-	sp->max1Found = false;
-	register uint32 w0_lit = (*c)[0];
-	sp->cbt_level = sol->level(V2IDX(w0_lit));
-	if (DL() == sp->cbt_level && DL() == sol->level(V2IDX((*c)[1]))) return;
-	// find the highest level in conflicting clause beyond literal-0
-	sp->max1Found = true;
-	int maxIdx = 0;
-	for (LIT_POS l = 1; l < c->size(); l++) { 
-		register int litLevel = sol->level(V2IDX((*c)[l]));
-		if (litLevel > sp->cbt_level) {
-			sp->max1Found = true;
-			sp->cbt_level = litLevel;
-			maxIdx = l;
-		}
-		else if (litLevel == sp->cbt_level && sp->max1Found == true)
-			sp->max1Found = false;
-	}
-	if (maxIdx) { // found max. level, swap with w0-literal
-		assert((*c)[0] == w0_lit);
-		(*c)[0] = (*c)[maxIdx];
-		(*c)[maxIdx] = w0_lit;
-		if (maxIdx > 1) { // found new watch at 0-position
-			assert(w0_lit == (*c)[maxIdx]);
-			remWatch(wt[FLIP(w0_lit)], c);
-			wt[FLIP((*c)[0])].push(WATCH(c, (*c)[1]));
+	void ParaFROST::whereToJump()
+	{
+		if (learntC.size() == 1) sp->bt_level = ROOT_LEVEL;
+		else if (learntC.size() == 2) sp->bt_level = l2dl(learntC[1]);
+		else {
+			int max_k = 1;
+			for (int k = 2; k < learntC.size(); k++) {
+				if (l2dl(learntC[k]) > l2dl(learntC[max_k]))
+					max_k = k;
+			}
+			uint32 max_k_lit = learntC[max_k];
+			learntC[max_k] = learntC[1];
+			learntC[1] = max_k_lit;
+			sp->bt_level = l2dl(max_k_lit);
 		}
 	}
-}
 
-void ParaFROST::analyze(C_REF c)
-{
-	if (verbose >= 3) {
-		printf("c | Analyzing conflict:\n"); 
-		printTrail(sp->trail, sp->trail_size);
-	}
-	learnt_cl.clear();
-	learnt_cl.push(UNKNOWN);
-	int conf_level = UNDEFINED;
-	if (cbt_en) conf_level = sol->level(V2IDX(c->w0_lit()));
-	else conf_level = DL();
-	int parent = 0, track = 0, index = sp->trail_size - 1;
-	do {
-		assert(c != NULL);
-		if (SH != 1 && c->status() == LEARNT) clBumpAct(c);
-		if (SH == 2 && c->status() == LEARNT && c->LBD() > GLUE) { // try to update LBD of a previously learnt clauses 
-			uint32 currLBD = calcLBD(c);
-			if (currLBD + 1 < c->LBD()) {
-				if (c->LBD() <= lbdFrozen) c->freeze();
-				c->set_LBD(currLBD);
+	void ParaFROST::cbtLevel()
+	{
+		assert(conflict != NOREF);
+		CLAUSE& c = cm[conflict];
+		sp->max1Found = false;
+		sp->cbt_level = sp->level[l2a(*c)];
+		if (DL() == sp->cbt_level && DL() == sp->level[l2a(c[1])]) return;
+		// find the highest level in conflicting clause beyond literal-0
+		sp->max1Found = true;
+		int maxIdx = 0;
+		for (int l = 1; l < c.size(); l++) {
+			register int litLevel = sp->level[l2a(c[l])];
+			if (litLevel > sp->cbt_level) {
+				sp->max1Found = true;
+				sp->cbt_level = litLevel;
+				maxIdx = l;
+			}
+			else if (litLevel == sp->cbt_level && sp->max1Found == true)
+				sp->max1Found = false;
+		}
+		if (maxIdx) { // found max. level, swap with w0-literal
+			uint32 w0_lit = *c;
+			*c = c[maxIdx];
+			c[maxIdx] = w0_lit;
+			if (maxIdx > 1) { // found new watch at 0-position
+				assert(w0_lit == c[maxIdx]);
+				WT& ws = c.size() == 2 ? wtBin : wt;
+				ws.remWatch(flip(w0_lit), conflict);
+				ws[flip(*c)].push(WATCH(conflict, c[1]));
 			}
 		}
-		for (LIT_POS j = (parent == 0) ? 0 : 1; j < c->size(); j++) {
-			uint32 q = (*c)[j], q_idx = V2IDX(q);
-			int q_dl = sol->level(q_idx);
-			if (!sp->seen[q_idx] && q_dl > ROOT_LEVEL) {
-				var_heap->varBumpAct(q_idx);
-				sp->seen[q_idx] = 1;
-				if (q_dl >= conf_level) {
-					track++; 
-					if (SH == 2 && source[q_idx] != NULL && ((C_REF)source[q_idx])->status() == LEARNT) 
-						learntLits.push(q);
-				}
-				else learnt_cl.push(q);
-			}
+	}
+
+	void ParaFROST::cancelAssigns(const int& bt_level)
+	{
+		int level = DL();
+		if (level == bt_level) return;
+		savePhases(bt_level);
+		uint32 from = trail_lens[bt_level], i = from, j = from;
+		while (i < trail.size()) {
+			uint32 lit = trail[i++], v = l2a(lit);
+			if (sp->level[v] > bt_level) cancelAssign(lit);
+			else if (cbt_en) trail[j++] = lit;
 		}
-		// next implication clause
+		PFLOG2(3, " %d literals kept in trail & %d are cancelled", j, trail.size() - j);
+		trail.resize(j);
+		sp->propagated = trail.size();
+		assert(trail_lens[bt_level] == trail.size());
+		trail_lens.shrink(level - bt_level);
+		assert(DL() == bt_level);
+	}
+
+	void ParaFROST::backJump(const int& bt_level) {
+		assert(trail.size() > 0);
+		PFLOG2(3, " Backjumping to level %d, from literal %d at trail index %d",
+			bt_level, l2i(trail[trail_lens[bt_level]]), trail_lens[bt_level]);
+		// cancel old assignments up to backtrack level <bt_level>
+		cancelAssigns(bt_level);
+		// add learnt clause & enqueue learnt decision
+		if (proof_en) {
+			wrProof('a');
+			wrProof(learntC.data(), learntC.size());
+			wrProof(0);
+		}
+		if (learntC.size() == 1) enqueue(learntC[0]), stats.n_units++;
+		else newClause(learntC, LEARNT);
+	}
+
+	void ParaFROST::analyze()
+	{
+		assert(conflict != NOREF);
+		assert(analyzed.empty());
+		PFLOG2(3, " Analyzing conflict:");
+		PFLTRAIL(this, 3);
+		nConflicts++;
 		if (cbt_en) {
-			do {
-				while (!sp->seen[V2IDX(sp->trail[index--])]);
-				parent = sp->trail[index + 1];
-				assert(parent > 0);
-			} while (sol->level(V2IDX(parent)) < conf_level);
-		}
-		else {
-			while (!sp->seen[V2IDX(sp->trail[index--])]);
-			parent = sp->trail[index + 1];
-			assert(parent > 0);
-		}
-		c = (C_REF)source[V2IDX(parent)];
-		sp->seen[V2IDX(parent)] = 0;
-		track--;
-	} while (track > 0);
-	assert(learnt_cl[0] == UNKNOWN);
-	learnt_cl[0] = FLIP(parent);
-	stats.max_lits += learnt_cl.size();
-	if (learnt_cl.size() == 1) sp->bt_level = ROOT_LEVEL;
-	else { // simplify learnt clause 
-		selfsub(); 
-		if (SH == 2 && learnt_cl.size() <= lbdMinClSize && calcLBD(learnt_cl) <= lbdMinReduce)
-			binSelfsub();
-		btLevel();
-	}
-	if (SH == 2) {
-		sp->learnt_lbd = calcLBD(learnt_cl); // calculate LBD of minimized learnt clause
-		if (verbose == 4) printf("c | LBD of learnt clause = %d\n", sp->learnt_lbd);
-		if (learntLits.size() > 0) {
-			for (int i = 0; i < learntLits.size(); i++) { // pump all variables having lower LBD values
-				uint32 q_idx = V2IDX(learntLits[i]);
-				c = (C_REF)source[q_idx];
-				if (c->status() == LEARNT && c->LBD() < sp->learnt_lbd) // NOTE: LBD call must be protected by status check to gurantee a valid LBD value
-					var_heap->varBumpAct(q_idx);
-			}
-			learntLits.clear();
-		}
-	}
-	stats.tot_lits += learnt_cl.size();
-	if (verbose >= 3) printLearnt(learnt_cl);
-}
-
-void ParaFROST::cancelAssigns(const int& bt_level)
-{
-	// Non-Chrono. BT
-	if (!cbt_en && DL() > bt_level) {
-		for (int i = sp->trail_size - 1; i >= trail_sz[bt_level]; i--) {
-			assert(sp->trail[i] > 0);
-			register uint32 assign = sp->trail[i], assign_idx = V2IDX(assign);
-			sol->init(assign_idx);
-			if (!var_heap->has(assign_idx)) var_heap->insert(assign_idx);
-			if (polarity == 1) sp->pol[assign_idx] = ISNEG(assign);
-			else if (polarity == -1) sp->pol[assign_idx] = !ISNEG(assign);
-			if (source[assign_idx] != NULL) {
-				((B_REF)source[assign_idx])->init_reason();
-				source[assign_idx] = NULL;
-			}
-			sp->lock[assign_idx] = false;
-		}
-		sp->trail_head = sp->trail_size = trail_sz[bt_level];
-		trail_sz.shrink(trail_sz.size() - bt_level);
-		assert(DL() == trail_sz.size());
-	}
-	// Chrono. BT
-	if (cbt_en && DL() > bt_level) {
-		int nLitsRem = 0;
-		for (int i = sp->trail_size - 1; i >= trail_sz[bt_level]; i--) {
-			assert(sp->trail[i] > 0);
-			register uint32 assign = sp->trail[i], assign_idx = V2IDX(assign);
-			if (sol->level(assign_idx) <= bt_level) 
-				tmp_stack[nLitsRem++] = sp->trail[i];
-			else {
-				sol->init(assign_idx);
-				if (!var_heap->has(assign_idx)) var_heap->insert(assign_idx);
-				if (polarity == 1) sp->pol[assign_idx] = ISNEG(assign);
-				else if (polarity == -1) sp->pol[assign_idx] = !ISNEG(assign);
-				if (source[assign_idx] != NULL) {
-					((B_REF)source[assign_idx])->init_reason();
-					source[assign_idx] = NULL;
-				}
-				sp->lock[assign_idx] = false;
+			cbtLevel();
+			if (sp->cbt_level == ROOT_LEVEL) { cnfstate = UNSAT; return; }
+			if (sp->max1Found) {
+				cancelAssigns(sp->cbt_level - 1);
+				return;
 			}
 		}
-		sp->trail_head = sp->trail_size = trail_sz[bt_level];
-		trail_sz.shrink(trail_sz.size() - bt_level);
-		for (int i = nLitsRem - 1; i >= 0; i--) sp->trail[sp->trail_size++] = tmp_stack[i];
-	}
-}
-
-void ParaFROST::backJump(const int& bt_level) {
-	if (verbose >= 3) printf("c | Backjumping to level %d\n", bt_level);
-	assert(sp->trail_size > 0);
-	// cancel old assignments up to backtrack level <bt_level>
-	cancelAssigns(bt_level);
-	// add learnt clause & enqueue learnt decision
-	if (proof_en) {
-		write_proof('a');
-		write_proof(learnt_cl.d_ptr(), learnt_cl.size());
-		write_proof(0);
-	}
-	if (learnt_cl.size() == 1) 
-		enqueue(learnt_cl[0]);
-	else if (learnt_cl.size() == 2) { // Note: LBD of binary learnts is always 2, no need to create C_REF clause
-		cnf_stats.global_n_bins++; cnf_stats.global_n_gcs++;
-		B_REF learnt_bin = new BCLAUSE();
-		learnt_bin->copyLitsFrom(learnt_cl, learnt_cl.size());
-		wt[FLIP(learnt_cl[0])].push(WATCH(learnt_bin, learnt_cl[1]));
-		wt[FLIP(learnt_cl[1])].push(WATCH(learnt_bin, learnt_cl[0]));
-		enqueue(learnt_cl[0], sp->bt_level, learnt_bin); // enqueue must always use sp->bt_level
-	}
-	else if (learnt_cl.size() > 2) {
-		C_REF learnt = new LCLAUSE();
-		learnt->copyLitsFrom(learnt_cl, learnt_cl.size());
-		attachClause(learnt);
-		enqueue(learnt_cl[0], sp->bt_level, learnt); // enqueue must always use sp->bt_level
-	}
-}
-
-void ParaFROST::remWatch(WL& ws, const G_REF gc)
-{
-	if (ws.size() == 0) return;     
-	if (ws.size() > 1) {
-		int c_idx = 0;
-		while (ws[c_idx].c_ref != gc) c_idx++;
-		assert(c_idx < ws.size());
-		while (c_idx < ws.size() - 1) {
-			ws[c_idx] = ws[c_idx + 1];
-			c_idx++;
+		else if (DL() == ROOT_LEVEL) { cnfstate = UNSAT; return; }
+		// conflict analysis
+		learntC.clear();
+		learntC.push(0);
+		sp->learnt_lbd = 0;
+		uint32 parent = 0;
+		int conf_level = UNDEFINED;
+		int track = 0, index = trail.size() - 1;
+		C_REF r = conflict;
+		if (l2dl(*cm[r]) != DL()) {
+			cm[r].print();
+			printTrail();
+			printf(" conflict on %d, dl = %d, curent level = %d\n", l2i(*cm[r]), l2dl(*cm[r]), DL());
 		}
-	}
-	ws.pop();
-}
-
-void ParaFROST::lReduce()
-{
-	if (verbose >= 2) printf("c | Reducing learnt database..");
-	int n = 0;
-	if (SH == 1) { // CSR
-		Sort(learnts, LEARNT_SR());
-		int pivot = learnts.size() / 2.1;
-		for (int i = 0; i < learnts.size(); i++) {
-			C_REF c = learnts[i];
-			if (i < pivot && !c->isReason()) {
-				assert(c->size() > 2);
-				detachClause(c);
+		assert(verifyConfl(*cm[r]));
+		conf_level = l2dl(*cm[r]);
+		do {
+			assert(r != NOREF);
+			CLAUSE& c = cm[r];
+			if (parent && c.size() == 2 && isFalse(*c)) {
+				assert(isTrue(c[1]));
+				c.swapWatched();
 			}
-			else learnts[n++] = c;
-		}
-	}
-	else { // activity or LBD
-		Sort(learnts, LEARNT_CMP());
-		if (SH == 0) {
-			double act_limit = cl_params.cl_inc / learnts.size();
-			int pivot = learnts.size() / 2.1;
-			for (int i = 0; i < learnts.size(); i++) {
-				C_REF c = learnts[i];
-				if (!c->isReason() && (i < pivot || c->activity() < act_limit)) {
-					assert(c->size() > 2);
-					detachClause(c);
-				}
-				else learnts[n++] = c;
-			}
-		}
-		else {
-			int pivot = learnts.size() / 2;
-			if (learnts[pivot]->LBD() <= 3) lrn.nClsReduce += incReduceBig;
-			for (int i = 0; i < learnts.size(); i++) {
-				C_REF c = learnts[i];
-				if (c->LBD() > GLUE && c->molten() && !c->isReason() && i < pivot) {
-					assert(c->size() > 2);
-					detachClause(c);
-				}
-				else {
-					if (!c->molten()) pivot++;
-					c->melt();
-					learnts[n++] = c;
-				}
-			}
-		}
-	}
-	learnts.resize(n);
-	assert(consistent(learnts, wt));
-	if (verbose >= 2) printf(" ==> done.\n");
-}
-
-C_REF ParaFROST::BCP()
-{
-	C_REF conf_ref = NULL;
-	int numProps = 0;
-	while (sp->trail_head < sp->trail_size) { // propagate assignments
-		numProps++;
-		uint32 assign = sp->trail[sp->trail_head++], assign_idx = V2IDX(assign), assign_dl = sol->level(assign_idx);
-		assert(assign > 0);
-		if (verbose >= 4) printf("c | Propagating assign(%d@%d):\n", (ISNEG(assign)) ? -int(ABS(assign)) : ABS(assign), assign_dl);
-		if (verbose >= 4) printWatched(assign_idx);
-		WL& ws = wt[assign];
-		if (ws.size()) {
-			WATCH* w_i = ws, * w_j = w_i, * end = w_i + ws.size();
-			while (w_i != end) {
-				uint32 blocker = w_i->blocker;
-				assert(blocker && blocker < UINT32_MAX);
-				if (sol->assign(V2IDX(blocker)) == !ISNEG(blocker)) {
-					*w_j++ = *w_i++;
-					continue;
-				}
-				// move assigned-0 literal to watch 1
-				C_REF c = (C_REF)w_i->c_ref;
-				//c->print();
-				assert(c->size() >= 2);
-				uint32 f_assign = FLIP(assign);
-				if (c->w0_lit() == f_assign) c->swap_ws(); 
-				assert(c->w1_lit() == f_assign);
-				w_i++;
-				// check if first literal is true
-				uint32 w0_lit = c->w0_lit(), w0_lit_idx = V2IDX(w0_lit);
-				WATCH w = WATCH(c, w0_lit);
-				if (w0_lit != blocker && sol->assign(w0_lit_idx) == !ISNEG(w0_lit))
-					*w_j++ = w;
-				else {
-					for (LIT_POS k = 2; k < c->size(); k++) { // look for (un)assigned-1 literal to watch
-						register uint32 lit = (*c)[k];
-						ASSIGN_ST h = sol->assign(V2IDX(lit));
-						if (h == UNDEFINED || h == !ISNEG(lit)) { 
-							c->set_w1(lit);
-							(*c)[k] = f_assign;
-							assert(c->w1_lit() == lit && (*c)[k] == f_assign);
-							wt[FLIP(lit)].push(w);
-							goto nextC;
-						}
-					}
-					// clause is unit or conflict
-					*w_j++ = w;
-					if (sol->assign(w0_lit_idx) == UNDEFINED) {
-						assert(sol->level(w0_lit_idx) == UNDEFINED);
-						c->flag_reason();
-						if (assign_dl == DL())
-							enqueue(w0_lit, assign_dl, c);
-						else {
-							// find parent with max. level
-							int maxLevel = assign_dl, maxIdx = 1;
-							for (LIT_POS k = 2; k < c->size(); k++) { 
-								register int litLevel = sol->level(V2IDX((*c)[k]));
-								if (litLevel > maxLevel) { maxLevel = litLevel; maxIdx = k; }
-							}
-							if (maxIdx != 1) {
-								c->swap(1, maxIdx);
-								*w_j--; // remove (w) from assign list
-								wt[FLIP((*c)[1])].push(w); // add it as new 1-literal watched 
-							}
-							enqueue(w0_lit, maxLevel, c);
-							//printClause(*c); printf("c | max level in c = %d\n", maxLevel);
-						}
-					}
-					else {
-						if (verbose >= 3) printf("c | Conflict on (%d@%d)\n", w0_lit_idx + 1, sol->level(w0_lit_idx));
-						sp->trail_head = sp->trail_size;
-						conf_ref = c;
-						while (w_i < end) *w_j++ = *w_i++;
-					}
-				}
-			nextC:;
-			}
-			ws.shrink(w_i - w_j);
-		}
-		if (verbose >= 4) printWatched(assign_idx);
-	}
-	stats.n_props += numProps;
-	lrn.simp_props -= numProps;
-	return conf_ref;
-}
-
-CNF_STATE ParaFROST::decide()
-{
-	if (R > 0 && ((int)nOrgVars() - sp->trail_size) > ref_vars) PDM();
-	if (sp->trail_size - sp->trail_head == 0) {
-		uint32 dec = UNKNOWN;
-		int cand = UNDEFINED;
-		while (!var_heap->empty() && dec == UNKNOWN) {
-			cand = var_heap->removeMin();
-			assert(cand != UNDEFINED && cand < (int)nOrgVars());
-			if (!sp->lock[cand]) {
-				dec = (polarity != 0) ? (sp->pol[cand] ? NEG(V2D(cand + 1)) : V2D(cand + 1)) : (drand() < 0.5 ? NEG(V2D(cand + 1)) : V2D(cand + 1));
-				assert(sp->trail_size < (int)nOrgVars());
-			}
-		}
-		if (dec == UNKNOWN) return SAT;
-		incDL();
-		enqueue(dec, DL());
-	}
-	return UNSOLVED;
-}
-
-CNF_STATE ParaFROST::search()
-{
-	starts++;
-	sp->reset_level();
-	sp->learnt_lbd = UNKNOWN;
-	int64 confs = UNKNOWN;
-	while (!interrupted()) {
-		if (verbose >= 3) printf("c | Current Decision Level = %d\n", DL());
-		C_REF conf_ref = BCP();
-		if (conf_ref != NULL) {
-			nConflicts++; confs++; 
+			bumpClause(c);
+			for (int j = (parent == 0) ? 0 : 1; j < c.size(); j++)
+				analyzeLit(c[j], conf_level, track);
+			// next implication clause
 			if (cbt_en) {
-				cbtLevel(conf_ref);
-				if (sp->cbt_level == ROOT_LEVEL) return UNSAT;
-				if (sp->max1Found) {
-					cancelAssigns(sp->cbt_level - 1);
-					continue;
-				}
-			}
-			else if (DL() == ROOT_LEVEL) return UNSAT;
-			if (SH == 2) {
-				maxConflicts++;
-				// increase var decay over time
-				if (nConflicts % VSIDSDecayFreq == 0 && var_heap->VarDecay() < 0.95) 
-					var_heap->incVarDecay(opt_var_decay_r);
-				// block restarts
-				trailQ.push(sp->trail_size);
-				if (maxConflicts > BL_RESTART_MIN && lbdQ.full() && sp->trail_size > (RB * trailQ.average())) {
-					lbdQ.reset();
-					stats.nRestartStops++;
-				}
-			}
-			// analyze conflict
-			analyze(conf_ref);
-			// chronological BT trigger
-			if (cbt_en && nConflicts >= cbt_conf_max && (DL() - sp->bt_level) >= cbt_dist) {
-				backJump(sp->cbt_level - 1); 
-				stats.cbt++;
+				do {
+					while (!sp->seen[l2a(trail[index--])]);
+					parent = trail[index + 1];
+					assert(parent > 0);
+				} while (sp->level[l2a(parent)] < conf_level);
 			}
 			else {
-				backJump(sp->bt_level); 
-				stats.ncbt++;
+				while (!sp->seen[l2a(trail[index--])]);
+				parent = trail[index + 1];
+				assert(parent > 0);
 			}
-			// adjust restart/learnt rate
-			if (SH < 2 && --lrn.adjust_cnt == 0) {
-				lrn.adjust_conf *= lrn.adjust_inc;
-				lrn.adjust_cnt = (int)lrn.adjust_conf;
-				lrn.max_learnt_cls *= lrn.size_inc;
-				printStats();
-			}
-			else if (SH == 2) {
-				lbdQ.push(sp->learnt_lbd);
-				lbdSum += sp->learnt_lbd;
-				printStats(nConflicts == 1 || nConflicts % progRate == 0);
-			}
-			// update var/clause activities
-			var_heap->VarDecayAct();
-			if (SH != 1) clDecayAct();
+			r = l2r(parent);
+			sp->seen[l2a(parent)] = 0;
+			track--;
+		} while (track > 0);
+		assert(learntC[0] == 0);
+		learntC[0] = flip(parent);
+		PFLLEARNT(this, 3);
+		// minimize learnt clause 
+		stats.max_lits += learntC.size();
+		if (learntC.size() > 1) {
+			selfsub();
+			if (!sp->learnt_lbd) sp->learnt_lbd = calcLBD(learntC); // calculate LBD, if clause not minimized
+		}
+		else sp->learnt_lbd = 1;
+		assert(sp->learnt_lbd != 0);
+		PFLOG2(4, " LBD of learnt clause = %d", sp->learnt_lbd);
+		stats.tot_lits += learntC.size();
+		// adjust restart rate
+		lbdrest.update(sp->learnt_lbd);
+		if (lrn.stable) lubyrest.update();
+		whereToJump();
+		bumpVariables();
+		if (cbt_en && nConflicts >= cbt_conf_max && (DL() - sp->bt_level) >= cbt_dist) {
+			backJump(sp->cbt_level - 1);
+			stats.cbt++;
 		}
 		else {
-			// solving restart policy
-			if (SH == 2 && lbdQ.full() && ((lbdQ.average() * RF) > (lbdSum / maxConflicts))) { // LBD restarts
-				lbdQ.reset();
-				cancelAssigns(ROOT_LEVEL);
-				return UNSOLVED;
-			}
-			else if (SH < 2 && confs >= maxConflicts) { // luby/power restarts
-				cancelAssigns(ROOT_LEVEL);
-				return UNSOLVED;
-			}
-			// simplify (satisfied clauses)
-			if (DL() == ROOT_LEVEL) simplify();
-			// learnt clauses reduction
-			if (SH == 2 && nConflicts >= reductions * lrn.nClsReduce) {
-				assert(learnts.size() > 0);
-				reductions = int(nConflicts / lrn.nClsReduce) + 1;
-				lReduce();
-				lrn.nClsReduce += incReduceSmall;
-			}
-			else if (SH < 2 && ((int64)learnts.size() - (int64)sp->trail_size) >= lrn.max_learnt_cls) lReduce();
-			// choose next decision(s)
-			stats.n_fuds++;
-			if (decide() == SAT) return SAT;
+			backJump(sp->bt_level);
+			stats.ncbt++;
 		}
-		if (verbose >= 3) printTrail(sp->trail, sp->trail_size);
+		printStats(vsidsOnly() && nConflicts % prograte == 0);
 	}
-	return TERMINATE;
-}
 
-void ParaFROST::solve()
-{
-	timer->start();
-	if (pre_en && !pre_delay) {	preprocess(); pre_en = false; }
-	PDMInit();
-	CNF_STATE status = UNSOLVED;
-	double rest_fact = 1.0;
-	while (status == UNSOLVED) {
-		if (SH < 2) {
-			rest_fact = restPolicy == "luby" ? luby_seq(restart_inc, restarts) : pow(restart_inc, restarts);
-			maxConflicts = rest_fact * restart_base;
+	C_REF ParaFROST::BCP()
+	{
+		conflict = NOREF;
+		uint32 propsBefore = sp->propagated;
+		while (sp->propagated < trail.size()) {
+			uint32 assign = trail[sp->propagated++], assign_dl = l2dl(assign);
+			assert(assign > 0);
+			PFLBCPS(this, 4, assign);
+			// binaries
+			WL& wBins = wtBin.getClean(assign);
+			for (int i = 0; i < wBins.size(); i++) {
+				uint32 imp = wBins[i].imp;
+				LIT_ST val = value(imp);
+				if (!val) { conflict = wBins[i].ref; goto bcp_exit; }
+				if (val < 0) enqueue(imp, assign_dl, wBins[i].ref);
+			}
+			// non-binaries
+			WL& ws = wt.getClean(assign);
+			if (ws.size()) {
+				WATCH* w_i = ws, * w_j = w_i, * w_end = ws.end();
+				while (w_i != w_end) {
+					uint32 wImp = w_i->imp;
+					assert(wImp && wImp < UINT32_MAX);
+					if (isTrue(wImp)) { *w_j++ = *w_i++; continue; }
+					C_REF r = w_i->ref;
+					CLAUSE& c = cm[r];
+					// move assigned-0 literal to watch 1
+					assert(c.size() >= 2);
+					uint32 f_assign = flip(assign);
+					register uint32 wlit = c[0] ^ c[1] ^ f_assign; // Thanks to Cadical solver
+					c[0] = wlit, c[1] = f_assign;
+					assert(c[1] == f_assign);
+					w_i++;
+					// check if first literal is true
+					LIT_ST val0 = value(c[0]);
+					WATCH w = WATCH(r, c[0]);
+					if (c[0] != wImp && val0 > 0) *w_j++ = w;
+					else {
+						// look for (un)-assigned-1 literal to watch
+						uint32* cmid = c.mid(), * cend = c.end();
+						uint32* k = cmid, lit = 0;
+						LIT_ST _false_ = UNDEFINED;
+						while (k != cend && (_false_ = isFalse(lit = *k))) k++;
+						assert(_false_ != UNDEFINED);
+						if (_false_) {
+							k = c + 2;
+							assert(c.pos() < c.size());
+							while (k != cmid && (_false_ = isFalse(lit = *k))) k++;
+						}
+						assert(k >= c + 2 && k <= c.end());
+						c.set_pos(k - c); // set new position
+						if (!_false_) c[1] = lit, * k = f_assign, wt[flip(lit)].push(w); // prepare new watch
+						else { // clause is unit or conflict
+							*w_j++ = w;
+							if (val0 < 0) {
+								assert(l2dl(c[0]) == UNDEFINED);
+								c.markReason();
+								if (assign_dl == DL()) enqueue(c[0], assign_dl, r);
+								else {
+									// find parent with max. level
+									int maxLevel = assign_dl, maxIdx = 1;
+									for (int n = 2; n < c.size(); n++) {
+										register int litLevel = l2dl(c[n]);
+										if (litLevel > maxLevel) { maxLevel = litLevel; maxIdx = n; }
+									}
+									if (maxIdx != 1) {
+										c.swap(1, maxIdx);
+										w_j--; // remove (w) from assign list
+										wt[flip(c[1])].push(w); // add it as new 1-literal watched 
+									}
+									enqueue(c[0], maxLevel, r);
+								}
+							}
+							else {
+								PFLCONFLICT(this, 3, c[0]);
+								sp->propagated = trail.size();
+								conflict = r;
+								while (w_i < w_end) *w_j++ = *w_i++;
+							}
+						}
+					}
+				}
+				ws.shrink(int(w_i - w_j));
+			}
+			PFLBCPE(this, 4, assign);
 		}
-		// special restart for preprocessing
-		if (pre_en && restarts >= 1 && restarts % pre_delay == 0) {
-			preprocess(); PDMInit();
-			pre_en = false; progRate = opt_progress;
+	bcp_exit:
+		if (!search_guess) {
+			int props = sp->propagated - propsBefore;
+			stats.n_props += props;
+			lrn.simpProps -= props;
 		}
-		status = search();
-		restarts++;
-		PDM_fuse();
+		return conflict;
 	}
-	timer->stop();
-	timer->solve = timer->cpuTime();
-	timer->solve -= timer->pre;
-	if (proof_en) proofFile.close();
-	wrapUp(status);
-}
 
-bool ParaFROST::consistent(BCNF& cnf, WT& wt)
-{
-	for (int i = 0; i < cnf.size(); i++) {
-		B_REF c = cnf[i];
-		//c->print();
-		WL& ws_0 = wt[FLIP(c->w0_lit())];
-		WL& ws_1 = wt[FLIP(c->w1_lit())];
-		//print(ws_0);
-		//print(ws_1);
-		assert(ws_0.size() > 0);
-		assert(ws_1.size() > 0);
-		bool w0_found = false, w1_found = false;
-		for (int j = 0; j < ws_0.size(); j++) {
-			WATCH& w = ws_0[j];
-			B_REF w_ref = (B_REF)w.c_ref;
-			assert(w_ref->size() > 0);
-			if (w_ref == c) {
-				w0_found = true;
-				break;
+	void ParaFROST::solve()
+	{
+		timer.start();
+		if (canPreSigmify()) preprocess();
+		if (guess_en) guess();
+		if (cnfstate == UNSOLVED) MDMInit();
+		PFLOG2(2, " CDCL search started..");
+		while (cnfstate == UNSOLVED && !interrupted()) {
+			PFLDL(this, 3);
+			if (BCP() != NOREF) analyze();
+			else if (satisfied()) cnfstate = SAT;
+			else if (canRestart()) restart();
+			else if (canRephase()) rephase();
+			else if (canSigmify()) preprocess();
+			else if (canShrink()) shrink();
+			else if (canReduce()) reduce();
+			else if (canMMD()) MDM();
+			else decide();
+			PFLTRAIL(this, 3);
+		}
+		timer.stop();
+		timer.solve = timer.cpuTime();
+		timer.solve -= timer.pre;
+		PFLOG2(2, " CDCL search completed successfully");
+		wrapup();
+	}
+
+	void ParaFROST::restart()
+	{
+		assert(sp->propagated == trail.size());
+		assert(conflict == NOREF);
+		assert(cnfstate == UNSOLVED);
+		if (lrn.stable) stats.stab_restarts++;
+		starts++;
+		cancelAssigns();
+		sp->reset();
+		if (mdmfuses_en) MDMFuseSlave();
+		lrn.restarts_conf_max = nConflicts + restart_inc;
+		PFLOG2(3, " new restart limit after %lld conflicts", lrn.restarts_conf_max);
+	}
+
+	bool ParaFROST::vibrate() {
+		if (!stable_en) return false;
+		if (vsidsOnly()) return true;
+		if (--lrn.stable_conf_max == 0) {
+			lrn.stable = !lrn.stable;
+			stabrestart_inc *= stabrestart_r;
+			lrn.stable_conf_max = stabrestart_inc;
+			PFLOG2(2, " Max stable conflicts increased to %lld", lrn.stable_conf_max);
+			lbdrest.swap();
+			printStats();
+		}
+		return lrn.stable;
+	}
+
+	void ParaFROST::recycle(CMM& new_cm)
+	{
+		wtBin.recycle(), wt.recycle();
+		for (uint32 v = 1; v <= inf.maxVar; v++) {
+			uint32 lit = what(v), flit = flip(lit);
+			recycleWL(wt[lit], new_cm), recycleWL(wtBin[lit], new_cm);
+			recycleWL(wt[flit], new_cm), recycleWL(wtBin[flit], new_cm);
+		}
+		for (uint32 i = 0; i < trail.size(); i++) {
+			uint32 v = l2a(trail[i]);
+			C_REF& r = sp->source[v];
+			if (r != NOREF) {
+				if (cm[r].deleted()) r = NOREF;
+				else if (cm[r].moved()) r = cm[r].ref();
 			}
 		}
-		for (int j = 0; j < ws_1.size(); j++) {
-			WATCH& w = ws_1[j];
-			B_REF w_ref = (B_REF)w.c_ref;
-			assert(w_ref->size() > 0);
-			if (w_ref == c) {
-				w1_found = true;
-				break;
+		for (uint32 i = 0; i < learnts.size(); i++) cm.move(learnts[i], new_cm);
+		for (uint32 i = 0; i < orgs.size(); i++) cm.move(orgs[i], new_cm);
+	}
+
+	void ParaFROST::recycle() {
+		assert(sp->propagated == trail.size());
+		assert(conflict == NOREF);
+		assert(cnfstate == UNSOLVED);
+		if (cm.garbage() > cm.size() * gc_perc) {
+			PFLOGN2(2, " Recycling garbage..");
+			CMM new_cm(cm.size() - cm.garbage());
+			recycle(new_cm);
+			PFLGCMEM(2, cm, new_cm);
+			new_cm.migrate(cm);
+			PFLDONE(2, 5);
+			stats.recyclings++;
+		}
+	}
+
+	void ParaFROST::map(WT& wt) {
+		if (wt.empty()) return;
+		assert(!vmap.empty());
+		for (uint32 v = 1; v <= inf.maxVar; v++) {
+			uint32 mVar = vmap.mapped(v);
+			if (mVar) {
+				uint32 p = v2l(v), n = neg(p);
+				uint32 mpos = v2l(mVar), mneg = neg(mpos);
+				if (mVar != v) { // map watch lists
+					wt[mpos].copyFrom(wt[p]);
+					wt[mneg].copyFrom(wt[n]);
+				}
+				map(wt[mpos]), map(wt[mneg]); // then map watch imps
 			}
 		}
-		if (!w0_found || !w1_found) {
-			printf(" Clause");
-			c->print();
-			printf(" NOT found in one of the watch lists:\n");
-			printWL(ws_0);
-			printWL(ws_1);
-			return false;
+		wt.resize(v2l(vmap.size()));
+		wt.shrinkCap();
+	}
+
+	void ParaFROST::mapBins() {
+		uint32 nBins = inf.nOrgBins + inf.nLearntBins;
+		if (nBins == 0) return;
+		BCNF bins; // for caching
+		bins.reserve(nBins);
+		extractBins(bins);
+		mapBins(bins);
+	}
+
+	void ParaFROST::map()
+	{
+		assert(conflict == NOREF);
+		assert(DL() == ROOT_LEVEL);
+		assert(trail.size() == sp->propagated);
+		stats.mappings++;
+		int64 memBefore = sysMemUsed();
+		vmap.initiate(sp);
+		// map original literals with current values
+		vmap.mapOrgs(model.lits);
+		// map clauses and watch tables
+		if (scnf.empty()) {
+			wtBin.recycle(), wt.recycle();
+			mapBins(), map(orgs), map(learnts);
+			map(wtBin), map(wt);
+			inf.maxFrozen = 0;
+		}
+		else {
+			mapped = true, newBeginning();
+			mapped = false, inf.maxMelted = 0;
+		}
+		// map trail, queue and heap
+		vmap.mapShrinkLits(trail);
+		sp->propagated = trail.size();
+		vQueue.map(*vmap, vmap.firstL0());
+		vmap.mapShrinkVars(vQueue.data());
+		vmap.mapShrinkVars(varBumps);
+		uVec1D tmp;
+		while (vHeap.size()) {
+			uint32 x = vHeap.pop();
+			if (x == vmap.firstL0()) continue;
+			uint32 mx = vmap.mapped(x);
+			if (mx) tmp.push(mx);
+		}
+		vmap.mapShrinkVars(varAct);
+		vHeap.rebuild(tmp);
+		// map phases & variable states
+		SP* newSP = new SP(vmap.size());
+		vmap.mapSP(newSP);
+		delete sp;
+		sp = newSP;
+		// update counters
+		lrn.best = lrn.target = 0;
+		for (uint32 v = 1; v <= vmap.numVars(); v++) {
+			if (sp->pbest[v] != UNDEFINED) lrn.best++;
+			if (sp->ptarget[v] != UNDEFINED) lrn.target++;
+		}
+		PFLOG2(2, " Variable mapping compressed %d to %d, saving %.2f KB of memory",
+			inf.maxVar, vmap.numVars(), double(abs(memBefore - sysMemUsed())) / KBYTE);
+		inf.maxVar = vmap.numVars();
+		inf.nDualVars = v2l(inf.maxVar + 1);
+		inf.nDelVars = 0;
+		vmap.destroy();
+	}
+
+	void ParaFROST::printReport()
+	{
+		if (report_en) {
+			PFLOG0("");
+			PFLOG0("\t\t\tSolver Report");
+			PFLOG1(" Simplifier time      : %-10.3f  sec", timer.pre);
+			PFLOG1(" Solver time          : %-10.3f  sec", timer.solve);
+			PFLOG1(" System memory        : %-10.3f  MB", ((double)sysMemUsed() / MBYTE));
+			PFLOG1(" Guessed              : %-10s  (%s)", stats.guess_succ ? "yes" : "no", guess_en ? stats.guess_who : "disabled");
+			PFLOG1(" Reduces              : %-10d", stats.reduces);
+			PFLOG1(" Rephases             : %-10lld", stats.n_rephs);
+			PFLOG1(" Recyclings           : %-10d", stats.recyclings);
+			PFLOG1(" Shrinkages           : %-10d", stats.shrinkages);
+			PFLOG1(" Mappings             : %-10d", stats.mappings);
+			PFLOG1(" Learnt units         : %-10lld", stats.n_units);
+			PFLOG1(" Learnt binaries      : %-10d", inf.nLearntBins);
+			PFLOG1(" Learnt glues         : %-10d", inf.nLearntBins + inf.nGlues);
+			PFLOG1(" MDM calls            : %-10d", stats.mdm_calls);
+			PFLOG1(" Multiple decisions   : %-10lld  (%.1f dec/sec)", stats.n_pds, stats.n_pds / timer.solve);
+			PFLOG1(" Follow-Up decisions  : %-10lld  (%.1f dec/sec)", stats.n_fuds, stats.n_fuds / timer.solve);
+			PFLOG1(" Propagations         : %-10lld  (%.1f prop/sec)", stats.n_props, stats.n_props / timer.solve);
+			PFLOG1(" Non-chronological BT : %-10d  (%.1f bt/sec)", stats.ncbt, stats.ncbt / timer.solve);
+			PFLOG1(" Chronological BT     : %-10d  (%.1f bt/sec)", stats.cbt, stats.cbt / timer.solve);
+			PFLOG1(" Stable restarts      : %-10d  (%.1f r/sec)", stats.stab_restarts, stats.stab_restarts / timer.solve);
+			PFLOG1(" Restarts             : %-10d  (%.1f r/sec)", starts, starts / timer.solve);
+			PFLOG1(" Conflicts            : %-10lld  (%.1f conf/sec)", nConflicts, (nConflicts / timer.solve));
+			PFLOG1(" Conflict literals    : %-10lld  (%.2f %% deleted)", stats.tot_lits, (stats.max_lits - stats.tot_lits) * 100.0 / stats.tot_lits);
 		}
 	}
-	return true;
-}
 
-bool ParaFROST::consistent(LCNF& cnf, WT& wt)
-{
-	for (int i = 0; i < cnf.size(); i++) {
-		C_REF c = cnf[i];
-		//c->print();
-		WL& ws_0 = wt[FLIP(c->w0_lit())];
-		WL& ws_1 = wt[FLIP(c->w1_lit())];
-		//print(ws_0);
-		//print(ws_1);
-		assert(ws_0.size() > 0);
-		assert(ws_1.size() > 0);
-		bool w0_found = false, w1_found = false;
-		for (int j = 0; j < ws_0.size(); j++) {
-			WATCH& w = ws_0[j];
-			C_REF w_ref = (C_REF)w.c_ref;
-			assert(w_ref->size() > 0);
-			if (w_ref == c) {
-				w0_found = true;
-				break;
+	void ParaFROST::wrapup() {
+		if (proof_en) proofFile.close();
+		if (!quiet_en) { PFLOGR('-', RULELEN); PFLOG0(""); }
+		if (cnfstate == SAT) {
+			PFLOGS("SATISFIABLE");
+			if (model_en) {
+				model.extend(sp->value);
+				model.print();
 			}
 		}
-		for (int j = 0; j < ws_1.size(); j++) {
-			WATCH& w = ws_1[j];
-			C_REF w_ref = (C_REF)w.c_ref;
-			assert(w_ref->size() > 0);
-			if (w_ref == c) {
-				w1_found = true;
-				break;
-			}
-		}
-		if (!w0_found || !w1_found) {
-			printf(" Clause");
-			c->print();
-			printf(" NOT found in one of the watch lists:\n");
-			printWL(ws_0);
-			printWL(ws_1);
-			return false;
-		}
+		else if (cnfstate == UNSAT) PFLOGS("UNSATISFIABLE");
+		else if (cnfstate == UNSOLVED) PFLOGS("UNKNOWN");
+		if (report_en) printReport();
 	}
-	return true;
-}
 
-void ParaFROST::printReport()
-{
-	if (perf_en) {
-		printf("c |\nc |\t\t\tSolver Report\n");
-		printf("c | Simplifier time      : %.3f sec\n", timer->pre);
-		printf("c | Solver time          : %.3f sec\n", timer->solve);
-		printf("C | Solver memory        : %.3f MB\n", ((double)sysMemUsed() / MBYTE));
-		printf("c | PDM calls            : %-10d\n", stats.pdm_calls);
-		printf("c | Restarts             : %-10d\n", starts);
-		printf("c | Blocked restarts     : %-10d\n", stats.nRestartStops);
-		printf("c | Chronological BT     : %-10d\n", stats.cbt);
-		printf("c | Non-chronological BT : %-10d\n", stats.ncbt);
-		printf("c | Parallel Decisions   : %-10lld  (%.1f dec/sec)\n", stats.n_pds, (stats.n_pds / timer->solve));
-		printf("c | Follow-Up Decisions  : %-10lld  (%.1f dec/sec)\n", stats.n_fuds, (stats.n_fuds / timer->solve));
-		printf("c | Propagations         : %-10lld  (%.1f prop/sec)\n", stats.n_props, (stats.n_props / timer->solve));
-		printf("c | Conflicts            : %-10lld  (%.1f conf/sec)\n", nConflicts, (nConflicts / timer->solve));
-		printf("c | Conflict literals    : %-10lld  (%.2f %% deleted)\n", stats.tot_lits, (stats.max_lits - stats.tot_lits) * 100 / (double)stats.tot_lits);
-		printf("c |--------------------------------------------------------------------------------------|\n");
-	}
-}
-
-void ParaFROST::printModel()
-{
-	printf("v ");
-	for (int i = 0; i < removed.size(); i++) { // print any saved assignments
-		sp->frozen[V2IDX(removed[i])] = true; // trail may not be reset
-		printf("%d ", ISNEG(removed[i]) ? -int(ABS(removed[i])) : int(ABS(removed[i])));
-	}
-	if (mapped) { // recover mapped variables
-		assert(sp->trail_size < reverseVars.size() - 1);
-		for (int i = 0; i < sp->trail_size; i++) {
-			int v = reverseVars[ABS(sp->trail[i])];
-			if (!sp->frozen[v - 1]) printf("%d ", ISNEG(sp->trail[i]) ? -v : v);
-		}
-	}
-	else {
-		for (int i = 0; i < sp->trail_size; i++) {
-			if (!sp->frozen[V2IDX(sp->trail[i])]) 
-				printf("%d ", ISNEG(sp->trail[i]) ? -int(ABS(sp->trail[i])) : int(ABS(sp->trail[i])));
-		}
-	}
-}
-
-void ParaFROST::wrapUp(const CNF_STATE &status)
-{
-	// print results
-	if (verbose >= 1) printf("c |--------------------------------------------------------------------------------------|\nc |\n");
-	if (status == SAT) {
-		if (!quiet_en) printf("c |\n");
-		//printf("%s: ", path.c_str()); printf("s SATISFIABLE (time=%.3f)\n", timer->solve);
-		printf("s SATISFIABLE\n");
-		if (!quiet_en) printf("c |\n");
-		if (model_en) {
-			printModel();
-			if (!quiet_en) printf("\nc |\n");
-			else printf("\n");
-		}
-	}
-	else if (status == UNSAT) {
-		if (!quiet_en) printf("c |\n");
-		//printf("%s: ", path.c_str()); printf("s UNSATISFIABLE (time=%.3f)\n", timer->solve);
-		printf("s UNSATISFIABLE\n");
-		if (!quiet_en) printf("c |\n");
-	}
-	else if (status == TERMINATE) {
-		//printf("%s: ", path.c_str()); printf("s UNKNOWN (time=%.3f)\n", timer->solve);
-		printf("s UNKNOWN\n");
-		if (!quiet_en) printf("c |\n");
-	}
-	if (perf_en) printReport();
 }

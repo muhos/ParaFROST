@@ -23,7 +23,6 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 //=======================================//
 #include <iostream>
 #include <algorithm>
-#include <cstdint>
 #include <cstring>
 #include <locale>
 #include <cassert>
@@ -33,190 +32,84 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 #include <climits>
 #include <cstdlib>
 #include <csignal>
-#include "Vec.h"
-using std::cout;
-using std::endl;
-using std::string;
-using std::ostream;
-using std::fstream;
-using std::ifstream;
-//=======================================//
-//      ParaFROST Parameters & Macros    //
-//=======================================//
-#define MBYTE 0x00100000
-#define KBYTE 0x00000400
-#define GBYTE 0x40000000
-#define LIT_LEN 32
-#define BUFFER_SIZE (MBYTE << 1)
-#define NEG_SIGN 0x00000001
-#define HASH_MASK 0x0000001F
-#define TAUTOLOGY 0
-#define CMP(a,b) (b == 0 ? a : b)
-#define ABS(x) ((x) >> 1)
-#define V2D(x) ((x) << 1)
-#define V2IDX(x) (ABS(x) - 1)
-#define ISNEG(x) (x & NEG_SIGN)
-#define NEG(x) (x | NEG_SIGN)
-#define FLIP(x) (x ^ NEG_SIGN)
-#define HASH(x) (x & HASH_MASK)
-#define UNKNOWN 0
-#define ORIGINAL 1
-#define LEARNT 2
-#define GLUE 2
-#define DELETED 3
-#define ST_MASK (int8_t)0x03  // 0000-0011
-#define IMP_MASK (int8_t)0x04 // 0000-0100
-#define DEL_MASK (int8_t)0x08 // 0000-1000
-#define BIN_MASK (int8_t)0x10 // 0001-0000
-#define ST_RST (int8_t)0xFC   // xxxx-xx00
-#define IMP_RST (int8_t)0xFB  // xxxx-x0xx
-#define DEL_RST (int8_t)0xF7  // xxxx-0xxx
-#define BIN_RST (int8_t)0xEF  // xxx0-xxxx
-#define MAPHASH(x) (1UL << HASH(x))
-#define POS(x) (x & 0xFFFFFFFE)
-#define ROOT_LEVEL 0
-#define UNDEFINED -1
-#define CUT_OFF -2
-#define UNSOLVED -1
-#define TERMINATE -2
-#define UNSAT 0
-#define SAT 1
-#define BL_RESTART_MIN 10000
+#include "pflogging.h"
+#include "pfdtypes.h"
+#include "pfconst.h"
 
-// data types
-typedef unsigned char Byte;
-typedef Byte* addr_t;
-typedef const char* arg_t;
-typedef unsigned int uint32;
-typedef signed long long int int64;
-typedef unsigned long long int uint64;
-typedef int LIT_POS;
-typedef LIT_POS CL_LEN;
-typedef signed char CNF_STATE;
-typedef signed char ASSIGN_ST;
-typedef void* G_REF;
-typedef Vec<uint32> uVector1D;
-typedef Vec<uVector1D> uVector2D;
-typedef Vec<int> vector1D;
-
-void set_timeout(int);
-void handler_terminate(int);
-void handler_mercy_intr(int);
-void handler_mercy_timeout(int);
-void sig_handler(void h_intr(int), void h_timeout(int) = NULL);
-/********************************************/
-/* Platform-related directives */
 #ifdef __linux__ 
 #include <sys/resource.h>
 #include <sys/mman.h>
 #include <sys/sysinfo.h>
 #include <unistd.h>
 #elif _WIN32
+#define NOMINMAX
 #include <windows.h>
 #include <psapi.h>
 #endif
+using std::swap;
+using std::string;
+using std::ostream;
+using std::fstream;
+using std::ifstream;
 
-//====================================================//
-//       Global Data structures primitives            //
-//====================================================//
-/*****************************************************/
-/*  Name:     CNF_INFO                               */
-/*  Usage:    collecting information about CNF       */
-/*  Scope:    host only                              */
-/*  Memory:   system memory                          */
-/*  Dependency:  none                                */
-/*****************************************************/
-struct CNF_INFO {
-	int64 global_n_lits;
-	int64 n_org_lits;
-	int64 n_added_lits;
-	int64 n_lits_after;
-	int max_org_cl_width;
-	uint32 n_org_vars;
-	uint32 n_org_cls;
-	uint32 n_org_bins;
-	uint32 n_del_vars;
-	uint32 n_cls_after;
-	uint32 global_n_del_vars;
-	uint32 global_n_bins;
-	uint32 global_n_cls;
-	uint32 global_n_gcs;
-	CNF_INFO() {
-		max_org_cl_width = 0;
-		n_del_vars = 0, n_cls_after = 0, n_lits_after = 0, n_added_lits = 0;
-		n_org_vars = 0, n_org_cls = 0, n_org_bins = 0, n_org_lits = 0;
-		global_n_del_vars = 0, global_n_bins = 0, global_n_cls = 0, global_n_gcs = 0, global_n_lits = 0;
+namespace pFROST {
+
+	// interrupt handlers
+	void set_timeout(int);
+	void handler_terminate(int);
+	void handler_mercy_intr(int);
+	void handler_mercy_timeout(int);
+	void sig_handler(void h_intr(int), void h_timeout(int) = NULL);
+	//===================================================//
+	//       Global Data structures primitives           //
+	//===================================================//
+	struct OCCUR { uint32 ps, ns; };
+	struct CNF_INFO {
+		uint32 maxVar, maxFrozen, maxMelted, nDualVars, nDelVars, n_del_vars_after;
+		uint32 nOrgCls, nOrgBins, nOrgLits, n_cls_after, n_lits_after;
+		uint32 nClauses, nGlues, nLiterals, nLearntBins, nLearntLits;
+		CNF_INFO() {
+			nOrgCls = 0, nOrgBins = 0, nOrgLits = 0;
+			maxVar = 0, maxFrozen = 0, maxMelted = 0, nDualVars = 0;
+			nDelVars = 0, nLearntBins = 0, nClauses = 0, nGlues = 0, nLiterals = 0;
+			n_del_vars_after = 0, n_cls_after = 0, n_lits_after = 0, nLearntLits = 0;
+		}
+	};
+	extern CNF_INFO inf;
+
+	class TIMER {
+	private:
+		clock_t _start, _stop;
+		float _cpuTime;
+	public:
+		float par, solve, pre;
+		TIMER			() {
+			_start = 0, _stop = 0, _cpuTime = 0;
+			par = 0, solve = 0, pre = 0;
+		}
+		void start		() { _start = clock(); }
+		void stop		() { _stop = clock(); }
+		float cpuTime	() { return _cpuTime = ((float)abs(_stop - _start)) / CLOCKS_PER_SEC; }
+	};
+	//====================================================//
+	//                 Global Inline helpers              //
+	//====================================================//
+	template<class T>
+	__forceinline bool		eq				(T& in, arg_t ref) {
+		while (*ref) { if (*ref != *in) return false; ref++; in++; }
+		return true;
 	}
-};
-extern CNF_INFO cnf_stats;
-
-struct OCCUR {
-	uint32 ps, ns;
-	OCCUR() : ps(0), ns(0) {}
-	void reset(void) { ps = 0; ns = 0; }
-};
-
-struct SCORE {
-	uint32 v, sc;
-	SCORE() : v(0), sc(0) {}
-};
-
-class TIMER {
-private:
-	clock_t _start, _stop;
-	float _cpuTime;
-
-public:
-	float par, solve, pre;
-
-	TIMER() {
-		_start = 0, _stop = 0, _cpuTime = 0;
-		par = 0, solve = 0, pre = 0;
-	}
-	~TIMER() { _cpuTime = 0; }
-
-	void start() { _start = clock(); }
-	void stop() { _stop = clock(); }
-	float cpuTime() { return _cpuTime = ((float)abs(_stop - _start)) / CLOCKS_PER_SEC; }
-};
-
-//====================================================//
-//                 Global Inline helpers              //
-//====================================================//
-inline uint32 nOrgVars() {
-	return cnf_stats.n_org_vars;
-}
-inline uint32 nOrgCls() {
-	return cnf_stats.n_org_cls;
-}
-inline uint32 nOrgBins() {
-	return cnf_stats.n_org_bins;
-}
-inline int64 nOrgLits() {
-	return cnf_stats.n_org_lits;
-}
-inline uint32 nClauses() {
-	return cnf_stats.global_n_cls;
-}
-inline uint32 nBins() {
-	return cnf_stats.global_n_bins;
-}
-inline uint32 nGlues() {
-	return cnf_stats.global_n_gcs;
-}
-inline uint32 nRemVars() {
-	return cnf_stats.global_n_del_vars;
-}
-inline int64 nLiterals() {
-	return cnf_stats.global_n_lits;
-}
-inline int64 nLearntLits() {
-	return cnf_stats.n_added_lits;
-}
-template<class T>
-inline bool eq(T& in, arg_t ref) {
-	while (*ref != '\0') { if (*ref != *in) return false; ref++; in++; }
-	return true;
+	__forceinline LIT_ST	flip			(const LIT_ST& sign) { return FLIP(sign); }
+	__forceinline LIT_ST	sign			(const uint32& lit) { assert(lit > 1); return LIT_ST(ISNEG(lit)); }
+	__forceinline uint32	flip			(const uint32& lit) { assert(lit > 1); return FLIP(lit); }
+	__forceinline uint32	neg				(const uint32& lit) { assert(lit > 1); return NEG(lit); }
+	__forceinline uint32	l2a				(const uint32& lit) { assert(lit > 1); return ABS(lit); }
+	__forceinline uint32	l2x				(const uint32& lit) { assert(lit > 1); return V2X(lit); }
+	__forceinline int		l2i				(const uint32& lit) { assert(lit > 1); return sign(lit) ? -int(l2a(lit)) : int(l2a(lit)); }
+	__forceinline uint32	v2l				(const uint32& v) { assert(v); return V2D(v); }
+	__forceinline uint32	v2dec			(const uint32& v, const LIT_ST phase) { assert(v); return (v2l(v) | phase); }
+	__forceinline uint32	nVarsRemained	() { return inf.maxVar - inf.nDelVars; }
+	__forceinline int64		maxLiterals		() { return inf.nLiterals + ((int64)inf.nOrgBins << 1) + inf.nLearntLits + ((int64)inf.nLearntBins << 1); }
 }
 
 #endif // __GL_DEFS_

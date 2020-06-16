@@ -24,7 +24,7 @@ TARGET_SIZE := $(shell getconf LONG_BIT)
 
 # compiler flags
 MTHREADS  := -pthreads
-CCFLAGS   := -m${TARGET_SIZE} -std=c++14 
+CCFLAGS   := -m${TARGET_SIZE} -std=c++14 -Wno-format-zero-length
 LDFLAGS   := 
 
 # Debug build flags
@@ -54,23 +54,36 @@ build: parafrost
 pfsimp.o:pfsimp.cpp
 	$(EXEC) $(HOST_COMPILER) $(INCLUDES) $(CCFLAGS) -o $@ -c $(WARN) $<
 
+pfguess.o:pfguess.cpp
+	$(EXEC) $(HOST_COMPILER) $(INCLUDES) $(CCFLAGS) -o $@ -c $(WARN) $<
+
+pfdecide.o:pfdecide.cpp
+	$(EXEC) $(HOST_COMPILER) $(INCLUDES) $(CCFLAGS) -o $@ -c $(WARN) $<
+
 pfsolve.o:pfsolve.cpp
 	$(EXEC) $(HOST_COMPILER) $(INCLUDES) $(CCFLAGS) -o $@ -c $(WARN) $<
 
-pfpdm.o:pfpdm.cpp
+pfmdm.o:pfmdm.cpp
 	$(EXEC) $(HOST_COMPILER) $(INCLUDES) $(CCFLAGS) -o $@ -c $(WARN) $<
 
 pfargs.o:pfargs.cpp
+	$(EXEC) $(HOST_COMPILER) $(INCLUDES) $(CCFLAGS) -o $@ -c $(WARN) $<
+ 
+pfextend.o:pfextend.cpp
 	$(EXEC) $(HOST_COMPILER) $(INCLUDES) $(CCFLAGS) -o $@ -c $(WARN) $<
 
 pfmain.o:pfmain.cpp
 	$(EXEC) $(HOST_COMPILER) $(INCLUDES) $(CCFLAGS) -o $@ -c $(WARN) $<
 
-parafrost: pfargs.o pfsimp.o pfpdm.o pfsolve.o pfmain.o
-	$(EXEC) $(HOST_COMPILER) $(LDFLAGS) $(CCFLAGS) -o $@ $+ $(LIBRARIES)
-	$(EXEC) mkdir -p $(TARGET_ARCH)/$(TARGET_OS)/$(BUILD_TYPE)
-	$(EXEC) cp $@ $(TARGET_ARCH)/$(TARGET_OS)/$(BUILD_TYPE)
+libpfrost.a: pfargs.o pfsimp.o pfdecide.o pfmdm.o pfguess.o pfextend.o pfsolve.o
+	$(EXEC) ar rc $@ $+
+	$(EXEC) ranlib $@
+
+parafrost: pfmain.o libpfrost.a
+	$(EXEC) $(HOST_COMPILER) $(CCFLAGS) -o $@ pfmain.o -L. -lpfrost $(LIBRARIES)
+	$(EXEC) mkdir -p build/$(BUILD_TYPE)
+	$(EXEC) cp $@ build/$(BUILD_TYPE)
 
 clean:
-	rm -f pfargs.o pfsimp.o pfpdm.o pfsolve.o pfmain.o parafrost  
-	rm -rf $(TARGET_ARCH)/$(TARGET_OS)/$(BUILD_TYPE)/parafrost
+	rm -f *.o libpfrost.a parafrost  
+	rm -rf build/$(BUILD_TYPE)/parafrost

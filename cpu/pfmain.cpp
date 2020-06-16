@@ -17,46 +17,54 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 **********************************************************************************/
 
 #include "pfsolve.h"
+using namespace pFROST;
+
+bool quiet_en = false;
+int verbose = -1;
 
 int main(int argc, char **argv)
 {             
-	if (argc == 1) { cout << "No input file specified." << endl; exit(EXIT_FAILURE); }
+	BOOL_OPT opt_quiet_en("q", "enable quiet mode, same as verbose=0", false);
+	INT_OPT opt_verbose("verbose", "set the verbosity", 1, INT32R(0, 4));
+	if (argc == 1) PFLOGE("no input file specified");
 	try {
 		parseArguments(argc, argv);
-		if (!isQuiet()) {
-			cout << "c |--------------------------------------------------------------------------------------|" << endl;
-			cout << "c |                              ParaFROST SAT Solver                                    |" << endl;
-			cout << "c | Technische Universiteit Eindhoven (TU/e), all rights reserved.                       |" << endl;
-			cout << "c |--------------------------------------------------------------------------------------|" << endl;
-			cout << "c | Embedded options: ";
+		quiet_en = opt_quiet_en, verbose = opt_verbose;
+		if (quiet_en) verbose = 0;
+		else if (!verbose) quiet_en = true;
+		if (!quiet_en && verbose) {
+			PFNAME("ParaFROST");
+			PFAUTHORS("Muhammad Osama and Anton Wijs");
+			PFRIGHTS("Technische Universiteit Eindhoven (TU/e)");
+			PFLOGR('-', RULELEN);
+			PFLOGN0(" Embedded options: ");
 			for (int i = 0, j = 0; i < options.size(); i++) {
 				if (options[i]->isParsed()) {
 					options[i]->printArgument();
-					if (++j % 4 == 0) cout << "\nc |                   ";
+					if (++j % 4 == 0) { putc('\n', stdout); PFLOGN0("\t\t"); }
 				}
 			}
-			cout << "\nc |--------------------------------------------------------------------------------------|" << endl;
+			putc('\n', stdout); PFLOGR('-', RULELEN);
 		}
 		string formula = argv[1];
-		if (formula.find(".cnf") == -1 && formula.find(".dimacs") == -1) {
-			cout << "Input file not recognizable." << endl; 
-			exit(EXIT_FAILURE); 
-		}
+		if (formula.find(".cnf") == -1 && formula.find(".dimacs") == -1) PFLOGE("input file not recognizable");
 		sig_handler(handler_terminate);
 		ParaFROST* pFrost = new ParaFROST(formula);
-		g_pFrost = pFrost;
-		if (g_pFrost->timeout > 0) set_timeout(pFrost->timeout);
+		pfrost = pFrost;
+		if (pfrost->timeout > 0) set_timeout(pFrost->timeout);
 		sig_handler(handler_mercy_intr, handler_mercy_timeout);
 		pFrost->solve();
-		g_pFrost = NULL;
+		PFLOG0("");
+		PFLOGN2(1, " Cleaning up..");
+		pfrost = NULL;
 		delete pFrost;
+		PFLDONE(1, 5);
+		if (!quiet_en) PFLOGR('-', RULELEN);
 		exit(EXIT_SUCCESS);
 	}
 	catch (MEMOUTEXCEPTION&) {
-		printf("c |\n");
-		printf("c |%45s\n", "Memoryout");
-		printf("c |\n");
-		printf("s UNKNOWN\n");
+		PFLOGEN("Memoryout");
+		PFLOGS("UNKNOWN");
 		exit(EXIT_SUCCESS);
 	}
 }
