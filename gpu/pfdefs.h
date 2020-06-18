@@ -1,3 +1,21 @@
+/***********************************************************************[pfdefs.h]
+Copyright(c) 2020, Muhammad Osama - Anton Wijs,
+Technische Universiteit Eindhoven (TU/e).
+
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU General Public License as published by
+the Free Software Foundation, either version 3 of the License, or
+(at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+GNU General Public License for more details.
+
+You should have received a copy of the GNU General Public License
+along with this program.  If not, see <https://www.gnu.org/licenses/>.
+**********************************************************************************/
+
 #ifndef __GL_DEFS_
 #define __GL_DEFS_
 //=======================================//
@@ -5,26 +23,18 @@
 //=======================================//
 #include <iostream>
 #include <algorithm>
-#include <cstdint>
 #include <cstring>
 #include <locale>
 #include <cassert>
 #include <cmath>
 #include <cstdio>
+#include <cstdlib>
 #include <fstream>
 #include <climits>
 #include <csignal>
 #include "pfdtypes.h"
 #include "pflogging.h"
-
-using std::cout;
-using std::endl;
-using std::string;
-using std::ostream;
-using std::sort;
-using std::fstream;
-using std::ifstream;
-// Platform-related directives
+#include "pfconst.h"
 #ifdef __linux__ 
 #include <sys/resource.h>
 #include <sys/mman.h>
@@ -36,107 +46,75 @@ using std::ifstream;
 #include <psapi.h>
 #endif
 
-//=======================================//
-//            Global Parameters          //
-//=======================================//
-#define MBYTE 0x00100000
-#define KBYTE 0x00000400
-#define GBYTE 0x40000000
-#define INIT_CAP 32
-#define DEFINED 2
-#define UNSOLVED -1
-#define UNDEFINED -1
-#define TERMINATE -2
-#define ROOT_LEVEL 0
-#define UNKNOWN 0
-#define UNSAT 0
-#define SAT 1
-#define GLUE 2
-//======== DANGER ZONE =========
-#define NEG_SIGN   0x00000001
-#define HASH_MASK  0x0000001F
-#define ABS(x)     ((x) >> 1)
-#define V2D(x)     ((x) << 1)
-#define V2X(x)     (ABS(x) - 1)
-#define ISNEG(x)   (x & NEG_SIGN)
-#define NEG(x)     (x | NEG_SIGN)
-#define FLIP(x)    (x ^ NEG_SIGN)
-#define HASH(x)    (x & HASH_MASK)
-#define MAPHASH(x) (1UL << HASH(x))
-#define POS(x)     (x & 0xFFFFFFFE)
-#define MIN(x, y)  (x < y ? x : y)
-#define ORIGINAL (int8_t)0x01
-#define LEARNT   (int8_t)0x02
-#define DELETED  (int8_t)0x03
-#define ST_MASK  (int8_t)0x03  // 0000-0011
-#define IMP_MASK (int8_t)0x04  // 0000-0100
-#define DEL_MASK (int8_t)0x08  // 0000-1000
-#define BIN_MASK (int8_t)0x10  // 0001-0000
-#define GAR_MASK (int8_t)0x20  // 0010-0000
-#define ST_RST   (int8_t)0xFC  // xxxx-xx00
-#define IMP_RST  (int8_t)0xFB  // xxxx-x0xx
-#define DEL_RST  (int8_t)0xF7  // xxxx-0xxx
-#define BIN_RST  (int8_t)0xEF  // xxx0-xxxx
-#define GAR_RST  (int8_t)0xDF  // xx0x-xxxx
-//==============================
-// interrupt handlers
-void set_timeout(int);
-void handler_terminate(int);
-void handler_mercy_intr(int);
-void handler_mercy_timeout(int);
-void sig_handler(void h_intr(int), void h_timeout(int) = NULL);
+using std::swap;
+using std::string;
+using std::ostream;
+using std::fstream;
+using std::ifstream;
 
-struct OCCUR { uint32 ps, ns; };
-struct SCORE { uint32 v, sc; };
-struct CNF_INFO {
-	uint32 n_org_vars, n_org_cls, n_org_bins, n_del_vars, n_cls_after, max_added_cls;
-	uint32 global_n_del_vars, global_n_bins, global_n_gcs, global_n_cls;
-	int64 n_org_lits, global_n_lits, n_added_lits, n_dual_vars, max_added_lits, n_lits_after;
-	CNF_INFO() {
-		max_added_cls = 0, max_added_lits = 0;
-		n_del_vars = 0, n_cls_after = 0, n_lits_after = 0, n_added_lits = 0;
-		n_org_vars = 0, n_org_cls = 0, n_org_bins = 0, n_org_lits = 0, n_dual_vars = 0;
-		global_n_del_vars = 0, global_n_bins = 0, global_n_cls = 0, global_n_gcs = 0, global_n_lits = 0;
+namespace pFROST {
+
+	// interrupt handlers
+	void set_timeout(int);
+	void handler_terminate(int);
+	void handler_mercy_intr(int);
+	void handler_mercy_timeout(int);
+	void sig_handler(void h_intr(int), void h_timeout(int) = NULL);
+	//===================================================//
+	//       Global Data structures primitives           //
+	//===================================================//
+	struct OCCUR { uint32 ps, ns; };
+	struct CNF_INFO {
+		uint32 maxVar, maxFrozen, maxMelted, nDualVars, nDelVars;
+		uint32 maxAddedCls, maxAddedLits;
+		uint32 nOrgCls, nOrgBins, nOrgLits, n_del_vars_after, n_cls_after, n_lits_after;
+		uint32 nClauses, nGlues, nLiterals, nLearntBins, nLearntLits;
+		CNF_INFO() {
+			nOrgCls = 0, nOrgBins = 0, nOrgLits = 0;
+			maxVar = 0, maxFrozen = 0, maxMelted = 0, nDualVars = 0;
+			maxAddedCls = 0, maxAddedLits = 0;
+			nDelVars = 0, nLearntBins = 0, nClauses = 0, nGlues = 0, nLiterals = 0;
+			n_del_vars_after = 0, n_cls_after = 0, n_lits_after = 0, nLearntLits = 0;
+		}
+	};
+	extern CNF_INFO inf;
+
+	class TIMER {
+	private:
+		clock_t _start, _stop;
+		float _cpuTime;
+	public:
+		float par, solve, pre;
+		TIMER() {
+			_start = 0, _stop = 0, _cpuTime = 0;
+			par = 0, solve = 0, pre = 0;
+		}
+		void start() { _start = clock(); }
+		void stop() { _stop = clock(); }
+		float cpuTime() { return _cpuTime = ((float)abs(_stop - _start)) / CLOCKS_PER_SEC; }
+	};
+	//====================================================//
+	//                 Global Inline helpers              //
+	//====================================================//
+	template<class T>
+	__forceinline bool		eq				(T& in, arg_t ref) {
+		while (*ref) { if (*ref != *in) return false; ref++; in++; }
+		return true;
 	}
-};
-extern CNF_INFO cnf_stats;
+	__forceinline LIT_ST	flip			(const LIT_ST& sign) { return FLIP(sign); }
+	__forceinline LIT_ST	sign			(const uint32& lit) { assert(lit > 1); return LIT_ST(ISNEG(lit)); }
+	__forceinline uint32	flip			(const uint32& lit) { assert(lit > 1); return FLIP(lit); }
+	__forceinline uint32	neg				(const uint32& lit) { assert(lit > 1); return NEG(lit); }
+	__forceinline uint32	l2a				(const uint32& lit) { assert(lit > 1); return ABS(lit); }
+	__forceinline uint32	l2x				(const uint32& lit) { assert(lit > 1); return V2X(lit); }
+	__forceinline int		l2i				(const uint32& lit) { assert(lit > 1); return sign(lit) ? -int(l2a(lit)) : int(l2a(lit)); }
+	__forceinline uint32	v2l				(const uint32& v) { assert(v); return V2D(v); }
+	__forceinline uint32	v2dec			(const uint32& v, const LIT_ST phase) { assert(v); return (v2l(v) | phase); }
+	__forceinline uint32	nVarsRemained	() { return inf.maxVar - inf.nDelVars; }
+	__forceinline uint32	maxOrgLits		() { return inf.nLiterals + (inf.nOrgBins << 1); }
+	__forceinline uint32	maxLearntLits	() { return inf.nLearntLits + (inf.nLearntBins << 1); }
+	__forceinline uint32	maxLiterals		() { return maxOrgLits() + maxLearntLits(); }
 
-class TIMER {
-private:
-	clock_t _start, _stop;
-	float _cpuTime;
-
-public:
-	float par, solve, pre;
-
-	TIMER() {
-		_start = 0, _stop = 0, _cpuTime = 0;
-		par = 0, solve = 0, pre = 0;
-	}
-	~TIMER() { _cpuTime = 0; }
-
-	void start() { _start = clock(); }
-	void stop() { _stop = clock(); }
-	float cpuTime() { return _cpuTime = ((float)abs(_stop - _start)) / CLOCKS_PER_SEC; }
-};
-
-inline uint32 nOrgVars() { return cnf_stats.n_org_vars; }
-inline int64 nDualVars() { return cnf_stats.n_dual_vars; }
-inline uint32 nOrgCls() { return cnf_stats.n_org_cls; }
-inline uint32 nOrgBins() { return cnf_stats.n_org_bins; }
-inline int64 nOrgLits() { return cnf_stats.n_org_lits; }
-inline uint32 maxAddedCls() { return cnf_stats.max_added_cls; }
-inline uint32 nClauses() { return cnf_stats.global_n_cls; }
-inline uint32 nBins() { return cnf_stats.global_n_bins; }
-inline uint32 nGlues() { return cnf_stats.global_n_gcs; }
-inline uint32 nVarsDeleted() { return cnf_stats.global_n_del_vars; }
-inline uint32 nVarsRemained() { return cnf_stats.n_org_vars - cnf_stats.global_n_del_vars; }
-inline int64 maxAddedLits() { return cnf_stats.max_added_lits; }
-inline int64 nLiterals() { return cnf_stats.global_n_lits; }
-inline int64 nLearntLits() { return cnf_stats.n_added_lits; }
-template<class T> inline bool eq(T& in, arg_t ref) {
-	while (*ref) { if (*ref != *in) return false; ref++; in++; }
-	return true;
 }
 
 #endif // !__GL_DEFS_

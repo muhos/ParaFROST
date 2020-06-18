@@ -1,3 +1,21 @@
+/***********************************************************************[pfcudefs.h]
+Copyright(c) 2020, Muhammad Osama - Anton Wijs,
+Technische Universiteit Eindhoven (TU/e).
+
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU General Public License as published by
+the Free Software Foundation, either version 3 of the License, or
+(at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+GNU General Public License for more details.
+
+You should have received a copy of the GNU General Public License
+along with this program.  If not, see <https://www.gnu.org/licenses/>.
+**********************************************************************************/
+
 #ifndef __CU_DEFS_
 #define __CU_DEFS_  
 
@@ -6,7 +24,6 @@
 #include <cassert>
 #include <cuda.h>
 #include <device_launch_parameters.h>
-#include "pfdtypes.h"
 
 #if !defined(_PFROST_D_)
 #define _PFROST_D_ __forceinline__ __device__
@@ -14,11 +31,8 @@
 #if !defined(_PFROST_H_D_)
 #define _PFROST_H_D_ inline __host__ __device__
 #endif
-#define MASTER_GPU 0
-#define BLOCK1D 256
-#define FULLWARP 0xFFFFFFFFU
 
-__forceinline__ int SM2Cores(int major, int minor) {
+__forceinline__ int		SM2Cores	(int major, int minor) {
 	// Defines for GPU Architecture types (using the SM version to determine # of cores per SM)
 	typedef struct {
 		int SM;  // arch defined in hex
@@ -54,7 +68,7 @@ __forceinline__ int SM2Cores(int major, int minor) {
 		major, minor, nCores[index - 1].Cores);
 	return nCores[index - 1].Cores;
 }
-__forceinline__ void CHECK(cudaError_t result)
+__forceinline__ void	CHECK		(cudaError_t result)
 {
 #if defined(DEBUG) || defined(_DEBUG)
 	if (result != cudaSuccess) {
@@ -64,7 +78,7 @@ __forceinline__ void CHECK(cudaError_t result)
 	}
 #endif
 }
-__forceinline__ void _getLstErr(const char* errorMessage, const char* file, const int line) {
+__forceinline__ void	_getLstErr	(const char* errorMessage, const char* file, const int line) {
 #if defined(DEBUG) || defined(_DEBUG)
 	cudaError_t err = cudaGetLastError();
 	if (cudaSuccess != err) {
@@ -74,6 +88,6 @@ __forceinline__ void _getLstErr(const char* errorMessage, const char* file, cons
 	}
 #endif
 }
-#define LOGERR(msg) _getLstErr(msg, __FILE__, __LINE__)
+#define LOGERR(msg)		_getLstErr	(msg, __FILE__, __LINE__)
 
 #endif

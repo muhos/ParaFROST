@@ -1,4 +1,4 @@
-/***********************************************************************[pfdefs.h]
+/***********************************************************************[pfralloc.h]
 Copyright(c) 2020, Muhammad Osama - Anton Wijs,
 Technische Universiteit Eindhoven (TU/e).
 
@@ -16,28 +16,33 @@ You should have received a copy of the GNU General Public License
 along with this program.  If not, see <https://www.gnu.org/licenses/>.
 **********************************************************************************/
 
+#ifndef __RALLOC_
+#define __RALLOC_
 
-#ifndef __GL_TYPES_
-#define __GL_TYPES_
+#include "pfdtypes.h"
+#include <cstdlib>
+#include <cstring>
 
 namespace pFROST {
 
-	// primitive data types
-	typedef const char* arg_t;
-	typedef unsigned char Byte;
-	typedef signed char CL_ST;
-	typedef signed char CNF_ST;
-	typedef signed char LIT_ST;
-	typedef Byte* addr_t;
-	typedef unsigned int uint32;
-	typedef long long int int64;
-	typedef unsigned long long int uint64;
-	typedef uint32 C_REF;
-	typedef void* G_REF;
+	class MEMOUTEXCEPTION {};
 
-#ifdef __GNUC__
-#define __forceinline __attribute__((always_inline))
-#endif
+	template <class T>
+	void pfalloc(T*& mem, size_t bytes) {
+		T* _mem = (T*)std::realloc(mem, bytes);
+		if (_mem == NULL) throw MEMOUTEXCEPTION();
+		mem = _mem;
+	}
+
+	template <class T>
+	void pfshrinkAlloc(T*& mem, size_t bytes) {
+		T* _mem = NULL;
+		_mem = (T*)std::realloc(_mem, bytes);
+		if (_mem == NULL) throw MEMOUTEXCEPTION();
+		std::memcpy(_mem, mem, bytes);
+		std::free(mem);
+		mem = _mem;
+	}
 
 }
 

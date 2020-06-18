@@ -1,527 +1,469 @@
+/***********************************************************************[pfsimp.cu]
+Copyright(c) 2020, Muhammad Osama - Anton Wijs,
+Technische Universiteit Eindhoven (TU/e).
 
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU General Public License as published by
+the Free Software Foundation, either version 3 of the License, or
+(at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+GNU General Public License for more details.
+
+You should have received a copy of the GNU General Public License
+along with this program.  If not, see <https://www.gnu.org/licenses/>.
+**********************************************************************************/
 
 #include "pfsimpopts.h"
 #include "pfsolve.h"
 #include "pfsort.h"
 
-void ParaFROST::masterFree()
-{
-	if (h_hist != NULL) delete[] h_hist;
-	if (h_cnf != NULL) h_cnf->~CNF(), h_cnf = NULL;
-	if (cnf != NULL) cnf->~CNF(), cnf = NULL;
-	if (ot != NULL) ot->~OT(), ot = NULL;
-	if (pv != NULL) pv->~PV(), pv = NULL;
-	d_hist = NULL;
-	histogram.clear(), rawLits.clear();
-	histogram.shrink_to_fit(), rawLits.shrink_to_fit();
-	destroyStreams();
-	cuMem.~cuMM();
-}
+namespace pFROST {
 
-void ParaFROST::slavesFree()
-{
-	
-}
+	using namespace SIGmA;
 
-void ParaFROST::optSimp()
-{
-	assert(pre_en);
-	clsTile = opt_tile_size;
-	litsCopyR = opt_lits_cop_r;
-	ngpus = opt_gpus;
-	nstreams = opt_streams;
-	solve_en = opt_solve_en;
-	p_cnf_en = opt_pcnf_en;
-	p_ot_en = opt_pot_en;
-	ve_en = opt_ve_en || opt_ve_plus_en;
-	ve_plus_en = opt_ve_plus_en;
-	sub_en = opt_sub_en;
-	bce_en = opt_bce_en;
-	hre_en = opt_hre_en;
-	all_en = opt_all_en;
-	phases = opt_phases;
-	mu_pos = opt_mu_pos;
-	mu_neg = opt_mu_neg;
-	cnf_free_freq = opt_cnf_free;
-	cls_en = all_en || sub_en || bce_en || hre_en;
-	if (all_en) ve_en = 1, ve_plus_en = 1, sub_en = 1, bce_en = 1, hre_en = 1;
-	if (!phases && ve_en) phases = 1; // at least 1 phase needed for BVE(+)
-	if (phases && !ve_en) phases = 0;
-	if (ngpus > devCount) ngpus = devCount;
-}
-
-void ParaFROST::_simplify()
-{
-	G_REF ref = BCP();
-	assert(ref == NULL); // at this point BCP cannot return a conflict (dare to prove?!)
-	if (sp->trail_size == sp->trail_offset) return;
-	assert(sp->trail_size > 0 && DL() == ROOT_LEVEL);
-	assert(sp->trail_head == sp->trail_size);
-	assert(sol->value(V2X(sp->trail[sp->trail_size - 1])) != UNDEFINED);
-	if (verbose > 1) printf("c | Simplifying CNF..");
-	// simplify watch table
-	for (int i = sp->trail_offset; i < sp->trail_size; i++) {
-		uint32 assign = sp->trail[i], assign_f = FLIP(assign);
-		wt.collect(assign);
-		wt.collect(assign_f);
-		WL& ws = wt[assign_f];
-		for (int j = 0; j < ws.size(); j++) {
-			B_REF c = (B_REF)ws[j].c_ref;
-			if (!c->garbage() && c->size() == 2) // original or learnt (undeleted) binary
-				removeClause(c);
-		}
-		uint32 assign_idx = V2X(assign);
-		if (var_heap->has(assign_idx)) var_heap->remove(assign_idx); // remove assign from the heap
-		removed.push(assign); // save in case preprocessing mapped variables
+	void ParaFROST::masterFree()
+	{
+		if (h_hist != NULL) delete[] h_hist;
+		if (cnf != NULL) cnf->~CNF(), cnf = NULL;
+		if (ot != NULL) ot->~OT(), ot = NULL;
+		if (vars != NULL) vars->~VARS(), vars = NULL;
+		d_hist = NULL;
+		histogram.clear(), rawLits.clear();
+		histogram.shrink_to_fit(), rawLits.shrink_to_fit();
+		destroyStreams();
+		cuMem.~cuMM();
 	}
-	// simplify input CNF
-	cnf_stats.global_n_cls = simplify(orgs);
-	orgs.resize(cnf_stats.global_n_cls);
-	cnf_stats.global_n_del_vars += (sp->trail_size - sp->trail_offset);
-	sp->trail_offset = sp->trail_size;
-	// clean any garbage clauses
-	wt.recycle();
-	gcr.recycle();
-	if (verbose > 1) printf(" ==> done\n");
-}
 
-void ParaFROST::extractBins()
-{
-	assert(cnf->size() == 0);
-	assert(cnf->numLits() == 0);
-	if (pre_delay) {
-		if (nOrgBins()) {
-			bins.clear(true), rawBins.reserve((nOrgBins() << 1));
-			for (uint32 v = 0; v < nOrgVars(); v++) {
-				uint32 p = V2D(v + 1), n = NEG(p);
-				WL& poss = wt[n];
-				for (int j = 0; j < poss.size(); j++) {
-					assert(poss[j].c_ref != NULL);
-					B_REF c = (B_REF)poss[j].c_ref;
-					assert(c->size() > 1);
-					if (!c->garbage() && c->size() == 2) {
-						if (c->orgBin()) { assert(c->status() == UNKNOWN); rawBins.appendFrom(*c, 2); }
-						removeClause(c);
-					}
-				}
-				WL& negs = wt[p];
-				for (int j = 0; j < negs.size(); j++) {
-					assert(negs[j].c_ref != NULL);
-					B_REF c = (B_REF)negs[j].c_ref;
-					assert(c->size() > 1);
-					if (!c->garbage() && c->size() == 2) {
-						if (c->orgBin()) { assert(c->status() == UNKNOWN); rawBins.appendFrom(*c, 2); }
-						removeClause(c);
-					}
-				}
+	void ParaFROST::slavesFree()
+	{
+
+	}
+
+	void ParaFROST::optSimp()
+	{
+		assert(sigma_en || sigma_live_en);
+		ngpus = opt_gpus;
+		nstreams = opt_streams;
+		solve_en = opt_solve_en;
+		ve_en = opt_ve_en || opt_ve_plus_en;
+		ve_plus_en = opt_ve_plus_en;
+		sub_en = opt_sub_en;
+		bce_en = opt_bce_en;
+		hre_en = opt_hre_en;
+		all_en = opt_all_en;
+		phases = opt_phases;
+		mu_pos = opt_mu_pos;
+		mu_neg = opt_mu_neg;
+		lcve_min = opt_lcve_min;
+		lits_rem_min = opt_lits_rem_min;
+		shrink_rate = opt_cnf_free;
+		cls_en = all_en || sub_en || bce_en || hre_en;
+		if (all_en) ve_en = 1, ve_plus_en = 1, sub_en = 1, bce_en = 1, hre_en = 1;
+		if (!phases && ve_en) phases = 1; // at least 1 phase needed for BVE(+)
+		if (phases && !ve_en) phases = 0;
+		if (ngpus > devCount) ngpus = devCount;
+	}
+
+	void ParaFROST::extract(BCNF& bcnf)
+	{
+		for (uint32 i = 0; i < bcnf.size(); i++) {
+			CLAUSE& c = cm[bcnf[i]];
+			assert(!c.deleted());
+			cnf->newClause(c, c.size());
+			inf.nClauses++, inf.nLiterals += c.size();
+		}
+		bcnf.clear(true);
+	}
+
+	void ParaFROST::awaken()
+	{
+		// deal with any remained facts at root level
+		PFLOG2(2, " Propagating any remaining facts before eliminations..");
+		C_REF cref = BCP();
+		assert(cref == NOREF); // dare to prove?!
+		PFLOG2(2, " All good.");
+		assert(DL() == ROOT_LEVEL);
+		assert(conflict == NOREF);
+		assert(cnfstate == UNSOLVED);
+		assert(sp->propagated == trail.size());
+		if (sigma_live_en) {
+			reduce();
+			PFLOGN2(2, " Shrinking CNF before eliminations..");
+			shrinkWT();
+			shrink(orgs);
+			shrink(learnts);
+			inf.nDelVars += (trail.size() - sp->simplified);
+			PFLENDING(2, 5, " (-%d variables)", trail.size() - sp->simplified);
+			sp->simplified = trail.size();
+		}
+		initSimp();
+		// alloc simplifier memory 
+		uint32 numCls = maxOrgs() + maxLearnts(), numLits = maxLiterals();
+		if (phases) {
+			inf.maxAddedCls = maxOrgs(), inf.maxAddedLits = maxOrgLits();
+			PFLOG2(2, " Maximum added clauses/literals = %d/%d", inf.maxAddedCls, inf.maxAddedLits);
+			numCls += inf.maxAddedCls, numLits += inf.maxAddedLits;
+		}
+		if (!cuMem.allocPV(vars) || !cuMem.resizeCNF(cnf, numCls, numLits)) { errCode = CNFALLOC_FAIL; return; }
+		createStreams();
+		PFLOGN2(2, " Extracting clauses..");
+		BCNF bins;
+		bins.reserve(inf.nOrgBins + inf.nLearntBins);
+		wtBin.recycle();
+		extractBins(bins);
+		inf.nClauses = inf.nLiterals = 0;
+		inf.nOrgBins = inf.nLearntBins = 0;
+		extract(bins);
+		// TODO: extract clauses using WT then use orgs & learnts
+		extract(orgs);
+		extract(learnts);
+		PFLENDING(2, 5, "(%d clauses extracted)", inf.nClauses);
+		// prefetch cnf 
+		cuMem.prefetchCNF(streams[0]);
+		// initialize vstates on device with the current vstates on host
+		cacheVarSt(cudaMemcpyHostToDevice, streams[1]);
+		// cleaning up
+		wtBin.clear(true), wt.clear(true), cm.destroy();
+		// compute clauses signatures
+		calcSigCNFAsync(cnf, 0, inf.nClauses, streams[0]);
+		// compute histogram on GPU & alloc OT
+		histogram.resize(inf.nDualVars);
+		d_hist = thrust::raw_pointer_cast(histogram.data()), h_hist = new uint32[inf.nDualVars];
+		if (!reallocOT()) return;
+		printPStats();
+		sync(streams[1]);
+	}
+
+	void ParaFROST::varReorder()
+	{
+		PFLOGN2(2, " Finding eligible variables for LCVE..");
+		assert(d_hist != NULL);
+		if (vars->nUnits) calcScores(vars, d_hist, ot); // update d_hist & calc scores
+		else calcScores(vars, d_hist);
+		CHECK(cudaMemcpyAsync(h_hist, d_hist, inf.nDualVars * sizeof(uint32), cudaMemcpyDeviceToHost, streams[2]));
+		thrust::sort(vars->eligible, vars->eligible + inf.maxVar, LCV_CMP(vars->scores));
+		sync(streams[2]);
+		PFLDONE(2, 5);
+		vars->nUnits = 0;
+		if (verbose == 4) {
+			PFLOG0(" Eligible variables:");
+			cudaMemcpy(h_hist, d_hist, inf.nDualVars * sizeof(uint32), cudaMemcpyDeviceToHost);
+			for (uint32 v = 0; v < inf.maxVar; v++) {
+				uint32 x = vars->eligible[v], p = v2l(x), n = neg(p);
+				PFLOG1("  e[%d]->(v: %d, p: %d, n: %d, s: %d)", v, x, h_hist[p], h_hist[n], vars->scores[x]);
 			}
-			CHECK(cudaMemcpyAsync(cuMem.litsLEA(), rawBins, rawBins.size() * sizeof(uint32), cudaMemcpyHostToDevice, streams[0]));
-			gcr.recycle();
 		}
 	}
-	else {
-		rawBins.reserve((bins.size() << 1));
-		for (int i = 0; i < bins.size(); i++) {
-			assert(bins[i]->orgBin());
-			assert(bins[i]->status() == UNKNOWN);
-			rawBins.appendFrom(*bins[i], 2);
-			collectClause(bins[i], false);
-			assert(bins[i] == NULL);
-		}
-		CHECK(cudaMemcpyAsync(cuMem.litsLEA(), rawBins, rawBins.size() * sizeof(uint32), cudaMemcpyHostToDevice, streams[0]));
-		bins.clear(true);
-	}
-	wt.clear(true);
-	cnf_stats.global_n_bins = uint32(rawBins.size() >> 1);
-}
 
-void ParaFROST::GPU_CNF_fill() {
-	// append binaries
-	extractBins();
-	assert(nBins() == (rawBins.size() >> 1));
-	// append k-size clauses 
-	rawOrgs.reserve(nLiterals());
-	for (int i = 0; i < orgs.size(); i++) rawOrgs.appendFrom(*orgs[i], orgs[i]->size());
-	// sync binaries copy
-	CHECK(cudaStreamSynchronize(streams[0])); 
-	uint32* dBin = cuMem.litsLEA(), *dOrg = dBin + rawBins.size();
-	for (uint32 i = 0; i < nBins(); i++) (*cnf)[i].attach(dBin + (i << 1), 2);
-	CHECK(cudaMemcpyAsync(dOrg, rawOrgs, rawOrgs.size() * sizeof(uint32), cudaMemcpyHostToDevice, streams[1]));
-	// free learnts
-	for (int i = 0; i < learnts.size(); i++) { collectClause(learnts[i], false); assert(learnts[i] == NULL); }
-	learnts.clear();
-	// sync orgs copy
-	CHECK(cudaStreamSynchronize(streams[1]));
-	cnf_stats.global_n_lits = 0;
-	for (int i = 0; i < orgs.size(); i++) {
-		(*cnf)[i + cnf_stats.global_n_bins].attach(dOrg + cnf_stats.global_n_lits, orgs[i]->size());
-		cnf_stats.global_n_lits += orgs[i]->size();
+	void ParaFROST::calcOccurs(const uint32& numLits)
+	{
+		assert(numLits > 0);
+		rawLits.resize(numLits);
+		copyIf(thrust::raw_pointer_cast(rawLits.data()), cnf, vars->gstats);
+		assert(vars->gstats->numLits == numLits);
+		histSimp();
+		rawLits.clear();
 	}
-	cnf_stats.global_n_lits += rawBins.size();
-	cnf_stats.global_n_cls = nBins() + orgs.size();
-	cnf_stats.global_n_bins = 0;
-	cnf->resize(cnf_stats.global_n_cls), cnf->resizeData(cnf_stats.global_n_lits);
-	cuMem.prefetchCNF(streams[0]);
-	// free the rest
-	rawBins.clear(true), rawOrgs.clear(true);
-	for (int i = 0; i < orgs.size(); i++) { collectClause(orgs[i], false); assert(orgs[i] == NULL); }
-	orgs.clear(true);
-	// calc clauses signatures
-	calcSigAsync(cnf, 0, nClauses(), streams[0]);
-}
 
-bool ParaFROST::awaken()
-{
-	_simplify();
-	createStreams();
-	pv = new PV();
-	// TODO make an error code for return to handle the original cnf on host
-	uint32 numCls = nClauses() + nBins();
-	uint64 numLits = nLiterals() + (nBins() << 1ULL);
-	if (phases) {
-		cnf_stats.max_added_cls = numCls, cnf_stats.max_added_lits = numLits;
-		if (verbose > 1) PFLOG(" Max. added clauses/literals = %d/%lld", maxAddedCls(), maxAddedLits());
-		numCls += cnf_stats.max_added_cls, numLits += cnf_stats.max_added_lits;
+	void ParaFROST::histSimp()
+	{
+		assert(rawLits.size() > 0);
+		assert(histogram.size() == v2l(inf.maxVar + 1ULL));
+		thrust::sort(rawLits.begin(), rawLits.end());
+		thrust::counting_iterator<size_t> search_begin(0);
+		thrust::upper_bound(rawLits.begin(), rawLits.end(), search_begin, search_begin + inf.nDualVars, histogram.begin());
+		thrust::adjacent_difference(histogram.begin(), histogram.end(), histogram.begin());
 	}
-	if (!cuMem.allocPV(pv) || !cuMem.resizeCNF(cnf, numCls, numLits)) return false;
-	GPU_CNF_fill();
-	histogram.resize(nDualVars());
-	d_hist = thrust::raw_pointer_cast(histogram.data()), h_hist = new uint32[nDualVars()];
-	cuMem.calcOTBlocks();
-	GPU_occurs(nLiterals(), true);
-	if (!cuMem.resizeOTAsync(ot, d_hist, numLits)) return false;
-	simpVal.resize(nOrgVars(), UNDEFINED);
-	for (int i = 0; i < removed.size(); i++) simpVal[V2X(removed[i])] = DEFINED;
-	sp->reset_trail();
-	printPStats();
-	return true;
-}
 
-void ParaFROST::GPU_preprocess()
-{
-	if (!phases && !cls_en) return;
-	/********************************/
-	/*         awaken sigma         */
-	/********************************/
-	timer->start();
-	if (!awaken()) { timer->stop(), pre_en = false; return; }
-	/********************************/
-	/*      1st-stage reduction     */
-	/********************************/
-	if (p_cnf_en) cnf->print();
-	int64 lits_before = nLiterals(), lits_diff = INT64_MAX;
-	int phase = 0;
-	while (lits_diff > LIT_REM_THR && phase < phases) {
+	void ParaFROST::preprocess()
+	{
+		if (!phases && !cls_en) return;
+		/********************************/
+		/*         awaken sigma         */
+		/********************************/
+		assert(cnfstate == UNSOLVED);
+		assert(conflict == NOREF);
+		timer.start();
+		int phase;
+		int64 lits_before, lits_diff;
+		awaken();
+		if (errCode == CNFALLOC_FAIL) { cuMem.destroy(); return; }
+		if (errCode == OTALLOC_FAIL) { cuMem.destroy(); goto writeBack; }
 		if (interrupted()) killSolver();
-		if (verbose > 1) printf("c |\t\tPhase-%d Variable Elections\n", phase);
-		CHECK(cudaStreamSynchronize(streams[0]));
-		createOT(cnf, ot, p_ot_en);
-		if (prop() == UNSAT) killSolver(UNSAT); 
-		if (!LCVE()) goto writeBack;
-		if (phase + 1 != phases && ((phase + 1) % cnf_free_freq == 0)) {
-			cnf_stats.max_added_cls = nClauses(), cnf_stats.max_added_lits = nLiterals();
-			if (verbose > 1) printf("c | Max. added clauses/literals = %d/%lld\n", maxAddedCls(), maxAddedLits());
-			if (!cuMem.resizeCNF(cnf, nClauses() + maxAddedCls(), nLiterals() + maxAddedLits())) goto writeBack;
-			createOTAsync(cnf, ot, p_ot_en);
+		/********************************/
+		/*      1st-stage reduction     */
+		/********************************/
+		phase = 0, lits_before = inf.nLiterals, lits_diff = INT64_MAX;
+		while (lits_diff > lits_rem_min && phase < phases) {
+			if (interrupted()) killSolver();
+			sync(streams[0]);
+			createOT(cnf, ot, false);
+			if (!prop()) killSolver();
+			PFLOG2(2, "\t\tPhase-%d Variable Elections", phase);
+			if (!LCVE()) goto writeBack;
+			if (!reallocCNF(phase + 1)) goto writeBack;
+			VE();
+			countCls();
+			inf.nClauses = inf.n_cls_after, inf.nLiterals = inf.n_lits_after;
+			lits_diff = lits_before - inf.nLiterals, lits_before = inf.nLiterals;
+			cacheUnits(streams[3]);
+			if (!reallocOT(streams[0])) goto writeBack;
+			phase++, vars->mu_inc++;
 		}
-		GPU_VE(); 
-		countCls(cnf, pv->gsts);
-		cnf_stats.global_n_cls = cnf_stats.n_cls_after, cnf_stats.global_n_lits = cnf_stats.n_lits_after;
-		lits_diff = lits_before - nLiterals(), lits_before = nLiterals();
-		if (pv->numGUnits) CHECK(cudaMemcpyAsync(sp->trail + sp->trail_head, cuMem.unitsLEA(),
-			pv->numGUnits * sizeof(uint32), cudaMemcpyDeviceToHost, streams[3]));
-		cuMem.resetOTCapAsync(ot, streams[0]), GPU_occurs(nLiterals());
-		if (!cuMem.resizeOTAsync(ot, d_hist, nLiterals(), streams[0])) goto writeBack;
-		phase++, pv->mu_inc++;
-	}
-	if (pv->numGUnits || cls_en) createOT(cnf, ot, p_ot_en);
-	if (pv->numGUnits && prop() == UNSAT) killSolver(UNSAT); 
-	/********************************/
-	/*      2nd-stage reduction     */
-	/********************************/
-	if (cls_en) {
-		if (verbose > 1) printf("c | 2nd-Stage Clause Eliminations..\n");
-		int t_p = mu_pos, t_n = mu_neg;
-		while (t_p <= CE_POS_LMT && t_n <= CE_NEG_LMT) pv->mu_inc++, t_p <<= pv->mu_inc, t_n <<= pv->mu_inc;
-		if (!LCVE()) goto writeBack;
-		if (sub_en) GPU_SUB();
-		if (bce_en) GPU_BCE();
-		if (hre_en) GPU_HRE();
-	}
-	/********************************/
-	/*           Write Back         */
-	/********************************/
-writeBack:
-	if (interrupted()) killSolver();
-	h_cnf = cuMem.allocHostCNF();
-	size_t copySize = h_cnf->numLits(), copyTile = copySize * litsCopyR;
-	CHECK(cudaMemcpyAsync(h_cnf->data(), cuMem.litsLEA(), copyTile * sizeof(uint32), cudaMemcpyDeviceToHost, streams[0]));
-	countDelVars(cnf, pv->gsts, cuMem.dvarsLEA());
-	CHECK(cudaMemcpyAsync(h_cnf->data(copyTile), cuMem.litsLEA(copyTile), (copySize - copyTile) * sizeof(uint32), cudaMemcpyDeviceToHost, streams[1]));
-	cnf_stats.global_n_cls = 0;
-	cnf_stats.global_n_lits = 0;
-	if (cnf_stats.n_del_vars - nVarsDeleted()) { // map
-		mapped = true;
-		mappedVars.resize(nOrgVars() + 1, 0);
-		reverseVars.resize(nOrgVars() + 1, 0);
-		cnf_stats.global_n_del_vars = 0;
-		cnf_stats.n_org_vars -= cnf_stats.n_del_vars;
-		cnf_stats.n_dual_vars = V2D(cnf_stats.n_org_vars + 1LL);
-		cleanSlate();
-	}
-	else { assert(mapped == false); cleanSlate(); }
-	printPStats();
-	timer->stop();
-	timer->pre = timer->cpuTime();
-	if (!solve_en) killSolver();
-	PDMInit(); // call initial PDM again 
-	pre_en = false;
-	if (pre_delay) progRate += (initProgRate >> 2);
-}
-
-void ParaFROST::cleanSlate()
-{
-	assert(wt.empty());
-	wt.allocMem();
-	uint32 copySize = h_cnf->size(), tile = clsTile;
-	uint32 nTiles = (copySize + tile - 1) / tile;
-	assert(nTiles > 0);
-	assert(tile * (nTiles - 1) <= copySize);
-	uint32 lastTile = copySize - tile * (nTiles - 1);
-	size_t* tiles = new size_t[nTiles], *t = tiles, *t_end = t + nTiles - 1, off = 0;
-	while (t < t_end) *t++ = tile * sizeof(SCLAUSE); 
-	*t = lastTile * sizeof(SCLAUSE);
-	assert(t - tiles == nTiles - 1);
-	t = tiles, t_end = t + nTiles;
-	CHECK(cudaStreamSynchronize(streams[0]));
-	CHECK(cudaStreamSynchronize(streams[1]));
-	// issue initial chunck
-	CHECK(cudaMemcpy(*h_cnf, cuMem.clsLEA(), *t++, cudaMemcpyDeviceToHost));
-	if (mapped) {
-		while (t < t_end) {
-			CHECK(cudaMemcpyAsync(*h_cnf + off + tile, cuMem.clsLEA(off + tile), *t++, cudaMemcpyDeviceToHost));
-			mapTile(off, tile), off += tile;
-			if (t < t_end) CHECK(cudaStreamSynchronize(0));
+		if (vars->nUnits || cls_en) createOT(cnf, ot, false);
+		if (!prop()) killSolver();
+		/********************************/
+		/*      2nd-stage reduction     */
+		/********************************/
+		if (cls_en) {
+			if (verbose > 1) printf("c | 2nd-Stage Clause Eliminations..\n");
+			int t_p = mu_pos, t_n = mu_neg;
+			while (t_p <= CE_POS_LMT && t_n <= CE_NEG_LMT) vars->mu_inc++, t_p <<= vars->mu_inc, t_n <<= vars->mu_inc;
+			if (!LCVE()) goto writeBack;
+			if (sub_en) SUB();
+			if (bce_en) BCE();
+			if (hre_en) HRE();
 		}
-		removed.appendFrom(sp->trail, sp->trail_size, 1);
-		delete[] h_hist, tiles; delete pv;
-		pv = NULL, h_hist = NULL, d_hist = NULL;
-		allocSolver(true), resetSolver();
-		uint32 oldVars = cnf_stats.n_org_vars + cnf_stats.n_del_vars;
-		Vec<Byte> seen(oldVars + 1, 0);
-		if (nTiles > 1) CHECK(cudaStreamSynchronize(0)); // sync last tile
-		CHECK(cudaMemcpyAsync(seen, cuMem.seenLEA(), oldVars + 1, cudaMemcpyDeviceToHost));
-		mapTile(off, lastTile);
-		mappedVars.clear(true);
-		cuMem.freeHostCNF(), h_cnf = NULL;
-		CHECK(cudaStreamSynchronize(0));
-		for (uint32 v = 1; v <= oldVars; v++) if (simpVal[v - 1] == UNDEFINED && !seen[v]) removed.push(V2D(v));
-		seen.clear(true);
+		/********************************/
+		/*           Write Back         */
+		/********************************/
+	writeBack:
+		if (interrupted()) killSolver();
+		cacheCNF(streams[0], streams[1]);
+		countDelVars();
+		printPStats();
+		sigmified = true;
+		if (canMap()) map();
+		else assert(!mapped), newBeginning();
+		timer.stop();
+		timer.pre = timer.cpuTime();
+		if (!solve_en) killSolver();
 	}
-	else {
-		while (t < t_end) {
-			CHECK(cudaMemcpyAsync(*h_cnf + off + tile, cuMem.clsLEA(off + tile), *t++, cudaMemcpyDeviceToHost));
-			copTile(off, tile), off += tile;
-			if (t < t_end) CHECK(cudaStreamSynchronize(0));
-		}
-		delete[] h_hist, tiles; delete pv;
-		pv = NULL, h_hist = NULL, d_hist = NULL;
-		resetSolver(false);
-		if (nTiles > 1) CHECK(cudaStreamSynchronize(0)); // sync last tile
-		copTile(off, lastTile);
-		cuMem.freeHostCNF(), h_cnf = NULL;
-	}
-	assert(consistent(orgs, wt));
-	simpVal.clear(true);
-	histogram.clear(), rawLits.clear();
-}
 
-void ParaFROST::GPU_VO()
-{
-	assert(d_hist != NULL);
-	if (pv->numGUnits) calcVarScores(pv->scores, d_hist, ot); // update d_hist & calc scores
-	else calcVarScores(pv->scores, d_hist);
-	CHECK(cudaMemcpyAsync(h_hist, d_hist, nDualVars() * sizeof(uint32), cudaMemcpyDeviceToHost, streams[2]));
-	thrust::sort(pv->scores, pv->scores + nOrgVars(), VAR_CMP());
-	CHECK(cudaStreamSynchronize(streams[2]));
-	pv->numGUnits = 0;
-	if (verbose == 4) {
-		printf("c | Variable occurrences:\n");
-		cudaMemcpy(h_hist, d_hist, nDualVars() * sizeof(uint32), cudaMemcpyDeviceToHost);
-		for (uint32 v = 0; v < nOrgVars(); v++) {
-			uint32 x = pv->scores[v].v, p = V2D(x), n = NEG(p);
-			printf("c | Var[%d]->(v: %d, p: %d, n: %d, s: %d)\n", v, x, h_hist[p], h_hist[n], pv->scores[v].sc);
-		}
-	}
-}
-
-void ParaFROST::GPU_occurs(const int64& numLits, const bool& init)
-{
-	assert(numLits > 0);
-	rawLits.resize(numLits);
-	if (init) copy(thrust::raw_pointer_cast(rawLits.data()), cnf, numLits);
-	else {
-		copyIf(thrust::raw_pointer_cast(rawLits.data()), cnf, pv->gsts);
-		assert(pv->gsts->numLits == numLits);
-	}
-	GPU_hist();
-	rawLits.clear();
-}
-
-void ParaFROST::GPU_hist()
-{
-	assert(rawLits.size() > 0);
-	assert(histogram.size() == V2D(nOrgVars() + 1ULL));
-	thrust::sort(rawLits.begin(), rawLits.end());
-	thrust::counting_iterator<size_t> search_begin(0);
-	thrust::upper_bound(rawLits.begin(), rawLits.end(), search_begin, search_begin + nDualVars(), histogram.begin());
-	thrust::adjacent_difference(histogram.begin(), histogram.end(), histogram.begin());
-}
-
-CNF_STATE ParaFROST::prop()
-{
-	if (pv->numGUnits) {
-		CHECK(cudaStreamSynchronize(streams[3]));
-		if (verbose == 4) printTrail();
-	}
-	while (sp->trail_head < sp->trail_size) { // propagate units
-		uint32 unit = sp->trail[sp->trail_head++], unitIdx = V2X(unit), f_unit = FLIP(unit);
-		assert(unit);
-		LIT_ST val = !ISNEG(unit);
-		if (simpVal[unitIdx] != val) { // not propagated before
-			assert(simpVal[unitIdx] == UNDEFINED);
-			simpVal[unitIdx] = val;
-			if (verbose == 4) printf("c | Propagating unit("), printLit(unit), printf("):\n"), ot->printClauseSet(*cnf, unitIdx);
-			OL& ol = (*ot)[unit], &ol_f = (*ot)[f_unit];
-			for (uint32 i = 0; i < ol.size(); i++) (*cnf)[ol[i]].markDeleted(); // remove satisfied
-			for (uint32 i = 0; i < ol_f.size(); i++) { // reduce unsatisfied 
-				SCLAUSE& c = (*cnf)[ol_f[i]];
-				assert(c.size());
-				if (c.status() == DELETED || propClause(c, f_unit)) continue; // clause satisfied
-				if (c.size() == 0) return UNSAT; // conflict on top level
-				if (c.size() == 1) {
-					assert(*c > 1);
-					if (simpVal[V2X(*c)] == UNDEFINED) sp->trail[sp->trail_size++] = *c; // new unit
-					else return UNSAT;  // conflict on top level
+	C_REF ParaFROST::newClause(SCLAUSE& s)
+	{
+		assert(!s.deleted());
+		C_REF r = s.ref();
+		if (r == NOREF) {
+			int sz = s.size();
+			assert(sz > 1);
+			r = cm.alloc(sz);
+			s.set_ref(r); // new ref overwrites simplified clause sig.
+			CLAUSE& new_c = cm[r];
+			if (mapped) vmap.mapClause(new_c, s);
+			else new_c.copyLitsFrom(s);
+			assert(sz == new_c.size());
+			assert(new_c[0] > 0 && new_c[1] > 0);
+			assert(new_c[0] <= UINT32_MAX && new_c[1] <= UINT32_MAX);
+			new_c.set_status(s.status());
+			if (sz == 2) {
+				if (s.status() == ORIGINAL) inf.nOrgBins++;
+				else assert(s.status() == LEARNT), inf.nLearntBins++;
+			}
+			else {
+				assert(sz > 2);
+				if (s.status() == LEARNT) {
+					new_c.set_LBD(new_c.size());
+					learnts.push(r);
+					inf.nLearntLits += sz;
 				}
+				orgs.push(r);
+				inf.nLiterals++;
 			}
-			if (verbose == 4) ot->printClauseSet(*cnf, unitIdx);
-			(*ot)[unit].clear(true), (*ot)[f_unit].clear(true);
 		}
+		return r;
 	}
-	if (pv->numGUnits) {
-		if (verbose > 1) { evalReds(cnf, pv->gsts); printf("c |\t\tBCP Reductions\n"); logReductions(); }
-		pv->units->clear(), filterPVs(), reduceOTAsync(cnf, ot, p_ot_en);
-	}
-	return UNSOLVED;
-}
 
-void ParaFROST::GPU_VE()
-{
-	if (interrupted()) killSolver();
-	if (verbose > 1) cout << "c | Eliminating variables for round-0." << endl;
-	ve(cnf, ot, pv);
-	if (verbose > 1) { evalReds(cnf, pv->gsts); printf("c |\t\tBVE Reductions\n"); logReductions(); }
-	if (ve_plus_en) {
-		countLits(cnf, pv->gsts);
-		int64 lits_before = cnf_stats.n_lits_after, lits_removed = nLiterals() - cnf_stats.n_lits_after;
-		while (lits_removed > LIT_REM_THR && filterPVs()) {
-			// HSE
-			if (verbose > 1) printf("c | Applying HSE..");
-			hse(cnf, ot, pv);
-			// count remaining literals
-			countLits(cnf, pv->gsts);
-			lits_removed = lits_before - cnf_stats.n_lits_after;
-			if (verbose > 1) printf("(Literals reduction: -%lld) ==> done\n", lits_removed);
-			if (lits_removed <= LIT_REM_THR) break;
-			// VE
-			if (verbose > 1) printf("c | Applying VE..");
-			ve(cnf, ot, pv);
-			// count remaining literals
-			countLits(cnf, pv->gsts);
-			lits_removed = (lits_before > cnf_stats.n_lits_after) ? lits_before - cnf_stats.n_lits_after : cnf_stats.n_lits_after - lits_before;
-			if (verbose > 1) {
-				if (lits_before > cnf_stats.n_lits_after) printf("(Literals reduction: -%lld) ==> done\n", lits_removed);
-				else printf("(Literals reduction: +%lld) ==> done\n", lits_removed);
+	void ParaFROST::newBeginning() {
+		assert(sigma_en || sigma_live_en);
+		assert(sigmified);
+		assert(!hcnf->empty());
+		assert(wtBin.empty()), assert(wt.empty());
+		assert(orgs.empty()), assert(learnts.empty());
+		inf.nOrgBins = inf.nLearntBins = 0;
+		inf.nLiterals = inf.nLearntLits = 0;
+		assert(inf.maxVar > vmap.numVars());
+		uint32 tableSize = mapped ? v2l(vmap.size()) : inf.nDualVars;
+		wtBin.resize(tableSize), wt.resize(tableSize);
+		cm.init(hcnf->data().size);
+		sync(streams[0]), sync(streams[1]); // sync CNF caching
+		if (!mapped) cacheVarSt(cudaMemcpyDeviceToHost);
+		createWT(), copyWatched(), copyNonWatched(); // must follow this order
+		inf.nOrgCls = inf.nClauses = orgs.size();
+		inf.nOrgLits = inf.nLiterals;
+		cuMem.breakMirror(); // free host CNF
+		if (!mapped) assert(vmap.empty()), sync(), sp->lockMelted();
+	}
+
+	void ParaFROST::depFreeze(const OL& ol, const uint32& cand, const uint32& p_temp, const uint32& n_temp)
+	{
+		for (uint32 i = 0; i < ol.size(); i++) {
+			SCLAUSE& c = (*cnf)[ol[i]];
+			for (int k = 0; k < c.size(); k++) {
+				register uint32 v = l2a(c[k]), p = v2l(v), n = neg(p);
+				if (v != cand && (h_hist[p] < p_temp || h_hist[n] < n_temp)) sp->frozen[v] = 1;
 			}
-			lits_before = cnf_stats.n_lits_after;
 		}
 	}
-	pv->numGUnits = pv->units->size(), sp->trail_size += pv->numGUnits;
-}
 
-void ParaFROST::GPU_SUB()
-{
-	if (interrupted()) killSolver();
-	if (verbose > 1) printf("c | HSE-ing parallel variables..");
-	hse(cnf, ot, pv);
-	pv->numGUnits = pv->units->size(), sp->trail_size += pv->numGUnits;
-	if (pv->numGUnits) CHECK(cudaMemcpyAsync(sp->trail + sp->trail_head, cuMem.unitsLEA(),
-		pv->numGUnits * sizeof(uint32), cudaMemcpyDeviceToHost, streams[3]));
-	if (prop() == UNSAT) killSolver(UNSAT);
-	if (verbose > 1) {
-		printf(" ==> done\n");
-		CHECK(cudaDeviceSynchronize()), evalReds(cnf, pv->gsts);
-		printf("c |\t\tHSE Reductions\n"), logReductions();
-	}
-}
-
-void ParaFROST::GPU_BCE()
-{
-	if (interrupted()) killSolver();
-	if (verbose > 1) cout << "c | Eliminating blocked clauses..";
-	bce(cnf, ot, pv);
-	if (verbose > 1)
-		printf(" ==> done\n"), countCls(cnf, pv->gsts), printf("c |\t\tBCE Reductions\n"), logReductions(1);
-}
-
-void ParaFROST::GPU_HRE()
-{
-	if (interrupted()) killSolver();
-	if (verbose > 1) cout << "c | Eliminating hidden redundances..";
-	hre(cnf, ot, pv);
-	if (verbose > 1) 
-		printf(" ==> done\n"), countCls(cnf, pv->gsts), printf("c |\t\tHRE Reductions\n"), logReductions(1);
-}
-
-void ParaFROST::depFreeze(const OL& ol, const uint32& cand, const uint32& p_temp, const uint32& n_temp)
-{
-	for (uint32 i = 0; i < ol.size(); i++) {
-		SCLAUSE& c = (*cnf)[ol[i]];
-		for (LIT_POS k = 0; k < c.size(); k++) {
-			register uint32 v = ABS(c[k]), p = V2D(v), n = NEG(p);
-			if (v != cand && (h_hist[p] < p_temp || h_hist[n] < n_temp)) sp->frozen[v] = true;
+	bool ParaFROST::LCVE()
+	{
+		// reorder variables
+		varReorder();
+		// extended LCVE
+		PFLOGN2(2, " Electing variables..");
+		vars->numPVs = 0, vars->pVars->clear();
+		for (uint32 v = 0; v < inf.maxVar; v++) {
+			uint32 cand = vars->eligible[v];
+			assert(cand && cand <= inf.maxVar);
+			if (sp->vstate[cand] == FROZEN) continue;
+			if (sp->frozen[cand]) continue;
+			uint32 p = v2l(cand), n = neg(p);
+			assert((*ot)[p].size() == h_hist[p]);
+			assert((*ot)[n].size() == h_hist[n]);
+			if (h_hist[p] == 0 && h_hist[n] == 0) continue;
+			uint32 pos_temp = mu_pos << vars->mu_inc, neg_temp = mu_neg << vars->mu_inc;
+			if (h_hist[p] >= pos_temp && h_hist[n] >= neg_temp) break;
+			assert(sp->vstate[cand] == ACTIVE);
+			vars->pVars->_push(cand);
+			depFreeze((*ot)[p], cand, pos_temp, neg_temp);
+			depFreeze((*ot)[n], cand, pos_temp, neg_temp);
 		}
+		vars->numPVs = vars->pVars->size();
+		assert(verifyLCVE());
+		PFLENDING(2, 5, "(%d elected)", vars->numPVs);
+		if (verbose == 4) { PFLOGN0(" PLCVs "); printVars(*vars->pVars, vars->numPVs, 'v'); }
+		memset(sp->frozen, 0, inf.maxVar + 1ULL);
+		if (vars->numPVs < lcve_min) {
+			if (verbose > 1) PFLOGW("parallel variables not enough -> skip BVE");
+			return false;
+		}
+		return true;
 	}
-}
 
-bool ParaFROST::LCVE()
-{
-	GPU_VO();
-	pv->numPVs = 0, pv->pVars->clear();
-	for (uint32 v = 0; v < nOrgVars(); v++) {
-		uint32 cand = pv->scores[v].v;
-		assert(cand && cand <= nOrgVars());
-		if (sp->frozen[cand]) continue;
-		uint32 p = V2D(cand), n = NEG(p);
-		assert((*ot)[p].size() == h_hist[p]);
-		assert((*ot)[n].size() == h_hist[n]);
-		if (h_hist[p] == 0 && h_hist[n] == 0) continue;
-		assert(simpVal[cand - 1] == UNDEFINED);
-		uint32 pos_temp = mu_pos << pv->mu_inc, neg_temp = mu_neg << pv->mu_inc;
-		if (h_hist[p] >= pos_temp && h_hist[n] >= neg_temp) break;
-		pv->pVars->_push(cand);
-		depFreeze((*ot)[p], cand, pos_temp, neg_temp);
-		depFreeze((*ot)[n], cand, pos_temp, neg_temp);
-	}
-	pv->numPVs = pv->pVars->size();
-	assert(verifyLCVE());
-	if (verbose >= 3) printf("c | PLCVs "), printVars(*pv->pVars, pv->numPVs);
-	bool* f = sp->frozen, * f_end = f + nOrgVars() + 1;
-	while (f != f_end) *f++ = 0;
-	if (pv->numPVs < MIN_PVARS) {
-		if (verbose > 1) PFLOGW("parallel variables not enough -> skip simp.");
+	bool ParaFROST::propClause(SCLAUSE& c, const uint32& f_assign)
+	{
+		uint32 sig = 0;
+		int n = 0;
+		bool check = false;
+		for (int k = 0; k < c.size(); k++) {
+			uint32 lit = c[k];
+			if (lit != f_assign) {
+				if (isTrue(lit)) return true;
+				c[n++] = lit;
+				sig |= MAPHASH(lit);
+			}
+			else check = true;
+		}
+		assert(check);
+		assert(n == c.size() - 1);
+		assert(c.hasZero() < 0);
+		assert(c.isSorted());
+		c.set_sig(sig);
+		c.pop();
 		return false;
 	}
-	return true;
+
+	bool ParaFROST::enqeueCached(const cudaStream_t& stream) {
+		if (vars->nUnits) {
+			nForced = sp->propagated;
+			sync(stream);
+			assert(vars->cachedUnits != NULL);
+			uint32* t = vars->cachedUnits + vars->nUnits;
+			for (uint32* u = vars->cachedUnits; u != t; u++) {
+				LIT_ST val = value(*u);
+				if (val == UNDEFINED) enqueue(*u);
+				else if (!val) return false; // early conflict detection
+			}
+			if (trail.size() == sp->propagated) vars->nUnits = nForced = 0; // duplicate units
+			else PFLTRAIL(this, 3);
+		}
+		return true;
+	}
+
+	bool ParaFROST::prop()
+	{
+		enqeueCached(streams[3]);
+		while (sp->propagated < trail.size()) { // propagate units
+			uint32 assign = trail[sp->propagated++], f_assign = flip(assign);
+			assert(assign);
+			PFLBCP(this, 4, assign);
+			OL& ol = (*ot)[assign], & f_ol = (*ot)[f_assign];
+			for (uint32 i = 0; i < ol.size(); i++) (*cnf)[ol[i]].markDeleted(); // remove satisfied
+			for (uint32 i = 0; i < f_ol.size(); i++) { // reduce unsatisfied 
+				SCLAUSE& c = (*cnf)[f_ol[i]];
+				assert(c.size());
+				if (c.deleted() || propClause(c, f_assign)) continue; // clause satisfied
+				assert(c.size()); // cannot be empty at this point
+				if (c.size() == 1) {
+					assert(*c > 1);
+					if (unassigned(*c)) enqueue(*c); 
+					else { cnfstate = UNSAT; return false; }  // conflict on top level
+				}
+			}
+			(*ot)[assign].clear(true), (*ot)[f_assign].clear(true);
+		}
+		cleanProped();
+		return true;
+	}
+
+	void ParaFROST::VE()
+	{
+		if (interrupted()) killSolver();
+		int64 lits_before = inf.nLiterals, lits_removed = INT64_MAX;
+		int round = 0;
+		while (lits_removed > lits_rem_min) {
+			PFLOG2(2, " Elimination round %d:", round++);
+			if (ve_plus_en) {
+				PFLOGN2(2, "  1) HSE-ing variables..");
+				hse(cnf, ot, vars), countLits();
+				lits_removed = lits_before - inf.n_lits_after;
+				lits_before = inf.n_lits_after;
+				assert(lits_removed >= 0);
+				PFLENDING(2, 5, "(Literals removed : %lld)", -lits_removed);
+			}
+			PFLOGN2(2, "  2) Eliminating variables..");
+			ve(cnf, ot, vars), countLits();
+			lits_removed = lits_before - inf.n_lits_after;
+			PFLENDING(2, 5, "(Literals removed : %c%lld)", lits_removed < 0 ? '+' : '-', abs(lits_removed));
+			lits_before = inf.n_lits_after;
+			if (filterPVs()) break;
+		}
+		PFLREDALL(this, 2, "BVE(+) Reductions");
+		cacheNumUnits(streams[3]);
+	}
+
+	void ParaFROST::SUB()
+	{
+		if (interrupted()) killSolver();
+		PFLOGN2(2, " SUB-ing variables..");
+		hse(cnf, ot, vars);
+		cacheNumUnits(streams[3]);
+		cacheUnits(streams[3]);
+		if (!prop()) killSolver();
+		PFLDONE(2, 5);
+		PFLREDCL(this, 2, "SUB Reductions");
+	}
+
+	void ParaFROST::BCE()
+	{
+		if (interrupted()) killSolver();
+		PFLOGN2(2, " Eliminating blocked clauses..");
+		bce(cnf, ot, vars);
+		PFLDONE(2, 5);
+		PFLREDALL(this, 2, "BCE Reductions");
+	}
+
+	void ParaFROST::HRE()
+	{
+		if (interrupted()) killSolver();
+		PFLOGN2(2, " Eliminating hidden redundances..");
+		hre(cnf, ot, vars);
+		PFLDONE(2, 5);
+		PFLREDCL(this, 2, "HRE Reductions");
+	}
+
 }

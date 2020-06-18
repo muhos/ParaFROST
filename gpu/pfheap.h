@@ -22,128 +22,92 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 #include "pfvec.h"
 #include "pfdefs.h"
 
-typedef struct {
-	double var_inc, var_decay;
-}VAR_PARAM;
-class VAR_HEAP {
-	uVec1D heap;
-	Vec1D indices;  
-	double* activity;
-	uint32 alloc_sz;
-	VAR_PARAM var_param;
+namespace pFROST {
 
-	inline int left(const int& i) { return (i << 1) + 1; }
-	inline int right(const int& i) { return (i + 1) << 1; }
-	inline int parent(const int& i) { return (i - 1) >> 1; }
-	inline void bubbleUp(int i) {
-		uint32   x = heap[i];
-		int p = parent(i);
-		while (i != 0 && activity[x] > activity[heap[p]]) {
-			heap[i] = heap[p];
-			indices[heap[p]] = i;
-			i = p;
-			p = parent(p);
-		}
-		heap[i] = x;
-		indices[x] = i;
-	}
-	inline void bubbleDown(int i) {
-		uint32 x = heap[i];
-		while (left(i) < heap.size()) {
-			int child = (right(i) < heap.size() && activity[heap[right(i)]] > activity[heap[left(i)]]) ? right(i) : left(i);
-			if (activity[heap[child]] <= activity[x]) break;
-			heap[i] = heap[child];
-			indices[heap[i]] = i;
-			i = child;
-		}
-		heap[i] = x;
-		indices[x] = i;
-	}
+#define ILLEGAL_POS NOREF
 
-public:
-	VAR_HEAP() { var_param = { 0, 0 }; activity = NULL; alloc_sz = 0; }
-	~VAR_HEAP() { delete[] activity; activity = NULL; heap.clear(true); indices.clear(true); }
-	void allocMem(const uint32& sz) {
-		alloc_sz = sz;
-		assert(alloc_sz > 0);
-		activity = new double[alloc_sz];
-		indices.resize(alloc_sz);
-	}
-	void init(const double& var_inc, const double& var_decay) {
-		assert(indices.size() <= (int)alloc_sz);
-		heap.clear();
-		for (uint32 i = 0; i < alloc_sz; i++) {
-			activity[i] = 0.0;
-			indices[i] = UNDEFINED;
+	template <class CMP>
+	class HEAP {
+		uVec1D	heap;
+		uVec1D	pos;
+		CMP		cmp;
+		__forceinline uint32	L(const uint32& x) { return (pos[x] << 1) + 1; }
+		__forceinline uint32	R(const uint32& x) { return (pos[x] + 1) << 1; }
+		__forceinline uint32	left(const uint32& x) { return heap[L(x)]; }
+		__forceinline uint32	right(const uint32& x) { return heap[R(x)]; }
+		__forceinline uint32	parent(const uint32& x) { return heap[(pos[x] - 1) >> 1]; }
+		__forceinline bool		hasLeft(const uint32& x) { return L(x) < heap.size(); }
+		__forceinline bool		hasRight(const uint32& x) { return R(x) < heap.size(); }
+		__forceinline bool		hasParent(const uint32& x) { return pos[x] > 0; }
+		__forceinline void		exch(const uint32& x, const uint32& y) {
+			uint32& i = pos[x], & j = pos[y];
+			swap(heap[i], heap[j]);
+			swap(i, j);
 		}
-		var_param.var_inc = var_inc;
-		var_param.var_decay = var_decay;
-	}
-	inline int size() const { return (int)heap.size(); }
-	inline bool empty() const { return heap.size() == 0; }
-	inline bool has(const uint32& v) const { return indices[v] >= 0; }
-	inline void build(const uint32& nVars) { for (uint32 v = 0; v < nVars; v++) insert(v); }
-	inline void incVarDecay(const double& rate) { var_param.var_decay += rate; }
-	inline double varActivity(const uint32& v) { return *(activity + v); }
-	inline void VarDecayAct(void) { var_param.var_inc *= (1.0 / var_param.var_decay); }
-	inline double VarDecay(void) { return var_param.var_decay; }
-	inline double maxActivity() { return activity[heap[0]] == 0.0 ? var_param.var_inc : activity[heap[0]]; }
-	inline double varInc() { return var_param.var_inc; }
-	inline uint32* h_ptr() { return heap; }
-	inline double* act_ptr() { return activity; }
-	inline void varBumpAct(const uint32& v) {
-		if ((activity[v] += var_param.var_inc) > 1e100) {
-			for (uint32 i = 0; i < nOrgVars(); i++) activity[i] *= 1e-100; // rescale activity
-			var_param.var_inc *= 1e-100;
+		__forceinline void		bubbleUp(uint32 x) {
+			assert(x < ILLEGAL_POS);
+			uint32 p;
+			while (hasParent(x) && cmp((p = parent(x)), x)) exch(p, x);
 		}
-		if (has(v)) bubbleUp(indices[v]);
-	}
-	inline void varBumpAct(const uint32& v, double norm_act) {
-		if ((activity[v] += norm_act) > 1e100) {
-			for (uint32 i = 0; i < nOrgVars(); i++) activity[i] *= 1e-100; // rescale activity
-			var_param.var_inc *= 1e-100;
+		__forceinline void		bubbleDown(uint32 x) {
+			assert(x < ILLEGAL_POS);
+			while (hasLeft(x)) {
+				uint32 child = left(x);
+				if (hasRight(x)) {
+					uint32 r_x = right(x);
+					if (cmp(child, r_x)) child = r_x;
+				}
+				if (!cmp(x, child)) break;
+				exch(x, child);
+			}
 		}
-		if (has(v)) bubbleUp(indices[v]);
-	}
-	inline void insert(const uint32& v) {
-		assert(v < (uint32)indices.size());
-		assert(!has(v));
-		indices[v] = (int)heap.size();
-		heap.push(v);
-		bubbleUp(indices[v]);
-	}
-	inline void remove(const uint32& v) {
-		assert(has(v));
-		int v_pos = indices[v];
-		indices[v] = UNDEFINED;
-		int last_idx = heap.size() - 1;
-		if (v_pos < last_idx) {
-			heap[v_pos] = heap[last_idx];
-			indices[heap[v_pos]] = v_pos;
+	public:
+								HEAP(const CMP& _cmp) : cmp(_cmp) {}
+								~HEAP() { destroy(); }
+		__forceinline uint32*	data() { return heap; }
+		__forceinline uint32	top() { assert(!empty()); return *heap; }
+		__forceinline uint32	size() const { return heap.size(); }
+		__forceinline bool		empty() const { return heap.size() == 0; }
+		__forceinline uint32	pop() {
+			uint32 top_x = heap[0], last = heap.back();
+			if (heap.size() > 1) exch(top_x, last);
+			pos[top_x] = ILLEGAL_POS;
 			heap.pop();
-			bubbleDown(v_pos);
+			if (heap.size() > 1) bubbleDown(last);
+			return top_x;
 		}
-		else heap.pop();
-	}
-	inline uint32 removeMin() {
-		uint32 x = heap[0];
-		heap[0] = heap[heap.size() - 1];
-		indices[heap[0]] = 0;
-		indices[x] = UNDEFINED;
-		heap.pop();
-		if (heap.size() > 1) bubbleDown(0);
-		return x;
-	}
-	void clear() {
-		for (int i = 0; i < heap.size(); i++) indices[heap[i]] = UNDEFINED;
-		heap.clear(true);
-		indices.clear(true);
-	}
-	void print() { // print heap content with associated activity
-		for (int i = 0; i < heap.size(); i++) {
-			printf(" heap[%d] = %d, a = %f\n", i, heap[i], activity[heap[i]]);
+		__forceinline void		clear() {
+			for (uint32 i = 0; i < heap.size(); i++) pos[heap[i]] = ILLEGAL_POS;
+			heap.clear();
 		}
-	}
-};
+		__forceinline void		destroy() {
+			heap.clear(true);
+			pos.clear(true);
+		}
+		__forceinline uint32&	operator[]	(const uint32& i) { assert(i < heap.size()); return heap[i]; }
+		__forceinline bool		has(const uint32& x) const { return pos.size() > x && pos[x] != ILLEGAL_POS; }
+		__forceinline void		bump(const uint32& x) { if (has(x)) update(x); }
+		__forceinline void		update(uint32 x) {
+			assert(has(x));
+			bubbleUp(x);
+			bubbleDown(x);
+		}
+		__forceinline void		insert(const uint32& x) {
+			pos.expand(x + 1, ILLEGAL_POS);
+			assert(!has(x));
+			pos[x] = heap.size();
+			heap.push(x);
+			bubbleUp(x);
+			bubbleDown(x);
+		}
+		__forceinline void		rebuild(uVec1D& vars) {
+			destroy();
+			for (uint32 i = 0; i < vars.size(); i++)
+				insert(vars[i]);
+		}
+
+	};
+
+}
 
 #endif

@@ -19,59 +19,54 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 #include "pfsort.h"
 #include "pfargs.h"
 
-bool isQuiet(void) 
-{
-    for (int i = 0; i < ARG::opts().size(); i++) {
-        if (ARG::opts()[i]->type == "<bool>" && ARG::opts()[i]->arg == "q" && ARG::opts()[i]->isParsed())
-            return true;
-    }
-    return false;
-}
+namespace pFROST {
 
-void printUsage(int argc, char** argv, bool verbose)
-{
-    PFLOGR('-', RULELEN);
-    PFLOG(" Usage: parafrost [<option> ...][<infile>.<cnf>][<option> ...]");
-    Sort(ARG::opts(), ARG::ARG_CMP());
-    arg_t prev_type = NULL;
-    PFLOG("");
-    PFLOG(" Options (simplification + solve):");
-    for (int i = 0; i < ARG::opts().size(); i++) {
-        if (ARG::opts()[i]->type != prev_type) PFLOG("");
-        ARG::opts()[i]->help(verbose);
-        prev_type = ARG::opts()[i]->type;
-    }
-    PFLOG("");
-    PFLOG("  -h or --help  print available options.");
-    PFLOG("  --help-more   print available options with verbose message.");
-    PFLOG("");
-    PFLOGR('-', RULELEN);
-    exit(EXIT_SUCCESS);
-}
-
-void parseArguments(int& argc, char** argv)
-{
-    int i, j;
-    for (i = j = 1; i < argc; i++) {
-        if (string(argv[i]) == "-h") printUsage(argc, argv);
-        char* arg = argv[i];
-        if (eq(arg, "--") && eq(arg, "help")) {
-            if (*arg == '\0')
-                printUsage(argc, argv);
-            else if (eq(arg, "-more"))
-                printUsage(argc, argv, true);
+    void printUsage(int argc, char** argv, bool verbose)
+    {
+        PFNAME("ParaFROST");
+        PFLOG0(" Usage: parafrost [<option> ...][<infile>.<cnf>][<option> ...]");
+        Sort(ARG::opts(), ARG::ARG_CMP());
+        arg_t prev_type = NULL;
+        PFLOG0("");
+        PFLOG0(" Options (simplification + solve):");
+        for (int i = 0; i < ARG::opts().size(); i++) {
+            if (ARG::opts()[i]->type != prev_type) PFLOG0("");
+            ARG::opts()[i]->help(verbose);
+            prev_type = ARG::opts()[i]->type;
         }
-        else {
-            int k = 0;
-            bool parsed = false;
-            while (k < ARG::opts().size() && !(parsed = ARG::opts()[k++]->parse(argv[i])));
-            if (!parsed) {
-                if (eq(argv[i], "--"))
-                    PFLOGE("unknown input \"%s\". Use '-h or --help' for help.", argv[i]);
-                else
-                    argv[j++] = argv[i];
+        PFLOG0("");
+        PFLOG0("  -h or --help  print available options.");
+        PFLOG0("  --help-more   print available options with verbose message.");
+        PFLOG0("");
+        PFLOGR('-', RULELEN);
+        exit(EXIT_SUCCESS);
+    }
+
+    void parseArguments(int& argc, char** argv)
+    {
+        int i, j;
+        for (i = j = 1; i < argc; i++) {
+            if (string(argv[i]) == "-h") printUsage(argc, argv);
+            char* arg = argv[i];
+            if (eq(arg, "--") && eq(arg, "help")) {
+                if (*arg == '\0')
+                    printUsage(argc, argv);
+                else if (eq(arg, "-more"))
+                    printUsage(argc, argv, true);
+            }
+            else {
+                int k = 0;
+                bool parsed = false;
+                while (k < ARG::opts().size() && !(parsed = ARG::opts()[k++]->parse(argv[i])));
+                if (!parsed) {
+                    if (eq(argv[i], "--"))
+                        PFLOGE("unknown input \"%s\". Use '-h or --help' for help.", argv[i]);
+                    else
+                        argv[j++] = argv[i];
+                }
             }
         }
+        argc -= (i - j);
     }
-    argc -= (i - j);
+
 }
