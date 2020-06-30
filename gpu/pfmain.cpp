@@ -39,11 +39,11 @@ int main(int argc, char** argv)
 			PFAUTHORS("Muhammad Osama and Anton Wijs");
 			PFRIGHTS("Technische Universiteit Eindhoven (TU/e)");
 			PFLOGR('-', RULELEN);
-			PFLOGN0(" Embedded options: ");
+			PFLOGN0(" Embedded options:\t");
 			for (uint32 i = 0, j = 0; i < options.size(); i++) {
 				if (options[i]->isParsed()) {
 					options[i]->printArgument();
-					if (++j % 4 == 0) { putc('\n', stdout); PFLOGN0("\t\t"); }
+					if (++j % 4 == 0) { putc('\n', stdout); PFLOGN0("\t\t\t"); }
 				}
 			}
 			putc('\n', stdout); PFLOGR('-', RULELEN);

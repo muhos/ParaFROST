@@ -35,6 +35,7 @@ namespace pFROST {
 			_PFROST_H_D_			~cuVec		() { clear(true); }
 			_PFROST_H_D_ void		alloc		(T* head) { _mem = head; }
 			_PFROST_H_D_ void		alloc		(T* head, const uint32& cap) { _mem = head, this->cap = cap; }
+			_PFROST_H_D_ void		alloc		(const uint32& cap) { _mem = (T*)(this + 1), this->cap = cap; }
 			_PFROST_D_	 T*			jump		(const uint32&);
 			_PFROST_D_   void		shrink		(const uint32&);
 			_PFROST_D_   void		insert		(const T&);
@@ -49,6 +50,7 @@ namespace pFROST {
 			_PFROST_H_D_ T&			at			(const uint32& idx) { assert(idx < sz); return _mem[idx]; }
 			_PFROST_H_D_			operator T* () { return _mem; }
 			_PFROST_H_D_ T*			data		() { return _mem; }
+			_PFROST_H_D_ T*			end			() { return _mem + sz; }
 			_PFROST_H_D_ T&			back		() { assert(sz); return _mem[sz - 1]; }
 			_PFROST_H_D_ bool		empty		() const { return sz == 0; }
 			_PFROST_H_D_ uint32		size		() const { return sz; }
@@ -76,6 +78,7 @@ namespace pFROST {
 				printf("]\n");
 			}
 		};
+
 	}
 }
 

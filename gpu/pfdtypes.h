@@ -35,10 +35,6 @@ namespace pFROST {
 	typedef uint32 C_REF;
 	typedef void* G_REF;
 
-#ifdef __GNUC__
-#define __forceinline __attribute__((always_inline))
-#endif
-
 }
 
 #endif

@@ -25,6 +25,9 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 #include <cuda.h>
 #include <device_launch_parameters.h>
 
+#if !defined(_PFROST_H_)
+#define _PFROST_H_ inline __host__
+#endif
 #if !defined(_PFROST_D_)
 #define _PFROST_D_ __forceinline__ __device__
 #endif

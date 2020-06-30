@@ -23,27 +23,35 @@ namespace pFROST {
 
 	namespace SIGmA {
 
-		// global
-		#define MASTER_GPU	0
-		#define AWAKEN_SUCC 0
-		#define CNFALLOC_FAIL 1
-		#define OTALLOC_FAIL 2
-		#define BLOCK1D		256
-		#define FULLWARP	0xFFFFFFFFU
+		// Global
+		#define MASTER_GPU		0
+		#define AWAKEN_SUCC		0
+		#define AWAKEN_FAIL		1
+		#define CNFALLOC_FAIL	2
+		#define OTALLOC_FAIL	3
+		#define LCVE_FAIL		4
+		#define BLOCK1D			256
+		#define FULLWARP		0xFFFFFFFFU
 
-		// specialized
-		#define CE_POS_LMT 512
-		#define CE_NEG_LMT 512
-		#define FAN_LMT 64
-		#define SH_MAX_BVE_OUT 125
-		#define SH_MAX_BCE_IN 95 
-		#define SH_MAX_HSE_IN 180
-		#define SH_MAX_HRE_IN 100
-		#define SH_MAX_HRE_OUT 250
-		#define BLUB 256
-		#define BLVE 64
-		#define BLHSE 64
-		#define BLBCE 128
+		// BVE marking
+		#define MELTING_MASK	0x80000000U
+		#define UNMELT_MASK		0x7FFFFFFFU
+		#define ELIMINATED(x)	(x & MELTING_MASK)
+		#define RECOVERVAR(x)	(x & UNMELT_MASK)
+
+		// Kernel configuration & GUARDs
+		#define CE_POS_LMT		512
+		#define CE_NEG_LMT		512
+		#define FAN_LMT			64
+		#define SH_MAX_BVE_OUT	125
+		#define SH_MAX_BCE_IN	95 
+		#define SH_MAX_HSE_IN	180
+		#define SH_MAX_HRE_IN	100
+		#define SH_MAX_HRE_OUT	250
+		#define BLUB			256
+		#define BLVE			64
+		#define BLHSE			64
+		#define BLBCE			128
 
 	}
 }

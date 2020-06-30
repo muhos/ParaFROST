@@ -28,6 +28,10 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 namespace pFROST {
 
+#ifdef __GNUC__
+#define __forceinline __attribute__((always_inline))
+#endif
+
 	template<class T, class S = uint32>
 	class Vec {
 		T* _mem;

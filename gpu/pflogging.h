@@ -173,7 +173,7 @@ inline void REPCH(const char& ch, const size_t& size, const size_t& off = 0) {
 
 #define PFLNEWLIT(s, lvl, src, lit) \
     do { \
-        PFLOG2(lvl, " New %s( %d@%d )", src == NOREF ? s->DL() == ROOT_LEVEL ? "forced unit" : "decision"  : "unit", l2i(lit), l2dl(lit)); \
+        PFLOG2(lvl, "   New %s( %d@%d )", src == NOREF ? s->DL() == ROOT_LEVEL ? "forced unit" : "decision"  : "unit", l2i(lit), l2dl(lit)); \
     }while(0)
 
 #define PFLCONFLICT(s, lvl, lit) PFLOG2(lvl, " Conflict detected in literal( %d@%d )", l2i(lit), l2dl(lit));
@@ -188,7 +188,7 @@ inline void REPCH(const char& ch, const size_t& size, const size_t& off = 0) {
 #define PFLREDCL(s, lvl, msg) \
     if (verbose >= lvl) { \
         inf.n_del_vars_after = 0; \
-        s->countCls(); \
+        s->countAll(); \
         PFLOG1("\t\t %s", msg); \
         s->logReductions(); \
     }

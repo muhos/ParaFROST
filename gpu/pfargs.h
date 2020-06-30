@@ -108,13 +108,13 @@ namespace pFROST {
 		}
 
 		virtual void help(bool verbose = false) {
-			PFLOGN1("  --%-15s = %-8s [", arg, type);
-			if (r.h == INT32_MIN) fprintf(stdout, "%-5s", "-I32");
-			else fprintf(stdout, "%-5d", r.h);
+			PFLOGN1("  --%-20s = %-8s [", arg, type);
+			if (r.h == INT32_MIN) fprintf(stdout, "%-8s", "-I32");
+			else fprintf(stdout, "%-8d", r.h);
 			fprintf(stdout, " .. ");
-			if (r.t == INT32_MAX) fprintf(stdout, "%-5s", "+I32");
-			else fprintf(stdout, "%5d", r.t);
-			fprintf(stdout, "] (default: %6d)\n", val);
+			if (r.t == INT32_MAX) fprintf(stdout, "%-8s", "+I32");
+			else fprintf(stdout, "%8d", r.t);
+			fprintf(stdout, "] (default: %8d)\n", val);
 			if (verbose) {
 				PFLOG1("   %s", text);
 				PFLOG0("");
@@ -158,13 +158,13 @@ namespace pFROST {
 		}
 
 		virtual void help(bool verbose = false) {
-			PFLOGN1("  --%-15s = %-8s [", arg, type);
-			if (r.h == INT64_MIN) fprintf(stdout, "%-5s", "-I64");
-			else fprintf(stdout, "%5lld", r.h);
+			PFLOGN1("  --%-20s = %-8s [", arg, type);
+			if (r.h == INT64_MIN) fprintf(stdout, "%-8s", "-I64");
+			else fprintf(stdout, "%8lld", r.h);
 			fprintf(stdout, " .. ");
-			if (r.t == INT64_MAX) fprintf(stdout, "%5s", "+I64");
-			else fprintf(stdout, "%5lld", r.t);
-			fprintf(stdout, "] (default: %6lld)\n", val);
+			if (r.t == INT64_MAX) fprintf(stdout, "%8s", "+I64");
+			else fprintf(stdout, "%8lld", r.t);
+			fprintf(stdout, "] (default: %8lld)\n", val);
 			if (verbose) {
 				PFLOG1("   %s", text);
 				PFLOG0("");
@@ -204,13 +204,13 @@ namespace pFROST {
 		}
 
 		virtual void help(bool verbose = false) {
-			PFLOGN1("  --%-15s = %-8s [", arg, type);
-			if (r.h == -INFINITY) fprintf(stdout, "%-6s", "-inf");
-			else fprintf(stdout, "%6.2f", r.h);
+			PFLOGN1("  --%-20s = %-8s [", arg, type);
+			if (r.h == -INFINITY) fprintf(stdout, "%-8s", "-inf");
+			else fprintf(stdout, "%8.2f", r.h);
 			fprintf(stdout, " .. ");
-			if (r.t == INFINITY) fprintf(stdout, "%6s", "inf");
-			else fprintf(stdout, "%6.2f", r.t);
-			fprintf(stdout, "] (default: %6.2f)\n", val);
+			if (r.t == INFINITY) fprintf(stdout, "%8s", "inf");
+			else fprintf(stdout, "%8.2f", r.t);
+			fprintf(stdout, "] (default: %8.2f)\n", val);
 			if (verbose) {
 				PFLOG1("   %s", text);
 				PFLOG0("");
@@ -242,7 +242,7 @@ namespace pFROST {
 		}
 
 		virtual void help(bool verbose = false) {
-			PFLOG1("  --%-15s = %8s  (default: %s)", arg, type, val);
+			PFLOG1("  --%-20s = %8s  (default: %s)", arg, type, val);
 			if (verbose) {
 				PFLOG1("   %s", text);
 				PFLOG0("");
@@ -279,7 +279,7 @@ namespace pFROST {
 		}
 
 		virtual void help(bool verbose = false) {
-			PFLOGN1("  -%-10s -no-%-10s", arg, arg);
+			PFLOGN1("  -%-20s -no-%-20s", arg, arg);
 			fprintf(stdout, "                 ");
 			fprintf(stdout, "(default: %s)\n", val ? "on" : "off");
 			if (verbose) {

@@ -104,78 +104,90 @@ namespace pFROST {
 	//		 ParaFROST defined members       //
 	//=======================================//
 	ParaFROST::ParaFROST(const string& _path) :
-		path(_path)
-		, timeout(opt_timeout)
-		, proof_path(opt_proof_out)
-		, seed(opt_seed)
-		, gc_perc(opt_garbage_perc)
-		, parse_only_en(opt_parseonly_en)
-		, report_en(opt_report_en & !quiet_en)
-		, prograte(opt_progress)
-		, vsids_en(opt_vsids_en)
-		, vsidsonly_en(opt_vsidsonly_en)
-		, mdmvsidsonly_en(opt_mdmvsidsonly_en)
-		, mdmfusem_en(opt_mdmfusem_en)
-		, mdmfuses_en(opt_mdmfuses_en)
-		, mcv_en(!opt_lcv_en)
-		, model_en(opt_model_en)
-		, proof_en(opt_proof_en)
-		, guess_en(opt_guess_en)
-		, rephase_en(opt_rephase_en)
-		, stable_en(opt_stable_en)
-		, target_phase_en(opt_targetphase_en)
-		, cbt_en(opt_cbt_en)
-		, sigma_en(opt_sig_pre_en)
-		, sigma_live_en(opt_sig_live_en)
-		, shrink_min(opt_shrink_min)
-		, map_min(opt_map_min)
-		, var_inc(opt_var_inc)
-		, var_decay(opt_var_decay)
-		, cla_inc(opt_cla_inc)
-		, cla_decay(opt_cla_decay)
-		, mdm_vsids_pumps(opt_mdm_vsidspumps)
-		, mdm_vmfq_pumps(opt_mdm_vmfqpumps)
-		, mdm_rounds(opt_mdm_rounds)
-		, mdm_freq(opt_mdm_freq)
-		, mdm_minc(opt_mdm_minc)
-		, mdm_sinc(opt_mdm_sinc)
-		, mdm_div(opt_mdm_div)
-		, stabrestart_r(opt_stabrestart_r)
-		, stabrestart_inc(opt_stabrestart_inc)
-		, luby_inc(opt_luby_inc)
-		, luby_max(opt_luby_max)
-		, restart_base(opt_rest_base)
-		, restart_inc(opt_rest_inc)
-		, polarity(opt_polarity)
-		, rephase_inc(opt_rephase_inc)
-		, lbd_freeze_min(opt_lbd_frozen)
-		, lbd_reduce_min(opt_lbd_min)
-		, lbd_csize_min(opt_lbd_min_size)
-		, reduce_base(opt_init_red)
-		, reduce_small_inc(opt_inc_red_sm)
-		, reduce_big_inc(opt_inc_red_bg)
-		, cbt_dist(opt_cbt_dist)
-		, cbt_conf_max(opt_cbt_confs)
-		, wt(cm)
-		, wtBin(cm)
-		, vHeap(HEAP_CMP(varAct))
-		, starts(1)
-		, nConflicts(0)
-		, intr(false)
-		, mapped(false)
-		, search_guess(false)
-		, conflict(NOREF)
-		, cnfstate(UNSOLVED)
+		path					(_path)
+		, timeout				(opt_timeout)
+		, proof_path			(opt_proof_out)
+		, seed					(opt_seed)
+		, gc_perc				(opt_garbage_perc)
+		, parse_only_en			(opt_parseonly_en)
+		, report_en				(opt_report_en & !quiet_en)
+		, prograte				(opt_progress)
+		, vsids_en				(opt_vsids_en)
+		, vsidsonly_en			(opt_vsidsonly_en)
+		, mdmvsidsonly_en		(opt_mdmvsidsonly_en)
+		, mdmfusem_en			(opt_mdmfusem_en)
+		, mdmfuses_en			(opt_mdmfuses_en)
+		, mcv_en				(!opt_lcv_en)
+		, model_en				(opt_model_en)
+		, proof_en				(opt_proof_en)
+		, guess_en				(opt_guess_en)
+		, rephase_en			(opt_rephase_en)
+		, stable_en				(opt_stable_en)
+		, target_phase_en		(opt_targetphase_en)
+		, cbt_en				(opt_cbt_en)
+		, sigma_en				(opt_sig_pre_en)
+		, sigma_live_en			(opt_sig_live_en)
+		, sigma_inc				(opt_sigma_inc)
+		, sigma_min				(opt_sigma_min)
+		, shrink_min			(opt_shrink_min)
+		, map_min				(opt_map_min)
+		, var_inc				(opt_var_inc)
+		, var_decay				(opt_var_decay)
+		, cla_inc				(opt_cla_inc)
+		, cla_decay				(opt_cla_decay)
+		, mdm_vsids_pumps		(opt_mdm_vsidspumps)
+		, mdm_vmfq_pumps		(opt_mdm_vmfqpumps)
+		, mdm_rounds			(opt_mdm_rounds)
+		, mdm_freq				(opt_mdm_freq)
+		, mdm_minc				(opt_mdm_minc)
+		, mdm_sinc				(opt_mdm_sinc)
+		, mdm_div				(opt_mdm_div)
+		, stabrestart_r			(opt_stabrestart_r)
+		, stabrestart_inc		(opt_stabrestart_inc)
+		, luby_inc				(opt_luby_inc)
+		, luby_max				(opt_luby_max)
+		, restart_base			(opt_rest_base)
+		, restart_inc			(opt_rest_inc)
+		, polarity				(opt_polarity)
+		, rephase_inc			(opt_rephase_inc)
+		, lbd_freeze_min		(opt_lbd_frozen)
+		, lbd_reduce_min		(opt_lbd_min)
+		, lbd_csize_min			(opt_lbd_min_size)
+		, reduce_base			(opt_reduce_init)
+		, reduce_small_inc		(opt_reduce_small)
+		, reduce_big_inc		(opt_reduce_big)
+		, cbt_dist				(opt_cbt_dist)
+		, cbt_conf_max			(opt_cbt_confs)
+		, wt					(cm)
+		, wtBin					(cm)
+		, vHeap					(HEAP_CMP(varAct))
+		, starts				(1)
+		, nForced				(0)
+		, nConflicts			(0)
+		, intr					(false)
+		, mapped				(false)
+		, search_guess			(false)
+		, conflict				(NOREF)
+		, cnfstate				(UNSOLVED)
+		, sigState				(AWAKEN_SUCC)
 	{
 		stats.sysMemAvail = getAvailSysMem();
 		CHECK(cudaGetDeviceCount(&devCount));
-		size_t _gfree = 0, _gtot = 0;
+		size_t _gfree = 0, memPenalty = 0;
 		if (devCount == 0) PFLOGE("no GPU(s) available that support CUDA");
 		else {
 			PFLOG2(1, " Detected (%d) CUDA-enabled GPU(s)", devCount);
 			CHECK(cudaGetDeviceProperties(&devProp, MASTER_GPU));
-			CHECK(cudaMemGetInfo(&_gfree, &_gtot));
+			assert(devProp.totalGlobalMem);
+#ifdef __linux__ 
+			memPenalty = 200 * MBYTE;
+			_gfree = devProp.totalGlobalMem - memPenalty;
+#elif _WIN32
+			memPenalty = 800 * MBYTE;
+			_gfree = devProp.totalGlobalMem - memPenalty;
+#endif
 			maxGPUThreads = devProp.multiProcessorCount * devProp.maxThreadsPerMultiProcessor;
+			cuMem.init(_gfree);
 			hcnf = NULL, cnf = NULL, ot = NULL, vars = NULL, h_hist = NULL, d_hist = NULL, streams = NULL;
 		}
 		if (!quiet_en) {
@@ -187,10 +199,10 @@ namespace pFROST {
 			PFLOGR('-', RULELEN);
 		}
 		if (_gfree <= 200 * MBYTE) {
-			PFLOGW("not enough GPU memory (free = %zd MB) -> skip simp.", _gfree / MBYTE);
+			PFLOGW("not enough GPU memory (free = %zd MB) -> skip SIGmA", _gfree / MBYTE);
 			sigma_en = sigma_live_en = false;
 		}
-		if (sigma_en) optSimp();
+		if (sigma_en || sigma_live_en) optSimp(), createStreams();
 		if (proof_en) {
 			proofFile.open(proof_path, std::ofstream::binary | std::ofstream::out);
 			if (!proofFile.is_open()) PFLOGE("cannot open proof file %s", proof_path.c_str());
@@ -240,7 +252,7 @@ namespace pFROST {
 				if (sign) PFLOGE("number of cls in header is negative");
 				if (inf.nOrgCls == 0) PFLOGE("zero number of cls in header");
 				PFLOG2(1, " Found header %d %d", inf.maxVar, inf.nOrgCls);
-				inf.nDualVars = v2l(inf.maxVar + 1LL);
+				inf.nDualVars = v2l(inf.maxVar + 1);
 				assert(orgs.empty());
 				allocFixed();
 				initSolver();
@@ -278,8 +290,8 @@ namespace pFROST {
 		if (inf.nClauses < orgs.size()) orgs.resize(inf.nClauses);
 		in_c.clear(true), tmpCl.clear(true);
 		timer.stop();
-		timer.par = timer.cpuTime();
-		PFLOG2(1, " Read %d Vars, %d Cls, and %d Lits in %.2f seconds", inf.maxVar, inf.nClauses + inf.nOrgBins + trail.size(), inf.nOrgLits + trail.size(), timer.par);
+		timer.parse = timer.cpuTime();
+		PFLOG2(1, " Read %d Vars, %d Cls, and %d Lits in %.2f seconds", inf.maxVar, inf.nClauses + inf.nOrgBins + trail.size(), inf.nOrgLits + trail.size(), timer.parse);
 		return UNSOLVED;
 	}
 
@@ -365,6 +377,7 @@ namespace pFROST {
 		lrn.rephased[0] = lrn.rephased[1] = 0;
 		lrn.rounds = mdm_rounds;
 		lrn.mdm_conf_max = mdm_minc;
+		lrn.sigma_conf_max = sigma_inc;
 		lrn.reduce_conf_max = reduce_base;
 		lrn.rephase_conf_max = rephase_inc;
 		lrn.restarts_conf_max = restart_base;
@@ -413,7 +426,6 @@ namespace pFROST {
 				assert(sp->learnt_lbd > 0);
 				CLAUSE& c = cm[r];
 				c.melt();
-				c.markReason();
 				c.set_act(lrn.cl_inc);
 				c.set_LBD(sp->learnt_lbd);
 				learnts.push(r);
@@ -429,21 +441,21 @@ namespace pFROST {
 		CLAUSE& c = cm[r];
 		assert(c.size() > 1);
 		if (c.size() == 2) {
-			if (c.status() == ORIGINAL) inf.nOrgBins--;
-			else assert(c.status() == LEARNT), inf.nLearntBins--;
+			if (c.original()) inf.nOrgBins--;
+			else assert(c.learnt()), inf.nLearntBins--;
 		}
 		else {
-			if (c.status() == ORIGINAL) inf.nLiterals -= c.size();
-			else assert(c.status() == LEARNT), inf.nLearntLits -= c.size();
+			if (c.original()) inf.nLiterals -= c.size();
+			else assert(c.learnt()), inf.nLearntLits -= c.size();
 			if (proof_en) {
 				wrProof('d');
 				wrProof(c, c.size());
 				wrProof(0);
 			}
 		}
-		detachClause(r, gc);
 		assert(!c.deleted());
-		c.markDeleted(), cm.collect(r);
+		detachClause(r, gc), c.markDeleted(), cm.collect(r);
+		depleteSource(c);
 	}
 
 	void ParaFROST::shrinkClause(C_REF& r)
@@ -461,8 +473,8 @@ namespace pFROST {
 			wt.remWatch(flip(c[0]), r);
 			wt.remWatch(flip(c[1]), r);
 			wtBin.newWatch(r, c[0], c[1]);
-			if (c.status() == ORIGINAL) inf.nOrgBins++;
-			else assert(c.status() == LEARNT), inf.nLearntBins++;
+			if (c.original()) inf.nOrgBins++;
+			else assert(c.learnt()), inf.nLearntBins++;
 		}
 		if (proof_en && remLits) {
 			wrProof('a');
@@ -504,7 +516,6 @@ namespace pFROST {
 		shrinkWT();
 		shrink(orgs);
 		inf.nClauses = orgs.size();
-		inf.nDelVars += (trail.size() - sp->simplified);
 		PFLENDING(2, 5, "(-%d variables)", trail.size() - sp->simplified);
 		sp->simplified = trail.size();
 		lrn.simpProps = inf.nLiterals + ((int64)inf.nOrgBins << 1);
@@ -524,7 +535,6 @@ namespace pFROST {
 		shrink(learnts);
 		shrink(orgs);
 		inf.nClauses = orgs.size();
-		inf.nDelVars += (trail.size() - sp->simplified);
 		PFLENDING(2, 5, "(-%d variables)", trail.size() - sp->simplified);
 		sp->simplified = trail.size();
 		lrn.simpProps = maxLiterals();
@@ -759,11 +769,6 @@ namespace pFROST {
 		int conf_level = UNDEFINED;
 		int track = 0, index = trail.size() - 1;
 		C_REF r = conflict;
-		if (l2dl(*cm[r]) != DL()) {
-			cm[r].print();
-			printTrail();
-			printf(" conflict on %d, dl = %d, curent level = %d\n", l2i(*cm[r]), l2dl(*cm[r]), DL());
-		}
 		assert(verifyConfl(*cm[r]));
 		conf_level = l2dl(*cm[r]);
 		do {
@@ -878,7 +883,6 @@ namespace pFROST {
 							*w_j++ = w;
 							if (val0 < 0) {
 								assert(l2dl(c[0]) == UNDEFINED);
-								c.markReason();
 								if (assign_dl == DL()) enqueue(c[0], assign_dl, r);
 								else {
 									// find parent with max. level
@@ -930,16 +934,14 @@ namespace pFROST {
 			else if (satisfied()) cnfstate = SAT;
 			else if (canRestart()) restart();
 			else if (canRephase()) rephase();
-			else if (canSigmify()) preprocess();
 			else if (canShrink()) shrink();
 			else if (canReduce()) reduce();
+			else if (canSigmify()) preprocess();
 			else if (canMMD()) MDM();
 			else decide();
 			PFLTRAIL(this, 3);
 		}
-		timer.stop();
-		timer.solve = timer.cpuTime();
-		timer.solve -= timer.pre;
+		timer.stop(), timer.solve += timer.cpuTime();
 		PFLOG2(2, " CDCL search completed successfully");
 		wrapup();
 	}
@@ -984,8 +986,8 @@ namespace pFROST {
 			uint32 v = l2a(trail[i]);
 			C_REF& r = sp->source[v];
 			if (r != NOREF) {
-				if (cm[r].deleted()) r = NOREF;
-				else if (cm[r].moved()) r = cm[r].ref();
+				assert(!cm[r].deleted());
+				if (cm[r].moved()) r = cm[r].ref();
 			}
 		}
 		for (uint32 i = 0; i < learnts.size(); i++) cm.move(learnts[i], new_cm);
@@ -1035,15 +1037,14 @@ namespace pFROST {
 		mapBins(bins);
 	}
 
-	void ParaFROST::map()
+	void ParaFROST::map(const bool& sigmified)
 	{
+		assert(!satisfied());
 		assert(conflict == NOREF);
 		assert(DL() == ROOT_LEVEL);
 		assert(trail.size() == sp->propagated);
-		if (sigmified) cacheVarSt(cudaMemcpyDeviceToHost);
 		stats.mappings++;
 		int64 memBefore = sysMemUsed();
-		if (sigmified) sync();
 		// create vmap
 		vmap.initiate(sp);
 		// map original literals with current values
@@ -1053,13 +1054,8 @@ namespace pFROST {
 			wtBin.recycle(), wt.recycle();
 			mapBins(), map(orgs), map(learnts);
 			map(wtBin), map(wt);
-			inf.maxFrozen = 0;
 		}
-		else {
-			mapped = true, newBeginning();
-			sigmified = mapped = false;
-			inf.maxMelted = 0;
-		}
+		else mapped = true, newBeginning(), mapped = false;
 		// map trail, queue and heap
 		vmap.mapShrinkLits(trail);
 		sp->propagated = trail.size();
@@ -1090,7 +1086,7 @@ namespace pFROST {
 			inf.maxVar, vmap.numVars(), double(abs(memBefore - sysMemUsed())) / KBYTE);
 		inf.maxVar = vmap.numVars();
 		inf.nDualVars = v2l(inf.maxVar + 1);
-		inf.nDelVars = 0;
+		inf.maxFrozen = inf.maxMelted = 0;
 		vmap.destroy();
 	}
 
@@ -1099,20 +1095,23 @@ namespace pFROST {
 		if (report_en) {
 			PFLOG0("");
 			PFLOG0("\t\t\tSolver Report");
-			PFLOG1(" Simplifier time      : %-10.3f  sec", timer.pre);
+			PFLOG1(" Simplifier time      : %-10.3f  sec", timer.simp);
 			PFLOG1(" Solver time          : %-10.3f  sec", timer.solve);
 			PFLOG1(" System memory        : %-10.3f  MB", ((double)sysMemUsed() / MBYTE));
+			PFLOG1(" Device memory        : %-10.3f  MB", ((double)cuMem.maxCapacity() / MBYTE));
 			PFLOG1(" Guessed              : %-10s  (%s)", stats.guess_succ ? "yes" : "no", guess_en ? stats.guess_who : "disabled");
 			PFLOG1(" Reduces              : %-10d", stats.reduces);
 			PFLOG1(" Rephases             : %-10lld", stats.n_rephs);
 			PFLOG1(" Recyclings           : %-10d", stats.recyclings);
 			PFLOG1(" Shrinkages           : %-10d", stats.shrinkages);
+			PFLOG1(" Sigmifications       : %-10d", stats.sigmifications);
 			PFLOG1(" Mappings             : %-10d", stats.mappings);
+			PFLOG1(" Forced units         : %-10lld", stats.n_forced);
 			PFLOG1(" Learnt units         : %-10lld", stats.n_units);
 			PFLOG1(" Learnt binaries      : %-10d", inf.nLearntBins);
 			PFLOG1(" Learnt glues         : %-10d", inf.nLearntBins + inf.nGlues);
 			PFLOG1(" MDM calls            : %-10d", stats.mdm_calls);
-			PFLOG1(" Multiple decisions   : %-10lld  (%.1f dec/sec)", stats.n_pds, stats.n_pds / timer.solve);
+			PFLOG1(" Multiple decisions   : %-10lld  (%.1f dec/sec)", stats.n_mds, stats.n_mds / timer.solve);
 			PFLOG1(" Follow-Up decisions  : %-10lld  (%.1f dec/sec)", stats.n_fuds, stats.n_fuds / timer.solve);
 			PFLOG1(" Propagations         : %-10lld  (%.1f prop/sec)", stats.n_props, stats.n_props / timer.solve);
 			PFLOG1(" Non-chronological BT : %-10d  (%.1f bt/sec)", stats.ncbt, stats.ncbt / timer.solve);

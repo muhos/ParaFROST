@@ -133,6 +133,7 @@ void ParaFROST::decide()
 	assert(conflict == NOREF);
 	assert(cnfstate == UNSOLVED);
 	uint32 cand = vsids() ? nextVSIDS() : nextVMFQ();
+	assert(sp->vstate[cand] == ACTIVE);
 	uint32 dec = what(cand, useTarget());
 	incDL();
 	enqueue(dec, DL());

@@ -34,9 +34,13 @@ namespace pFROST {
 	BOOL_OPT opt_all_en("all", "enable all simplifications", false);
 	BOOL_OPT opt_solve_en("solve", "proceed with solving after simplifications", true);
 	INT_OPT opt_lcve_min("lcve-min", "minimum parallel variables to simplify", 2, INT32R(1, INT32_MAX));
-	INT_OPT opt_lits_rem_min("lit-min", "minimum literals to stop phases or ve(+) rounds", 10, INT32R(1, INT32_MAX));
+	INT_OPT opt_ve_round_min("ve-round-min", "minimum removed literals to stop ve(+) rounds", 10, INT32R(1, INT32_MAX));
+	INT_OPT opt_ve_phase_min("ve-phase-min", "minimum removed literals to stop stage-1 reductions ", 500, INT32R(1, INT32_MAX));
 	INT_OPT opt_mu_pos("mu-pos", "set the positive freezing temperature in LCVE", 32, INT32R(10, INT32_MAX));
 	INT_OPT opt_mu_neg("mu-neg", "set the negative freezing temperature in LCVE", 32, INT32R(10, INT32_MAX));
+	INT_OPT opt_hse_max_occurs("hse-max-occur", "maximum occurrence list size to scan in HSE", 30000, INT32R(100, INT32_MAX));
+	INT_OPT opt_bce_max_occurs("bce-max-occur", "maximum occurrence list size to scan in BCE", 30000, INT32R(100, INT32_MAX));
+	INT_OPT opt_hre_max_occurs("hre-max-occur", "maximum occurrence list size to scan in HRE", 30000, INT32R(100, INT32_MAX));
 	INT_OPT opt_phases("phases", "set the number of phases in stage-1 reductions", 2, INT32R(0, INT32_MAX));
 	INT_OPT opt_cnf_free("cnf-free-freq", "set the frequency of CNF memory shrinkage in SIGmA", 2, INT32R(0, 3));
 	INT_OPT opt_gpus("ngpus", "number of GPU(s) to be activated", 1, INT32R(1, MAX_GPU_COUNT));

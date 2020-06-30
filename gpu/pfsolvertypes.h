@@ -192,8 +192,8 @@ namespace pFROST {
 			}
 			putc(']', stdout), putc('\n', stdout);
 		}
-		void		lockMelted		() {
-			for (uint32 v = 1; v <= _sz; v++)
+		void		lockMelted		(const uint32& size) {
+			for (uint32 v = 1; v <= size; v++)
 				if (vstate[v] == MELTED)
 					locked[v] = 1;
 		}
@@ -208,6 +208,7 @@ namespace pFROST {
 		int64 mdm_conf_max, reduce_conf_max;
 		int64 restarts_conf_max, stable_conf_max;
 		int64 rephased[2], rephase_conf_max, rephase_last_max;
+		int64 sigma_conf_max;
 		double var_inc, var_decay;
 		float cl_inc, cl_decay;
 		uint32 numMDs, nRefVars;
@@ -216,35 +217,13 @@ namespace pFROST {
 		LIT_ST lastrephased;
 		bool stable;
 	};
-	struct MODEL {
-		Vec<LIT_ST> value;
-		uVec1D lits, resolved;
-		uint32 maxVar;
-					MODEL			() : maxVar(0) {}
-		void		init			() {
-			assert(inf.maxVar);
-			PFLOG2(2, " Initially mapping original variables to literals..");
-			maxVar = inf.maxVar;
-			lits.resize(maxVar + 1), lits[0] = 0;
-			for (uint32 v = 1; v <= inf.maxVar; v++) lits[v] = v2l(v);
-		}
-		void		print			() {
-			PFLMH('v');
-			for (uint32 v = 1; v <= maxVar; v++)
-				PFLMLIT(v, value[v]);
-			putc('\n', stdout);
-			if (!quiet_en) PFLOG0("");
-		}
-		void		extend			(LIT_ST*);
-		__forceinline
-		bool		satisfied		(const uint32& lit) { return value[l2a(lit)] == !sign(lit); }
-	};
 	struct STATS {
 		int64 sysMemAvail;
 		int64 n_rephs;
-		int64 n_fuds, n_pds;
-		int64 n_units, n_props;
-		int64 tot_lits, max_lits;
+		int64 n_fuds, n_mds;
+		int64 n_units, n_forced;
+		int64 n_props, tot_lits, max_lits;
+		int sigmifications;
 		int marker, mdm_calls;
 		int mappings, shrinkages;
 		int reduces, recyclings;
@@ -261,9 +240,10 @@ namespace pFROST {
 			recyclings = 0;
 			ncbt = cbt = 0;
 			stab_restarts = 0;
-			n_pds = n_fuds = 0;
-			n_props = n_units = 0;
-			max_lits = tot_lits = 0;
+			sigmifications = 0;
+			n_mds = n_fuds = 0;
+			n_forced = n_units = 0;
+			n_props = max_lits = tot_lits = 0;
 			guess_succ = false;
 			guess_who = "none succeeded";
 		}

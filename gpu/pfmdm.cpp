@@ -141,11 +141,11 @@ void ParaFROST::MDMInit()
 	assert(verifySeen());
 	lrn.numMDs = trail.size() - sp->propagated;
 	lrn.nRefVars = inf.maxVar - lrn.numMDs, lrn.rounds--;
-	stats.n_pds += lrn.numMDs;
+	stats.n_mds += lrn.numMDs;
 	PFLENDING(2, 4, "(%d elected)", lrn.numMDs);
 	if (mdm_vsids_pumps || mdm_vmfq_pumps) pumpFrozen();
 	memset(sp->frozen, 0, inf.maxVar + 1LL);
-	printStats(1, 1);
+	printStats(1, 'm');
 }
 
 void ParaFROST::MDM()
@@ -176,11 +176,11 @@ void ParaFROST::MDM()
 	assert(verifySeen());
 	lrn.numMDs = trail.size() - sp->propagated;
 	lrn.nRefVars = inf.maxVar - lrn.numMDs, lrn.rounds--;
-	stats.n_pds += lrn.numMDs;
+	stats.n_mds += lrn.numMDs;
 	PFLENDING(2, 4, "(%d elected)", lrn.numMDs);
 	if (mdm_vmfq_pumps) pumpFrozen();
 	memset(sp->frozen, 0, inf.maxVar + 1LL);
-	printStats(lrn.rounds == 0, 1);
+	printStats(lrn.rounds == 0, 'm');
 }
 
 bool ParaFROST::valid(WL& wsBins, WL& ws, const uint32& cand)

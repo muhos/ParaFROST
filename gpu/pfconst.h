@@ -62,7 +62,7 @@ namespace pFROST {
 #define REASON		(CL_ST)0x01
 #define ORIGINAL	(CL_ST)0x01
 #define LEARNT		(CL_ST)0x02
-#define DELETED		(CL_ST)0x03
+#define DELETED		(CL_ST)0x04
 #define ABS(x)		((x) >> 1)
 #define V2D(x)		((x) << 1)
 #define V2X(x)		(ABS(x) - 1)

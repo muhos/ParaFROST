@@ -52,10 +52,12 @@ namespace pFROST {
 	INT_OPT opt_timeout("timeout", "set the timeout in seconds", 0, INT32R(0, INT32_MAX));
 	INT_OPT opt_seed("seed", "seed value for random generation", 9999991, INT32R(1, INT32_MAX));
 	INT_OPT opt_map_min("map-min", "minimum variables to map", 2000, INT32R(0, INT32_MAX));
-	INT_OPT opt_shrink_min("shrink-min", "minimum variables to shrink", 2, INT32R(0, INT32_MAX));
-	INT_OPT opt_init_red("init-reduce", "initial number of conflicts for learnts reduction", 2000, INT32R(0, INT32_MAX));
-	INT_OPT opt_inc_red_sm("inc-small", "small step for learnt clauses deletion", 300, INT32R(0, INT32_MAX));
-	INT_OPT opt_inc_red_bg("inc-big", "large step for learnt clauses deletion", 1000, INT32R(0, INT32_MAX));
+	INT_OPT opt_shrink_min("shrink-min", "minimum variables to shrink", 5, INT32R(0, INT32_MAX));
+	INT_OPT opt_sigma_min("sigma-min", "minimum root variables to awaken live sigma", 2, INT32R(1, INT32_MAX));
+	INT_OPT opt_sigma_inc("sigma-inc", "live sigma increment value based on conflicts", 2000, INT32R(1, INT32_MAX));
+	INT_OPT opt_reduce_init("reduce-init", "initial number of conflicts for learnts reduction", 2000, INT32R(0, INT32_MAX));
+	INT_OPT opt_reduce_small("reduce-small", "small step for learnt clauses deletion", 300, INT32R(0, INT32_MAX));
+	INT_OPT opt_reduce_big("reduce-big", "large step for learnt clauses deletion", 1000, INT32R(0, INT32_MAX));
 	INT_OPT opt_lbd_frozen("lbd-frozen", "freeze clauses if their LBD decreases than this value", 30, INT32R(0, INT32_MAX));
 	INT_OPT opt_lbd_min_size("lbd-min-size", "minimum clause size to minimize learnt", 30, INT32R(3, INT32_MAX));
 	INT_OPT opt_lbd_min("lbd-min", "minimum LBD value to minimize learnt", 6, INT32R(3, INT32_MAX));
@@ -68,8 +70,8 @@ namespace pFROST {
 	INT_OPT opt_stabrestart_inc("stable-restart-inc", "stable restart increment value", 1000, INT32R(1, INT32_MAX));
 	INT_OPT opt_lbdfast("lbd-fast", "initial LBD fast window", 50, INT32R(1, 100));
 	INT_OPT opt_lbdslow("lbd-slow", "initial LBD slow window", 100000, INT32R(1000, INT32_MAX));
-	INT_OPT opt_cbt_dist("cbt-dist", "maximum distance (level difference) to activate CBT", 500, INT32R(GLUE, INT32_MAX));
-	INT_OPT opt_cbt_confs("cbt-conf", "maximum number of conflicts to activate CBT", 5000, INT32R(0, INT32_MAX));
+	INT_OPT opt_cbt_dist("cbt-dist", "minimum distance (level difference) to activate CBT", 500, INT32R(GLUE, INT32_MAX));
+	INT_OPT opt_cbt_confs("cbt-conf", "minimum number of conflicts to activate CBT", 5000, INT32R(0, INT32_MAX));
 	DOUBLE_OPT opt_lbd_rate("lbd-rate", "slow rate in firing LBD restarts", 1.1, FP64R(1, 10));
 	DOUBLE_OPT opt_var_inc("var-inc", "VSIDS increment value", 1.0, FP64R(1, 10));
 	DOUBLE_OPT opt_var_decay("var-decay", "VSIDS decay value", 0.95, FP64R(0, 1));

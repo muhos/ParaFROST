@@ -41,11 +41,15 @@ namespace pFROST {
 			_PFROST_H_D_			SCLAUSE				() { _sz = 0, _st = ORIGINAL, _f = CFREEZE; }
 			_PFROST_H_D_			SCLAUSE				(const int& size) { _sz = size, _st = ORIGINAL, _f = CFREEZE; }
 			_PFROST_H_D_			SCLAUSE				(uint32* lits, const int& size) {
-				_st = ORIGINAL, _f = CFREEZE;
+				_sig = 0, _st = ORIGINAL, _f = CFREEZE;
 				_sz = size, copyLitsFrom(lits);
 			}
+			_PFROST_H_D_			SCLAUSE				(uint32* lits, const int& size, const CL_ST& state) {
+				_sig = 0, _f = CFREEZE;
+				_st = state, _sz = size, copyLitsFrom(lits);
+			}
 			_PFROST_H_D_			SCLAUSE				(SCLAUSE& src) {
-				assert(src.status() != DELETED);
+				assert(!src.deleted());
 				_f = src.molten();
 				_st = src.status();
 				_sig = src.sig();
@@ -53,7 +57,7 @@ namespace pFROST {
 				copyLitsFrom(src);
 			}
 			_PFROST_H_D_ void		copyLitsFrom		(uint32* src) {
-				assert(_sz > 1);
+				assert(_sz);
 				for (int k = 0; k < _sz; k++) _lits[k] = src[k];
 			}
 			_PFROST_H_D_ void		resize				(const int& size) { _sz = size; }
@@ -65,7 +69,8 @@ namespace pFROST {
 			_PFROST_H_D_ uint32		operator[]			(const int& i) const { assert(i < _sz); return _lits[i]; }
 			_PFROST_H_D_ uint32*	data				(const int& i = 0) { assert(i < _sz); return _lits + i; }
 			_PFROST_H_D_ uint32*	end					() { return _lits + _sz; }
-			_PFROST_H_D_			operator uint32*	() { assert(_sz != 0); return _lits; }
+			_PFROST_H_D_ uint32		back				() { assert(_sz); return _lits[_sz - 1]; }
+			_PFROST_H_D_ operator	uint32*				() { assert(_sz); return _lits; }
 			_PFROST_H_D_ void		pop					() { _sz--; }
 			_PFROST_H_D_ void		clear				() { _sz = 0; }
 			_PFROST_H_D_ void		markDeleted			() { _st = DELETED; }
@@ -74,7 +79,9 @@ namespace pFROST {
 			_PFROST_H_D_ int		size				() const { return _sz; }
 			_PFROST_H_D_ uint32		sig					() const { return _sig; }
 			_PFROST_H_D_ uint32		ref					() const { return _sig; }
-			_PFROST_H_D_ bool		deleted				() const { return _st == DELETED; }
+			_PFROST_H_D_ bool		deleted				() const { return _st & DELETED; }
+			_PFROST_H_D_ bool		learnt				() const { return _st & LEARNT; }
+			_PFROST_H_D_ bool		original			() const { return _st & ORIGINAL; }
 			_PFROST_H_D_ CL_ST		status				() const { return _st; }
 			_PFROST_H_D_ bool		molten				() const { return _f; }
 			_PFROST_H_D_ void		filter				() {
@@ -148,9 +155,9 @@ namespace pFROST {
 					printf("%4d ", lit);
 				}
 				char st = 'U';
-				if (status() == DELETED) st = 'X';
-				else if (status() == ORIGINAL) st = 'O';
-				else if (status() == LEARNT) st = 'L';
+				if (deleted()) st = 'X';
+				else if (original()) st = 'O';
+				else if (learnt()) st = 'L';
 				printf(") %c, s=0x%X\n", st, _sig);
 			}
 		};

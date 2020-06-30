@@ -21,9 +21,11 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 #include <thrust/device_vector.h>
 #include "pfsclause.h"
+#include "pfclause.h"
 #include "pfdefs.h"
 #include "pfcuvec.h"
 #include "pfcuconst.h"
+#include "pfsort.h"
 
 namespace pFROST {
 	extern cudaDeviceProp	devProp;
@@ -52,25 +54,20 @@ namespace pFROST {
 		};
 		struct VARS {
 			GSTATS *gstats;
-			cuVecU *pVars, *units, tmpObj;
+			cuVecU *pVars, *units, *resolved, tmpObj;
 			uint32 *scores, *eligible, *cachedUnits;
-			LIT_ST *vstate;
 			uint32 numPVs, nUnits, mu_inc;
 			VARS() : gstats(NULL)
 					, pVars(NULL)
 					, units(NULL)
-					, vstate(NULL)
 					, scores(NULL)
+					, resolved(NULL)
 					, eligible(NULL)
 					, cachedUnits(NULL)
 					, numPVs(0), nUnits(0), mu_inc(0) {}
 			~VARS() { 
-				scores = NULL, eligible = NULL, gstats = NULL;
 				if (cachedUnits != NULL) delete[] cachedUnits;
 				cachedUnits = NULL;
-				pVars->clear(true);
-				units->clear(true);
-				tmpObj.clear(true);
 			}
 		};
 		/*****************************************************/
@@ -84,13 +81,22 @@ namespace pFROST {
 			Byte _bucket;
 		public:
 			_PFROST_H_D_					CNF			() : _bucket((Byte)sizeof(S_REF)), _data({ NULL, 0, 0 }) { assert(_bucket == sizeof(uint32)); }
-			_PFROST_H_D_					CNF			(S_REF data_cap, uint32 cs_cap) : _bucket((Byte)sizeof(S_REF)) {
+			_PFROST_H_D_					CNF			(const S_REF& data_cap, const uint32& cs_cap) : _bucket((Byte)sizeof(S_REF)) {
 				assert(_bucket == sizeof(uint32));
 				assert(data_cap);
 				assert(cs_cap);
 				_data.cap = data_cap, _data.size = 0;
 				_data.mem = (S_REF*)(this + 1);
 				cs.alloc(_data.mem + data_cap, cs_cap);
+			}
+			_PFROST_H_D_		void		resize		(const S_REF& data_size, const uint32& cs_size) {
+				assert(data_size);
+				assert(cs_size);
+				_data.size = data_size, cs.resize(cs_size);
+			}
+			_PFROST_H_D_		void		resize		(const uint32& cs_size) { 
+				assert(cs_size);
+				cs.resize(cs_size); 
 			}
 			_PFROST_H_D_		void		fixPointer	() { assert(_data.cap); _data.mem = (S_REF*)(this + 1), cs.alloc(_data.mem + _data.cap); }
 			_PFROST_H_D_ 		cuCNF&		data		() { return _data; }
@@ -107,49 +113,6 @@ namespace pFROST {
 			_PFROST_H_D_		SCLAUSE&	operator[]	(const S_REF& r)	   { assert(r < _data.size); return (SCLAUSE&)_data.mem[r]; }
 			_PFROST_H_D_ const	SCLAUSE&	operator[]	(const S_REF& r) const { assert(r < _data.size); return (SCLAUSE&)_data.mem[r]; }
 			_PFROST_H_D_		size_t		calcSize	(const int& nLits) { return (sizeof(SCLAUSE) + (size_t(nLits) - 1) * sizeof(uint32)); }
-			_PFROST_H_D_		void		newClause	(uint32* lits, const int& nLits) {
-				assert(nLits > 1);
-				size_t cBytes = calcSize(nLits);
-				assert(_data.size < _data.cap);
-				new (cref(_data.size)) SCLAUSE(lits, nLits);
-				assert(cref(_data.size)->capacity() == cBytes);
-				assert(nLits == cref(_data.size)->size());
-				cs._push(_data.size);
-				_data.size += S_REF(cBytes / _bucket);
-			}
-			_PFROST_H_D_		void		newClause	(SCLAUSE& src) {
-				assert(_data.size < _data.cap);
-				new (cref(_data.size)) SCLAUSE(src);
-				cs._push(_data.size);
-				_data.size += src.blockSize();
-
-			}
-			_PFROST_H_D_		void		copyFrom	(CNF* src) {
-				assert(_data.mem != NULL);
-				assert(_data.cap);
-				assert(_data.size == 0);
-				assert(cs.empty());
-				uint32 size = src->size();
-				for (uint32 i = 0; i < size; i++) {
-					SCLAUSE& s = src->clause(i);
-					if (s.status() == LEARNT || s.status() == ORIGINAL)
-						this->newClause(s);
-				}
-			}
-			_PFROST_H_D_		void		shrink		() {
-				uint32 nCls = 0, newSize = 0;
-				uint32 nClsBefore = size();
-				for (uint32 i = 0; i < nClsBefore; i++) {
-					SCLAUSE& c = clause(i);
-					if (c.status() == LEARNT || c.status() == ORIGINAL) {
-						assert(newSize < _data.cap);
-						new (cref(newSize)) SCLAUSE(c);
-						cs[nCls++] = newSize;
-						newSize += c.blockSize();
-					}
-				}
-				_data.size = newSize, cs.resize(nCls);
-			}
 			_PFROST_H_D_		void		print		(const bool& p_ref = true) {
 				for (S_REF i = 0; i < size(); i++) {
 					SCLAUSE& c = clause(i);
@@ -160,6 +123,39 @@ namespace pFROST {
 					}
 				}
 			}
+			_PFROST_H_			void		newClause	(CLAUSE& src, const bool& _sort) {
+				assert(src.size() > 1);
+				size_t cBytes = calcSize(src.size());
+				assert(_data.size < _data.cap);
+				new (cref(_data.size)) SCLAUSE(src, src.size(), src.status());
+				if (_sort) Sort(cref(_data.size)->data(), src.size());
+				assert(cref(_data.size)->capacity() == cBytes);
+				assert(src.size() == cref(_data.size)->size());
+				cs._push(_data.size);
+				_data.size += S_REF(cBytes / _bucket);
+			}
+			_PFROST_H_			void		newClause	(SCLAUSE& src) {
+				assert(_data.size < _data.cap);
+				assert(src.size());
+				new (cref(_data.size)) SCLAUSE(src);
+				assert(src.size() == cref(_data.size)->size());
+				cs._push(_data.size);
+				_data.size += src.blockSize();
+
+			}
+			_PFROST_H_			void		copyFrom	(CNF* src) {
+				assert(_data.mem != NULL);
+				assert(_data.cap);
+				assert(_data.size == 0);
+				assert(cs.empty());
+				uint32 size = src->size();
+				for (uint32 i = 0; i < size; i++) {
+					SCLAUSE& s = src->clause(i);
+					if (s.learnt() || s.original())
+						newClause(s);
+				}
+			}
+			_PFROST_D_			void		insert		(SCLAUSE& src);
 			_PFROST_D_			S_REF*		jump		(S_REF&, const uint32&, const uint32&);
 		};
 		/*****************************************************/
@@ -191,7 +187,7 @@ namespace pFROST {
 					printf("c | list[%lld][cap = %d]", sign_v, lists[v].capacity()), lists[v].print();
 				}
 			}
-			inline			bool	accViolation() {
+			_PFROST_H_		bool	accViolation() {
 				for (uint32 v = 0; v < inf.maxVar; v++) {
 					uint32 p = V2D(v + 1), n = NEG(p);
 					if (lists[p].size() > lists[p].capacity()) {
@@ -232,21 +228,20 @@ namespace pFROST {
 		class cuMM {
 			cuPool hcnfPool, cnfPool, otPool; // dynamic pools
 			cuPool varsPool; // fixed pool
-			size_t _free, _tot, _used, cap;
+			size_t _tot, _free, cap, maxcap;
 			S_REF  *d_cs_mem, *d_cnf_mem;
 			uint32 *d_units, otBlocks;
-			inline bool				hasFreeMem		(const char* name) {
-				_free = 0, _tot = 0;
-				size_t usedBefore = _used;
-				CHECK(cudaMemGetInfo(&_free, &_tot));
-				_used = (_tot - _free) + cap;
-				PFLOG2(2, " Allocating GPU memory for %s (used/free = %.2f/%zd MB)", name, double(_used - usedBefore) / MBYTE, _free / MBYTE);
-				if (_used >= _tot) { PFLOGW("not enough memory (current = %zd MB) -> skip simp.", _used / MBYTE); return false; }
+			inline bool	hasFreeMem		(const char* name) {
+				PFLOG2(2, " Allocating GPU memory for %s (used/free = %.2f/%zd MB)", name, double(cap) / MBYTE, _free / MBYTE);
+				if (cap > _free) { PFLOGW("not enough memory (current = %zd MB) -> skip SIGmA", cap / MBYTE); return false; }
+				_free -= cap;
+				assert(_tot >= _free);
+				assert(_tot > cap);
 				return true;
 			}
 
 		public:
-									cuMM			() : 
+						cuMM			() : 
 										cnfPool({ NULL, 0 })
 										, hcnfPool({ NULL, 0 })
 										, varsPool({ NULL, 0 })
@@ -256,33 +251,34 @@ namespace pFROST {
 										, d_cnf_mem(NULL)
 										, cap(0)
 										, _tot(0)
-										, _used(0)
 										, _free(0)
-										, otBlocks(0) {
-								CHECK(cudaMemGetInfo(&_free, &_tot));
-								_used = _tot - _free;
-							}
-									~cuMM			() { destroy(); }
-						  void		destroy			();
-						  void		breakMirror		();
-				   inline bool		empty			() const { return cap == 0; }
-				   inline size_t	capacity		() const { return cap; }
-				   inline S_REF*	cnfClsdPtr		() { return d_cs_mem; }
-				   inline S_REF*	cnfDatadPtr		() { return d_cnf_mem; }
-				   inline uint32*	unitsdPtr		() { return d_units; }
-				   inline void		prefetchCNF		(const cudaStream_t& _s = (cudaStream_t)0) {
+										, maxcap(0)
+										, otBlocks(0) {}
+				void	destroy			();
+				void	breakMirror		();
+		inline 	void	updateMaxCap	() { if (maxcap < cap) maxcap = cap; }
+		inline	bool	empty			() const { return cap == 0; }
+		inline	size_t	capacity		() const { return cap; }
+		inline	size_t	maxCapacity		() const { return maxcap; }
+		inline	S_REF*	cnfClsdPtr		() { return d_cs_mem; }
+		inline	S_REF*	cnfDatadPtr		() { return d_cnf_mem; }
+		inline	uint32*	unitsdPtr		() { return d_units; }
+		inline	void	prefetchCNF		(const cudaStream_t& _s = (cudaStream_t)0) {
 					   if (devProp.major > 5) {
-						   PFLOGN2(2, " Advising GPU driver to favor global over system memory..");
+						   PFLOGN2(2, " Prefetching CNF to global to memory..");
 						   CHECK(cudaMemAdvise(cnfPool.mem, cnfPool.cap, cudaMemAdviseSetPreferredLocation, MASTER_GPU));
 						   CHECK(cudaMemPrefetchAsync(cnfPool.mem, cnfPool.cap, MASTER_GPU, _s));
 						   PFLDONE(2, 5);
 					   }
 				   }
-						  void		mirrorCNF		(CNF*&);
-						  bool		allocPV			(VARS*&);
-						  bool		resizeCNF		(CNF*&, const uint32&, const uint32&);
-						  bool		resizeOTAsync	(OT*&, uint32*, const uint32&, const cudaStream_t& _s = (cudaStream_t)0);
-						  void		resetOTCapAsync	(OT*, const cudaStream_t& _s = (cudaStream_t)0);
+				bool	allocFixed		(VARS*&, const uint32&);
+				void	mirrorCNF		(CNF*&);
+				void	resizeHostCNF	(CNF*&, const uint32&, const uint32&);
+				bool	resizeCNF		(CNF*&, const uint32&, const uint32&);
+				void	resizeCNFAsync	(CNF*, CNF*);
+				bool	resizeOTAsync	(OT*&, uint32*, const uint32&, const cudaStream_t& _s = (cudaStream_t)0);
+				void	resetOTCapAsync	(OT*, const cudaStream_t& _s = (cudaStream_t)0);
+				void	init			(const size_t _free) { this->_free = _tot = _free; }
 		};
 
 	}
