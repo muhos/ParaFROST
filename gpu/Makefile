@@ -63,7 +63,7 @@ INCLUDES  := -I../../common/inc
 LIBRARIES :=
 
 # Gencode arguments
-SMS ?= 35 50 60 70 75
+SMS ?= 60 70 75
 All_GOOD := 1
 ifeq ($(SMS),)
 $(info >>> WARNING - no SM architectures have been specified <<<)
@@ -96,7 +96,7 @@ else
 	@echo "Compilation is ready - all dependencies have been met"
 endif
 
-pfalloc.o:pfalloc.cu
+pfcualloc.o:pfcualloc.cu
 	$(EXEC) $(NVCC) $(INCLUDES) $(ALL_CCFLAGS) $(GENCODE_FLAGS) -o $@ -c $(WARN) $<
  
 pfkernels.o:pfkernels.cu
@@ -108,7 +108,16 @@ pfsimp.o:pfsimp.cu
 pfsolve.o:pfsolve.cpp
 	$(EXEC) $(NVCC) $(INCLUDES) $(ALL_CCFLAGS) $(GENCODE_FLAGS) -o $@ -c $(WARN) $<
 
-pfpdm.o:pfpdm.cpp
+pfmdm.o:pfmdm.cpp
+	$(EXEC) $(NVCC) $(INCLUDES) $(ALL_CCFLAGS) $(GENCODE_FLAGS) -o $@ -c $(WARN) $<
+ 
+pfguess.o:pfguess.cpp
+	$(EXEC) $(NVCC) $(INCLUDES) $(ALL_CCFLAGS) $(GENCODE_FLAGS) -o $@ -c $(WARN) $<
+
+pfdecide.o:pfdecide.cpp
+	$(EXEC) $(NVCC) $(INCLUDES) $(ALL_CCFLAGS) $(GENCODE_FLAGS) -o $@ -c $(WARN) $<
+
+pfmodel.o:pfmodel.cpp
 	$(EXEC) $(NVCC) $(INCLUDES) $(ALL_CCFLAGS) $(GENCODE_FLAGS) -o $@ -c $(WARN) $<
 
 pfargs.o:pfargs.cpp
@@ -117,11 +126,11 @@ pfargs.o:pfargs.cpp
 pfmain.o:pfmain.cpp
 	$(EXEC) $(NVCC) $(INCLUDES) $(ALL_CCFLAGS) $(GENCODE_FLAGS) -o $@ -c $(WARN) $<
 
-parafrost: pfargs.o pfalloc.o pfkernels.o pfsimp.o pfpdm.o pfsolve.o pfmain.o
+parafrost: pfargs.o pfcualloc.o pfkernels.o pfsimp.o pfdecide.o pfmdm.o pfguess.o pfmodel.o pfsolve.o pfmain.o
 	$(EXEC) $(NVCC) $(ALL_LDFLAGS) $(GENCODE_FLAGS) -o $@ $+ $(LIBRARIES)
 	$(EXEC) mkdir -p build/$(BUILD_TYPE)
 	$(EXEC) cp $@ build/$(BUILD_TYPE)
 
 clean:
-	rm -f pfalloc.o pfkernels.o pfargs.o pfsimp.o pfpdm.o pfsolve.o pfmain.o parafrost  
+	rm -f *.o parafrost  
 	rm -rf build/$(BUILD_TYPE)/parafrost

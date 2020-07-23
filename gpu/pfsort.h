@@ -31,14 +31,14 @@ namespace pFROST {
 	//============================//
 	template<class T>
 	struct LESS {
-		bool operator () (T x, T y) {
+		bool operator () (T& x, T& y) {
 			return x < y;
 		}
 	};
 
 	template<class T>
 	struct GREATER {
-		bool operator () (T x, T y) {
+		bool operator () (T& x, T& y) {
 			return x > y;
 		}
 	};
@@ -104,7 +104,7 @@ namespace pFROST {
 	}
 
 	template<class T, class SZ, class CMP>
-	void insertion_sort(T* d, const SZ& sz, CMP cmp)
+	inline void insertion_sort(T* d, const SZ& sz, CMP cmp)
 	{
 		if (sz == 2 && cmp(d[1], d[0]))
 			swap(d[1], d[0]);
@@ -120,7 +120,7 @@ namespace pFROST {
 	}
 
 	template<class T, class SZ>
-	void Sort(T* d, const SZ& sz) {
+	inline void Sort(T* d, const SZ& sz) {
 		assert(d != NULL);
 		assert(sz > 0);
 		if (sz <= INSORT_THR)
@@ -131,7 +131,7 @@ namespace pFROST {
 	}
 
 	template<class T, class SZ, class CMP>
-	void Sort(T* d, const SZ& sz, CMP cmp) {
+	inline void Sort(T* d, const SZ& sz, CMP cmp) {
 		assert(d != NULL);
 		assert(sz > 0);
 		if (sz <= INSORT_THR)
@@ -142,7 +142,7 @@ namespace pFROST {
 	}
 
 	template<class T, class CMP>
-	void Sort(Vec<T>& d, CMP cmp) {
+	inline void Sort(Vec<T>& d, CMP cmp) {
 		assert(d.data() != NULL);
 		assert(d.size() > 0);
 		if (d.size() <= INSORT_THR)
@@ -153,7 +153,7 @@ namespace pFROST {
 	}
 
 	template<class T, class SZ, class CMP>
-	void Sort(Vec<T, SZ>& d, CMP cmp) {
+	inline void Sort(Vec<T, SZ>& d, CMP cmp) {
 		assert(d.data() != NULL);
 		assert(d.size() > 0);
 		if (d.size() <= INSORT_THR)

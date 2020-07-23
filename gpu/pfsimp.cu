@@ -19,16 +19,25 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 #include "pfsimpopts.h"
 #include "pfsolve.h"
 #include "pfsort.h"
+#include <cub/device/device_select.cuh>
+using namespace cub;
 
 namespace pFROST {
-
 	using namespace SIGmA;
+	cuTIMER *cutimer = NULL;
+	bool unified_access = false;
+	bool profile_gpu = false;
+	bool sync_always = false;
+	bool atomic_ve = false;
+	bool gc_par = false;
 
 	void ParaFROST::masterFree()
 	{
 		syncAll();
-		cleanSigma();
+		cleanFixed();
+		cleanDynamic();
 		destroyStreams();
+		cumem.breakMirror(), hcnf = NULL;
 	}
 
 	void ParaFROST::slavesFree()
@@ -40,10 +49,6 @@ namespace pFROST {
 	{
 		assert(sigma_en || sigma_live_en);
 		ngpus = opt_gpus;
-		nstreams = opt_streams;
-		solve_en = opt_solve_en;
-		ve_en = opt_ve_en || opt_ve_plus_en;
-		ve_plus_en = opt_ve_plus_en;
 		sub_en = opt_sub_en;
 		bce_en = opt_bce_en;
 		hre_en = opt_hre_en;
@@ -51,18 +56,29 @@ namespace pFROST {
 		phases = opt_phases;
 		mu_pos = opt_mu_pos;
 		mu_neg = opt_mu_neg;
+		gc_par = opt_gc_par_en;
+		nstreams = opt_streams;
+		solve_en = opt_solve_en;
 		lcve_min = opt_lcve_min;
-		ve_round_min = opt_ve_round_min;
-		ve_phase_min = opt_ve_phase_min;
 		shrink_rate = opt_cnf_free;
+		ve_plus_en = opt_ve_plus_en;
+		atomic_ve = opt_atomic_ve_en;
+		sort_cnf_en = opt_sort_cnf_en;
+		xor_limit = opt_xor_max_arity;
 		hse_limit = opt_hse_max_occurs;
 		bce_limit = opt_bce_max_occurs;
 		hre_limit = opt_hre_max_occurs;
+		ve_phase_min = opt_ve_phase_min;
+		profile_gpu = opt_profile_gpu_en;
+		sync_always = opt_sync_always_en;
+		ve_en = opt_ve_en || opt_ve_plus_en;
+		unified_access = opt_unified_access_en;
 		cls_en = all_en || sub_en || bce_en || hre_en;
 		if (all_en) ve_en = 1, ve_plus_en = 1, sub_en = 1, bce_en = 1, hre_en = 1;
 		if (!phases && ve_en) phases = 1; // at least 1 phase needed for BVE(+)
 		if (phases && !ve_en) phases = 0;
 		if (ngpus > devCount) ngpus = devCount;
+		if (profile_gpu) cutimer = new cuTIMER;
 	}
 
 	void ParaFROST::extract(CNF* dest, WT& src)
@@ -102,14 +118,7 @@ namespace pFROST {
 		assert(cnfstate == UNSOLVED);
 		assert(sp->propagated == trail.size());
 		initSimp();
-		if (sigma_live_en && trail.size() > sp->simplified) {
-			PFLOGN2(2, " Shrinking CNF before eliminations..");
-			shrinkWT();
-			shrink(orgs);
-			shrink(learnts);
-			PFLENDING(2, 5, " (-%d variables)", trail.size() - sp->simplified);
-			sp->simplified = trail.size();
-		}
+		if (sigma_live_en && trail.size() > sp->simplified) shrink();
 		if (orgs.empty()) { sigState = AWAKEN_FAIL; return; }
 		// alloc simplifier memory 
 		uint32 numCls = maxOrgs() + maxLearnts(), numLits = maxLiterals();
@@ -118,82 +127,96 @@ namespace pFROST {
 			PFLOG2(2, " Maximum added clauses/literals = %d/%d", inf.maxAddedCls, inf.maxAddedLits);
 			numCls += inf.maxAddedCls, numLits += inf.maxAddedLits;
 		}
-		if (!cuMem.allocFixed(vars, numLits) ||
-			!cuMem.resizeCNF(cnf, numCls, numLits)) 
+		assert(inf.nDualVars);
+		if (!cumem.resizeCNF(cnf, numCls, numLits) ||
+			!cumem.allocHist(cuhist, numLits) ||
+			!cumem.allocVars(vars, numLits) ||
+			!cumem.allocAux(numCls)) 
 		{ sigState = CNFALLOC_FAIL; return; }
-		PFLOGN2(2, " Extracting clauses heterogeneously to device..");
-		cuMem.resizeHostCNF(hcnf, maxOrgs() + maxLearnts(), maxLiterals());
-		printStats(), inf.nClauses = inf.nLiterals = 0;
-		extract(hcnf, wtBin), reflectCNF(streams[0], streams[1]), wtBin.clear(true);
-		extract(hcnf, wt), reflectCNF(streams[0], streams[1]), wt.clear(true);
-		extract(hcnf, orgs), reflectCNF(streams[0], streams[1]), orgs.clear(true);
-		extract(hcnf, learnts), reflectCNF(streams[0], streams[1]), learnts.clear(true);
-		// resize cnf & clean old database
-		cuMem.resizeCNFAsync(cnf, hcnf);
-		cm.destroy();
-		sync(streams[0]), sync(streams[1]);
-		assert(hcnf->data().size == off1);
-		assert(inf.nClauses == hcnf->size() && hcnf->size() == off2);
+		if (unified_access) {
+			PFLOGN2(2, " Extracting clauses directly to device..");
+			if (profile_gpu) cutimer->start();
+			printStats(), inf.nClauses = inf.nLiterals = 0;
+			extract(cnf, wtBin), wtBin.clear(true);
+			extract(cnf, wt), wt.clear(true);
+			extract(cnf, orgs), orgs.clear(true);
+			extract(cnf, learnts), learnts.clear(true);
+			cm.destroy();
+			assert(inf.nClauses == cnf->size());
+			if (profile_gpu) cutimer->stop(), cutimer->io += cutimer->gpuTime();
+		}
+		else {
+			PFLOGN2(2, " Extracting clauses heterogeneously to device..");
+			cumem.createMirror(hcnf, maxOrgs() + maxLearnts(), maxLiterals());
+			if (profile_gpu) cutimer->start(streams[0]);
+			printStats(), inf.nClauses = inf.nLiterals = 0;
+			extract(hcnf, wtBin), reflectCNF(streams[0], streams[1]), wtBin.clear(true);
+			extract(hcnf, wt), reflectCNF(streams[0], streams[1]), wt.clear(true);
+			extract(hcnf, orgs), reflectCNF(streams[0], streams[1]), orgs.clear(true);
+			extract(hcnf, learnts), reflectCNF(streams[0], streams[1]), learnts.clear(true);
+			// resize cnf & clean old database
+			cumem.resizeCNFAsync(cnf, hcnf);
+			cm.destroy();
+			sync(streams[0]), sync(streams[1]);
+			assert(hcnf->data().size == off1);
+			assert(inf.nClauses == hcnf->size() && hcnf->size() == off2);
+			if (profile_gpu) cutimer->stop(streams[0]), cutimer->io += cutimer->gpuTime();
+		}
 		PFLENDING(2, 5, "(%d clauses extracted)", inf.nClauses);
 		// compute clauses signatures
 		sync(), calcSigCNFAsync(cnf, 0, inf.nClauses, streams[0]);
-		// free host CNF
-		cuMem.breakMirror();
 		// compute histogram on GPU & alloc OT
-		assert(inf.nDualVars);
-		histogram.resize(inf.nDualVars);
-		d_hist = thrust::raw_pointer_cast(histogram.data());
-		h_hist = new uint32[inf.nDualVars];
 		if (!reallocOT(streams[0])) return;
-		cuMem.updateMaxCap(); // for monitoring GPU memory only
+		cumem.updateMaxCap(); // for reporting GPU memory only
 	}
 
 	void ParaFROST::varReorder()
 	{
 		PFLOGN2(2, " Finding eligible variables for LCVE..");
-		assert(d_hist != NULL);
-		if (vars->nUnits) calcScores(vars, d_hist, ot); // update d_hist & calc scores
-		else calcScores(vars, d_hist);
-		CHECK(cudaMemcpyAsync(h_hist, d_hist, inf.nDualVars * sizeof(uint32), cudaMemcpyDeviceToHost, streams[2]));
+		assert(cuhist.d_hist != NULL);
+		// NOTE: OT creation will be synced in calcScores call
+		if (vars->nUnits) calcScores(vars, cuhist.d_hist, ot); // update d_hist & calc scores
+		else calcScores(vars, cuhist.d_hist);
+		cuhist.cacheHist(streams[2]);
+		if (profile_gpu) cutimer->start(streams[3]);
 		thrust::sort(thrust::cuda::par.on(streams[3]), vars->eligible, vars->eligible + inf.maxVar, GPU_LCV_CMP(vars->scores));
-		sync(streams[2]);
 		PFLDONE(2, 5);
 		vars->nUnits = 0;
+		sync(streams[2]);
+		if (profile_gpu) cutimer->stop(streams[3]), cutimer->vo += cutimer->gpuTime();
 		if (verbose == 4) {
 			PFLOG0(" Eligible variables:");
-			CHECK(cudaMemcpy(h_hist, d_hist, inf.nDualVars * sizeof(uint32), cudaMemcpyDeviceToHost));
 			for (uint32 v = 0; v < inf.maxVar; v++) {
 				uint32 x = vars->eligible[v], p = v2l(x), n = neg(p);
-				PFLOG1("  e[%d]->(v: %d, p: %d, n: %d, s: %d)", v, x, h_hist[p], h_hist[n], vars->scores[x]);
+				PFLOG1("  e[%d]->(v: %d, p: %d, n: %d, s: %d)", v, x, cuhist[p], cuhist[n], vars->scores[x]);
 			}
 		}
 	}
 
 	void ParaFROST::calcOccurs(const uint32& numLits)
 	{
-		PFLOGN2(2, " Copying remained literals..");
 		assert(numLits);
-		rawLits.resize(numLits);
-		copyIf(thrust::raw_pointer_cast(rawLits.data()), cnf, vars->gstats);
+		PFLOGN2(2, " Copying remained literals..");
+		copyIf(cuhist.d_lits, cnf, vars->gstats);
 		assert(vars->gstats->numLits == numLits);
 		PFLENDING(2, 5, "(%d copied)", numLits);
-		histSimp();
-		rawLits.clear(), rawLits.shrink_to_fit();
+		histSimp(numLits);
 	}
 
-	void ParaFROST::histSimp()
+	void ParaFROST::histSimp(const uint32& numLits)
 	{
-		PFLOGN2(2, " Computing histogram on %d literals..", rawLits.size());
-		assert(rawLits.size());
-		assert(histogram.size() == v2l(inf.maxVar + 1ULL));
-		thrust::sort(rawLits.begin(), rawLits.end());
+		assert(numLits);
+		PFLOGN2(2, " Computing histogram on %d elements..", numLits);
+		if (profile_gpu) cutimer->start();
+		thrust::sort(cuhist.thrust_lits, cuhist.thrust_lits + numLits);
 		thrust::counting_iterator<size_t> search_begin(0);
-		thrust::upper_bound(rawLits.begin(), rawLits.end(), search_begin, search_begin + inf.nDualVars, histogram.begin());
-		thrust::adjacent_difference(histogram.begin(), histogram.end(), histogram.begin());
+		thrust::upper_bound(cuhist.thrust_lits, cuhist.thrust_lits + numLits, search_begin, search_begin + inf.nDualVars, cuhist.thrust_hist);
+		thrust::adjacent_difference(cuhist.thrust_hist, cuhist.thrust_hist + inf.nDualVars, cuhist.thrust_hist);
+		if (profile_gpu) cutimer->stop(), cutimer->vo += cutimer->gpuTime();
 		PFLDONE(2, 5);
 	}
 
-	void ParaFROST::preprocess()
+	void ParaFROST::sigmify()
 	{
 		timer.stop(), timer.solve += timer.cpuTime();
 		if (!phases && !cls_en) return;
@@ -214,7 +237,7 @@ namespace pFROST {
 		/*      1st-stage reduction     */
 		/********************************/
 		phase = 0, lits_before = inf.nLiterals, lits_diff = INT64_MAX;
-		while (lits_diff > ve_phase_min && phase < phases) {
+		while ((lits_diff > ve_phase_min || phase < 2) && phase < phases) {
 			if (interrupted()) killSolver();
 			sync(streams[0]);
 			if (!reallocCNF(phase + 1)) goto writeBack;
@@ -223,9 +246,12 @@ namespace pFROST {
 			PFLOG2(2, "\t\tPhase-%d Variable Elections (p-mu: %d, n-mu: %d)",
 				phase, mu_pos << vars->mu_inc, mu_neg << vars->mu_inc);
 			if (!LCVE()) goto writeBack;
-			VE(), cacheNumUnits(streams[3]);
-			if (bce_en && phase) BCE();
-			countAll();
+			//(*vars->pVars)[0] = 3, (*vars->pVars)[1] = 5, (*vars->pVars)[2] = 13, vars->numPVs = 3, vars->pVars->resize(vars->numPVs);
+			sortOTAsync(cnf, ot, vars, streams);
+			if (ve_en) VE();
+			if (bce_en) BCE();
+			countAll(), filterPVs();
+			cacheNumUnits(streams[3]);
 			inf.nClauses = inf.n_cls_after, inf.nLiterals = inf.n_lits_after;
 			lits_diff = lits_before - inf.nLiterals, lits_before = inf.nLiterals;
 			cacheUnits(streams[3]);
@@ -244,8 +270,8 @@ namespace pFROST {
 			while (t_p <= CE_POS_LMT && t_n <= CE_NEG_LMT) vars->mu_inc++, t_p <<= vars->mu_inc, t_n <<= vars->mu_inc;
 			PFLDONE(2, 5);
 			if (!LCVE()) goto writeBack;
+			sortOTAsync(cnf, ot, vars, streams);
 			if (sub_en) SUB();
-			if (bce_en) BCE();
 			if (hre_en) HRE();
 		}
 		/********************************/
@@ -255,21 +281,28 @@ namespace pFROST {
 		assert(sp->propagated == trail.size());
 		if (interrupted()) killSolver();
 		cacheCNF(streams[0], streams[1]);
-		if (satisfied() || sigState == LCVE_FAIL || !inf.nClauses)
+		if (inf.maxFrozen > sp->simplified) stats.n_forced += inf.maxFrozen - sp->simplified;
+		assert(stats.n_forced <= inf.maxVar);
+		stats.sigmifications++;
+		if (satisfied() || !inf.nClauses)
 			cnfstate = SAT, printStats(1, 'p');
 		else {
 			if (canMap()) map(true);
 			else assert(!mapped), newBeginning();
 			if (sigma_live_en) {
-				// update sigma trigger (inspired by Cadical)
-				double w = weight(sigma_inc * (phase + 1));
-				lrn.sigma_conf_max = nConflicts + w;
-				PFLOG2(2, " SIGmA limit increased to %lld conflicts by a weight of %.2f", lrn.sigma_conf_max, w);
+				// update sigma trigger (inspired by Cadical) 
+				// but we decrease phases and reset last shrinked too
+				double current_inc = sigma_inc * (phase + 1);
+				sigmaWeight(current_inc);
+				lrn.lastsimplified = 0;
+				lrn.sigma_conf_max = nConflicts + current_inc;
+				PFLOG2(2, " SIGmA limit increased to %lld conflicts by a weight of %.2f", lrn.sigma_conf_max, current_inc);
+				if (phases > 1) {
+					phases--;
+					PFLOG2(2, " SIGmA phases decreased to %d phases", phases);
+				}
 			}
 		}
-		stats.sigmifications++;
-		if (inf.maxFrozen > sp->simplified) stats.n_forced += inf.maxFrozen - sp->simplified;
-		assert(stats.n_forced <= inf.maxVar);
 		timer.stop(), timer.simp += timer.cpuTime();
 		if (!solve_en) killSolver();
 		timer.start();
@@ -298,7 +331,7 @@ namespace pFROST {
 			else {
 				assert(sz > 2);
 				if (s.learnt()) {
-					new_c.set_LBD(new_c.size());
+					new_c.set_lbd(sz);
 					learnts.push(r);
 					inf.nLearntLits += sz;
 				}
@@ -313,7 +346,6 @@ namespace pFROST {
 
 	void ParaFROST::newBeginning() {
 		assert(sigma_en || sigma_live_en);
-		assert(!hcnf->empty());
 		assert(wtBin.empty()), assert(wt.empty());
 		assert(orgs.empty()), assert(learnts.empty());
 		inf.nOrgBins = inf.nLearntBins = 0;
@@ -321,14 +353,29 @@ namespace pFROST {
 		assert(inf.maxVar > vmap.numVars());
 		uint32 tableSize = mapped ? v2l(vmap.size()) : inf.nDualVars;
 		wtBin.resize(tableSize), wt.resize(tableSize);
-		cm.init(hcnf->data().size);
 		if (!mapped) assert(vmap.empty()), sp->lockMelted(inf.maxVar);
-		sync(streams[0]), sync(streams[1]); // sync CNF caching
-		cacheResolved(streams[2]), createWT(), copyWatched(), copyNonWatched();  // must follow this order
+		if (unified_access) {
+			assert(hcnf == NULL); // assert we don't have memory leak
+			hcnf = cnf;
+			cm.init(hcnf->data().size * 1.5);
+			cacheResolved(streams[2]);
+		}
+		else {
+			assert(!hcnf->empty());
+			cm.init(hcnf->data().size * 1.5);
+			sync(streams[0]), sync(streams[1]); // sync CNF caching
+			cacheResolved(streams[2]);
+			if (profile_gpu) cutimer->stop(streams[1]), cutimer->io += cutimer->gpuTime();
+		}
+		createWT(), copyWatched(), copyNonWatched();  // must follow this order
 		syncAll();
 		inf.nOrgCls = inf.nClauses = orgs.size();
 		inf.nOrgLits = inf.nLiterals;
 		printStats(1, 'p');
+		if (unified_access) {
+			hcnf = NULL;
+			if (profile_gpu) cutimer->stop(), cutimer->io += cutimer->gpuTime();
+		}
 	}
 
 	bool ParaFROST::LCVE()
@@ -344,11 +391,11 @@ namespace pFROST {
 			if (sp->vstate[cand] == FROZEN || sp->vstate[cand] == MELTED) continue;
 			if (sp->frozen[cand]) continue;
 			uint32 p = v2l(cand), n = neg(p);
-			assert((*ot)[p].size() == h_hist[p]);
-			assert((*ot)[n].size() == h_hist[n]);
-			if (h_hist[p] == 0 && h_hist[n] == 0) continue;
+			assert((*ot)[p].size() == cuhist[p]);
+			assert((*ot)[n].size() == cuhist[n]);
+			if (cuhist[p] == 0 && cuhist[n] == 0) continue;
 			uint32 pos_temp = mu_pos << vars->mu_inc, neg_temp = mu_neg << vars->mu_inc;
-			if (h_hist[p] >= pos_temp && h_hist[n] >= neg_temp) break;
+			if (cuhist[p] >= pos_temp && cuhist[n] >= neg_temp) break;
 			assert(sp->vstate[cand] == ACTIVE);
 			vars->pVars->_push(cand);
 			depFreeze((*ot)[p], cand, pos_temp, neg_temp);
@@ -359,18 +406,11 @@ namespace pFROST {
 		memset(sp->frozen, 0, inf.maxVar + 1ULL);
 		if (vars->numPVs) {
 			uint32 mcv = vars->pVars->back();
-			PFLENDING(2, 5, "(%d elected, mcv: %d, pH: %d, nH: %d)", vars->numPVs, mcv, h_hist[v2l(mcv)], h_hist[neg(v2l(mcv))]);
+			PFLENDING(2, 5, "(%d elected, mcv: %d, pH: %d, nH: %d)", vars->numPVs, mcv, cuhist[v2l(mcv)], cuhist[neg(v2l(mcv))]);
 			if (verbose == 4) { PFLOGN0(" PLCVs "); printVars(*vars->pVars, vars->numPVs, 'v'); }
 		}
-		else {
-			PFLDONE(2, 5);
-			// NOTE: practically and perfhaps theoretically if LCVE couldn't elect
-			// any variable, that means all variables are eliminated, propagated, or
-			// more interestingly disappeared in clause eliminations which is enough
-			// to prove the formula is SATISFIABLE
-			sigState = LCVE_FAIL;
-		}
 		if (vars->numPVs < lcve_min) {
+			PFLDONE(2, 5);
 			if (verbose > 1) PFLOGW("parallel variables not enough -> skip SIGmA");
 			return false;
 		}
@@ -429,35 +469,24 @@ namespace pFROST {
 	void ParaFROST::VE()
 	{
 		if (interrupted()) killSolver();
-		int64 lits_before = inf.nLiterals, lits_removed = INT64_MAX;
-		int round = 0;
-		while (lits_removed > ve_round_min) {
-			PFLOG2(2, " Elimination round %d:", round);
-			if (ve_plus_en) {
-				PFLOGN2(2, "  1) HSE-ing variables..");
-				hse(cnf, ot, vars, hse_limit), countLits();
-				lits_removed = lits_before - inf.n_lits_after;
-				assert(lits_removed >= 0);
-				PFLENDING(2, 5, "(Literals removed : %lld)", -lits_removed);
-				if (round && !lits_removed) break;
-				lits_before = inf.n_lits_after;
-			}
-			PFLOGN2(2, "  2) Eliminating variables..");
-			ve(cnf, ot, vars, sigma_live_en), countLits();
-			lits_removed = lits_before - inf.n_lits_after;
-			PFLENDING(2, 5, "(Literals removed : %c%lld)", lits_removed < 0 ? '+' : '-', abs(lits_removed));
-			lits_before = inf.n_lits_after;
-			if (filterPVs()) break;
-			round++;
+		uint32 cs_size = cumem.pinnedCNF()->size(), data_size = cumem.pinnedCNF()->data().size;
+		if (ve_plus_en) {
+			PFLOGN2(2, "  Eliminating (self)-subsumptions..");
+			hseAsync(cnf, ot, vars, hse_limit);
+			PFLDONE(2, 5);
 		}
+		PFLOGN2(2, "  Eliminating variables..");
+		veAsync(cnf, ot, vars, streams, cuhist, cs_size, data_size, xor_limit, sigma_live_en);
+		PFLDONE(2, 5);
 		PFLREDALL(this, 2, "BVE(+) Reductions");
 	}
 
 	void ParaFROST::SUB()
 	{
 		if (interrupted()) killSolver();
+		if (!vars->numPVs) return;
 		PFLOGN2(2, " SUB-ing variables..");
-		hse(cnf, ot, vars, hse_limit);
+		hseAsync(cnf, ot, vars, hse_limit);
 		cacheNumUnits(streams[3]);
 		cacheUnits(streams[3]);
 		PFLDONE(2, 5);
@@ -468,8 +497,9 @@ namespace pFROST {
 	void ParaFROST::BCE()
 	{
 		if (interrupted()) killSolver();
+		if (!vars->numPVs) return;
 		PFLOGN2(2, " Eliminating blocked clauses..");
-		bce(cnf, ot, vars, bce_limit);
+		bceAsync(cnf, ot, vars, bce_limit);
 		PFLDONE(2, 5);
 		PFLREDALL(this, 2, "BCE Reductions");
 	}
@@ -477,8 +507,9 @@ namespace pFROST {
 	void ParaFROST::HRE()
 	{
 		if (interrupted()) killSolver();
+		if (!vars->numPVs) return;
 		PFLOGN2(2, " Eliminating hidden redundances..");
-		hre(cnf, ot, vars, hre_limit);
+		hreAsync(cnf, ot, vars, hre_limit);
 		PFLDONE(2, 5);
 		PFLREDCL(this, 2, "HRE Reductions");
 	}
@@ -486,8 +517,53 @@ namespace pFROST {
 	inline void	ParaFROST::initSimp() {
 		nForced = 0, sigState = AWAKEN_SUCC;
 		off1 = off2 = 0;
-		// free old memory (keeps the streams)
-		if (cuMem.capacity()) cleanSigma();
+		if (cumem.ucapacity()) cleanDynamic();
+	}
+
+	inline void ParaFROST::depFreeze(const OL& ol, const uint32& cand, const uint32& p_temp, const uint32& n_temp)
+	{
+		for (uint32 i = 0; i < ol.size(); i++) {
+			SCLAUSE& c = (*cnf)[ol[i]];
+			for (int k = 0; k < c.size(); k++) {
+				register uint32 v = l2a(c[k]), p = v2l(v), n = neg(p);
+				if (v != cand && (cuhist[p] < p_temp || cuhist[n] < n_temp)) sp->frozen[v] = 1;
+			}
+		}
+	}
+
+	inline void ParaFROST::cacheCNF(const cudaStream_t& s1, const cudaStream_t& s2)
+	{
+		// 0) count clauses on GPU and variables on CPU
+		countFinal();
+		if (!inf.nClauses) return; // all eliminated
+		if (unified_access) {
+			if (profile_gpu) cutimer->start();
+			// 1) compact cs w.r.t clause status on gpu
+			uint32* ts = cuhist.d_lits;
+			size_t tb = 0;
+			DeviceSelect::If(NULL, tb, cnf->csData(), cnf->csData(), ts, cnf->size(), COMPACT_CMP(cnf)), assert(tb <= cuhist.litsbytes);
+			DeviceSelect::If(ts + 1, tb, cnf->csData(), cnf->csData(), ts, cnf->size(), COMPACT_CMP(cnf), s1);
+			sync();
+			cnf->resize(inf.nClauses); // must be done after step (1)
+			// 2) sort cs w.r.t clause size on gpu (user-enabled)
+			if (sort_cnf_en) thrust::stable_sort(thrust::cuda::par.on(s1), cnf->csData(), cnf->csData() + inf.nClauses, CNF_CMP_SZ(cnf));
+		}
+		else {
+			cumem.mirrorCNF(hcnf);
+			if (profile_gpu) cutimer->start(s2);
+			// 1) compact cs w.r.t  clause status on gpu
+			uint32 *ts = cuhist.d_lits;
+			size_t tb = 0;
+			DeviceSelect::If(NULL, tb, cumem.csMem(), cumem.csMem(), ts, hcnf->size(), COMPACT_CMP(cnf)), assert(tb <= cuhist.litsbytes);
+			DeviceSelect::If(ts + 1, tb, cumem.csMem(), cumem.csMem(), ts, hcnf->size(), COMPACT_CMP(cnf), s1);
+			// 2) copy actual cnf data async.
+			CHECK(cudaMemcpyAsync(hcnf->data().mem, cumem.cnfMem(), hcnf->data().size * sizeof(S_REF), cudaMemcpyDeviceToHost, s2));
+			hcnf->resize(inf.nClauses); // must be done after step (2)
+			// 3) sort cs w.r.t clause size on gpu (user-enabled)
+			if (sort_cnf_en) thrust::stable_sort(thrust::cuda::par.on(s1), cumem.csMem(), cumem.csMem() + inf.nClauses, CNF_CMP_SZ(cnf));
+			// 4) copy compact cs async.
+			CHECK(cudaMemcpyAsync(hcnf->csData(), cumem.csMem(), inf.nClauses * sizeof(S_REF), cudaMemcpyDeviceToHost, s1));
+		}
 	}
 
 	inline bool ParaFROST::enqeueCached(const cudaStream_t& stream) {
@@ -503,59 +579,29 @@ namespace pFROST {
 			}
 			if (trail.size() == sp->propagated) vars->nUnits = nForced = 0; // duplicate units
 			else PFLTRAIL(this, 3);
-			sync(); // sync ot creation
+			syncAll(); // sync ot creation
 		}
 		return true;
-	}
-
-	inline void ParaFROST::cacheCNF(const cudaStream_t& s1, const cudaStream_t& s2)
-	{
-		// sync any gpu streams still running
-		syncAll(); 
-		// 0) count clauses on GPU and variables on CPU
-		countFinal();
-		if (!inf.nClauses) return; // all eliminated
-		cuMem.mirrorCNF(hcnf);
-		// 1) copy actual cnf data async.
-		CHECK(cudaMemcpyAsync(hcnf->data().mem, cuMem.cnfDatadPtr(), hcnf->data().size * sizeof(S_REF), cudaMemcpyDeviceToHost, s1));
-		// 2) sort cs w.r.t  clause status on gpu
-		thrust::stable_sort(thrust::cuda::par.on(s2), cuMem.cnfClsdPtr(), cuMem.cnfClsdPtr() + hcnf->size(), CNF_CMP_ST(cnf));
-		// 3) sort cs w.r.t clause size on gpu (inf.nClauses gives nr. undeleted clauses)
-		hcnf->resize(inf.nClauses); // must be done after step (2)
-		thrust::stable_sort(thrust::cuda::par.on(s2), cuMem.cnfClsdPtr(), cuMem.cnfClsdPtr() + inf.nClauses, CNF_CMP_SZ(cnf));
-		// 4) copy sorted cs async.
-		CHECK(cudaMemcpyAsync(hcnf->csData(), cuMem.cnfClsdPtr(), inf.nClauses * sizeof(S_REF), cudaMemcpyDeviceToHost, s2));
-	}
-
-	inline void ParaFROST::depFreeze(const OL& ol, const uint32& cand, const uint32& p_temp, const uint32& n_temp)
-	{
-		for (uint32 i = 0; i < ol.size(); i++) {
-			SCLAUSE& c = (*cnf)[ol[i]];
-			for (int k = 0; k < c.size(); k++) {
-				register uint32 v = l2a(c[k]), p = v2l(v), n = neg(p);
-				if (v != cand && (h_hist[p] < p_temp || h_hist[n] < n_temp)) sp->frozen[v] = 1;
-			}
-		}
 	}
 
 	inline void	ParaFROST::cleanProped() {
 		if (vars->nUnits) {
 			nForced = sp->propagated - nForced;
 			PFLREDALL(this, 2, "BCP Reductions");
-			nForced = 0, vars->tmpObj.clear();
-			assert(vars->tmpObj.data() == cuMem.unitsdPtr());
-			CHECK(cudaMemcpyAsync(vars->units, &vars->tmpObj, sizeof(cuVecU), cudaMemcpyHostToDevice));
 			reduceOTAsync(cnf, ot, 0);
+			nForced = 0, vars->tmpObj.clear();
+			assert(vars->tmpObj.data() == cumem.unitsdPtr());
+			CHECK(cudaMemcpyAsync(vars->units, &vars->tmpObj, sizeof(cuVecU), cudaMemcpyHostToDevice));
 		}
-		else sync(); // sync ot creation
 	}
 
-	inline void	ParaFROST::cleanSigma() {
-		histogram.clear(), histogram.shrink_to_fit();
-		if (h_hist != NULL) delete[] h_hist;
+	inline void	ParaFROST::cleanDynamic() {
 		if (vars != NULL) delete vars;
-		vars = NULL, h_hist = NULL, d_hist = NULL;
-		cuMem.destroy(), ot = NULL, cnf = NULL, hcnf = NULL;
+		cumem.freeDynamic(), vars = NULL, ot = NULL, cnf = NULL;
+	}
+
+	inline void	ParaFROST::cleanFixed() {
+		cumem.freeFixed();
 	}
 
 }

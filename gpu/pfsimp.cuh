@@ -1,4 +1,4 @@
-/***********************************************************************[pfsimp.h]
+/***********************************************************************[pfsimp.cuh]
 Copyright(c) 2020, Muhammad Osama - Anton Wijs,
 Technische Universiteit Eindhoven (TU/e).
 
@@ -30,6 +30,7 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 namespace pFROST {
 
 	namespace SIGmA {
+
 		// Special GPU comparators
 		struct GPU_LCV_CMP {
 			uint32* scores;
@@ -45,12 +46,12 @@ namespace pFROST {
 				return (scores[x] != scores[y]) ? scores[x] > scores[y] : x > y;
 			}
 		};
-		struct CNF_CMP_ST {
+		struct COMPACT_CMP
+		{
 			CNF* cnf;
-			_PFROST_H_D_ CNF_CMP_ST(CNF* _cnf) : cnf(_cnf) { assert(cnf != NULL); }
-			_PFROST_D_ bool operator () (S_REF& a, S_REF& b) {
-				SCLAUSE& x = (*cnf)[a], & y = (*cnf)[b];
-				return x.status() < y.status();
+			_PFROST_H_D_ COMPACT_CMP(CNF* _cnf) : cnf(_cnf) {}
+			_PFROST_D_ bool operator()(const S_REF& ref) {
+				return !cnf->cref(ref)->deleted();
 			}
 		};
 		struct CNF_CMP_SZ {
@@ -58,9 +59,11 @@ namespace pFROST {
 			_PFROST_H_D_ CNF_CMP_SZ(CNF* _cnf) : cnf(_cnf) { assert(cnf != NULL); }
 			_PFROST_D_ bool operator () (S_REF& a, S_REF& b) {
 				SCLAUSE& x = (*cnf)[a], &y = (*cnf)[b];
-				if (x.size() != y.size()) return x.size() < y.size();
+				uint32 xsize = x.size();
+				if (xsize != y.size()) return x.size() < y.size();
 				else if (*x != *y) return *x < *y;
-				else if (x.back() != y.back()) return x.back() < y.back();
+				else if (x[1] != y[1]) return x[1] < y[1];
+				else if (xsize > 2 && x.back() != y.back()) return x.back() < y.back();
 				else return x.sig() < y.sig();
 			}
 		};
@@ -69,19 +72,17 @@ namespace pFROST {
 		//======================================================//
 		void cuMemSetAsync(addr_t, const Byte&, const size_t&);
 		void copyIf(uint32*, CNF*, GSTATS*);
-		void shrinkSimp(CNF*, CNF*);
 		void calcScores(VARS*, uint32*);
 		void calcScores(VARS*, uint32*, OT*);
 		void calcSigCNFAsync(CNF*, const uint32&, const uint32&, const cudaStream_t&);
 		void calcSigCNF(CNF*, const uint32&);
-		void createOT(CNF*, OT*, const bool&);
 		void createOTAsync(CNF*, OT*, const bool&);
 		void reduceOTAsync(CNF*, OT*, const bool&);
-		void reduceOT(CNF*, OT*, VARS*, cudaStream_t*, const bool&);
-		void ve(CNF*, OT*, VARS*, const bool&);
-		void hse(CNF*, OT*, VARS*, const uint32& limit);
-		void bce(CNF*, OT*, VARS*, const uint32& limit);
-		void hre(CNF*, OT*, VARS*, const uint32& limit);
+		void sortOTAsync(CNF*, OT*, VARS* vars, cudaStream_t*);
+		void veAsync(CNF*, OT*, VARS*, cudaStream_t*, const cuHist&, const uint32&, const uint32&, const int&, const bool&);
+		void hseAsync(CNF*, OT*, VARS*, const uint32&);
+		void bceAsync(CNF*, OT*, VARS*, const uint32&);
+		void hreAsync(CNF*, OT*, VARS*, const uint32&);
 		void evalReds(CNF*, GSTATS*, LIT_ST*);
 		void countFinal(CNF*, GSTATS*, LIT_ST*);
 		void countCls(CNF*, GSTATS*);

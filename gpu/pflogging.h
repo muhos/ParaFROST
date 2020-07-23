@@ -180,6 +180,8 @@ inline void REPCH(const char& ch, const size_t& size, const size_t& off = 0) {
 
 #define PFLREDALL(s, lvl, msg) \
     if (verbose >= lvl) { \
+        if (!sync_always) sync(); \
+        s->filterPVs(); \
         s->evalReds(); \
         PFLOG1("\t\t %s",msg); \
         s->logReductions();\
@@ -188,6 +190,7 @@ inline void REPCH(const char& ch, const size_t& size, const size_t& off = 0) {
 #define PFLREDCL(s, lvl, msg) \
     if (verbose >= lvl) { \
         inf.n_del_vars_after = 0; \
+        if (!sync_always) sync(); \
         s->countAll(); \
         PFLOG1("\t\t %s", msg); \
         s->logReductions(); \

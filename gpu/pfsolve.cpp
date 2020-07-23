@@ -121,10 +121,10 @@ namespace pFROST {
 		, model_en				(opt_model_en)
 		, proof_en				(opt_proof_en)
 		, guess_en				(opt_guess_en)
+		, reduce_en				(opt_reduce_en)
 		, rephase_en			(opt_rephase_en)
 		, stable_en				(opt_stable_en)
 		, target_phase_en		(opt_targetphase_en)
-		, cbt_en				(opt_cbt_en)
 		, sigma_en				(opt_sig_pre_en)
 		, sigma_live_en			(opt_sig_live_en)
 		, sigma_inc				(opt_sigma_inc)
@@ -133,8 +133,6 @@ namespace pFROST {
 		, map_min				(opt_map_min)
 		, var_inc				(opt_var_inc)
 		, var_decay				(opt_var_decay)
-		, cla_inc				(opt_cla_inc)
-		, cla_decay				(opt_cla_decay)
 		, mdm_vsids_pumps		(opt_mdm_vsidspumps)
 		, mdm_vmfq_pumps		(opt_mdm_vmfqpumps)
 		, mdm_rounds			(opt_mdm_rounds)
@@ -150,14 +148,12 @@ namespace pFROST {
 		, restart_inc			(opt_rest_inc)
 		, polarity				(opt_polarity)
 		, rephase_inc			(opt_rephase_inc)
-		, lbd_freeze_min		(opt_lbd_frozen)
+		, lbd_tier1				(opt_lbd_tier1)
+		, lbd_tier2				(opt_lbd_tier2)
 		, lbd_reduce_min		(opt_lbd_min)
 		, lbd_csize_min			(opt_lbd_min_size)
-		, reduce_base			(opt_reduce_init)
-		, reduce_small_inc		(opt_reduce_small)
-		, reduce_big_inc		(opt_reduce_big)
-		, cbt_dist				(opt_cbt_dist)
-		, cbt_conf_max			(opt_cbt_confs)
+		, reduce_perc			(opt_reduce_perc)
+		, reduce_inc			(opt_reduce_inc)
 		, wt					(cm)
 		, wtBin					(cm)
 		, vHeap					(HEAP_CMP(varAct))
@@ -179,6 +175,7 @@ namespace pFROST {
 			PFLOG2(1, " Detected (%d) CUDA-enabled GPU(s)", devCount);
 			CHECK(cudaGetDeviceProperties(&devProp, MASTER_GPU));
 			assert(devProp.totalGlobalMem);
+			if (devProp.warpSize != 32) PFLOGE("GPU warp size not supported");
 #ifdef __linux__ 
 			memPenalty = 200 * MBYTE;
 			_gfree = devProp.totalGlobalMem - memPenalty;
@@ -187,8 +184,8 @@ namespace pFROST {
 			_gfree = devProp.totalGlobalMem - memPenalty;
 #endif
 			maxGPUThreads = devProp.multiProcessorCount * devProp.maxThreadsPerMultiProcessor;
-			cuMem.init(_gfree);
-			hcnf = NULL, cnf = NULL, ot = NULL, vars = NULL, h_hist = NULL, d_hist = NULL, streams = NULL;
+			cumem.init(_gfree);
+			hcnf = NULL, cnf = NULL, ot = NULL, vars = NULL, streams = NULL;
 		}
 		if (!quiet_en) {
 			PFLOG1(" Free system memory = %lld GB", stats.sysMemAvail / GBYTE);
@@ -254,7 +251,7 @@ namespace pFROST {
 				PFLOG2(1, " Found header %d %d", inf.maxVar, inf.nOrgCls);
 				inf.nDualVars = v2l(inf.maxVar + 1);
 				assert(orgs.empty());
-				allocFixed();
+				allocVars();
 				initSolver();
 			}
 			else {
@@ -328,7 +325,7 @@ namespace pFROST {
 		exit(EXIT_SUCCESS);
 	}
 
-	void ParaFROST::allocFixed()
+	void ParaFROST::allocVars()
 	{
 		PFLOGN2(2, " Allocating solver memory for fixed arrays..");
 		assert(sizeof(C_REF) == sizeof(uint32));
@@ -367,18 +364,15 @@ namespace pFROST {
 		lrn.bumped = 0;
 		lrn.numMDs = 0;
 		lrn.nRefVars = 0;
-		lrn.simpProps = 0;
-		lrn.reductions = 1;
 		lrn.var_inc = var_inc;
 		lrn.var_decay = var_decay;
 		lrn.target = lrn.best = 0;
-		lrn.cl_inc = float(cla_inc);
-		lrn.cl_decay = float(cla_decay);
+		lrn.lastsimplified = 0;
 		lrn.rephased[0] = lrn.rephased[1] = 0;
 		lrn.rounds = mdm_rounds;
 		lrn.mdm_conf_max = mdm_minc;
 		lrn.sigma_conf_max = sigma_inc;
-		lrn.reduce_conf_max = reduce_base;
+		lrn.reduce_conf_max = reduce_inc;
 		lrn.rephase_conf_max = rephase_inc;
 		lrn.restarts_conf_max = restart_base;
 		lrn.stable_conf_max = stabrestart_inc;
@@ -425,16 +419,17 @@ namespace pFROST {
 			else {
 				assert(sp->learnt_lbd > 0);
 				CLAUSE& c = cm[r];
-				c.melt();
-				c.set_act(lrn.cl_inc);
-				c.set_LBD(sp->learnt_lbd);
+				if (sp->learnt_lbd > sz) c.set_lbd(sz);
+				else c.set_lbd(sp->learnt_lbd);
+				if (sp->learnt_lbd <= lbd_tier1) inf.nGlues++;			// Tier1
+				else if (sp->learnt_lbd <= lbd_tier2) c.initTier2();	// Tier2
+				else c.initTier3();										// Tier3
 				learnts.push(r);
 				inf.nLearntLits += sz;
-				if (sp->learnt_lbd <= 2) inf.nGlues++; // glues
 			}
 		}
 		if (type == ORIGINAL) cm[r].set_status(ORIGINAL);
-		else assert(type == LEARNT), cm[r].set_status(LEARNT), enqueue(*learntC, sp->bt_level, r); // enqueue must always use sp->bt_level
+		else assert(type == LEARNT), cm[r].set_status(LEARNT), enqueue(*learntC, sp->bt_level, r);
 	}
 
 	void ParaFROST::removeClause(C_REF& r, const bool& gc) {
@@ -484,9 +479,10 @@ namespace pFROST {
 			wrProof(tmpCl, c.size());
 			wrProof(0);
 		}
-		c.shrink(remLits); // adjusts pos also
+		c.shrink(remLits); // adjusts "pos" also
 		cm.collect(remLits);
 		assert(c.size() > 1);
+		if (c.learnt() && c.size() > 2) bumpShrinked(c);
 	}
 
 	void ParaFROST::shrinkWT()
@@ -516,9 +512,10 @@ namespace pFROST {
 		shrinkWT();
 		shrink(orgs);
 		inf.nClauses = orgs.size();
-		PFLENDING(2, 5, "(-%d variables)", trail.size() - sp->simplified);
+		int simpVars = trail.size() - sp->simplified;
+		lrn.lastsimplified += simpVars;
+		PFLENDING(2, 5, "(-%d variables)", simpVars);
 		sp->simplified = trail.size();
-		lrn.simpProps = inf.nLiterals + ((int64)inf.nOrgBins << 1);
 		stats.shrinkages++;
 	}
 
@@ -527,51 +524,70 @@ namespace pFROST {
 		// remove satisfied clauses & falsified literals
 		PFLOGN2(2, " Shrinking CNF..");
 		assert(trail.size() && DL() == ROOT_LEVEL);
-		assert(sp->propagated == trail.size());
 		assert(conflict == NOREF);
 		assert(cnfstate == UNSOLVED);
+		assert(sp->propagated == trail.size());
 		assert(!unassigned(trail.back()));
 		shrinkWT();
-		shrink(learnts);
 		shrink(orgs);
+		shrink(learnts);
 		inf.nClauses = orgs.size();
-		PFLENDING(2, 5, "(-%d variables)", trail.size() - sp->simplified);
+		int simpVars = trail.size() - sp->simplified;
+		lrn.lastsimplified += simpVars;
+		PFLENDING(2, 5, "(-%d variables)", simpVars);
 		sp->simplified = trail.size();
-		lrn.simpProps = maxLiterals();
 		stats.shrinkages++;
-		recycle();
-		if (canMap()) map();
+	}
+
+	void ParaFROST::reduceLearnts() {
+		assert(learnts.size());
+		reduced.reserve(learnts.size());
+		// keep recently used, tier1, and reason learnts otherwise reduce
+		for (C_REF* r = learnts; r != learnts.end(); r++) {
+			CLAUSE& c = cm[*r];
+			assert(c.size() > 2);
+			if (c.reason()) continue;
+			if (c.usage()) c.warm();
+			else if (c.lbd() > lbd_tier1) reduced.push(*r);
+		}
+		if (reduced.size()) {
+			uint32 pivot = reduce_perc * reduced.size();
+			PFLOGN2(2, " Reducing learnt database (up to %d clauses)..", pivot);
+			std::stable_sort(reduced.data(), reduced.end(), LEARNT_CMP(cm));
+			// remove learnts from database
+			C_REF* h = reduced, * e = h + pivot;
+			while (h != e) {
+				assert(!cm[*h].reason());
+				assert(cm[*h].lbd() > lbd_tier1);
+				removeClause(*h++);
+			}
+			uint32 n = 0;
+			for (C_REF* r = learnts; r != learnts.end(); r++)
+				if (!cm[*r].deleted()) learnts[n++] = *r;
+			assert(n == learnts.size() - pivot);
+			learnts.resize(n);
+			PFLDONE(2, 5);
+		}
+		reduced.clear();
 	}
 
 	void ParaFROST::reduce()
 	{
-		// learnt clauses reduction
-		PFLOGN2(2, " Reducing learnt database..");
+		// remove satisfied clauses if possible then reduce learnts
 		assert(sp->propagated == trail.size());
 		assert(conflict == NOREF);
 		assert(cnfstate == UNSOLVED);
-		assert(learnts.size());
-		Sort(learnts, LEARNT_CMP(cm));
-		uint32 pivot = learnts.size() / 2, n = 0;
-		if (cm[learnts[pivot]].LBD() <= 3) lrn.reduce_conf_max += reduce_big_inc;
-		for (uint32 i = 0; i < learnts.size(); i++) {
-			CLAUSE& c = cm[learnts[i]];
-			assert(c.size() > 2);
-			if (c.LBD() > GLUE && c.molten() && !c.reason() && i < pivot)
-				removeClause(learnts[i]);
-			else {
-				if (!c.molten()) pivot++;
-				c.melt();
-				learnts[n++] = learnts[i];
-			}
-		}
-		learnts.resize(n);
-		// update counters
-		lrn.reductions = (nConflicts / lrn.reduce_conf_max) + 1;
-		lrn.reduce_conf_max += reduce_small_inc;
 		stats.reduces++;
-		PFLDONE(2, 5);
+		bool shrinked = false;
+		if (canShrink()) shrink(), shrinked = true;
+		reduceLearnts();
+		// update counters
+		double current_inc = reduce_inc * (stats.reduces + 1);
+		reduceWeight(current_inc);
+		lrn.reduce_conf_max = nConflicts + current_inc;
+		PFLOG2(2, " Max reduce limit increased to %lld conflicts by a weight %.2f", lrn.reduce_conf_max, current_inc);
 		recycle();
+		if (shrinked && canMap()) map();
 	}
 
 	void ParaFROST::selfsubBin()
@@ -677,52 +693,18 @@ namespace pFROST {
 		}
 	}
 
-	void ParaFROST::cbtLevel()
-	{
-		assert(conflict != NOREF);
-		CLAUSE& c = cm[conflict];
-		sp->max1Found = false;
-		sp->cbt_level = sp->level[l2a(*c)];
-		if (DL() == sp->cbt_level && DL() == sp->level[l2a(c[1])]) return;
-		// find the highest level in conflicting clause beyond literal-0
-		sp->max1Found = true;
-		int maxIdx = 0;
-		for (int l = 1; l < c.size(); l++) {
-			register int litLevel = sp->level[l2a(c[l])];
-			if (litLevel > sp->cbt_level) {
-				sp->max1Found = true;
-				sp->cbt_level = litLevel;
-				maxIdx = l;
-			}
-			else if (litLevel == sp->cbt_level && sp->max1Found == true)
-				sp->max1Found = false;
-		}
-		if (maxIdx) { // found max. level, swap with w0-literal
-			uint32 w0_lit = *c;
-			*c = c[maxIdx];
-			c[maxIdx] = w0_lit;
-			if (maxIdx > 1) { // found new watch at 0-position
-				assert(w0_lit == c[maxIdx]);
-				WT& ws = c.size() == 2 ? wtBin : wt;
-				ws.remWatch(flip(w0_lit), conflict);
-				ws[flip(*c)].push(WATCH(conflict, c[1]));
-			}
-		}
-	}
-
 	void ParaFROST::cancelAssigns(const int& bt_level)
 	{
 		int level = DL();
 		if (level == bt_level) return;
 		savePhases(bt_level);
-		uint32 from = trail_lens[bt_level], i = from, j = from;
+		uint32 from = trail_lens[bt_level], i = from;
 		while (i < trail.size()) {
-			uint32 lit = trail[i++], v = l2a(lit);
-			if (sp->level[v] > bt_level) cancelAssign(lit);
-			else if (cbt_en) trail[j++] = lit;
+			uint32 lit = trail[i++];
+			if (sp->level[l2a(lit)] > bt_level) cancelAssign(lit);
 		}
-		PFLOG2(3, " %d literals kept in trail & %d are cancelled", j, trail.size() - j);
-		trail.resize(j);
+		PFLOG2(3, " %d literals kept and %d are cancelled", from, trail.size() - from);
+		trail.resize(from);
 		sp->propagated = trail.size();
 		assert(trail_lens[bt_level] == trail.size());
 		trail_lens.shrink(level - bt_level);
@@ -752,52 +734,23 @@ namespace pFROST {
 		PFLOG2(3, " Analyzing conflict:");
 		PFLTRAIL(this, 3);
 		nConflicts++;
-		if (cbt_en) {
-			cbtLevel();
-			if (sp->cbt_level == ROOT_LEVEL) { cnfstate = UNSAT; return; }
-			if (sp->max1Found) {
-				cancelAssigns(sp->cbt_level - 1);
-				return;
-			}
-		}
-		else if (DL() == ROOT_LEVEL) { cnfstate = UNSAT; return; }
-		// conflict analysis
+		if (DL() == ROOT_LEVEL) { cnfstate = UNSAT; return; }
 		learntC.clear();
 		learntC.push(0);
 		sp->learnt_lbd = 0;
 		uint32 parent = 0;
-		int conf_level = UNDEFINED;
 		int track = 0, index = trail.size() - 1;
 		C_REF r = conflict;
-		assert(verifyConfl(*cm[r]));
-		conf_level = l2dl(*cm[r]);
 		do {
 			assert(r != NOREF);
-			CLAUSE& c = cm[r];
-			if (parent && c.size() == 2 && isFalse(*c)) {
-				assert(isTrue(c[1]));
-				c.swapWatched();
-			}
-			bumpClause(c);
-			for (int j = (parent == 0) ? 0 : 1; j < c.size(); j++)
-				analyzeLit(c[j], conf_level, track);
+			analyzeReason(r, parent, track);
 			// next implication clause
-			if (cbt_en) {
-				do {
-					while (!sp->seen[l2a(trail[index--])]);
-					parent = trail[index + 1];
-					assert(parent > 0);
-				} while (sp->level[l2a(parent)] < conf_level);
-			}
-			else {
-				while (!sp->seen[l2a(trail[index--])]);
-				parent = trail[index + 1];
-				assert(parent > 0);
-			}
+			while (!sp->seen[l2a(trail[index--])]);
+			parent = trail[index + 1];
+			assert(parent > 0);
 			r = l2r(parent);
 			sp->seen[l2a(parent)] = 0;
-			track--;
-		} while (track > 0);
+		} while (--track > 0);
 		assert(learntC[0] == 0);
 		learntC[0] = flip(parent);
 		PFLLEARNT(this, 3);
@@ -805,25 +758,19 @@ namespace pFROST {
 		stats.max_lits += learntC.size();
 		if (learntC.size() > 1) {
 			selfsub();
-			if (!sp->learnt_lbd) sp->learnt_lbd = calcLBD(learntC); // calculate LBD, if clause not minimized
+			if (!sp->learnt_lbd) sp->learnt_lbd = calcLBD(learntC); // calculate lbd, if clause not minimized
 		}
 		else sp->learnt_lbd = 1;
 		assert(sp->learnt_lbd != 0);
-		PFLOG2(4, " LBD of learnt clause = %d", sp->learnt_lbd);
+		PFLOG2(4, " lbd of learnt clause = %d", sp->learnt_lbd);
 		stats.tot_lits += learntC.size();
 		// adjust restart rate
 		lbdrest.update(sp->learnt_lbd);
 		if (lrn.stable) lubyrest.update();
 		whereToJump();
 		bumpVariables();
-		if (cbt_en && nConflicts >= cbt_conf_max && (DL() - sp->bt_level) >= cbt_dist) {
-			backJump(sp->cbt_level - 1);
-			stats.cbt++;
-		}
-		else {
-			backJump(sp->bt_level);
-			stats.ncbt++;
-		}
+		backJump(sp->bt_level);
+		stats.ncbt++;
 		printStats(vsidsOnly() && nConflicts % prograte == 0);
 	}
 
@@ -832,7 +779,7 @@ namespace pFROST {
 		conflict = NOREF;
 		uint32 propsBefore = sp->propagated;
 		while (sp->propagated < trail.size()) {
-			uint32 assign = trail[sp->propagated++], assign_dl = l2dl(assign);
+			uint32 assign = trail[sp->propagated++], assign_dl = DL();
 			assert(assign > 0);
 			PFLBCPS(this, 4, assign);
 			// binaries
@@ -877,27 +824,13 @@ namespace pFROST {
 							while (k != cmid && (_false_ = isFalse(lit = *k))) k++;
 						}
 						assert(k >= c + 2 && k <= c.end());
-						c.set_pos(k - c); // set new position
+						c.set_pos(int(k - c)); // set new position
 						if (!_false_) c[1] = lit, * k = f_assign, wt[flip(lit)].push(w); // prepare new watch
 						else { // clause is unit or conflict
 							*w_j++ = w;
 							if (val0 < 0) {
 								assert(l2dl(c[0]) == UNDEFINED);
-								if (assign_dl == DL()) enqueue(c[0], assign_dl, r);
-								else {
-									// find parent with max. level
-									int maxLevel = assign_dl, maxIdx = 1;
-									for (int n = 2; n < c.size(); n++) {
-										register int litLevel = l2dl(c[n]);
-										if (litLevel > maxLevel) { maxLevel = litLevel; maxIdx = n; }
-									}
-									if (maxIdx != 1) {
-										c.swap(1, maxIdx);
-										w_j--; // remove (w) from assign list
-										wt[flip(c[1])].push(w); // add it as new 1-literal watched 
-									}
-									enqueue(c[0], maxLevel, r);
-								}
+								enqueue(c[0], assign_dl, r);
 							}
 							else {
 								PFLCONFLICT(this, 3, c[0]);
@@ -913,36 +846,31 @@ namespace pFROST {
 			PFLBCPE(this, 4, assign);
 		}
 	bcp_exit:
-		if (!search_guess) {
-			int props = sp->propagated - propsBefore;
-			stats.n_props += props;
-			lrn.simpProps -= props;
-		}
+		if (!search_guess) stats.n_props += (sp->propagated - propsBefore);
 		return conflict;
 	}
 
 	void ParaFROST::solve()
 	{
 		timer.start();
-		if (canPreSigmify()) preprocess();
+		if (canPreSigmify()) sigmify();
 		if (guess_en) guess();
 		if (cnfstate == UNSOLVED) MDMInit();
-		PFLOG2(2, " CDCL search started..");
+		PFLOG2(2, "-- CDCL search started..");
 		while (cnfstate == UNSOLVED && !interrupted()) {
 			PFLDL(this, 3);
 			if (BCP() != NOREF) analyze();
 			else if (satisfied()) cnfstate = SAT;
 			else if (canRestart()) restart();
 			else if (canRephase()) rephase();
-			else if (canShrink()) shrink();
 			else if (canReduce()) reduce();
-			else if (canSigmify()) preprocess();
+			else if (canSigmify()) sigmify();
 			else if (canMMD()) MDM();
 			else decide();
 			PFLTRAIL(this, 3);
 		}
 		timer.stop(), timer.solve += timer.cpuTime();
-		PFLOG2(2, " CDCL search completed successfully");
+		PFLOG2(2, "-- CDCL search completed successfully");
 		wrapup();
 	}
 
@@ -954,7 +882,7 @@ namespace pFROST {
 		if (lrn.stable) stats.stab_restarts++;
 		starts++;
 		cancelAssigns();
-		sp->reset();
+		sp->bt_level = ROOT_LEVEL;
 		if (mdmfuses_en) MDMFuseSlave();
 		lrn.restarts_conf_max = nConflicts + restart_inc;
 		PFLOG2(3, " new restart limit after %lld conflicts", lrn.restarts_conf_max);
@@ -1094,15 +1022,29 @@ namespace pFROST {
 	{
 		if (report_en) {
 			PFLOG0("");
-			PFLOG0("\t\t\tSolver Report");
+			PFLOG0("\t\t\tSimplifier Report");
 			PFLOG1(" Simplifier time      : %-10.3f  sec", timer.simp);
+			if (profile_gpu) {
+				PFLOG1("  - Var ordering      : %-10.2f  ms", cutimer->vo);
+				PFLOG1("  - CNF signatures    : %-10.2f  ms", cutimer->sig);
+				PFLOG1("  - CNF compact       : %-10.2f  ms", cutimer->gc);
+				PFLOG1("  - CNF transfer      : %-10.2f  ms", cutimer->io);
+				PFLOG1("  - OT  creation      : %-10.2f  ms", cutimer->cot);
+				PFLOG1("  - OT  sorting       : %-10.2f  ms", cutimer->sot);
+				PFLOG1("  - OT  reduction     : %-10.2f  ms", cutimer->rot);
+				PFLOG1("  - BVE               : %-10.2f  ms", cutimer->ve);
+				PFLOG1("  - HSE               : %-10.2f  ms", cutimer->hse);
+				PFLOG1("  - BCE               : %-10.2f  ms", cutimer->bce);
+				PFLOG1("  - HRE               : %-10.2f  ms", cutimer->hre);
+			}
+			PFLOG1(" Device memory        : %-10.3f  MB", ((double)cumem.maxCapacity() / MBYTE));
+			PFLOG0("\t\t\tSolver Report");
 			PFLOG1(" Solver time          : %-10.3f  sec", timer.solve);
 			PFLOG1(" System memory        : %-10.3f  MB", ((double)sysMemUsed() / MBYTE));
-			PFLOG1(" Device memory        : %-10.3f  MB", ((double)cuMem.maxCapacity() / MBYTE));
 			PFLOG1(" Guessed              : %-10s  (%s)", stats.guess_succ ? "yes" : "no", guess_en ? stats.guess_who : "disabled");
-			PFLOG1(" Reduces              : %-10d", stats.reduces);
+			PFLOG1(" Reduces              : %-10lld", stats.reduces);
 			PFLOG1(" Rephases             : %-10lld", stats.n_rephs);
-			PFLOG1(" Recyclings           : %-10d", stats.recyclings);
+			PFLOG1(" Recyclings           : %-10lld", stats.recyclings);
 			PFLOG1(" Shrinkages           : %-10d", stats.shrinkages);
 			PFLOG1(" Sigmifications       : %-10d", stats.sigmifications);
 			PFLOG1(" Mappings             : %-10d", stats.mappings);
@@ -1114,9 +1056,8 @@ namespace pFROST {
 			PFLOG1(" Multiple decisions   : %-10lld  (%.1f dec/sec)", stats.n_mds, stats.n_mds / timer.solve);
 			PFLOG1(" Follow-Up decisions  : %-10lld  (%.1f dec/sec)", stats.n_fuds, stats.n_fuds / timer.solve);
 			PFLOG1(" Propagations         : %-10lld  (%.1f prop/sec)", stats.n_props, stats.n_props / timer.solve);
-			PFLOG1(" Non-chronological BT : %-10d  (%.1f bt/sec)", stats.ncbt, stats.ncbt / timer.solve);
-			PFLOG1(" Chronological BT     : %-10d  (%.1f bt/sec)", stats.cbt, stats.cbt / timer.solve);
-			PFLOG1(" Stable restarts      : %-10d  (%.1f r/sec)", stats.stab_restarts, stats.stab_restarts / timer.solve);
+			PFLOG1(" Non-chronological BT : %-10lld  (%.1f bt/sec)", stats.ncbt, stats.ncbt / timer.solve);
+			PFLOG1(" Stable restarts      : %-10lld  (%.1f r/sec)", stats.stab_restarts, stats.stab_restarts / timer.solve);
 			PFLOG1(" Restarts             : %-10d  (%.1f r/sec)", starts, starts / timer.solve);
 			PFLOG1(" Conflicts            : %-10lld  (%.1f conf/sec)", nConflicts, (nConflicts / timer.solve));
 			PFLOG1(" Conflict literals    : %-10lld  (%.2f %% deleted)", stats.tot_lits, (stats.max_lits - stats.tot_lits) * 100.0 / stats.tot_lits);

@@ -122,21 +122,19 @@ namespace pFROST {
 			assert(sz); return size_t(sz) * nVecs * sizeof(T);
 		}
 	public:
-		int			*level, *board, bt_level, cbt_level;
+		int			*level, *board, bt_level, learnt_lbd;
 		LIT_ST		*value, *locked, *seen, *frozen, *vstate, *psaved, *ptarget, *pbest;
-		uint32		*tmp_stack, propagated, simplified, learnt_lbd;
+		uint32		*tmp_stack, propagated, simplified;
 		C_REF		*source;
-		bool		max1Found;
 					SP				(const uint32& size) :
 						_mem(NULL)
 						, _sz(size)
 						, _cap(0)
-						, max1Found(false)
 						, propagated(0)
 						, simplified(0)
 						, learnt_lbd(0)
 						, bt_level(ROOT_LEVEL)
-						, cbt_level(UNDEFINED) {
+					{
 						size_t vec1Bytes = calcBytes<LIT_ST>(size, 9);
 						size_t vec4Bytes = calcBytes<uint32>(size, 4);
 						_cap = vec1Bytes + vec4Bytes;
@@ -197,28 +195,26 @@ namespace pFROST {
 				if (vstate[v] == MELTED)
 					locked[v] = 1;
 		}
-		void		reset			() { 
-			bt_level = ROOT_LEVEL, cbt_level = UNDEFINED, max1Found = false; 
-		}
 		void		destroy			() { if (_mem != NULL) std::free(_mem); }
 					~SP				() { destroy(); }
 	};
 	struct LEARN {
-		int64 simpProps, reductions, bumped;
+		int64 bumped;
 		int64 mdm_conf_max, reduce_conf_max;
 		int64 restarts_conf_max, stable_conf_max;
 		int64 rephased[2], rephase_conf_max, rephase_last_max;
 		int64 sigma_conf_max;
 		double var_inc, var_decay;
-		float cl_inc, cl_decay;
 		uint32 numMDs, nRefVars;
 		uint32 best, target;
-		int	rounds;
+		int	rounds, lastsimplified;
 		LIT_ST lastrephased;
 		bool stable;
 	};
 	struct STATS {
 		int64 sysMemAvail;
+		int64 reduces, recyclings;
+		int64 stab_restarts, ncbt;
 		int64 n_rephs;
 		int64 n_fuds, n_mds;
 		int64 n_units, n_forced;
@@ -226,11 +222,10 @@ namespace pFROST {
 		int sigmifications;
 		int marker, mdm_calls;
 		int mappings, shrinkages;
-		int reduces, recyclings;
-		int stab_restarts, ncbt, cbt;
 		bool guess_succ;
 		const char* guess_who;
 		void reset() {
+			ncbt = 0;
 			marker = 0;
 			n_rephs = 0;
 			reduces = 0;
@@ -238,7 +233,6 @@ namespace pFROST {
 			mdm_calls = 0;
 			shrinkages = 0;
 			recyclings = 0;
-			ncbt = cbt = 0;
 			stab_restarts = 0;
 			sigmifications = 0;
 			n_mds = n_fuds = 0;
@@ -256,9 +250,9 @@ namespace pFROST {
 	struct LEARNT_CMP {
 		const CMM& cm;
 		LEARNT_CMP(const CMM& _cm) : cm(_cm) {}
-		bool operator () (C_REF& a, C_REF& b) {
-			if (cm[a].LBD() != cm[b].LBD()) return cm[a].LBD() > cm[b].LBD();
-			else return cm[a].activity() != cm[b].activity() ? cm[a].activity() < cm[b].activity() : cm[a].size() > cm[b].size();
+		bool operator () (const C_REF& a, const C_REF& b) {
+			if (cm[a].lbd() != cm[b].lbd()) return cm[a].lbd() > cm[b].lbd();
+			return cm[a].size() > cm[b].size();
 		}
 	};
 	struct ANALYZE_CMP {

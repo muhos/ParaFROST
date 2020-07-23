@@ -21,19 +21,16 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 #include "pfcudefs.h"
 #include "pfdtypes.h"
+#include "pfwarp.cuh"
 
 namespace pFROST {
 
     namespace SIGmA {
 
-        _PFROST_D_ uint32 laneMask_lt() {
-            uint32 lanemask;
-            asm("mov.u32 %0, %%lanemask_lt;" : "=r"(lanemask));
-            return lanemask;
-        }
-
         _PFROST_D_ uint32 atomicAggInc(uint32* counter) {
-            uint32 mask = __activemask(), total = __popc(mask), prefix = __popc(mask & laneMask_lt());
+            uint32 mask = __activemask(), total = __popc(mask), laneMask;
+            laneMask_lt(laneMask);
+            uint32 prefix = __popc(mask & laneMask);
             int lowest_lane = __ffs(mask) - 1;
             uint32 warpRes = 0;
             if (prefix == 0) warpRes = atomicAdd(counter, total);
@@ -43,7 +40,9 @@ namespace pFROST {
         }
 
         _PFROST_D_ int atomicAggInc(int* counter) {
-            uint32 mask = __activemask(), total = __popc(mask), prefix = __popc(mask & laneMask_lt());
+            uint32 mask = __activemask(), total = __popc(mask), laneMask;
+            laneMask_lt(laneMask);
+            uint32 prefix = __popc(mask & laneMask);
             int lowest_lane = __ffs(mask) - 1;
             int warpRes = 0;
             if (prefix == 0) warpRes = atomicAdd(counter, total);

@@ -32,32 +32,30 @@ namespace pFROST {
 	/*****************************************************/
 	class CLAUSE {
 		CL_ST	_st, _r, _f, _m;
-		int		_sz, _pos;
-		uint32	_lbd;
-		float	_act;
+		int		_sz, _pos, _lbd;
 		union { uint32 _lits[2]; C_REF _ref; };
 	public:
 		size_t				capacity		() const { return (_sz - 2) * sizeof(uint32) + sizeof(*this); }
 		inline				CLAUSE			() {
-			_sz = 0, _pos = 2, _lbd = 0, _act = 0.0;
+			_sz = 0, _pos = 2, _lbd = 0;
 			_st = 0, _r = NOREASON, _f = CFREEZE, _m = STILL;
 		}
 		inline				CLAUSE			(const int& size) {
 			assert(size > 1);
 			_sz = size, _pos = 2, _r = NOREASON, _f = CFREEZE, _m = STILL;
-			_st = 0, _lbd = 0, _act = 0.0;
+			_st = 0, _lbd = 0;
 		}
 		inline				CLAUSE			(const Lits_t& lits) {
 			assert(lits.size() > 1);
 			_sz = lits.size(), copyLitsFrom(lits);
-			_pos = 2, _lbd = 0, _act = 0.0;
+			_pos = 2, _lbd = 0;
 			_st = 0, _r = NOREASON, _f = CFREEZE, _m = STILL;
 		}
 		inline				CLAUSE			(const CLAUSE& src) {
 			assert(src.size() > 1);
 			_sz = src.size(), copyLitsFrom(src);
 			_pos = src.pos(), _st = src.status(), _r = src.reason(), _m = STILL;
-			_lbd = src.LBD(), _act = src.activity(), _f = src.molten();
+			_lbd = src.lbd(), _f = src.usage();
 		}
 		template <class SRC>
 		inline	void		copyLitsFrom	(const SRC& src) {
@@ -74,53 +72,45 @@ namespace pFROST {
 		inline	int			size			() const { return _sz; }
 		inline	int			pos				() const { return _pos; }
 		inline	C_REF		ref				() const { return _ref; }
-		inline	uint32		LBD				() const { return _lbd; }
-		inline	float		activity		() const { return _act; }
+		inline	int			lbd				() const { return _lbd; }
 		inline	CL_ST		status			() const { return _st; }
 		inline	bool		deleted			() const { return _st & DELETED; }
 		inline	bool		original		() const { return _st & ORIGINAL; }
 		inline	bool		learnt			() const { return _st & LEARNT; }
 		inline	bool		reason			() const { return _r; }
-		inline	bool		molten			() const { return _f; }
 		inline	bool		moved			() const { return _m; }
+		inline	CL_ST		usage			() const { return _f; }
+		inline	void		initTier2		() { _f = USAGET2; }
+		inline	void		initTier3		() { _f = USAGET3; }
+		inline	void		warm			() { _f--; }
 		inline  void		initMoved		() { _m = STILL; }
 		inline	void		initReason		() { _r = NOREASON; }
 		inline	void		markReason		() { _r = REASON; }
 		inline	void		markDeleted		() { _st = DELETED; }
 		inline	void		markMoved		() { _m = MOVED; }
-		inline	void		freeze			() { _f = CFREEZE; }
-		inline	void		melt			() { _f = CMELT; }
 		inline	void		shrink			(const int& n) { _sz -= n; if (_pos >= _sz) _pos = 2; }
 		inline	void		resize			(const int& newSz) { _sz = newSz; }
-		inline	void		inc_act			(const float& act) { _act += act; }
-		inline	void		sca_act			(const float& act) { _act *= act; }
 		inline	void		set_ref			(const C_REF& r) { _m = MOVED, _ref = r; }
 		inline	void		set_pos			(const int& newPos) { assert(newPos >= 2); _pos = newPos; }
-		inline	void		set_LBD			(const uint32& lbd) { _lbd = lbd; }
-		inline	void		set_act			(const float& act) { _act = act; }
+		inline	void		set_lbd			(const uint32& lbd) { _lbd = lbd; }
 		inline	void		set_status		(const CL_ST& status) { _st = status; }
 		inline	void		swap			(const int& p1, const int& p2) { // swap two literals
-			uint32 tmp = _lits[p1];
-			_lits[p1] = _lits[p2];
-			_lits[p2] = tmp;
+			std::swap(_lits[p1], _lits[p2]);
 		}
 		inline	void		swapWatched		() { // swap watched literals
-			uint32 lit0 = *_lits;
-			*_lits = *(_lits + 1);
-			*(_lits + 1) = lit0;
+			std::swap(*_lits, _lits[1]);
 		}
 		inline	void		print			() const {
 			fprintf(stdout, "(");
 			for (int l = 0; l < _sz; l++) {
-				int lit = int(ABS(_lits[l]));
-				lit = (ISNEG(_lits[l])) ? -lit : lit;
-				fprintf(stdout, "%4d ", lit);
+				uint32 lit = _lits[l];
+				fprintf(stdout, "%4d ", SIGN(lit) ? -int(ABS(lit)) : int(ABS(lit)));
 			}
 			char st = 'U';
 			if (deleted()) st = 'X';
 			else if (original()) st = 'O';
 			else if (learnt()) st = 'L';
-			fprintf(stdout, ") %c:%d, f:%d, lbd=%d, a=%.1f\n", st, reason(), molten(), LBD(), activity());
+			fprintf(stdout, ") %c:%d, used=%d, lbd=%d\n", st, reason(), usage(), lbd());
 		}
 	};
 	/*****************************************************/

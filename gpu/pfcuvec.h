@@ -47,7 +47,7 @@ namespace pFROST {
 			_PFROST_H_D_ cuVec<T>&	operator=	(cuVec<T>& rhs) { return *this; }
 			_PFROST_H_D_ const T&	operator [] (const uint32& idx) const { assert(idx < sz); return _mem[idx]; }
 			_PFROST_H_D_ T&			operator [] (const uint32& idx) { assert(idx < sz); return _mem[idx]; }
-			_PFROST_H_D_ T&			at			(const uint32& idx) { assert(idx < sz); return _mem[idx]; }
+			_PFROST_H_D_ T&			at			(const uint32& idx) { return _mem[idx]; }
 			_PFROST_H_D_			operator T* () { return _mem; }
 			_PFROST_H_D_ T*			data		() { return _mem; }
 			_PFROST_H_D_ T*			end			() { return _mem + sz; }
@@ -65,7 +65,7 @@ namespace pFROST {
 				if (litType) {
 					for (uint32 i = 0; i < sz; i++) {
 						assert(_mem[i]);
-						printf("%2d  ", ISNEG(_mem[i]) ? -int(ABS(_mem[i])) : int(ABS(_mem[i])));
+						printf("%2d  ", SIGN(_mem[i]) ? -int(ABS(_mem[i])) : int(ABS(_mem[i])));
 						if (i && i < sz - 1 && i % 10 == 0) printf("\nc |\t\t");
 					}
 				}

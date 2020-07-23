@@ -29,7 +29,7 @@ namespace pFROST {
         arg_t prev_type = NULL;
         PFLOG0("");
         PFLOG0(" Options (simplification + solve):");
-        for (int i = 0; i < ARG::opts().size(); i++) {
+        for (uint32 i = 0; i < ARG::opts().size(); i++) {
             if (ARG::opts()[i]->type != prev_type) PFLOG0("");
             ARG::opts()[i]->help(verbose);
             prev_type = ARG::opts()[i]->type;
@@ -55,7 +55,7 @@ namespace pFROST {
                     printUsage(argc, argv, true);
             }
             else {
-                int k = 0;
+                uint32 k = 0;
                 bool parsed = false;
                 while (k < ARG::opts().size() && !(parsed = ARG::opts()[k++]->parse(argv[i])));
                 if (!parsed) {

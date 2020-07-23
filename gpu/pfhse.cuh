@@ -1,4 +1,4 @@
-/***********************************************************************[pfhse.h]
+/***********************************************************************[pfhse.cuh]
 Copyright(c) 2020, Muhammad Osama - Anton Wijs,
 Technische Universiteit Eindhoven (TU/e).
 
@@ -25,21 +25,22 @@ namespace pFROST {
 
 	namespace SIGmA {
 
-#define SS_DBG 0
+#define SS_DBG 0 // set to 1 to serialize HSE
 
 #if SS_DBG
 		_PFROST_D_ void DBG_updateOL(const uint32& x, CNF& cnf, OL& ol)
 		{
 			if (ol.size() == 0) return;
-			int idx = 0, ol_sz = ol.size();
-			while (idx < ol_sz) {
-				SCLAUSE& c = cnf[ol[idx]];
-				if (c.deleted()) ol[idx] = ol[--ol_sz];
-				else if (c.molten()) { c.freeze(); ol[idx] = ol[--ol_sz]; }
-				else idx++;
+			uint32 ol_sz = ol.size();
+			S_REF* i, * j, * rend = ol.end();
+			for (i = ol, j = ol; i != rend; i++) {
+				SCLAUSE& c = cnf[*i];
+				if (c.molten() || c.deleted()) printf("c | (self)-subsumed clause "), c.print();
+				if (c.molten()) c.freeze();
+				else if (!c.deleted()) *j++ = *i;
 			}
+			ol.shrink(i - j);
 			if (ol_sz != ol.size()) { printf("c | Updated list:\n"); pClauseSet(cnf, ol); printf("c | == End of list ==\n"); }
-			ol.resize(ol_sz);
 		}
 #endif
 
@@ -155,7 +156,6 @@ namespace pFROST {
 			assert(self_lit);
 			int n = 0;
 			uint32 sig = 0;
-			bool check = false;
 #pragma unroll
 			for (int k = 0; k < c.size(); k++) {
 				uint32 lit = sh_c[k];
@@ -164,9 +164,7 @@ namespace pFROST {
 					sig |= MAPHASH(lit);
 					n++;
 				}
-				else check = true;
 			}
-			assert(check);
 			assert(n == c.size() - 1);
 			assert(n <= SH_MAX_HSE_IN);
 			assert(c.hasZero() < 0);
@@ -186,14 +184,11 @@ namespace pFROST {
 			assert(self_lit);
 			int n = 0;
 			uint32 sig = 0;
-			bool check = false;
 #pragma unroll
 			for (int k = 0; k < c.size(); k++) {
 				uint32 lit = c[k];
-				if (lit != self_lit) { c[n++] = lit, sig |= MAPHASH(lit); }
-				else check = true;
+				if (lit != self_lit) c[n++] = lit, sig |= MAPHASH(lit);
 			}
-			assert(check);
 			assert(n == c.size() - 1);
 			assert(c.hasZero() < 0);
 			assert(c.isSorted());
@@ -208,77 +203,70 @@ namespace pFROST {
 		_PFROST_D_ void updateOL(CNF& cnf, OL& ol)
 		{
 			if (ol.size() == 0) return;
-			uint32* r = ol, *rend = ol.end();
-			while (r != rend) {
-				SCLAUSE& c = cnf[*r];
-				if (c.deleted()) *r = *--rend;
-				else if (c.molten()) c.freeze(), *r = *--rend;
-				else r++;
+			S_REF *i, *j, *rend = ol.end();
+			for (i = ol, j = ol; i != rend; i++) {
+				SCLAUSE& c = cnf[*i];
+				if (c.molten()) c.freeze();
+				else if (!c.deleted()) *j++ = *i;
 			}
-			assert(r == rend);
-			assert(rend >= ol);
-			ol.resize(rend - ol);
+			ol.shrink(i - j);
 		}
 
 		_PFROST_D_ void self_sub_x(const uint32& x, CNF& cnf, OL& poss, OL& negs, cuVecU* units, uint32* sh_c)
 		{
 			// positives vs negatives
 #pragma unroll
-			for (uint32* i = poss; i != poss.end(); i++) {
+			for (S_REF* i = poss; i != poss.end(); i++) {
 				SCLAUSE& pos = cnf[*i];
-				if (pos.deleted()) continue;
-				// self-subsumption check
-				if (pos.size() > SH_MAX_HSE_IN) { // use global memory 
+				if (pos.deleted() || pos.size() > HSE_MAX_CL_SIZE) continue;
+				// use global memory 
+				if (pos.size() > SH_MAX_HSE_IN) {
+					// self-subsumption check
 #pragma unroll
-					for (uint32* j = negs; j != negs.end(); j++) {
+					for (S_REF* j = negs; j != negs.end(); j++) {
 						SCLAUSE& neg = cnf[*j];
-						if (neg.deleted() || neg.learnt()) continue;
-						if (neg.size() > 1 && neg.size() < pos.size() &&
-							selfSub(neg.sig(), pos.sig()) && selfSub(x, neg, pos)) {
+						if (neg.size() > pos.size()) break;
+						if (neg.size() == 1 || neg.size() > HSE_MAX_CL_SIZE) continue;
+						if (neg.deleted() || (neg.learnt() && pos.original())) continue;
+						if (selfSub(neg.sig(), pos.sig()) && selfSub(x, neg, pos)) {
+							if (neg.size() == pos.size()) neg.markDeleted();
 							strengthen(units, pos, x);
 							pos.melt(); // mark for fast recongnition in ot update 
 						}
-						else if (neg.size() > 1 && neg.size() == pos.size() && pos.original() &&
-							selfSub(neg.sig(), pos.sig()) && selfSub(x, neg, pos)) {
-							strengthen(units, pos, x);
-							pos.melt();
-							neg.markDeleted();
-						}
 					}
 					// subsumption check
-					for (uint32* j = poss; j != poss.end(); j++) {
+#pragma unroll
+					for (S_REF* j = poss; j != i; j++) {
 						SCLAUSE& sm_c = cnf[*j];
-						if (sm_c.original() && sm_c.size() < pos.size() &&
-							sub(sm_c.sig(), pos.sig()) && sub(sm_c, pos)) {
+						if (sm_c.deleted() || (sm_c.learnt() && pos.original()) || sm_c.size() > HSE_MAX_CL_SIZE) continue;
+						if (sub(sm_c.sig(), pos.sig()) && sub(sm_c, pos)) {
 							pos.markDeleted();
 							break;
 						}
 					}
 				}
-				else { // use shared memory
+				// use shared memory
+				else { 
 					uint32* sh_pos = sh_c;
 					pos.shareTo(sh_pos);
 #pragma unroll
-					for (uint32* j = negs; j != negs.end(); j++) {
+					for (S_REF* j = negs; j != negs.end(); j++) {
 						SCLAUSE& neg = cnf[*j];
-						if (neg.deleted() || neg.learnt()) continue;
-						if (neg.size() > 1 && neg.size() < pos.size() &&
-							selfSub(neg.sig(), pos.sig()) && selfSub(x, neg, sh_pos, pos.size())) {
+						if (neg.size() > pos.size()) break;
+						if (neg.size() == 1 || neg.size() > HSE_MAX_CL_SIZE) continue;
+						if (neg.deleted() || (neg.learnt() && pos.original())) continue;
+						if (selfSub(neg.sig(), pos.sig()) && selfSub(x, neg, sh_pos, pos.size())) {
+							if (neg.size() == pos.size()) neg.markDeleted();
 							strengthen(units, pos, sh_pos, x);
 							pos.melt();
-						}
-						else if (neg.size() > 1 && neg.size() == pos.size() && pos.original() &&
-							selfSub(neg.sig(), pos.sig()) && selfSub(x, neg, sh_pos, pos.size())) {
-							strengthen(units, pos, sh_pos, x);
-							pos.melt();
-							neg.markDeleted();
 						}
 					}
-					for (uint32* j = poss; j != poss.end(); j++) {
+#pragma unroll
+					for (S_REF* j = poss; j != i; j++) {
 						SCLAUSE& sm_c = cnf[*j];
+						if (sm_c.deleted() || (sm_c.learnt() && pos.original()) || sm_c.size() > HSE_MAX_CL_SIZE) continue;
 						assert(isCoherent(x, pos, sh_pos, pos.size()));
-						if (sm_c.original() && sm_c.size() < pos.size() &&
-							sub(sm_c.sig(), pos.sig()) && sub(sm_c, sh_pos, pos.size())) {
+						if (sub(sm_c.sig(), pos.sig()) && sub(sm_c, sh_pos, pos.size())) {
 							pos.markDeleted();
 							break;
 						}
@@ -292,51 +280,54 @@ namespace pFROST {
 #endif
 	// negatives vs positives
 #pragma unroll
-			for (uint32* i = negs; i != negs.end(); i++) {
+			for (S_REF* i = negs; i != negs.end(); i++) {
 				SCLAUSE& neg = cnf[*i];
-				if (neg.deleted()) continue;
+				if (neg.deleted() || neg.size() > HSE_MAX_CL_SIZE) continue;
 				if (neg.size() > SH_MAX_HSE_IN) {
 					// self-subsumption check
 #pragma unroll
-					for (uint32* j = poss; j != poss.end(); j++) {
+					for (S_REF* j = poss; j != poss.end(); j++) {
 						SCLAUSE& pos = cnf[*j];
-						if (pos.deleted() || pos.learnt()) continue;
-						if (pos.size() > 1 && pos.size() < neg.size() &&
-							selfSub(pos.sig(), neg.sig()) && selfSub(NEG(x), pos, neg)) {
+						if (pos.size() > neg.size()) break;
+						if (pos.size() == 1 || pos.size() > HSE_MAX_CL_SIZE) continue;
+						if (pos.deleted() || (pos.learnt() && neg.original())) continue;
+						if (pos.size() < neg.size() && selfSub(pos.sig(), neg.sig()) && selfSub(NEG(x), pos, neg)) {
 							strengthen(units, neg, NEG(x));
 							neg.melt();
 						}
 					}
 					// subsumption check
-					for (uint32* j = negs; j < negs.end(); j++) {
+#pragma unroll
+					for (S_REF* j = negs; j != i; j++) {
 						SCLAUSE& sm_c = cnf[*j];
-						if (sm_c.original() && sm_c.size() < neg.size() &&
-							sub(sm_c.sig(), neg.sig()) && sub(sm_c, neg)) {
+						if (sm_c.deleted() || (sm_c.learnt() && neg.original()) || sm_c.size() > HSE_MAX_CL_SIZE) continue;
+						if (sub(sm_c.sig(), neg.sig()) && sub(sm_c, neg)) {
 							neg.markDeleted();
 							break;
 						}
 					}
 				}
-				else { // use shared memory
+				// use shared memory
+				else { 
 					uint32* sh_neg = sh_c;
 					neg.shareTo(sh_neg);
 #pragma unroll
-					for (uint32* j = poss; j != poss.end(); j++) {
+					for (S_REF* j = poss; j != poss.end(); j++) {
 						SCLAUSE& pos = cnf[*j];
-						if (pos.deleted() || pos.learnt()) continue;
-						if (pos.size() > 1 && pos.size() < neg.size() &&
-							selfSub(pos.sig(), neg.sig()) &&
-							selfSub(NEG(x), pos, sh_neg, neg.size())) {
+						if (pos.size() > neg.size()) break;
+						if (pos.size() == 1 || pos.size() > HSE_MAX_CL_SIZE) continue;
+						if (pos.deleted() || (pos.learnt() && neg.original())) continue;
+						if (pos.size() < neg.size() && selfSub(pos.sig(), neg.sig()) && selfSub(NEG(x), pos, sh_neg, neg.size())) {
 							strengthen(units, neg, sh_neg, NEG(x));
 							neg.melt();
 						}
 					}
-					// subsumption check
-					for (uint32* j = negs; j < negs.end(); j++) {
+#pragma unroll
+					for (S_REF* j = negs; j != i; j++) {
 						SCLAUSE& sm_c = cnf[*j];
+						if (sm_c.deleted() || (sm_c.learnt() && neg.original()) || sm_c.size() > HSE_MAX_CL_SIZE) continue;
 						assert(isCoherent(x, neg, sh_neg, neg.size()));
-						if (sm_c.original() && sm_c.size() < neg.size() &&
-							sub(sm_c.sig(), neg.sig()) && sub(sm_c, sh_neg, neg.size())) {
+						if (sub(sm_c.sig(), neg.sig()) && sub(sm_c, sh_neg, neg.size())) {
 							neg.markDeleted();
 							break;
 						}

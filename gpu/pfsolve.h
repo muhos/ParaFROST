@@ -48,7 +48,7 @@ namespace pFROST {
 		LEARN			lrn;
 		STATS			stats;
 		WT				wt, wtBin;
-		BCNF			orgs, learnts;
+		BCNF			orgs, learnts, reduced;
 		VMAP			vmap;
 		MODEL			model;
 		C_REF			conflict;
@@ -74,7 +74,6 @@ namespace pFROST {
 		inline void		interrupt			() { intr = true; }
 		inline void		incDL				() { trail_lens.push(trail.size()); }
 		inline void		decayVarAct			() { lrn.var_inc *= (1.0 / lrn.var_decay); }
-		inline void		decayClAct			() { lrn.cl_inc *= (float(1.0) / lrn.cl_decay); }
 		inline uint32	maxOrgs				() const { return orgs.size() + inf.nOrgBins; }
 		inline uint32	maxLearnts			() const { return learnts.size() + inf.nLearntBins; }
 		inline uint32	DL					() const { return trail_lens.size(); }
@@ -89,16 +88,15 @@ namespace pFROST {
 		inline bool		canPreSigmify		() const { return sigma_en; }
 		inline bool		canMMD				() const { return lrn.rounds && varsEnough(); }
 		inline bool		canRephase			() const { return rephase_en && nConflicts > lrn.rephase_conf_max; }
-		inline bool		canReduce			() const { return nConflicts >= lrn.reductions * lrn.reduce_conf_max; }
-		inline bool		canMap				() const { return inf.maxFrozen > uint32(map_min) || inf.maxMelted > uint32(map_min); }
+		inline bool		canReduce			() const { return reduce_en && learnts.size() && nConflicts >= lrn.reduce_conf_max; }
+		inline bool		canMap				() const { return inf.maxFrozen > map_min || inf.maxMelted > map_min; }
 		inline bool		canShrink			() const { 
-			return DL() == ROOT_LEVEL && lrn.simpProps <= 0 && int(trail.size() - sp->simplified) >= shrink_min;
+			return DL() == ROOT_LEVEL && int(trail.size() - sp->simplified) >= shrink_min;
 		}
 		inline bool		canSigmify			() const { 
-			return sigma_live_en && DL() == ROOT_LEVEL && nConflicts > lrn.sigma_conf_max && int(trail.size() - sp->simplified) >= sigma_min;
+			return sigma_live_en && DL() == ROOT_LEVEL && nConflicts > lrn.sigma_conf_max && lrn.lastsimplified >= sigma_min;
 		}
 		inline bool		abortSub			(const uint32& level) const { return (MAPHASH(level) & minLevel) == 0; }
-		inline bool		verifyConfl			(const uint32& lit) const { if (!cbt_en) return DL() == l2dl(lit); else return l2dl(lit) > ROOT_LEVEL; }
 		inline LIT_ST	value				(const uint32& lit) const { assert(lit > 1); return sp->value[lit]; }
 		inline LIT_ST	unassigned			(const uint32& lit) const { assert(lit > 1); return sp->value[lit] & NOVAL_MASK; }
 		inline LIT_ST	isTrue				(const uint32& lit) const { assert(lit > 1); return !unassigned(lit) && sp->value[lit]; }
@@ -106,18 +104,18 @@ namespace pFROST {
 		inline int		l2dl				(const uint32& lit) const { assert(lit > 1); return sp->level[l2a(lit)]; }
 		inline C_REF	l2r					(const uint32& lit) const { assert(lit > 1); return sp->source[l2a(lit)]; }
 		inline uint32	l2hl				(const uint32& lit) const { return MAPHASH(l2dl(lit)); }
-		inline uint32	calcLBD				(Lits_t& c) {
+		inline int		calcLBD				(Lits_t& c) {
 			stats.marker++;
-			register uint32 lbd = 0;
+			register int lbd = 0;
 			for (int i = 0; i < c.size(); i++) {
 				int litLevel = l2dl(c[i]);
 				if (sp->board[litLevel] != stats.marker) { sp->board[litLevel] = stats.marker; lbd++; }
 			}
 			return lbd;
 		}
-		inline uint32	calcLBD				(CLAUSE& c) {
+		inline int		calcLBD				(CLAUSE& c) {
 			stats.marker++;
-			register uint32 lbd = 0;
+			register int lbd = 0;
 			for (int i = 0; i < c.size(); i++) {
 				int litLevel = l2dl(c[i]);
 				if (sp->board[litLevel] != stats.marker) { sp->board[litLevel] = stats.marker; lbd++; }
@@ -188,17 +186,6 @@ namespace pFROST {
 			trail.push(lit);
 			PFLNEWLIT(this, 4, src, lit);
 		}
-		inline void		analyzeLit			(const uint32& lit, const int& confLevel, int& track) {
-			assert(lit > 1);
-			uint32 v = l2a(lit);
-			if (sp->seen[v]) return;
-			if (sp->level[v] > ROOT_LEVEL) {
-				analyzed.push(v);
-				sp->seen[v] = 1;
-				if (sp->level[v] < confLevel) learntC.push(lit);
-				else if (sp->level[v] == confLevel) track++;
-			}
-		}
 		inline void		cancelAssign		(const uint32& lit) {
 			assert(lit > 1);
 			uint32 v = l2a(lit);
@@ -212,23 +199,55 @@ namespace pFROST {
 			PFLOG2(4, " Literal %d@%d cancelled", l2i(lit), sp->level[v]);
 			sp->level[v] = UNDEFINED;
 		}
-		inline void		bumpClause			(CLAUSE& c) {
-			if (c.learnt() && c.size() > 2) {
-				bumpClAct(c);
-				if (c.LBD() > GLUE) { // try to update LBD of a previously learnt clauses 
-					uint32 currLBD = calcLBD(c);
-					if (currLBD < c.LBD()) {
-						if (c.LBD() <= uint32(lbd_freeze_min)) c.freeze();
-						c.set_LBD(currLBD);
-					}
-				}
+		inline void		analyzeLit			(const uint32& lit, int& track) {
+			assert(lit > 1);
+			uint32 v = l2a(lit);
+			if (sp->seen[v]) return;
+			int confLevel = DL(), litLevel = sp->level[v];
+			if (litLevel > ROOT_LEVEL) {
+				assert(litLevel <= confLevel);
+				if (litLevel == confLevel) track++;
+				else if (litLevel < confLevel) learntC.push(lit);
+				analyzed.push(v);
+				sp->seen[v] = 1;
 			}
 		}
-		inline void		bumpClAct			(CLAUSE& c) {
-			c.inc_act(lrn.cl_inc);
-			if (c.activity() > (float)1e30) scaleClAct();
-			assert(c.activity() <= (float)1e30);
-			assert(lrn.cl_inc <= (float)1e30);
+		inline void		analyzeReason		(const C_REF& r, const uint32& parent, int& track) {
+			CLAUSE& c = cm[r];
+			PFLCLAUSE(4, c, " Analyzing reason");
+			if (parent && c.size() == 2 && isFalse(*c)) {
+				assert(isTrue(c[1]));
+				c.swapWatched();
+			}
+			if (c.learnt() && c.size() > 2) bumpClause(c);
+			for (int j = (parent == 0) ? 0 : 1; j < c.size(); j++)
+				analyzeLit(c[j], track);
+		}
+		inline void		bumpClause			(CLAUSE& c) {
+			assert(c.learnt());
+			assert(c.size() > 2);
+			int old_lbd = c.lbd();
+			if (old_lbd <= lbd_tier1) return; // always keep Tier1 value
+			int new_lbd = calcLBD(c);
+			if (new_lbd < old_lbd) { // try to update old LBD
+				if (old_lbd > lbd_tier2 && new_lbd <= lbd_tier2) c.initTier2();
+				else c.initTier3(); // set as Tier 3 
+				c.set_lbd(new_lbd);
+				PFLCLAUSE(4, c, " Bumping clause with LBD %d ", new_lbd);
+			}
+			else if (c.usage() && old_lbd <= lbd_tier2) c.initTier2(); // set as Tier2
+			else c.initTier3(); // set as Tier 3 
+		}
+		inline void		bumpShrinked		(CLAUSE& c) {
+			assert(c.learnt());
+			assert(c.size() > 2);
+			int old_lbd = c.lbd();
+			if (old_lbd <= lbd_tier1) return; // always keep Tier1 value
+			int new_lbd = std::min(c.size() - 1, old_lbd);
+			if (new_lbd >= old_lbd) return;
+			if (old_lbd > lbd_tier2 && new_lbd <= lbd_tier2) c.initTier2();
+			c.set_lbd(new_lbd);
+			PFLCLAUSE(4, c, " Bumping clause with LBD %d ", new_lbd);
 		}
 		inline void		depleteSource		(CLAUSE& c) {
 			assert(c.deleted());
@@ -317,21 +336,29 @@ namespace pFROST {
 			for (WATCH* w = ws; w != ws.end(); w++)
 				w->imp = vmap.mapLit(w->imp);
 		}
+		inline void		reduceWeight		(double& val) {
+			double orgSize = maxOrgs();
+			if (orgSize > 1e5) {
+				val *= log(orgSize / 1e4) / log(10);
+				if (val < 1.0) val = 1.0;
+			}
+		}
+		inline void		sigmaWeight			(double& val) {
+			double c2v = C2VRatio();
+			val *= (c2v <= 2) ? 1.0 : log(c2v) / log(2);
+			if (val < 1.0) val = 1.0;
+		}
 		inline void		bumpVariables		() {
 			bool vsidsEn = vsids();
 			if (!vsidsEn) Sort(analyzed, ANALYZE_CMP(varBumps));
 			for (uint32 i = 0; i < analyzed.size(); i++)
 				bumpVariable(analyzed[i]);
-			if (vsidsEn) decayVarAct(), decayClAct();
+			if (vsidsEn) decayVarAct();
 			analyzed.clear();
 		}
 		inline void		scaleVarAct			() {
 			for (uint32 v = 1; v <= inf.maxVar; v++) varAct[v] *= 1e-150;
 			lrn.var_inc *= 1e-150;
-		}
-		inline void		scaleClAct			() {
-			for (uint32 i = 0; i < learnts.size(); i++) cm[learnts[i]].sca_act((float)1e-30);
-			lrn.cl_inc *= (float)1e-30;
 		}
 		inline void		varOrgPhase			() {
 			memset(sp->psaved, polarity, inf.maxVar + 1ULL);
@@ -466,7 +493,7 @@ namespace pFROST {
 			if (verbose == 1 && _p) {
 				int l2c = learnts.size() == 0 ? 0 : int(inf.nLearntLits / learnts.size());
 				solLine[0] = type;
-				PFLOGN1(solLine.c_str(), maxActive(), inf.nClauses, inf.nOrgBins, inf.nLiterals,
+				PFLOGN1(solLine.c_str(), maxActive(), orgs.size(), inf.nOrgBins, inf.nLiterals,
 					nConflicts, starts - 1,
 					learnts.size(), inf.nGlues + inf.nLearntBins, l2c);
 				REPCH(' ', RULELEN - solLineLen), putc('|', stdout), putc('\n', stdout);
@@ -533,11 +560,11 @@ namespace pFROST {
 		void	shrinkTop			();
 		void	shrink				();
 		void	reduce				();
+		void	reduceLearnts		();
 		void	rephase				();
 		void	whereToJump			();
 		void	selfsubBin			();
 		void	selfsub				();
-		void	cbtLevel			();
 		void	analyze				();
 		void	solve				();
 		void	restart				();
@@ -558,7 +585,7 @@ namespace pFROST {
 		void	backwardNegs		();
 		void	backwardPoss		();
 		void	printReport			();
-		void	allocFixed			();
+		void	allocVars			();
 		void	wrapup				();
 		int64	sysMemUsed			();
 		CNF_ST	parser				();
@@ -572,43 +599,38 @@ namespace pFROST {
 		string	proof_path;
 		int64	stabrestart_r, stabrestart_inc;
 		double	var_inc, var_decay;
-		double	cla_inc, cla_decay;
-		double	lbdrate, gc_perc;
+		double	lbdrate, gc_perc, reduce_perc;
+		uint32	map_min;
 		int		seed, timeout, prograte;
 		int		cbt_dist, cbt_conf_max;
 		int		mdm_rounds, mdm_freq, mdm_div;
 		int		mdm_minc, mdm_sinc;
 		int		mdm_vsids_pumps, mdm_vmfq_pumps;
-		int		map_min, shrink_min;
-		int		sigma_min, sigma_inc;
+		int		shrink_min, sigma_min, sigma_inc;
 		int		polarity, rephase_inc;
 		int		luby_inc, luby_max, restart_base, restart_inc;
-		int		lbd_freeze_min, lbd_reduce_min, lbd_csize_min;
-		int		reduce_base, reduce_small_inc, reduce_big_inc;
+		int		lbd_reduce_min, lbd_csize_min;
+		int		lbd_tier2, lbd_tier1, reduce_inc;
 		bool	parse_only_en, report_en, model_en, proof_en;
 		bool	vsids_en, mdmvsidsonly_en, vsidsonly_en, stable_en;
 		bool	target_phase_en, rephase_en, guess_en, cbt_en;
-		bool	mdmfusem_en, mdmfuses_en, mcv_en;
+		bool	reduce_en, mdmfusem_en, mdmfuses_en, mcv_en;
 		//==========================================//
 		//                Simplifier                //
 		//==========================================//
 	protected:
-		cuMM			cuMem;
 		VARS			*vars;
+		cuMM			cumem;
+		cuHist			cuhist;
 		OT				*ot;
 		CNF				*cnf, *hcnf;
-		uTHRVector		histogram, rawLits;
-		uint32			*h_hist, *d_hist;
 		uint32			off1, off2;
 		cudaStream_t	*streams;
-		bool			mapped;
 		std::ofstream	outputFile;
+		bool			mapped;
 		int				nForced, sigState, devCount;
 	public:
 		//============= inline methods ==============//
-		inline void		syncAll				() {
-			CHECK(cudaDeviceSynchronize());
-		}
 		inline void		createStreams		() {
 			if (streams == NULL) {
 				PFLOGN2(2, " Allocating GPU streams..");
@@ -633,7 +655,7 @@ namespace pFROST {
 			for (uint32 i = 0; i < hcnf->size(); i++) {
 				S_REF href = hcnf->ref(i);
 				SCLAUSE& s = (*hcnf)[href];
-				if (s.deleted()) continue;
+				assert(!s.deleted());
 				assert(s.size() > 1);
 				s.set_ref(NOREF);
 				WT& ws = (s.size() == 2) ? wtBin : wt;
@@ -655,10 +677,8 @@ namespace pFROST {
 		}
 		inline void		copyNonWatched		() {
 			assert(!hcnf->empty());
-			for (uint32 i = 0; i < hcnf->size(); i++) {
-				if (hcnf->clause(i).deleted()) continue;
+			for (uint32 i = 0; i < hcnf->size(); i++)
 				newClause(hcnf->clause(i));
-			}
 		}
 		inline void		countMelted			() {
 			SIGmA::countMelted(sp->vstate);
@@ -696,7 +716,7 @@ namespace pFROST {
 				inf.n_cls_after,
 				inf.n_lits_after);
 		}
-		inline bool		filterPVs			() {
+		inline void		filterPVs			() {
 			int idx = 0, n = vars->pVars->size();
 			while (idx < n) {
 				uint32& x = (*vars->pVars)[idx];
@@ -705,7 +725,6 @@ namespace pFROST {
 				else idx++;
 			}
 			vars->pVars->resize(n), vars->numPVs = n;
-			return n == 0;
 		}
 		inline void		printOT				() {
 			PFLOG0(" Positive occurs:");
@@ -731,35 +750,34 @@ namespace pFROST {
 			if (times > 1 && times != phases && (times % shrink_rate) == 0) {
 				inf.maxAddedCls = inf.nClauses, inf.maxAddedLits = inf.nLiterals;
 				PFLOG2(2, " Maximum added clauses/literals = %d/%d", inf.maxAddedCls, inf.maxAddedLits);
-				if (!cuMem.resizeCNF(cnf, inf.nClauses + inf.maxAddedCls, inf.nLiterals + inf.maxAddedLits)) return false;
+				if (!cumem.resizeCNF(cnf, inf.nClauses + inf.maxAddedCls, inf.nLiterals + inf.maxAddedLits)) return false;
 			}
+			else cumem.cacheCNFPtr(cnf);
 			return true;
 		}
 		inline bool		reallocOT			(const cudaStream_t& stream = 0) {
-			if (ot != NULL) cuMem.resetOTCapAsync(ot, stream);
 			assert(inf.nLiterals);
 			calcOccurs(inf.nLiterals);
-			if (!cuMem.resizeOTAsync(ot, d_hist, inf.nLiterals + inf.maxAddedLits, stream)) { sigState = OTALLOC_FAIL; return false; }
+			if (!cumem.resizeOTAsync(ot, inf.nLiterals + inf.maxAddedLits, stream)) { sigState = OTALLOC_FAIL; return false; }
 			return true;
-		}
-		inline void		sync				(const cudaStream_t& stream = 0) {
-			CHECK(cudaStreamSynchronize(stream));
 		}
 		inline void		reflectCNF			(const cudaStream_t& s1, const cudaStream_t& s2) {
 			uint32 len1 = hcnf->data().size - off1;
 			if (!len1) return;
 			uint32 len2 = hcnf->size() - off2;
-			CHECK(cudaMemcpyAsync(cuMem.cnfDatadPtr() + off1, hcnf->data().mem + off1, len1 * sizeof(S_REF), cudaMemcpyHostToDevice, s1));
-			CHECK(cudaMemcpyAsync(cuMem.cnfClsdPtr() + off2, hcnf->csData() + off2, len2 * sizeof(S_REF), cudaMemcpyHostToDevice, s2));
+			CHECK(cudaMemcpyAsync(cumem.cnfMem() + off1, hcnf->data().mem + off1, len1 * sizeof(S_REF), cudaMemcpyHostToDevice, s1));
+			CHECK(cudaMemcpyAsync(cumem.csMem() + off2, hcnf->csData() + off2, len2 * sizeof(S_REF), cudaMemcpyHostToDevice, s2));
 			off1 = hcnf->data().size, off2 = hcnf->size();
 		}
 		inline void		cacheUnits			(const cudaStream_t& stream) {
 			sync(stream);
-			if (vars->nUnits = vars->tmpObj.size()) CHECK(cudaMemcpyAsync(vars->cachedUnits, cuMem.unitsdPtr(),
+			if (vars->nUnits = vars->tmpObj.size()) CHECK(cudaMemcpyAsync(vars->cachedUnits, cumem.unitsdPtr(),
 				vars->nUnits * sizeof(uint32), cudaMemcpyDeviceToHost, stream));
+			if (sync_always) sync(stream);
 		}
 		inline void		cacheNumUnits		(const cudaStream_t& stream) {
 			CHECK(cudaMemcpyAsync(&vars->tmpObj, vars->units, sizeof(cuVecU), cudaMemcpyDeviceToHost, stream));
+			if (sync_always) sync(stream);
 		}
 		inline void		cacheResolved		(const cudaStream_t& stream) {
 			uint32* devStart = *vars->resolved, devSize = vars->resolved->size();
@@ -768,19 +786,14 @@ namespace pFROST {
 			model.resolved.resize(off + devSize);
 			uint32 *start = model.resolved + off;
 			CHECK(cudaMemcpyAsync(start, devStart, devSize * sizeof(uint32), cudaMemcpyDeviceToHost, stream));
-		}
-		inline double	weight				(const double& val)	{
-			double c2v = C2VRatio();
-			double fact = (c2v <= 2) ? 1.0 : log(c2v) / log(2);
-			double w = fact * val;
-			return w < 1 ? 1.0 : w;
+			if (sync_always || unified_access) sync(stream);
 		}
 		//===========================================//
 		void			optSimp				();
 		void			varReorder			();
 		void			awaken				();
 		void			newBeginning		();
-		void			preprocess			();
+		void			sigmify				();
 		bool			LCVE				();
 		bool			prop				();
 		void			VE					();
@@ -789,7 +802,7 @@ namespace pFROST {
 		void			BCE					();
 		void			masterFree			();
 		void			slavesFree			();
-		void			histSimp			();
+		void			histSimp			(const uint32&);
 		void			calcOccurs			(const uint32&);
 		void			extract				(CNF*, WT&);
 		void			extract				(CNF*, BCNF&);
@@ -799,13 +812,14 @@ namespace pFROST {
 		inline void		cacheCNF			(const cudaStream_t&, const cudaStream_t&);
 		inline bool		enqeueCached		(const cudaStream_t&);
 		inline void		cleanProped			();
-		inline void		cleanSigma			();
+		inline void		cleanFixed			();
+		inline void		cleanDynamic		();
 		inline void		initSimp			();
 		//================ options ================//
-		bool	sigma_en, sigma_live_en, solve_en;
+		bool	sigma_en, sigma_live_en, solve_en, sort_cnf_en;
 		bool	ve_en, ve_plus_en, sub_en, bce_en, hre_en, cls_en, all_en;
-		int		phases, shrink_rate, ngpus, nstreams;
-		uint32	lcve_min, ve_round_min, ve_phase_min, mu_pos, mu_neg;
+		int		phases, shrink_rate, xor_limit, ngpus, nstreams;
+		uint32	lcve_min, ve_phase_min, mu_pos, mu_neg;
 		uint32	hse_limit, bce_limit, hre_limit;
 	};
 	extern ParaFROST* pfrost;

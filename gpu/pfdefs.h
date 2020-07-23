@@ -103,12 +103,12 @@ namespace pFROST {
 	}
 	inline double	ratio			(const double& x, const double& y) { return y ? x / y : 0; }
 	inline LIT_ST	flip			(const LIT_ST& sign) { return FLIP(sign); }
-	inline LIT_ST	sign			(const uint32& lit) { assert(lit > 1); return LIT_ST(ISNEG(lit)); }
+	inline LIT_ST	sign			(const uint32& lit) { assert(lit > 1); return LIT_ST(SIGN(lit)); }
 	inline uint32	flip			(const uint32& lit) { assert(lit > 1); return FLIP(lit); }
 	inline uint32	neg				(const uint32& lit) { assert(lit > 1); return NEG(lit); }
 	inline uint32	l2a				(const uint32& lit) { assert(lit > 1); return ABS(lit); }
 	inline uint32	l2x				(const uint32& lit) { assert(lit > 1); return V2X(lit); }
-	inline int		l2i				(const uint32& lit) { assert(lit > 1); return sign(lit) ? -int(l2a(lit)) : int(l2a(lit)); }
+	inline int		l2i				(const uint32& lit) { assert(lit > 1); return SIGN(lit) ? -int(l2a(lit)) : int(l2a(lit)); }
 	inline uint32	v2l				(const uint32& v) { assert(v); return V2D(v); }
 	inline uint32	v2dec			(const uint32& v, const LIT_ST phase) { assert(v); return (v2l(v) | phase); }
 	inline void		printLit		(const uint32& lit) { fprintf(stdout, "%6d", l2i(lit)); }

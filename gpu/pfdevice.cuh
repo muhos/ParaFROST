@@ -27,7 +27,14 @@ namespace pFROST {
 
 	namespace SIGmA {
 
-		_PFROST_H_D_ void pLit(const uint32& l) { printf("%d", ISNEG(l) ? -int(ABS(l)) : ABS(l)); }
+		template<class T>
+		struct DEFAULT_CMP {
+			_PFROST_D_ bool operator () (T& x, T& y) {
+				return x < y;
+			}
+		};
+
+		_PFROST_H_D_ void pLit(const uint32& l) { printf("%d", SIGN(l) ? -int(ABS(l)) : ABS(l)); }
 
 		_PFROST_H_D_ void pSharedClause(uint32* c, const int& sz)
 		{
@@ -54,35 +61,141 @@ namespace pFROST {
 			}
 		}
 
+		template<class T, class CMP>
+		_PFROST_H_D_ bool devIsSorted(T* d, const int& sz, CMP cmp) {
+			for (int i = 1; i < sz; i++)
+				if (cmp(d[i], d[i - 1])) return false;
+			return true;
+		}
+
+		template<typename T, typename CMP>
+		_PFROST_D_ void cswap(T& x, T& y, CMP cmp)
+		{
+			bool which = cmp(x, y);
+			T ta = which ? x : y;
+			T tb = which ? y : x;
+			x = ta, y = tb;
+		}
+
+		template<typename T, typename CMP>
+		_PFROST_D_ void sort2(T& x, T& y, CMP cmp)
+		{
+			cswap(x, y, cmp);
+		}
+
+		template<typename T, typename CMP>
+		_PFROST_D_ void sort3(T& x, T& y, T& z, CMP cmp)
+		{
+			cswap(y, z, cmp);
+			cswap(x, z, cmp);
+			cswap(x, y, cmp);
+		}
+
+		template<typename T, typename CMP>
+		_PFROST_D_ void sort4(T* d, CMP cmp)
+		{
+			cswap(d[0], d[1], cmp);
+			cswap(d[2], d[3], cmp);
+			cswap(d[0], d[2], cmp);
+			cswap(d[1], d[3], cmp);
+			cswap(d[1], d[2], cmp);
+		}
+
+		template<typename T, typename CMP>
+		_PFROST_D_ void sort5(T* d, CMP cmp)
+		{
+			cswap(d[0], d[1], cmp);
+			cswap(d[3], d[4], cmp);
+			cswap(d[2], d[4], cmp);
+			cswap(d[2], d[3], cmp);
+			cswap(d[0], d[3], cmp);
+			cswap(d[0], d[2], cmp);
+			cswap(d[1], d[4], cmp);
+			cswap(d[1], d[3], cmp);
+			cswap(d[1], d[2], cmp);
+		}
+
+		template<typename T, typename CMP>
+		_PFROST_D_ void sort6(T* d, CMP cmp)
+		{
+			cswap(d[1], d[2], cmp);
+			cswap(d[0], d[2], cmp);
+			cswap(d[0], d[1], cmp);
+			cswap(d[4], d[5], cmp);
+			cswap(d[3], d[5], cmp);
+			cswap(d[3], d[4], cmp);
+			cswap(d[0], d[3], cmp);
+			cswap(d[1], d[4], cmp);
+			cswap(d[2], d[5], cmp);
+			cswap(d[2], d[4], cmp);
+			cswap(d[1], d[3], cmp);
+			cswap(d[2], d[3], cmp);
+		}
+
+		template<typename T, typename S, typename CMP>
+		_PFROST_D_ void devSort(T* data, const S& size, CMP cmp)
+		{
+			if (size <= 1) return;
+			assert(data != NULL);
+			if (size == 2) sort2(data[0], data[1], cmp);
+			else if (size == 3) sort3(data[0], data[1], data[2], cmp);
+			else if (size == 4) sort4(data, cmp);
+			else if (size == 5) sort5(data, cmp);
+			else if (size == 6) sort6(data, cmp);
+			else if (size <= 32){
+				int i, j;
+#pragma unroll
+				for (i = 1; i < size; i++) {
+					T tmp = data[i];
+					for (j = i; j > 0 && cmp(tmp, data[j - 1]); j--) data[j] = data[j - 1];
+					data[j] = tmp;
+				}
+			}
+			else thrust::sort(thrust::seq, data, data + size, cmp);
+			assert(devIsSorted(data, size, cmp));
+		}
+
+		template<typename T>
+		_PFROST_D_ void devSort(T* data, const int& size)
+		{
+			if (size <= 1) return;
+			assert(data != NULL);
+			devSort(data, size, DEFAULT_CMP<T>());
+			assert(devIsSorted(data, size, DEFAULT_CMP<T>()));
+		}
+
+		template<typename T>
+		_PFROST_D_ void devSwap(T& a, T& b) { T c = a; a = b, b = c; }
+
 		template<typename T>
 		_PFROST_D_ void warpReduce(T* smem, T& val) {
-			if (threadIdx.x < warpSize) {
-				if (blockDim.x >= 64) val += smem[threadIdx.x + warpSize];
-				val += __shfl_xor_sync(FULLWARP, val, 16, warpSize);
-				val += __shfl_xor_sync(FULLWARP, val, 8, warpSize);
-				val += __shfl_xor_sync(FULLWARP, val, 4, warpSize);
-				val += __shfl_xor_sync(FULLWARP, val, 2, warpSize);
-				val += __shfl_xor_sync(FULLWARP, val, 1, warpSize);
+			if (threadIdx.x < 32) {
+				if (blockDim.x >= 64) val += smem[threadIdx.x + 32];
+				val += __shfl_down_sync(FULLWARP, val, 16);
+				val += __shfl_down_sync(FULLWARP, val, 8);
+				val += __shfl_down_sync(FULLWARP, val, 4);
+				val += __shfl_down_sync(FULLWARP, val, 2);
+				val += __shfl_down_sync(FULLWARP, val, 1);
 			}
 		}
 
 		template<typename T1, typename T2>
 		_PFROST_D_ void warpReduce(T1* smem1, T1& val1, T2* smem2, T2& val2) {
-			if (threadIdx.x < warpSize) {
+			if (threadIdx.x < 32) {
 				if (blockDim.x >= 64) {
-					val1 += smem1[threadIdx.x + warpSize];
-					val2 += smem2[threadIdx.x + warpSize];
+					val1 += smem1[threadIdx.x + 32];
+					val2 += smem2[threadIdx.x + 32];
 				}
-				val1 += __shfl_xor_sync(FULLWARP, val1, 16, warpSize);
-				val2 += __shfl_xor_sync(FULLWARP, val2, 16, warpSize);
-				val1 += __shfl_xor_sync(FULLWARP, val1, 8, warpSize);
-				val2 += __shfl_xor_sync(FULLWARP, val2, 8, warpSize);
-				val1 += __shfl_xor_sync(FULLWARP, val1, 4, warpSize);
-				val2 += __shfl_xor_sync(FULLWARP, val2, 4, warpSize);
-				val1 += __shfl_xor_sync(FULLWARP, val1, 2, warpSize);
-				val2 += __shfl_xor_sync(FULLWARP, val2, 2, warpSize);
-				val1 += __shfl_xor_sync(FULLWARP, val1, 1, warpSize);
-				val2 += __shfl_xor_sync(FULLWARP, val2, 1, warpSize);
+				val1 += __shfl_down_sync(FULLWARP, val1, 16);
+				val2 += __shfl_down_sync(FULLWARP, val2, 16);
+				val1 += __shfl_down_sync(FULLWARP, val1, 8);
+				val2 += __shfl_down_sync(FULLWARP, val2, 8);
+				val1 += __shfl_down_sync(FULLWARP, val1, 4);
+				val2 += __shfl_down_sync(FULLWARP, val2, 4);
+				val1 += __shfl_down_sync(FULLWARP, val1, 2);
+				val2 += __shfl_down_sync(FULLWARP, val2, 2);
+				val1 += __shfl_down_sync(FULLWARP, val1, 1);
+				val2 += __shfl_down_sync(FULLWARP, val2, 1);
 			}
 		}
 
@@ -176,42 +289,8 @@ namespace pFROST {
 			return cs.jump(nCls);
 		}
 
-		_PFROST_D_ void CNF::insert(SCLAUSE& src) {
-			assert(src.size());
-			assert(src.blockSize() > src.size());
-			S_REF ref = atomicAdd(&_data.size, src.blockSize());
-			assert(ref < _data.cap);
-			new (cref(ref)) SCLAUSE(src);
-			assert(src.size() == cref(ref)->size());
-			cs.push(ref);
-		}
-
-		_PFROST_D_ uint32* OT::data(const uint32& offset) { 
-			return occurs + atomicAdd(&maxEntries, offset);
-		}
-
 		_PFROST_D_ uint32 rscore(const uint32& ps, const uint32& ns) {
 			return (!ps || !ns) ? ps | ns : ps * ns;
-		}
-
-		_PFROST_D_ void devSort(uint32* data, const int& size)
-		{
-			if (size == 2) {
-				uint32 val0 = *data, val1 = *(data + 1);
-				if (val0 > val1) {
-					*data = val1;
-					*(data + 1) = val0;
-				}
-			}
-			else {
-				int i, j;
-#pragma unroll
-				for (i = 1; i < size; i++) {
-					uint32 tmp = data[i];
-					for (j = i; j > 0 && data[j - 1] > tmp; j--) data[j] = data[j - 1];
-					data[j] = tmp;
-				}
-			}
 		}
 
 		_PFROST_D_ void calcSig(SCLAUSE& c)
@@ -284,6 +363,29 @@ namespace pFROST {
 				else { it1++; it2++; }
 			}
 			return false;
+		}
+
+		_PFROST_D_ void	saveResolved(uint32*& saved, const uint32& lit)
+		{
+			*saved++ = 0, *saved++ = lit, *saved++ = 0;
+		}
+
+		_PFROST_D_ void	saveResolved(uint32*& saved, SCLAUSE& c, const uint32& dx)
+		{
+			assert(c.original());
+			saveResolved(saved, dx);
+			uint32* lit = c, * cend = c.end();
+			while (lit != cend)
+				*saved++ = *lit++;
+		}
+
+		_PFROST_D_ void countLitsBefore(CNF& cnf, OL& list, uint32& nLitsBefore)
+		{
+#pragma unroll
+			for (S_REF* i = list; i != list.end(); i++) {
+				SCLAUSE& c = cnf[*i];
+				if (c.original()) nLitsBefore += c.size();
+			}
 		}
 
 		_PFROST_D_ bool merge(const uint32& x, SCLAUSE& c1, SCLAUSE& c2, SCLAUSE& out_c)
@@ -421,31 +523,35 @@ namespace pFROST {
 		_PFROST_D_ void reduceOL(CNF& cnf, OL& ol)
 		{
 			if (ol.size() == 0) return;
-			uint32* r = ol, *rend = ol.end();
-			while (r != rend) {
-				if (cnf[*r].deleted()) *r = *--rend;
-				else r++;
-			}
-			assert(r == rend);
-			assert(rend >= ol);
-			ol.resize(rend - ol);
+			S_REF* i, * j, * rend = ol.end();
+			for (i = ol, j = ol; i != rend; i++)
+				if (!cnf[*i].deleted()) *j++ = *i;
+			ol.shrink(i - j);
 		}
 
-		_PFROST_D_ void forward_equ(CNF& cnf, OT& ot, uint32* m_c, const int& m_len)
+		_PFROST_D_ void forward_equ(CNF& cnf, OT& ot, uint32* m_c, const int& m_len, const CL_ST& type)
 		{
 			assert(m_len);
-			uint32 m_sig = 0;
-			if (threadIdx.x == 0) calcSig(m_c, m_len, m_sig);
+			assert(type != DELETED);
+			uint32 best = *m_c, m_sig = MAPHASH(best);
+			assert(best > 1);
+			if (threadIdx.x == 0) {
+				int minsize = ot[best].size();
+				for (int k = 1; k < m_len; k++) {
+					int lsize = ot[m_c[k]].size();
+					if (lsize < minsize) minsize = lsize, best = m_c[k];
+					m_sig |= MAPHASH(m_c[k]);
+				}
+			}
 			m_sig = __shfl_sync(FULLWARP, m_sig, 0);
-			for (uint32* k = m_c; k != m_c + m_len; k++) {
-				assert(*k > 1);
-				for (uint32* i = threadIdx.x + ot[*k]; i < ot[*k].end(); i += blockDim.x) {
-					SCLAUSE& org = cnf[*i];
-					if (!org.deleted() && m_len == org.size() &&
-						sub(m_sig, org.sig()) && isEqual(org, m_c, m_len)) {
-						org.markDeleted();
-						return;
-					}
+			best = __shfl_sync(FULLWARP, best, 0);
+			OL& minList = ot[best];
+			for (uint32* i = threadIdx.x + minList; i < minList.end(); i += blockDim.x) {
+				SCLAUSE& org = cnf[*i];
+				if (org.status() == type && m_len == org.size() &&
+					sub(m_sig, org.sig()) && isEqual(org, m_c, m_len)) {
+					org.markDeleted();
+					break;
 				}
 			}
 		}
@@ -456,27 +562,29 @@ namespace pFROST {
 			OL& me = which ? poss : negs;
 			OL& other = which ? negs : poss;
 #pragma unroll
-			for (uint32* i = me; i != me.end(); i++) { // start with me
-				SCLAUSE& c = cnf[*i];
-				if (c.deleted()) continue;
-				int c_size = c.size();
-				uint32 nTs = 0;
+			for (S_REF* i = me; i != me.end(); i++) { // start with me
+				SCLAUSE& c_me = cnf[*i];
+				if (c_me.deleted()) continue;
+				bool allTautology = true;
+				int c_size = c_me.size();
 				if (c_size <= SH_MAX_BCE_IN) { // use shared memory 
-					c.shareTo(sh_c);
+					c_me.shareTo(sh_c);
 #pragma unroll
-					for (uint32* j = other; j != other.end(); j++) { // block with other
-						SCLAUSE& other_c = cnf[*j];
-						if (!other_c.deleted() && isTautology(x, other_c, sh_c, c_size)) nTs++;
+					for (S_REF* j = other; j != other.end(); j++) { // block with other
+						SCLAUSE& c_other = cnf[*j];
+						if (c_other.deleted() || c_me.status() != c_other.status()) continue;
+						if (!isTautology(x, c_other, sh_c, c_size)) { allTautology = false; break; }
 					}
 				}
 				else { // use global memory
 #pragma unroll
-					for (uint32* j = other; j != other.end(); j++) { // block with other
-						SCLAUSE& other_c = cnf[*j];
-						if (!other_c.deleted() && isTautology(x, c, other_c)) nTs++;
+					for (S_REF* j = other; j != other.end(); j++) { // block with other
+						SCLAUSE& c_other = cnf[*j];
+						if (c_other.deleted() || c_me.status() != c_other.status()) continue;
+						if (!isTautology(x, c_me, c_other)) { allTautology = false; break; }
 					}
 				}
-				if (nTs == other.size()) assert(c.size() > 1), c.markDeleted(); // all clauses but a unit can be blocked
+				if (allTautology) assert(c_me.size() > 1), c_me.markDeleted(); // all clauses but a unit can be blocked
 			}
 		}
 

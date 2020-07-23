@@ -151,14 +151,14 @@ namespace pFROST {
 				printf("(");
 				for (int l = 0; l < _sz; l++) {
 					int lit = int(ABS(_lits[l]));
-					lit = (ISNEG(_lits[l])) ? -lit : lit;
+					lit = (SIGN(_lits[l])) ? -lit : lit;
 					printf("%4d ", lit);
 				}
 				char st = 'U';
 				if (deleted()) st = 'X';
 				else if (original()) st = 'O';
 				else if (learnt()) st = 'L';
-				printf(") %c, s=0x%X\n", st, _sig);
+				printf(") %c, f:%d, s=0x%X\n", st, _f, _sig);
 			}
 		};
 	}
