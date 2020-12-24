@@ -31,7 +31,7 @@ namespace pFROST {
     /*  Usage: global memory manager with garbage monitor */
     /*  Dependency:  none                                 */
     /******************************************************/
-    template<class T, class S = uint32>
+    template<class T, class S = size_t>
     class SMM
     {
         T* _mem;
@@ -40,7 +40,7 @@ namespace pFROST {
         size_t _bucket;
         bool check(const S& d) const {
             if (d >= sz) {
-                PFLOGEN("memory index (%d) violates memory boundary (%d)", d, sz);
+                PFLOGEN("memory index (%zd) violates memory boundary (%zd)", d, sz);
                 return false;
             }
             return true;
@@ -58,7 +58,7 @@ namespace pFROST {
         }
         bool checkSize(const S& newSz) const {
             if (sz != 0 && newSz <= sz) {
-                PFLOGEN("size overflow during memory allocation: (new = %d, old = %d)", newSz, sz);
+                PFLOGEN("size overflow during memory allocation: (new = %zd, old = %zd)", newSz, sz);
                 return false;
             }
             return true;
@@ -85,10 +85,10 @@ namespace pFROST {
         inline const T* address     (const S& idx) const { assert(check(idx)); return _mem + idx; }
         inline void     collect     (const S& size) { _junk += size; }
         inline void     init        (const S& init_cap) {
-            if (init_cap == 0) return;
+            if (!init_cap) return;
             assert(_bucket);
             if (init_cap > maxCap) {
-                printf("Error - initial size exceeds maximum memory size: (max = %d, size = %d)\n", maxCap, init_cap);
+                PFLOG1("Error - initial size exceeds maximum memory size: (max = %zd, size = %zd)\n", maxCap, init_cap);
                 throw MEMOUTEXCEPTION();
             }
             cap = init_cap;

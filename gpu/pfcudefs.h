@@ -24,86 +24,56 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 #include <cassert>
 #include <cuda.h>
 #include <device_launch_parameters.h>
+#include "pflogging.h"
 
 namespace pFROST {
 
 	namespace SIGmA {
-#if !defined(_PFROST_H_)
-#define _PFROST_H_ inline __host__
-#endif
-#if !defined(_PFROST_D_)
-#define _PFROST_D_ __forceinline__ __device__
-#endif
-#if !defined(_PFROST_H_D_)
-#define _PFROST_H_D_ inline __host__ __device__
-#endif
 
-		__forceinline__ int		SM2Cores(int major, int minor) {
-			// Defines for GPU Architecture types (using the SM version to determine # of cores per SM)
-			typedef struct {
-				int SM;  // arch defined in hex
-				int Cores;
-			} SM;
-			SM nCores[] = {
-				{0x30, 192},
-				{0x32, 192},
-				{0x35, 192},
-				{0x37, 192},
-				{0x50, 128},
-				{0x52, 128},
-				{0x53, 128},
-				{0x60,  64},
-				{0x61, 128},
-				{0x62, 128},
-				{0x70,  64},
-				{0x72,  64},
-				{0x75,  64},
-				{-1, -1} };
+		#if !defined(_PFROST_H_)
+		#define _PFROST_H_ inline __host__
+		#endif
+		#if !defined(_PFROST_D_)
+		#define _PFROST_D_ __forceinline__ __device__
+		#endif
+		#if !defined(_PFROST_H_D_)
+		#define _PFROST_H_D_ inline __host__ __device__
+		#endif
+		#if defined(DEBUG) || defined(_DEBUG) 
+		#define LOGERR(MESSAGE)	\
+				do { \
+					cudaError_t ERR = cudaGetLastError(); \
+					if (cudaSuccess != ERR) { \
+						PFLOGEN("%s(%i): %s due to (%d) %s", __FILE__, __LINE__, MESSAGE, static_cast<int>(ERR), cudaGetErrorString(ERR)); \
+						cudaDeviceReset(); \
+						exit(1); \
+					} \
+				} \
+				while(0)
+		#else
+		#define LOGERR(MESSAGE)	do { } while(0)
+		#endif
 
-			int index = 0;
-
-			while (nCores[index].SM != -1) {
-				if (nCores[index].SM == ((major << 4) + minor)) {
-					return nCores[index].Cores;
-				}
-				index++;
-			}
-			printf(
-				"MapSMtoCores for SM %d.%d is undefined."
-				"  Default to use %d Cores/SM\n",
-				major, minor, nCores[index - 1].Cores);
-			return nCores[index - 1].Cores;
-		}
-		__forceinline__ void	CHECK(cudaError_t result)
+		__forceinline__ void	CHECK(cudaError_t returncode)
 		{
-#if defined(DEBUG) || defined(_DEBUG)
-			if (result != cudaSuccess) {
-				fprintf(stderr, "CUDA Runtime Error: %s\n", cudaGetErrorString(result));
+		#if defined(DEBUG) || defined(_DEBUG)
+			if (returncode != cudaSuccess) {
+				PFLOGEN("CUDA runtime failure due to %s", cudaGetErrorString(returncode));
 				cudaDeviceReset();
 				exit(1);
 			}
-#endif
+		#endif
 		}
-		__forceinline__ void	_getLstErr(const char* errorMessage, const char* file, const int line) {
-#if defined(DEBUG) || defined(_DEBUG)
-			cudaError_t err = cudaGetLastError();
-			if (cudaSuccess != err) {
-				fprintf(stderr, "%s(%i) : Last CUDA error : %s : (%d) %s.\n", file, line, errorMessage, static_cast<int>(err), cudaGetErrorString(err));
-				cudaDeviceReset();
-				exit(1);
-			}
-#endif
-		}
+
 		__forceinline__ void	sync(const cudaStream_t& stream = 0) {
 			CHECK(cudaStreamSynchronize(stream));
 		}
+
 		__forceinline__ void	syncAll() {
 			CHECK(cudaDeviceSynchronize());
 		}
-#define LOGERR(msg)	_getLstErr(msg, __FILE__, __LINE__)	
 
 	}
-	
 }
 
 #endif

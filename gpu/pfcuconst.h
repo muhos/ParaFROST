@@ -36,6 +36,7 @@ namespace pFROST {
 		#define AWAKEN_FAIL		1
 		#define CNFALLOC_FAIL	2
 		#define OTALLOC_FAIL	3
+		#define NLIMITS			4
 
 		// BVE marking
 		#define MELTING_MASK	0x80000000U
@@ -44,18 +45,18 @@ namespace pFROST {
 		#define AOIX_MASK		0x80000000U
 		#define TYPE_MASK		0xC0000000U
 		#define ADDED_MASK		0x3FFFFFFFU
-		#define IS_RES(x)		(x & RES_MASK)
-		#define IS_AOIX(x)		(x & AOIX_MASK)
-		#define ELIMINATED(x)	(x & MELTING_MASK)
-		#define RECOVERVAR(x)	(x & UNMELT_MASK)
-		#define RECOVERADDED(x)	(x & ADDED_MASK)
-		#define RECOVERTYPE(x)	(x & TYPE_MASK)
-
+		#define IS_RES(x)		((x) & RES_MASK)
+		#define IS_AOIX(x)		((x) & AOIX_MASK)
+		#define ELIMINATED(x)	((x) & MELTING_MASK)
+		#define RECOVERVAR(x)	((x) & UNMELT_MASK)
+		#define RECOVERADDED(x)	((x) & ADDED_MASK)
+		#define RECOVERTYPE(x)	((x) & TYPE_MASK)
 
 		// Kernel configuration & GUARDs
 		#define BLOCK1D			256
 		#define CE_POS_LMT		512
 		#define CE_NEG_LMT		512
+		#define BLSORT			256 
 		#define BLVE			64
 		#define BLVE1			64
 		#define BLVE2			128
@@ -67,7 +68,8 @@ namespace pFROST {
 		#define BLHSE			64
 		#define HSE_MAX_CL_SIZE 1000
 		#define SH_MAX_HSE_IN	190
-		#define SH_MAX_HRE_OUT	350
+		#define BLERE			64
+		#define SH_MAX_ERE_OUT	190
 
 	}
 }

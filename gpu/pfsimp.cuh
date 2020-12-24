@@ -35,21 +35,27 @@ namespace pFROST {
 		struct GPU_LCV_CMP {
 			uint32* scores;
 			_PFROST_H_D_ GPU_LCV_CMP(uint32* _scores) : scores(_scores) { assert(scores != NULL); }
-			_PFROST_D_ bool operator () (uint32& x, uint32& y) {
-				return (scores[x] != scores[y]) ? scores[x] < scores[y] : x < y;
+			_PFROST_D_ bool operator () (const uint32& a, const uint32& b) const {
+				uint32 x = scores[a], y = scores[b];
+				if (x < y) return true;
+				if (x > y) return false;
+				return a < b;
 			}
 		};
 		struct GPU_MCV_CMP {
 			uint32* scores;
 			_PFROST_H_D_ GPU_MCV_CMP(uint32* _scores) : scores(_scores) { assert(scores != NULL); }
-			_PFROST_D_ bool operator () (uint32& x, uint32& y) {
-				return (scores[x] != scores[y]) ? scores[x] > scores[y] : x > y;
+			_PFROST_D_ bool operator () (const uint32& a, const uint32& b) const {
+				uint32 x = scores[a], y = scores[b];
+				if (x > y) return true;
+				if (x < y) return false;
+				return a > b;
 			}
 		};
 		struct COMPACT_CMP
 		{
 			CNF* cnf;
-			_PFROST_H_D_ COMPACT_CMP(CNF* _cnf) : cnf(_cnf) {}
+			_PFROST_H_D_ COMPACT_CMP(CNF* _cnf) : cnf(_cnf) { assert(cnf != NULL); }
 			_PFROST_D_ bool operator()(const S_REF& ref) {
 				return !cnf->cref(ref)->deleted();
 			}
@@ -57,32 +63,40 @@ namespace pFROST {
 		struct CNF_CMP_SZ {
 			CNF* cnf;
 			_PFROST_H_D_ CNF_CMP_SZ(CNF* _cnf) : cnf(_cnf) { assert(cnf != NULL); }
+			_PFROST_H_D_ bool operator () (S_REF& a, S_REF& b) {
+				return cnf->cref(a)->size() < cnf->cref(b)->size();
+			}
+		};
+		struct CNF_CMP_KEY {
+			CNF* cnf;
+			_PFROST_H_D_ CNF_CMP_KEY(CNF* _cnf) : cnf(_cnf) { assert(cnf != NULL); }
 			_PFROST_D_ bool operator () (S_REF& a, S_REF& b) {
 				SCLAUSE& x = (*cnf)[a], &y = (*cnf)[b];
-				uint32 xsize = x.size();
-				if (xsize != y.size()) return x.size() < y.size();
-				else if (*x != *y) return *x < *y;
-				else if (x[1] != y[1]) return x[1] < y[1];
-				else if (xsize > 2 && x.back() != y.back()) return x.back() < y.back();
-				else return x.sig() < y.sig();
+				uint32 xsize = x.size(), ysize = y.size();
+				if (xsize < ysize) return true;
+				if (xsize > ysize) return false;
+				if (*x != *y) return *x < *y;
+				if (x[1] != y[1]) return x[1] < y[1];
+				return (xsize > 2 && x.back() != y.back()) ? 
+					x.back() < y.back() : x.sig() < y.sig();
 			}
 		};
 		//======================================================//
 		//                GPU Wrappers Declaration              //
 		//======================================================//
+		void initLimits(cuLimit);
 		void cuMemSetAsync(addr_t, const Byte&, const size_t&);
 		void copyIf(uint32*, CNF*, GSTATS*);
 		void calcScores(VARS*, uint32*);
 		void calcScores(VARS*, uint32*, OT*);
-		void calcSigCNFAsync(CNF*, const uint32&, const uint32&, const cudaStream_t&);
-		void calcSigCNF(CNF*, const uint32&);
+		void prepareCNFAsync(CNF*, const cudaStream_t&);
 		void createOTAsync(CNF*, OT*, const bool&);
 		void reduceOTAsync(CNF*, OT*, const bool&);
 		void sortOTAsync(CNF*, OT*, VARS* vars, cudaStream_t*);
-		void veAsync(CNF*, OT*, VARS*, cudaStream_t*, const cuHist&, const uint32&, const uint32&, const int&, const bool&);
-		void hseAsync(CNF*, OT*, VARS*, const uint32&);
-		void bceAsync(CNF*, OT*, VARS*, const uint32&);
-		void hreAsync(CNF*, OT*, VARS*, const uint32&);
+		void veAsync(CNF*, OT*, VARS*, cudaStream_t*, cuMM&, const cuHist&, const bool&);
+		void hseAsync(CNF*, OT*, VARS*);
+		void bceAsync(CNF*, OT*, VARS*);
+		void ereAsync(CNF*, OT*, VARS*);
 		void evalReds(CNF*, GSTATS*, LIT_ST*);
 		void countFinal(CNF*, GSTATS*, LIT_ST*);
 		void countCls(CNF*, GSTATS*);

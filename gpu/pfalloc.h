@@ -31,7 +31,7 @@ namespace pFROST {
     /*  Usage: global memory manager with garbage monitor */
     /*  Dependency:  none                                 */
     /******************************************************/
-    template<class T, class S = uint32>
+    template<class T, class S = size_t>
     class SMM
     {
         T* _mem;
@@ -40,7 +40,7 @@ namespace pFROST {
         size_t _bucket;
         bool check(const S& d) const {
             if (d >= sz) {
-                PFLOGEN("memory index (%d) violates memory boundary (%d)", d, sz);
+                PFLOGEN("memory index (%zd) violates memory boundary (%zd)", d, sz);
                 return false;
             }
             return true;
@@ -58,50 +58,50 @@ namespace pFROST {
         }
         bool checkSize(const S& newSz) const {
             if (sz != 0 && newSz <= sz) {
-                PFLOGEN("size overflow during memory allocation: (new = %d, old = %d)", newSz, sz);
+                PFLOGEN("size overflow during memory allocation: (new = %zd, old = %zd)", newSz, sz);
                 return false;
             }
             return true;
         }
     public:
-        ~SMM() { dealloc(); }
-        SMM() {
+                        ~SMM        () { dealloc(); }
+                        SMM         () {
             maxCap = std::numeric_limits<S>::max();
             assert(maxCap > INT8_MAX);
             _mem = NULL, _bucket = sizeof(T), sz = 0LL, cap = 0LL, _junk = 0LL;
         }
-        explicit        SMM(const S& _cap) {
+        explicit        SMM         (const S& _cap) {
             maxCap = std::numeric_limits<S>::max();
             assert(maxCap > INT8_MAX);
             _mem = NULL, _bucket = sizeof(T), sz = 0LL, cap = 0LL, _junk = 0LL, init(_cap);
         }
-        inline void     dealloc() { if (_mem != NULL) std::free(_mem), _mem = NULL; sz = cap = 0, _junk = 0; }
-        inline size_t   bucket() const { assert(_bucket); return _bucket; }
-        inline S        size() const { return sz; }
-        inline S        garbage() const { return _junk; }
+        inline void     dealloc     () { if (_mem != NULL) std::free(_mem), _mem = NULL; sz = cap = 0, _junk = 0; }
+        inline size_t   bucket      () const { assert(_bucket); return _bucket; }
+        inline S        size        () const { return sz; }
+        inline S        garbage     () const { return _junk; }
         inline T&       operator[]  (const S& idx) { assert(check(idx)); return _mem[idx]; }
         inline const T& operator[]  (const S& idx) const { assert(check(idx)); return _mem[idx]; }
-        inline T*       address(const S& idx) { assert(check(idx)); return _mem + idx; }
-        inline const T* address(const S& idx) const { assert(check(idx)); return _mem + idx; }
-        inline void     collect(const S& size) { _junk += size; }
-        inline void     init(const S& init_cap) {
-            if (init_cap == 0) return;
+        inline T*       address     (const S& idx) { assert(check(idx)); return _mem + idx; }
+        inline const T* address     (const S& idx) const { assert(check(idx)); return _mem + idx; }
+        inline void     collect     (const S& size) { _junk += size; }
+        inline void     init        (const S& init_cap) {
+            if (!init_cap) return;
             assert(_bucket);
             if (init_cap > maxCap) {
-                printf("Error - initial size exceeds maximum memory size: (max = %d, size = %d)\n", maxCap, init_cap);
+                PFLOG1("Error - initial size exceeds maximum memory size: (max = %zd, size = %zd)\n", maxCap, init_cap);
                 throw MEMOUTEXCEPTION();
             }
             cap = init_cap;
             pfalloc(_mem, _bucket * cap);
         }
-        inline void     reserve(const S& min_cap) {
+        inline void     reserve     (const S& min_cap) {
             if (cap >= min_cap) return;
             if (cap > (maxCap - cap)) cap = min_cap;
             else { cap <<= 1; if (cap < min_cap) cap = min_cap; }
             assert(_bucket);
             pfalloc(_mem, _bucket * cap);
         }
-        inline S        alloc(const S& size) {
+        inline S        alloc       (const S& size) {
             assert(size > 0);
             assert(checkSize(sz + size));
             reserve(sz + size);
@@ -110,7 +110,7 @@ namespace pFROST {
             assert(sz > 0);
             return oldSz;
         }
-        inline void     migrate(SMM& newBlock) {
+        inline void     migrate     (SMM& newBlock) {
             if (newBlock._mem != NULL) std::free(newBlock._mem);
             newBlock._mem = _mem, newBlock.sz = sz, newBlock.cap = cap, newBlock._junk = _junk;
             _mem = NULL, sz = 0, cap = 0, _junk = 0;

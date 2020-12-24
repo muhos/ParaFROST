@@ -19,6 +19,8 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 #ifndef __GL_TYPES_
 #define __GL_TYPES_
 
+#include <cstddef>
+
 namespace pFROST {
 
 	// primitive types
@@ -31,12 +33,8 @@ namespace pFROST {
 	typedef unsigned int uint32;
 	typedef signed long long int int64;
 	typedef unsigned long long int uint64;
-	typedef uint32 C_REF;
+	typedef size_t C_REF;
 	typedef void* G_REF;
-
-#ifdef __GNUC__
-#define __forceinline __attribute__((always_inline))
-#endif
 
 }
 

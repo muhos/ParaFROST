@@ -26,7 +26,7 @@ namespace pFROST {
 
 	namespace SIGmA {
 
-#define VE_DBG		0 // set to serialize BVE
+#define VE_DBG 0 // set to serialize BVE
 
 		_PFROST_D_ void toblivion(const uint32& dx, const uint32& nSaved, CNF& cnf, OL& toSave, OL& other, cuVecU* resolved)
 		{
@@ -34,9 +34,10 @@ namespace pFROST {
 #pragma unroll
 			for (S_REF* i = toSave; i != toSave.end(); i++) {
 				SCLAUSE& c = cnf[*i];
-				if (c.original()) saveResolved(saved, c, dx);
+				if (c.original()) saveResolved(saved, c);
 				c.markDeleted();
 			}
+			saveResolved(saved, dx);
 #pragma unroll
 			for (S_REF* i = other; i != other.end(); i++) cnf[*i].markDeleted();
 			toSave.clear(true), other.clear(true);
@@ -48,11 +49,12 @@ namespace pFROST {
 #pragma unroll
 			for (S_REF* i = toSave; i != toSave.end(); i++) {
 				SCLAUSE& c = cnf[*i];
-				if (c.original()) saveResolved(saved, c, dx);
+				if (c.original()) saveResolved(saved, c);
 			}
+			saveResolved(saved, dx);
 		}
 
-		_PFROST_D_ void calcResolvents(const uint32& x, CNF& cnf, OL& poss, OL& negs, const uint32& pOrgs, const uint32& nOrgs, uint32& nAddedCls, uint32& nAddedLits)
+		_PFROST_D_ void calcResolvents(const uint32& x, CNF& cnf, OL& me, OL& other, const uint32& pOrgs, const uint32& nOrgs, uint32& nAddedCls, uint32& nAddedLits)
 		{
 			assert(x);
 			assert(pOrgs);
@@ -60,52 +62,58 @@ namespace pFROST {
 			assert(!nAddedLits);
 			uint32 nTs = 0;
 #pragma unroll
-			for (S_REF* i = poss; i != poss.end(); i++) {
-				SCLAUSE& pos = cnf[*i];
-				if (pos.learnt()) continue;
+			for (S_REF* i = me; i != me.end(); i++) {
+				SCLAUSE& ci = cnf[*i];
+				if (ci.learnt()) continue;
 #pragma unroll
-				for (S_REF* j = negs; j != negs.end(); j++) {
-					SCLAUSE& neg = cnf[*j];
-					if (neg.learnt()) continue;
-					if (isTautology(x, pos, neg)) nTs++;
-					else nAddedLits += pos.size() + neg.size() - 2;
+				for (S_REF* j = other; j != other.end(); j++) {
+					SCLAUSE& cj = cnf[*j];
+					if (cj.learnt()) continue;
+					if (isTautology(x, ci, cj)) nTs++;
+					else nAddedLits += ci.size() + cj.size() - 2;
 				}
 			}
 			assert(pOrgs * nOrgs >= nTs);
 			nAddedCls = pOrgs * nOrgs - nTs;
 		}
 
-		_PFROST_D_ void resolve_x(const uint32& x, const uint32& nAddedCls, const uint32& nAddedLits, CNF& cnf, OL& poss, OL& negs, cuVecU* units, uint32* out_c)
+		_PFROST_D_ void resolve_x(const uint32& x, const uint32& nAddedCls, const uint32& nAddedLits, CNF& cnf, OL& me, OL& other, cuVecU* units, uint32* out_c)
 		{
-			S_REF ref, checksum = 0;
+			assert(x);
+			int nbuckets = dc_nbuckets;
+			uint32 checksum = 0;
+			S_REF ref;
 			S_REF* cs = cnf.jump(ref, nAddedCls, nAddedLits);
 #pragma unroll
-			for (S_REF* i = poss; i != poss.end(); i++) {
-				SCLAUSE& pos = cnf[*i];
-				if (pos.learnt()) continue;
+			for (S_REF* i = me; i != me.end(); i++) {
+				SCLAUSE& ci = cnf[*i];
+				if (ci.learnt()) continue;
 #pragma unroll
-				for (S_REF* j = negs; j != negs.end() && checksum < nAddedCls; j++) {
-					SCLAUSE& neg = cnf[*j];
-					if (neg.learnt()) continue;
-					int max_sz = pos.size() + neg.size() - 2;
+				for (S_REF* j = other; j != other.end() && checksum < nAddedCls; j++) {
+					SCLAUSE& cj = cnf[*j];
+					if (cj.learnt()) continue;
+					int max_sz = ci.size() + cj.size() - 2;
 					if (max_sz > SH_MAX_BVE_OUT) { // use global memory
-						if (merge(x, pos, neg, cnf[ref])) {
-							SCLAUSE& added = cnf[ref];
-							if (added.size() == 1) units->push(*added);
-							cs[checksum++] = ref, ref += added.blockSize();
+						if (!isTautology(x, ci, cj)) {
+							SCLAUSE* added = new (cnf.cref(ref)) SCLAUSE();
+							merge(x, ci, cj, added), max_sz = added->size();
+							added->markAdded();
+							if (max_sz == 1) units->push(**added);
+							cs[checksum++] = ref, ref += (max_sz - 1) + nbuckets;
 						}
 					}
 					else { // use shared memory
 						int merged_sz = 0;
-						if (merged_sz = merge(x, pos, neg, out_c)) {
+						if (merged_sz = merge(x, ci, cj, out_c)) {
 							assert(merged_sz <= SH_MAX_BVE_OUT);
 							uint32 sig = 0;
 							calcSig(out_c, merged_sz, sig);
 							SCLAUSE* added = cnf.cref(ref);
 							added = new (added) SCLAUSE(out_c, merged_sz);
 							added->set_sig(sig);
+							added->markAdded();
 							if (merged_sz == 1) units->push(*out_c);
-							cs[checksum++] = ref, ref += (merged_sz - 1) + sizeof(S_REF);
+							cs[checksum++] = ref, ref += (merged_sz - 1) + nbuckets;
 							assert(added->isSorted());
 							assert(added->hasZero() < 0);
 						}
@@ -115,16 +123,65 @@ namespace pFROST {
 			assert(checksum == nAddedCls);
 		}
 
-		_PFROST_D_ bool resolve(const uint32& x, const uint32& pOrgs, const uint32& nOrgs, CNF& cnf, OL& poss, OL& negs, cuVecU* units, cuVecU* resolved, uint32* out_c)
+		_PFROST_D_ void substitute_x(const uint32& x, const uint32& nAddedCls, const uint32& nAddedLits, CNF& cnf, OL& me, OL& other, cuVecU* units, uint32* out_c)
 		{
-			uint32 p = V2D(x);
+			assert(x);
+			int nbuckets = dc_nbuckets;
+			uint32 checksum = 0;
+			S_REF ref;
+			S_REF* cs = cnf.jump(ref, nAddedCls, nAddedLits);
+#pragma unroll
+			for (S_REF* i = me; i != me.end(); i++) {
+				SCLAUSE& ci = cnf[*i];
+				if (ci.learnt()) continue;
+#pragma unroll
+				for (S_REF* j = other; j != other.end() && checksum < nAddedCls; j++) {
+					SCLAUSE& cj = cnf[*j];
+					if (cj.learnt()) continue;
+					if (ci.molten() == cj.molten()) continue;
+					int max_sz = ci.size() + cj.size() - 2;
+					if (max_sz > SH_MAX_BVE_OUT) { // use global memory
+						if (!isTautology(x, ci, cj)) {
+							SCLAUSE* added = new (cnf.cref(ref)) SCLAUSE();
+							merge(x, ci, cj, added), max_sz = added->size();
+							added->markAdded();
+							if (max_sz == 1) units->push(**added);
+							cs[checksum++] = ref, ref += (max_sz - 1) + nbuckets;
+						}
+					}
+					else { // use shared memory
+						int merged_sz = 0;
+						if (merged_sz = merge(x, ci, cj, out_c)) {
+							assert(merged_sz <= SH_MAX_BVE_OUT);
+							uint32 sig = 0;
+							calcSig(out_c, merged_sz, sig);
+							SCLAUSE* added = cnf.cref(ref);
+							added = new (added) SCLAUSE(out_c, merged_sz);
+							added->set_sig(sig);
+							added->markAdded();
+							if (merged_sz == 1) units->push(*out_c);
+							cs[checksum++] = ref, ref += (merged_sz - 1) + nbuckets;
+							assert(added->isSorted());
+							assert(added->hasZero() < 0);
+						}
+					}
+				}
+			}
+			assert(checksum == nAddedCls);
+		}
+
+		_PFROST_D_ bool resolve(const uint32& x, const uint32& pOrgs, const uint32& nOrgs, CNF& cnf, OL& poss, OL& negs, cuVecU* units, cuVecU* resolved, uint32* out_c, const bool& bound)
+		{
+			assert(x);
+			assert(checkMolten(cnf, poss, negs));
+			uint32 p = V2L(x);
 			uint32 nAddedCls = 0, nAddedLits = 0, psLits = 0, nsLits = 0;
 			// count clauses/literals before and after
 			calcResolvents(x, cnf, poss, negs, pOrgs, nOrgs, nAddedCls, nAddedLits);
 			if (nAddedCls) {
 				if (nAddedCls > pOrgs + nOrgs) return false;
 				countLitsBefore(cnf, poss, psLits), countLitsBefore(cnf, negs, nsLits);
-				if (nAddedLits > psLits + nsLits) return false;
+				if (bound && nAddedLits > psLits + nsLits) return false;
 			}
 #if VE_DBG
 			printf("c | Resolving(%d) ==> added = %d, deleted = %d\n", x, nAddedCls, poss.size() + negs.size());
@@ -135,13 +192,9 @@ namespace pFROST {
 			// save resolved
 			uint32 nSaved, lit;
 			bool which = pOrgs > nOrgs;
-			if (which) nSaved = nOrgs * 3 + nsLits, lit = NEG(p);
-			else nSaved = pOrgs * 3 + psLits, lit = p;
+			if (which) nSaved = nOrgs + nsLits + 2, lit = p;
+			else nSaved = pOrgs + psLits + 2, lit = NEG(p);
 			toblivion(lit, nSaved, cnf, which ? negs : poss, which ? poss : negs, resolved);
-#if VE_DBG
-			printf("c | Units"), units->print();
-			printf("c | Resolved"), resolved->print();
-#endif
 			return true; // resolution successful
 		}
 
@@ -149,6 +202,8 @@ namespace pFROST {
 		{
 			assert(p > 1);
 			assert(!SIGN(p));
+			assert(checkMolten(cnf, poss, negs));
+			assert(pOrgs && nOrgs);
 			uint32 first;
 			if (first = find_sfanin(p, cnf, poss)) {
 				uint32 second = NEG(p), def = first;
@@ -163,10 +218,6 @@ namespace pFROST {
 #endif
 						saveResolved(p, pOrgs, nOrgs, cnf, poss, negs, resolved);
 						substitute_single(p, def, cnf, poss, negs, units);
-#if VE_DBG
-						printf("c | Units"), units->print();
-						printf("c | Resolved"), resolved->print();
-#endif
 						return true;
 					}
 				}
@@ -174,24 +225,23 @@ namespace pFROST {
 			return false;
 		}
 
-		_PFROST_D_ bool find_ao_gate(const uint32& dx, const uint32& pOrgs, const uint32& nOrgs, CNF& cnf, OL& poss, OL& negs, cuVecU* units, cuVecU* resolved, uint32* out_c)
+		_PFROST_D_ bool find_ao_gate(const uint32& dx, const uint32& nOrgCls, CNF& cnf, OT& ot, cuVecU* units, cuVecU* resolved, uint32* out_c)
 		{
 			assert(dx > 1);
+			assert(checkMolten(cnf, ot[dx], ot[FLIP(dx)]));
 			uint32 sig, x = ABS(dx);
-			bool polarity = SIGN(dx);
 			// (-) ==> look for AND , (+) ==> look for OR
 #if VE_DBG
-			const char* type = polarity ? "AND" : "OR";
+			const char* type = SIGN(dx) ? "AND" : "OR";
 #endif
-			if ((polarity ? nOrgs : pOrgs) > (SH_MAX_BVE_OUT - 1)) return false; // shared memory GUARD
-			OL& itarget = polarity ? negs : poss;
-			OL& otarget = polarity ? poss : negs;
+			OL& itarget = ot[dx];
 			int nImps = find_fanin(dx, cnf, itarget, out_c, sig);
 			if (nImps > 1) {
 				uint32 f_dx = FLIP(dx);
 				out_c[nImps++] = f_dx;
 				sig |= MAPHASH(f_dx);
 				devSort(out_c, nImps);
+				OL& otarget = ot[f_dx];
 				for (S_REF* i = otarget; i != otarget.end(); i++) {
 					SCLAUSE& c = cnf[*i];
 					if (c.learnt()) continue;
@@ -199,8 +249,8 @@ namespace pFROST {
 						c.melt(); // mark as fanout clause
 						// check resolvability
 						uint32 nAddedCls = 0, nAddedLits = 0;
-						countSubstituted(x, cnf, poss, negs, nAddedCls, nAddedLits);
-						if (nAddedCls > pOrgs + nOrgs) { c.freeze(); break; }
+						countSubstituted(x, cnf, itarget, otarget, nAddedCls, nAddedLits);
+						if (nAddedCls > nOrgCls) { c.freeze(); break; }
 						// can be substituted
 #if VE_DBG
 						printf("c | Gate %d = %s(", ABS(dx), type);
@@ -209,15 +259,10 @@ namespace pFROST {
 							printf(" %d", ABS(out_c[k]));
 							if (k < nImps - 1) printf(",");
 						}
-						printf(" ) found ==> added = %d, deleted = %d\n", nAddedCls, poss.size() + negs.size());
-						pClauseSet(cnf, poss, negs);
+						printf(" ) found ==> added = %d, deleted = %d\n", nAddedCls, itarget.size() + otarget.size());
+						pClauseSet(cnf, itarget, otarget);
 #endif
-						if (nAddedCls) substitute_x(x, nAddedCls, nAddedLits, cnf, poss, negs, units, out_c);
-						toblivion(POS(dx), pOrgs, nOrgs, cnf, poss, negs, resolved);
-#if VE_DBG
-						printf("c | Units"), units->print();
-						printf("c | Resolved"), resolved->print();
-#endif
+						if (nAddedCls) substitute_x(x, nAddedCls, nAddedLits, cnf, itarget, otarget, units, out_c);
 						return true;
 					}
 				}
@@ -226,134 +271,117 @@ namespace pFROST {
 			return false;
 		}
 
-		_PFROST_D_ bool find_ite_gate(const uint32& p, const uint32& pOrgs, const uint32& nOrgs, CNF& cnf, OT& ot, cuVecU* units, cuVecU* resolved, uint32* out_c)
+		_PFROST_D_ bool find_ite_gate(const uint32& dx, const uint32& nOrgCls, CNF& cnf, OT& ot, cuVecU* units, cuVecU* resolved, uint32* out_c)
 		{
-			assert(p > 1);
-			OL& poss = ot[p];
-			for (S_REF* i = poss; i != poss.end(); i++) {
+			assert(dx > 1);
+			assert(checkMolten(cnf, ot[dx], ot[FLIP(dx)]));
+			OL& itarget = ot[dx];
+			for (S_REF* i = itarget; i != itarget.end(); i++) {
 				SCLAUSE& ci = cnf[*i];
 				if (ci.learnt() || ci.size() < 3 || ci.size() > 3) continue;
 				uint32 xi = ci[0], yi = ci[1], zi = ci[2];
-				if (yi == p) devSwap(xi, yi);
-				if (zi == p) devSwap(xi, zi);
-				assert(xi == p);
-				for (S_REF* j = i + 1; j != poss.end(); j++) {
+				if (yi == dx) devSwap(xi, yi);
+				if (zi == dx) devSwap(xi, zi);
+				assert(xi == dx);
+				for (S_REF* j = i + 1; j != itarget.end(); j++) {
 					SCLAUSE& cj = cnf[*j];
 					if (cj.learnt() || cj.size() < 3 || cj.size() > 3) continue;
 					uint32 xj = cj[0], yj = cj[1], zj = cj[2];
-					if (yj == p) devSwap(xj, yj);
-					if (zj == p) devSwap(xj, zj);
-					assert(xj == p);
+					if (yj == dx) devSwap(xj, yj);
+					if (zj == dx) devSwap(xj, zj);
+					assert(xj == dx);
 					if (ABS(yi) == ABS(zj)) devSwap(yj, zj);
 					if (ABS(zi) == ABS(zj)) continue;
 					if (yi != FLIP(yj)) continue;
-					uint32 n = NEG(p);
-					S_REF r1 = fast_equality_check(cnf, ot, n, yi, FLIP(zi));
-					if (r1 == NOREF) continue;
-					S_REF r2 = fast_equality_check(cnf, ot, n, yj, FLIP(zj));
-					if (r2 == NOREF) continue;
+					uint32 f_dx = FLIP(dx);
+					S_REF r1 = fast_equality_check(cnf, ot, f_dx, yi, FLIP(zi));
+					if (r1 == GNOREF) continue;
+					S_REF r2 = fast_equality_check(cnf, ot, f_dx, yj, FLIP(zj));
+					if (r2 == GNOREF) continue;
+					assert(cnf[r1].original());
+					assert(cnf[r2].original());
 					// mark gate clauses
 					ci.melt(), cj.melt();
 					cnf[r1].melt(), cnf[r2].melt();
 					// check resolvability
-					uint32 v = ABS(p);
+					uint32 v = ABS(dx);
 					uint32 nAddedCls = 0, nAddedLits = 0;
-					OL& negs = ot[n];
-					countSubstituted(v, cnf, poss, negs, nAddedCls, nAddedLits);
-					if (nAddedCls > pOrgs + nOrgs) {
+					OL& otarget = ot[f_dx];
+					countSubstituted(v, cnf, itarget, otarget, nAddedCls, nAddedLits);
+					if (nAddedCls > nOrgCls) {
 						ci.freeze(), cj.freeze();
 						cnf[r1].freeze(), cnf[r2].freeze();
 						return false;
 					}
 					// can be substituted
 #if VE_DBG
-					printf("c | Gate %d = ITE(%d, %d, %d) found ==> added = %d, deleted = %d", ABS(p), ABS(yi), ABS(zi), ABS(zj), nAddedCls, poss.size() + negs.size());
-					pClauseSet(cnf, poss, negs);
+					printf("c | Gate %d = ITE(%d, %d, %d) found ==> added = %d, deleted = %d", ABS(dx), ABS(yi), ABS(zi), ABS(zj), nAddedCls, itarget.size() + otarget.size());
+					pClauseSet(cnf, itarget, otarget);
 #endif
-					if (nAddedCls) substitute_x(v, nAddedCls, nAddedLits, cnf, poss, negs, units, out_c);
-					toblivion(p, pOrgs, nOrgs, cnf, poss, negs, resolved);
-#if VE_DBG
-					printf("c | Units"), units->print();
-					printf("c | Resolved"), resolved->print();
-#endif
+					if (nAddedCls) substitute_x(v, nAddedCls, nAddedLits, cnf, itarget, otarget, units, out_c);
 					return true;
 				}
 			}
 			return false;
 		}
 
-		_PFROST_D_ bool find_xor_gate(const uint32& p, const uint32& pOrgs, const uint32& nOrgs, const int& xor_limit, CNF& cnf, OT& ot, cuVecU* units, cuVecU* resolved, uint32* out_c)
+		_PFROST_D_ bool find_xor_gate(const uint32& dx, const uint32& nOrgCls, const int& xor_max_arity, CNF& cnf, OT& ot, cuVecU* units, cuVecU* resolved, uint32* out_c)
 		{
-			OL& poss = ot[p];
-			for (S_REF* i = poss; i != poss.end(); i++) {
+			assert(dx > 1);
+			assert(checkMolten(cnf, ot[dx], ot[FLIP(dx)]));
+			OL& itarget = ot[dx];
+			for (S_REF* i = itarget; i != itarget.end(); i++) {
 				SCLAUSE& ci = cnf[*i];
 				int size = ci.size();
 				int arity = size - 1; // XOR arity
-				if (ci.learnt() || size < 3 || arity > xor_limit || arity > SH_MAX_BVE_OUT) continue;
-				// share to out_c except p
-				shareXORClause(p, ci, out_c);
+				if (ci.learnt() || size < 3 || arity > xor_max_arity || arity > SH_MAX_BVE_OUT) continue;
+				// share to out_c except dx
+				shareXORClause(dx, ci, out_c);
 				// find arity clauses
 				int itargets = 0;
 				for (int j = 0; j < arity; j++) {
-					S_REF r = find_fanin(p, j, cnf, poss, out_c, arity);
-					if (r == NOREF) break;
+					S_REF r = find_fanin(dx, j, cnf, itarget, out_c, arity);
+					if (r == GNOREF) break;
 					cnf[r].melt(), itargets++;
 				}
 				if (itargets < arity) {
-					freeze_arities(cnf, poss);
+					freeze_arities(cnf, itarget);
 					continue;
 				}
 				// find all +/-  
-				uint32 n = NEG(p);
-				S_REF r1 = find_all(n, cnf, ot, out_c, arity);
-				if (r1 == NOREF) break;
+				uint32 f_dx = FLIP(dx);
+				S_REF r1 = find_all(f_dx, cnf, ot, out_c, arity);
+				if (r1 == GNOREF) break;
 				flip_all(out_c, arity);
-				S_REF r2 = find_all(n, cnf, ot, out_c, arity);
-				if (r2 == NOREF) break;
+				S_REF r2 = find_all(f_dx, cnf, ot, out_c, arity);
+				if (r2 == GNOREF) break;
+				assert(cnf[r1].original());
+				assert(cnf[r2].original());
 				cnf[r1].melt(), cnf[r2].melt();
 				// check resolvability
-				uint32 v = ABS(p);
-				OL& negs = ot[n];
+				uint32 v = ABS(dx);
+				OL& otarget = ot[f_dx];
 				uint32 nAddedCls = 0, nAddedLits = 0;
-				countSubstituted(v, cnf, poss, negs, nAddedCls, nAddedLits);
-				if (nAddedCls > pOrgs + nOrgs) {
+				countSubstituted(v, cnf, itarget, otarget, nAddedCls, nAddedLits);
+				if (nAddedCls > nOrgCls) {
 					cnf[r1].freeze(), cnf[r2].freeze();
 					break;
 				}
-				uint32 psLits = 0, nsLits = 0;
-				if (nAddedCls) {
-					countLitsBefore(cnf, poss, psLits);
-					countLitsBefore(cnf, negs, nsLits);
-					if (nAddedLits > psLits + nsLits) {
-						cnf[r1].freeze(), cnf[r2].freeze();
-						break;
-					}
-				}
 				// can be substituted
 #if VE_DBG
-				printf("c | Gate %d = XOR(", ABS(p));
+				printf("c | Gate %d = XOR(", ABS(dx));
 				for (int k = 0; k < arity; k++) {
 					printf(" %d", ABS(out_c[k]));
 					if (k < arity - 1) printf(",");
 				}
-				printf(" ) found ==> added = %d, deleted = %d\n", nAddedCls, poss.size() + negs.size());
-				pClauseSet(cnf, poss, negs);
+				printf(" ) found ==> added = %d, deleted = %d\f_dx", nAddedCls, itarget.size() + otarget.size());
+				pClauseSet(cnf, itarget, otarget);
 #endif
 				// substitute
-				if (nAddedCls) substitute_x(v, nAddedCls, nAddedLits, cnf, poss, negs, units, out_c);
-				// save resolved
-				uint32 nSaved, lit;
-				bool which = pOrgs > nOrgs;
-				if (which) nSaved = nOrgs * 3 + nsLits, lit = n;
-				else nSaved = pOrgs * 3 + psLits, lit = p;
-				toblivion(lit, nSaved, cnf, which ? negs : poss, which ? poss : negs, resolved);
-#if VE_DBG
-				printf("c | Units"), units->print();
-				printf("c | Resolved"), resolved->print();
-#endif
+				if (nAddedCls) substitute_x(v, nAddedCls, nAddedLits, cnf, itarget, otarget, units, out_c);
 				return true;
 			}
-			freeze_arities(cnf, poss);
+			freeze_arities(cnf, itarget);
 			return false;
 		}
 
@@ -367,27 +395,92 @@ namespace pFROST {
 			poss.clear(true), negs.clear(true);
 		}
 
-		_PFROST_D_ void resolve_x(const uint32& x, const uint32& nAddedCls, uint32& addedPos, S_REF& addedRef, CNF& cnf, OL& poss, OL& negs, cuVecU* units, uint32* out_c)
+		_PFROST_D_ void resolve_x(const uint32& x, const uint32& nAddedCls, uint32& addedPos, S_REF& addedRef, CNF& cnf, OL& me, OL& other, cuVecU* units, uint32* out_c)
 		{
+			assert(x);
+			assert(nAddedCls);
+#if VE_DBG
+			printf("c | Resolving %d, added = %d, addedPos = %d, addedRef = %lld:\n", x, nAddedCls, addedPos, addedRef);
+#endif
+			int nbuckets = dc_nbuckets;
+			uint32 checksum = addedPos + nAddedCls;
+			S_REF* cs = cnf.csData();
+#pragma unroll
+			for (S_REF* i = me; i != me.end() && addedPos < checksum; i++) {
+				SCLAUSE& ci = cnf[*i];
+				if (ci.learnt()) continue;
+#pragma unroll
+				for (S_REF* j = other; j != other.end() && addedPos < checksum; j++) {
+					SCLAUSE& cj = cnf[*j];
+					if (cj.learnt()) continue;
+					int max_sz = ci.size() + cj.size() - 2;
+					if (max_sz > SH_MAX_BVE_OUT2) {
+						// must use "isTautology" check first to avoid data racing on global memory
+						if (!isTautology(x, ci, cj)) {
+							SCLAUSE* added = new (cnf.cref(addedRef)) SCLAUSE();
+							merge(x, ci, cj, added), max_sz = added->size();
+							added->markAdded();
+							if (max_sz == 1) units->push(**added);
+							cs[addedPos++] = addedRef, addedRef += (max_sz - 1) + nbuckets;
+#if VE_DBG
+							printf("c | C(%d, r: %lld)->", addedPos - 1, addedRef - added->blockSize()), added->print();
+#endif
+						}
+					}
+					else { // use shared memory
+						int merged_sz = 0;
+						if (merged_sz = merge(x, ci, cj, out_c)) {
+							assert(merged_sz <= SH_MAX_BVE_OUT2);
+							uint32 sig = 0;
+							calcSig(out_c, merged_sz, sig);
+							SCLAUSE* added = cnf.cref(addedRef);
+							added = new (added) SCLAUSE(out_c, merged_sz);
+							added->set_sig(sig);
+							added->markAdded();
+							if (merged_sz == 1) units->push(*out_c);
+							cs[addedPos++] = addedRef, addedRef += (merged_sz - 1) + nbuckets;
+							assert(added->isSorted());
+							assert(added->hasZero() < 0);
+#if VE_DBG
+							printf("c | C(%d, r: %lld)->", addedPos - 1, addedRef - added->blockSize()), added->print();
+#endif
+						}
+					}
+				}
+			}
+			assert(checksum == addedPos);
+			// delete resolved
+			toblivion(cnf, me, other);
+		}
+
+		_PFROST_D_ void substitute_x(const uint32& x, const uint32& nAddedCls, uint32& addedPos, S_REF& addedRef, CNF& cnf, OL& me, OL& other, cuVecU* units, uint32* out_c)
+		{
+			assert(x);
 			assert(nAddedCls);
 #if VE_DBG
 			printf("c | Substituting %d, added = %d, addedPos = %d, addedRef = %d:\n", x, nAddedCls, addedPos, addedRef);
 #endif
-			S_REF* cs = cnf.csData(), checksum = addedPos + nAddedCls;
+			int nbuckets = dc_nbuckets;
+			uint32 checksum = addedPos + nAddedCls;
+			S_REF* cs = cnf.csData();
 #pragma unroll
-			for (S_REF* i = poss; i != poss.end() && addedPos < checksum; i++) {
-				SCLAUSE& pos = cnf[*i];
-				if (pos.learnt()) continue;
+			for (S_REF* i = me; i != me.end() && addedPos < checksum; i++) {
+				SCLAUSE& ci = cnf[*i];
+				if (ci.learnt()) continue;
 #pragma unroll
-				for (S_REF* j = negs; j != negs.end() && addedPos < checksum; j++) {
-					SCLAUSE& neg = cnf[*j];
-					if (neg.learnt()) continue;
-					int max_sz = pos.size() + neg.size() - 2;
-					if (max_sz > SH_MAX_BVE_OUT2) { // use global memory
-						SCLAUSE* added = cnf.cref(addedRef);
-						if (merge(x, pos, neg, *added)) {
-							if (added->size() == 1) units->push(**added);
-							cs[addedPos++] = addedRef, addedRef += added->blockSize();
+				for (S_REF* j = other; j != other.end() && addedPos < checksum; j++) {
+					SCLAUSE& cj = cnf[*j];
+					if (cj.learnt()) continue;
+					if (ci.molten() == cj.molten()) continue;
+					int max_sz = ci.size() + cj.size() - 2;
+					if (max_sz > SH_MAX_BVE_OUT2) {
+						// must use "isTautology" check first to avoid data racing on global memory
+						if (!isTautology(x, ci, cj)) { 
+							SCLAUSE* added = new (cnf.cref(addedRef)) SCLAUSE();
+							merge(x, ci, cj, added), max_sz = added->size();
+							added->markAdded();
+							if (max_sz == 1) units->push(**added);
+							cs[addedPos++] = addedRef, addedRef += (max_sz - 1) + nbuckets;
 #if VE_DBG
 							printf("c | C(%d, r: %d)->", addedPos - 1, addedRef - added->blockSize()), added->print();
 #endif
@@ -395,15 +488,16 @@ namespace pFROST {
 					}
 					else { // use shared memory
 						int merged_sz = 0;
-						if (merged_sz = merge(x, pos, neg, out_c)) {
+						if (merged_sz = merge(x, ci, cj, out_c)) {
 							assert(merged_sz <= SH_MAX_BVE_OUT2);
 							uint32 sig = 0;
 							calcSig(out_c, merged_sz, sig);
 							SCLAUSE* added = cnf.cref(addedRef);
 							added = new (added) SCLAUSE(out_c, merged_sz);
 							added->set_sig(sig);
+							added->markAdded();
 							if (merged_sz == 1) units->push(*out_c);
-							cs[addedPos++] = addedRef, addedRef += (merged_sz - 1) + sizeof(S_REF);
+							cs[addedPos++] = addedRef, addedRef += (merged_sz - 1) + nbuckets;
 							assert(added->isSorted());
 							assert(added->hasZero() < 0);
 #if VE_DBG
@@ -415,64 +509,14 @@ namespace pFROST {
 			}
 			assert(checksum == addedPos);
 			// delete resolved
-			toblivion(cnf, poss, negs);
+			toblivion(cnf, me, other);
 		}
 
-		_PFROST_D_ void substitute_x(const uint32& x, const uint32& nAddedCls, uint32& addedPos, S_REF& addedRef, CNF& cnf, OL& poss, OL& negs, cuVecU* units, uint32* out_c)
+		_PFROST_D_ bool resolve(const uint32& x, const uint32& pOrgs, const uint32& nOrgs, CNF& cnf, OL& poss, OL& negs, cuVecU* resolved, uint32& nAddedCls, uint32& nAddedLits, const bool& bound)
 		{
-			assert(nAddedCls);
-#if VE_DBG
-			printf("c | Substituting %d, added = %d, addedPos = %d, addedRef = %d:\n", x, nAddedCls, addedPos, addedRef);
-#endif
-			S_REF* cs = cnf.csData(), checksum = addedPos + nAddedCls;
-#pragma unroll
-			for (S_REF* i = poss; i != poss.end() && addedPos < checksum; i++) {
-				SCLAUSE& pos = cnf[*i];
-				if (pos.learnt()) continue;
-#pragma unroll
-				for (S_REF* j = negs; j != negs.end() && addedPos < checksum; j++) {
-					SCLAUSE& neg = cnf[*j];
-					if (neg.learnt()) continue;
-					if (pos.molten() == neg.molten()) continue;
-					int max_sz = pos.size() + neg.size() - 2;
-					if (max_sz > SH_MAX_BVE_OUT2) { // use global memory
-						SCLAUSE* added = cnf.cref(addedRef);
-						if (merge(x, pos, neg, *added)) {
-							if (added->size() == 1) units->push(**added);
-							cs[addedPos++] = addedRef, addedRef += added->blockSize();
-#if VE_DBG
-							printf("c | C(%d, r: %d)->", addedPos - 1, addedRef - added->blockSize()), added->print();
-#endif
-						}
-					}
-					else { // use shared memory
-						int merged_sz = 0;
-						if (merged_sz = merge(x, pos, neg, out_c)) {
-							assert(merged_sz <= SH_MAX_BVE_OUT2);
-							uint32 sig = 0;
-							calcSig(out_c, merged_sz, sig);
-							SCLAUSE* added = cnf.cref(addedRef);
-							added = new (added) SCLAUSE(out_c, merged_sz);
-							added->set_sig(sig);
-							if (merged_sz == 1) units->push(*out_c);
-							cs[addedPos++] = addedRef, addedRef += (merged_sz - 1) + sizeof(S_REF);
-							assert(added->isSorted());
-							assert(added->hasZero() < 0);
-#if VE_DBG
-							printf("c | C(%d, r: %d)->", addedPos - 1, addedRef - added->blockSize()), added->print();
-#endif
-						}
-					}
-				}
-			}
-			assert(checksum == addedPos);
-			// delete resolved
-			toblivion(cnf, poss, negs);
-		}
-
-		_PFROST_D_ bool resolve(const uint32& x, const uint32& pOrgs, const uint32& nOrgs, CNF& cnf, OL& poss, OL& negs, cuVecU* resolved, uint32& nAddedCls, uint32& nAddedLits)
-		{
-			uint32 p = V2D(x);
+			assert(x);
+			assert(checkMolten(cnf, poss, negs));
+			uint32 p = V2L(x);
 			uint32 psLits = 0, nsLits = 0;
 			// count clauses/literals before and after
 			nAddedCls = 0, nAddedLits = 0;
@@ -481,7 +525,7 @@ namespace pFROST {
 				if (nAddedCls > pOrgs + nOrgs) return false;
 				countLitsBefore(cnf, poss, psLits);
 				countLitsBefore(cnf, negs, nsLits);
-				if (nAddedLits > psLits + nsLits) return false;
+				if (bound && nAddedLits > psLits + nsLits) return false;
 			}
 #if VE_DBG
 			printf("c | Resolving(%d) ==> added = %d, deleted = %d\n", x, nAddedCls, poss.size() + negs.size());
@@ -490,8 +534,8 @@ namespace pFROST {
 			// save deleted
 			uint32 nSaved, lit;
 			bool which = pOrgs > nOrgs;
-			if (which) nSaved = nOrgs * 3 + nsLits, lit = NEG(p);
-			else nSaved = pOrgs * 3 + psLits, lit = p;
+			if (which) nSaved = nOrgs + nsLits + 2, lit = p;
+			else nSaved = pOrgs + psLits + 2, lit = NEG(p);
 			if (nAddedCls) saveResolved(lit, nSaved, cnf, which ? negs : poss, resolved);
 			else toblivion(lit, nSaved, cnf, which ? negs : poss, which ? poss : negs, resolved);
 #if VE_DBG
@@ -504,6 +548,8 @@ namespace pFROST {
 		{
 			assert(p > 1);
 			assert(!SIGN(p));
+			assert(checkMolten(cnf, poss, negs));
+			assert(pOrgs && nOrgs);
 			uint32 first;
 			if (first = find_sfanin(p, cnf, poss)) {
 				uint32 second = NEG(p), def = first;
@@ -528,24 +574,23 @@ namespace pFROST {
 			return 0;
 		}
 
-		_PFROST_D_ bool find_ao_gate(const uint32& dx, const uint32& pOrgs, const uint32& nOrgs, CNF& cnf, OL& poss, OL& negs, cuVecU* resolved, uint32* out_c, uint32& nAddedCls, uint32& nAddedLits)
+		_PFROST_D_ bool find_ao_gate(const uint32& dx, const uint32& nOrgCls, CNF& cnf, OT& ot, cuVecU* resolved, uint32* out_c, uint32& nAddedCls, uint32& nAddedLits)
 		{
 			assert(dx > 1);
+			assert(checkMolten(cnf, ot[dx], ot[FLIP(dx)]));
 			uint32 sig, x = ABS(dx);
-			bool polarity = SIGN(dx);
 			// (-) ==> look for AND , (+) ==> look for OR
 #if VE_DBG
-			const char* type = polarity ? "AND" : "OR";
+			const char* type = SIGN(dx) ? "AND" : "OR";
 #endif
-			if ((polarity ? nOrgs : pOrgs) > (SH_MAX_BVE_OUT1 - 1)) return false; // shared memory GUARD
-			OL& itarget = polarity ? negs : poss;
-			OL& otarget = polarity ? poss : negs;
+			OL& itarget = ot[dx];
 			int nImps = find_fanin(dx, cnf, itarget, out_c, sig);
 			if (nImps > 1) {
 				uint32 f_dx = FLIP(dx);
 				out_c[nImps++] = f_dx;
 				sig |= MAPHASH(f_dx);
 				devSort(out_c, nImps);
+				OL& otarget = ot[f_dx];
 				for (S_REF* i = otarget; i != otarget.end(); i++) {
 					SCLAUSE& c = cnf[*i];
 					if (c.learnt()) continue;
@@ -553,8 +598,8 @@ namespace pFROST {
 						c.melt(); // mark as fanout clause
 						// check resolvability
 						nAddedCls = 0, nAddedLits = 0;
-						countSubstituted(x, cnf, poss, negs, nAddedCls, nAddedLits);
-						if (nAddedCls > pOrgs + nOrgs) { c.freeze(); break; }
+						countSubstituted(x, cnf, itarget, otarget, nAddedCls, nAddedLits);
+						if (nAddedCls > nOrgCls) { c.freeze(); break; }
 						// can be substituted
 #if VE_DBG
 						printf("c | Gate %d = %s(", ABS(dx), type);
@@ -563,13 +608,8 @@ namespace pFROST {
 							printf(" %d", ABS(out_c[k]));
 							if (k < nImps - 1) printf(",");
 						}
-						printf(" ) found ==> added = %d, deleted = %d\n", nAddedCls, poss.size() + negs.size());
-						pClauseSet(cnf, poss, negs);
-#endif
-						if (nAddedCls) saveResolved(POS(dx), pOrgs, nOrgs, cnf, poss, negs, resolved);
-						else toblivion(POS(dx), pOrgs, nOrgs, cnf, poss, negs, resolved);
-#if VE_DBG
-						printf("c | Resolved"), resolved->print();
+						printf(" ) found ==> added = %d, deleted = %d\n", nAddedCls, itarget.size() + otarget.size());
+						printGate(cnf, itarget, otarget);
 #endif
 						return true;
 					}
@@ -579,54 +619,54 @@ namespace pFROST {
 			return false;
 		}
 
-		_PFROST_D_ bool find_ite_gate(const uint32& p, const uint32& pOrgs, const uint32& nOrgs, CNF& cnf, OT& ot, cuVecU* resolved, uint32& nAddedCls, uint32& nAddedLits)
+		_PFROST_D_ bool find_ite_gate(const uint32& dx, const uint32& nOrgCls, CNF& cnf, OT& ot, cuVecU* resolved, uint32& nAddedCls, uint32& nAddedLits)
 		{
-			assert(p > 1);
-			OL& poss = ot[p];
-			for (S_REF* i = poss; i != poss.end(); i++) {
+			assert(dx > 1);
+			assert(checkMolten(cnf, ot[dx], ot[FLIP(dx)]));
+			OL& itarget = ot[dx];
+			for (S_REF* i = itarget; i != itarget.end(); i++) {
 				SCLAUSE& ci = cnf[*i];
 				if (ci.learnt() || ci.size() < 3 || ci.size() > 3) continue;
+				assert(ci.original());
 				uint32 xi = ci[0], yi = ci[1], zi = ci[2];
-				if (yi == p) devSwap(xi, yi);
-				if (zi == p) devSwap(xi, zi);
-				assert(xi == p);
-				for (S_REF* j = i + 1; j != poss.end(); j++) {
+				if (yi == dx) devSwap(xi, yi);
+				if (zi == dx) devSwap(xi, zi);
+				assert(xi == dx);
+				for (S_REF* j = i + 1; j != itarget.end(); j++) {
 					SCLAUSE& cj = cnf[*j];
 					if (cj.learnt() || cj.size() < 3 || cj.size() > 3) continue;
+					assert(cj.original());
 					uint32 xj = cj[0], yj = cj[1], zj = cj[2];
-					if (yj == p) devSwap(xj, yj);
-					if (zj == p) devSwap(xj, zj);
-					assert(xj == p);
+					if (yj == dx) devSwap(xj, yj);
+					if (zj == dx) devSwap(xj, zj);
+					assert(xj == dx);
 					if (ABS(yi) == ABS(zj)) devSwap(yj, zj);
 					if (ABS(zi) == ABS(zj)) continue;
 					if (yi != FLIP(yj)) continue;
-					uint32 n = NEG(p);
-					S_REF r1 = fast_equality_check(cnf, ot, n, yi, FLIP(zi));
-					if (r1 == NOREF) continue;
-					S_REF r2 = fast_equality_check(cnf, ot, n, yj, FLIP(zj));
-					if (r2 == NOREF) continue;
+					uint32 f_dx = FLIP(dx);
+					S_REF r1 = fast_equality_check(cnf, ot, f_dx, yi, FLIP(zi));
+					if (r1 == GNOREF) continue;
+					S_REF r2 = fast_equality_check(cnf, ot, f_dx, yj, FLIP(zj));
+					if (r2 == GNOREF) continue;
+					assert(cnf[r1].original());
+					assert(cnf[r2].original());
 					// mark gate clauses
 					ci.melt(), cj.melt();
 					cnf[r1].melt(), cnf[r2].melt();
 					// check resolvability
-					uint32 v = ABS(p);
-					OL& negs = ot[n];
+					uint32 v = ABS(dx);
+					OL& otarget = ot[f_dx];
 					nAddedCls = 0, nAddedLits = 0;
-					countSubstituted(v, cnf, poss, negs, nAddedCls, nAddedLits);
-					if (nAddedCls > pOrgs + nOrgs) {
+					countSubstituted(v, cnf, itarget, otarget, nAddedCls, nAddedLits);
+					if (nAddedCls > nOrgCls) {
 						ci.freeze(), cj.freeze();
 						cnf[r1].freeze(), cnf[r2].freeze();
 						return false;
 					}
 					// can be substituted
 #if VE_DBG
-					printf("c | Gate %d = ITE(%d, %d, %d) found ==> added = %d, deleted = %d", ABS(p), ABS(yi), ABS(zi), ABS(zj), nAddedCls, poss.size() + negs.size());
-					pClauseSet(cnf, poss, negs);
-#endif
-					if (nAddedCls) saveResolved(p, pOrgs, nOrgs, cnf, poss, negs, resolved);
-					else toblivion(p, pOrgs, nOrgs, cnf, poss, negs, resolved);
-#if VE_DBG
-					printf("c | Resolved"), resolved->print();
+					printf("c | Gate %d = ITE(%d, %d, %d) found ==> added = %d, deleted = %d", ABS(dx), ABS(yi), ABS(zi), ABS(zj), nAddedCls, itarget.size() + otarget.size());
+					printGate(cnf, itarget, otarget);
 #endif
 					return true;
 				}
@@ -634,76 +674,63 @@ namespace pFROST {
 			return false;
 		}
 
-		_PFROST_D_ bool find_xor_gate(const uint32& p, const uint32& pOrgs, const uint32& nOrgs, const int& xor_limit, CNF& cnf, OT& ot, cuVecU* resolved, uint32* out_c, uint32& nAddedCls, uint32& nAddedLits)
+		_PFROST_D_ bool find_xor_gate(const uint32& dx, const uint32& nOrgCls, const int& xor_max_arity, CNF& cnf, OT& ot, cuVecU* resolved, uint32* out_c, uint32& nAddedCls, uint32& nAddedLits)
 		{
-			OL& poss = ot[p];
-			for (S_REF* i = poss; i != poss.end(); i++) {
+			assert(dx > 1);
+			assert(checkMolten(cnf, ot[dx], ot[FLIP(dx)]));
+			OL& itarget = ot[dx];
+			for (S_REF* i = itarget; i != itarget.end(); i++) {
 				SCLAUSE& ci = cnf[*i];
 				int size = ci.size();
 				int arity = size - 1; // XOR arity
-				if (ci.learnt() || size < 3 || arity > xor_limit || arity > SH_MAX_BVE_OUT1) continue;
-				// share to out_c except p
-				shareXORClause(p, ci, out_c);
+				if (ci.learnt() || size < 3 || arity > xor_max_arity || arity > SH_MAX_BVE_OUT1) continue;
+				assert(ci.original());
+				// share to out_c except dx
+				shareXORClause(dx, ci, out_c);
 				// find arity clauses
 				int itargets = 0;
 				for (int j = 0; j < arity; j++) {
-					S_REF r = find_fanin(p, j, cnf, poss, out_c, arity);
-					if (r == NOREF) break;
+					S_REF r = find_fanin(dx, j, cnf, itarget, out_c, arity);
+					if (r == GNOREF) break;
+					assert(cnf[r].original());
 					cnf[r].melt(), itargets++;
 				}
 				if (itargets < arity) {
-					freeze_arities(cnf, poss);
+					freeze_arities(cnf, itarget);
 					continue;
 				}
 				// find all +/-  
-				uint32 n = NEG(p);
-				S_REF r1 = find_all(n, cnf, ot, out_c, arity);
-				if (r1 == NOREF) break;
+				uint32 f_dx = FLIP(dx);
+				S_REF r1 = find_all(f_dx, cnf, ot, out_c, arity);
+				if (r1 == GNOREF) break;
 				flip_all(out_c, arity);
-				S_REF r2 = find_all(n, cnf, ot, out_c, arity);
-				if (r2 == NOREF) break;
+				S_REF r2 = find_all(f_dx, cnf, ot, out_c, arity);
+				if (r2 == GNOREF) break;
+				assert(cnf[r1].original());
+				assert(cnf[r2].original());
 				cnf[r1].melt(), cnf[r2].melt();
 				// check resolvability
-				uint32 v = ABS(p);
-				OL& negs = ot[n];
+				uint32 v = ABS(dx);
+				OL& otarget = ot[f_dx];
 				nAddedCls = 0, nAddedLits = 0;
-				countSubstituted(v, cnf, poss, negs, nAddedCls, nAddedLits);
-				if (nAddedCls > pOrgs + nOrgs) {
+				countSubstituted(v, cnf, itarget, otarget, nAddedCls, nAddedLits);
+				if (nAddedCls > nOrgCls) {
 					cnf[r1].freeze(), cnf[r2].freeze();
 					break;
 				}
-				uint32 psLits = 0, nsLits = 0;
-				if (nAddedCls) {
-					countLitsBefore(cnf, poss, psLits);
-					countLitsBefore(cnf, negs, nsLits);
-					if (nAddedLits > psLits + nsLits) {
-						cnf[r1].freeze(), cnf[r2].freeze();
-						break;
-					}
-				}
 				// can be substituted
 #if VE_DBG
-				printf("c | Gate %d = XOR(", ABS(p));
+				printf("c | Gate %d = XOR(", ABS(dx));
 				for (int k = 0; k < arity; k++) {
 					printf(" %d", ABS(out_c[k]));
 					if (k < arity - 1) printf(",");
 				}
-				printf(" ) found ==> added = %d, deleted = %d\n", nAddedCls, poss.size() + negs.size());
-				pClauseSet(cnf, poss, negs);
-#endif
-				// save deleted
-				uint32 nSaved, lit;
-				bool which = pOrgs > nOrgs;
-				if (which) nSaved = nOrgs * 3 + nsLits, lit = n;
-				else nSaved = pOrgs * 3 + psLits, lit = p;
-				if (nAddedCls) saveResolved(lit, nSaved, cnf, which ? negs : poss, resolved);
-				else toblivion(lit, nSaved, cnf, which ? negs : poss, which ? poss : negs, resolved);
-#if VE_DBG
-				printf("c | Resolved"), resolved->print();
+				printf(" ) found ==> added = %d, deleted = %d\f_dx", nAddedCls, itarget.size() + otarget.size());
+				printGate(cnf, itarget, otarget);
 #endif
 				return true;
 			}
-			freeze_arities(cnf, poss);
+			freeze_arities(cnf, itarget);
 			return false;
 		}
 

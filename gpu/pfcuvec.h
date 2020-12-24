@@ -37,10 +37,8 @@ namespace pFROST {
 			_PFROST_H_D_ void		alloc		(T* head, const uint32& cap) { _mem = head, this->cap = cap; }
 			_PFROST_H_D_ void		alloc		(const uint32& cap) { _mem = (T*)(this + 1), this->cap = cap; }
 			_PFROST_D_	 T*			jump		(const uint32&);
-			_PFROST_D_   void		shrink		(const uint32&);
 			_PFROST_D_   void		insert		(const T&);
 			_PFROST_D_   void		push		(const T&);
-			_PFROST_D_   void		pop			();
 			_PFROST_H_D_ void		_pop		() { sz--; }
 			_PFROST_H_D_ void		_shrink		(const uint32& n) { sz -= n; }
 			_PFROST_H_D_ void		_push		(const T& val) { _mem[sz++] = val; }
@@ -52,10 +50,25 @@ namespace pFROST {
 			_PFROST_H_D_ T*			data		() { return _mem; }
 			_PFROST_H_D_ T*			end			() { return _mem + sz; }
 			_PFROST_H_D_ T&			back		() { assert(sz); return _mem[sz - 1]; }
-			_PFROST_H_D_ bool		empty		() const { return sz == 0; }
+			_PFROST_H_D_ bool		empty		() const { return !sz; }
 			_PFROST_H_D_ uint32		size		() const { return sz; }
 			_PFROST_H_D_ uint32		capacity	() const { return cap; }
 			_PFROST_H_D_ void		resize		(const uint32& n) { assert(n <= cap); sz = n; }
+			_PFROST_H_D_ void		shareTo		(T* dest) {
+				assert(sz && _mem);
+				T* s = _mem, *e = s + sz;
+				while (s != e) *dest++ = *s++;
+			}
+			_PFROST_H_D_ void		copyFrom	(T* src) {
+				assert(sz);
+				T* d = _mem, * e = d + sz;
+				while (d != e) *d++ = *src++;
+			}
+			_PFROST_H_D_ void		copyFrom	(T* src, const uint32& n) {
+				assert(n <= sz);
+				T* d = _mem, *e = d + n;
+				while (d != e) *d++ = *src++;
+			}
 			_PFROST_H_D_ void		clear		(const bool& _free = false) {
 				if (_free) _mem = NULL, cap = 0;
 				sz = 0;
@@ -71,7 +84,7 @@ namespace pFROST {
 				}
 				else {
 					for (uint32 i = 0; i < sz; i++) {
-						printf("%2d  ", _mem[i]);
+						printf("%2lld  ", uint64(_mem[i]));
 						if (i && i < sz - 1 && i % 10 == 0) printf("\nc |\t\t");
 					}
 				}

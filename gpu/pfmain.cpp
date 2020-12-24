@@ -17,7 +17,7 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 **********************************************************************************/
 
 #include "pfsolve.h"
-#include "pfargs.h"
+
 using namespace pFROST;
 
 bool quiet_en = false;
@@ -25,9 +25,10 @@ int verbose = -1;
 
 int main(int argc, char** argv)
 {
-	BOOL_OPT opt_quiet_en("q", "enable quiet mode, same as verbose=0", false);
+	BOOL_OPT opt_quiet_en("quiet", "enable quiet mode, same as verbose=0", false);
 	INT_OPT opt_verbose("verbose", "set the verbosity", 1, INT32R(0, 4));
-	Vec<ARG*>& options = ARG::opts();
+	INT_OPT opt_timeout("timeout", "set the timeout in seconds", 0, INT32R(0, INT32_MAX));
+	OPTION_VEC& options = ARG::opts();
 	if (argc == 1) PFLOGE("no input file specified");
 	try {
 		parseArguments(argc, argv);
@@ -35,38 +36,37 @@ int main(int argc, char** argv)
 		if (quiet_en) verbose = 0;
 		else if (!verbose) quiet_en = true;
 		if (!quiet_en && verbose) {
-			PFNAME("ParaFROST");
+			PFNAME("ParaFROST (Parallel Formal Reasoning Of Satisfiability)");
 			PFAUTHORS("Muhammad Osama and Anton Wijs");
 			PFRIGHTS("Technische Universiteit Eindhoven (TU/e)");
-			PFLOGR('-', RULELEN);
-			PFLOGN0(" Embedded options:\t");
-			for (uint32 i = 0, j = 0; i < options.size(); i++) {
+			PFLRULER('-', RULELEN);
+			PFLOGN0(" Embedded options: ");
+			for (int i = 0, j = 0; i < options.size(); i++) {
 				if (options[i]->isParsed()) {
 					options[i]->printArgument();
-					if (++j % 4 == 0) { putc('\n', stdout); PFLOGN0("\t\t\t"); }
+					if (++j % 4 == 0) { putc('\n', stdout); PFLOGN0("\t\t      "); }
 				}
 			}
-			putc('\n', stdout); PFLOGR('-', RULELEN);
+			putc('\n', stdout); PFLRULER('-', RULELEN);
 		}
+		signal_handler(handler_terminate);
 		string formula = argv[1];
-		if (formula.find(".cnf") == -1 && formula.find(".dimacs") == -1) PFLOGE("input file not recognizable");
-		sig_handler(handler_terminate);
 		ParaFROST* pFrost = new ParaFROST(formula);
 		pfrost = pFrost;
-		if (pfrost->timeout > 0) set_timeout(pFrost->timeout);
-		sig_handler(handler_mercy_intr, handler_mercy_timeout);
+		if (opt_timeout > 0) set_timeout(opt_timeout);
+		signal_handler(handler_mercy_interrupt, handler_mercy_timeout);
 		pFrost->solve();
-		PFLOG0("");
+		if (!quiet_en) PFLOG0("");
 		PFLOGN2(1, " Cleaning up..");
 		pfrost = NULL;
 		delete pFrost;
 		PFLDONE(1, 5);
-		if (!quiet_en) PFLOGR('-', RULELEN);
-		exit(EXIT_SUCCESS);
+		if (!quiet_en) PFLRULER('-', RULELEN);
+		return 0;
 	}
 	catch (MEMOUTEXCEPTION&) {
 		PFLOGEN("Memoryout");
 		PFLOGS("UNKNOWN");
-		exit(EXIT_SUCCESS);
+		return 0;
 	}
 }

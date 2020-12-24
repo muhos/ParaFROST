@@ -26,11 +26,11 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 #include <typeinfo>
 #include <iostream>
 
-namespace pFROST {
-
 #ifdef __GNUC__
 #define __forceinline __attribute__((always_inline))
 #endif
+
+namespace pFROST {
 
 	template<class T, class S = uint32>
 	class Vec {
@@ -63,15 +63,16 @@ namespace pFROST {
 		__forceinline			operator T* () { return _mem; }
 		__forceinline T*		data		() { return _mem; }
 		__forceinline T*		end			() { return _mem + sz; }
-		__forceinline bool		empty		() const { return sz == 0; }
+		__forceinline bool		empty		() const { return !sz; }
 		__forceinline S			size		() const { return sz; }
 		__forceinline S			capacity	() const { return cap; }
 		__forceinline void		pop			() { assert(sz > 0); _mem[--sz].~T(); }
 		__forceinline void		insert		(const T& val) { assert(cap > sz);  _mem[sz++] = val; }
 		__forceinline void		push		(const T& val) { if (sz == cap) reserve(sz + 1); new (_mem + sz) T(val); sz++; }
 		__forceinline void		reserve		(const S& min_cap, const S& size) { reserve(min_cap); sz = size; }
-		__forceinline void		init		(const T& val) {
-			for (S i = 0; i < sz; i++) _mem[i] = val;
+		__forceinline void		init		(const S& off, const S& n, const T& val) {
+			if (!val && !off) { std::memset(_mem, 0, n * sizeof(T)); }
+			else { for (S i = off; i < n; i++) _mem[i] = val; }
 		}
 		__forceinline void		resize		(const S& n) {
 			if (n == sz) return;
@@ -79,7 +80,7 @@ namespace pFROST {
 			else expand(n);
 		}
 		__forceinline void		resize		(const S& n, const T& val) {
-			if (n == sz) { init(val); return; }
+			if (n == sz) { init(0, n, val); return; }
 			if (n < sz) shrink(sz - n, val);
 			else expand(n, val);
 		}
@@ -90,16 +91,7 @@ namespace pFROST {
 		__forceinline void		shrink		(const S& n, const T& val) {
 			assert(n <= sz);
 			for (S i = 0; i < n; i++) _mem[--sz].~T();
-			init(val);
-		}
-		__forceinline void		copyFrom	(Vec<T, S>& copy) {
-			resize(copy.size());
-			std::memcpy(_mem, copy, sz * sizeof(T));
-		}
-		template<class SS = uint32>
-		__forceinline void		copyFrom	(T* copy, const SS& copy_sz) {
-			assert(copy_sz <= sz);
-			std::memcpy(_mem, copy, sz * sizeof(T));
+			init(0, n, val);
 		}
 		__forceinline void		expand		(const S& size) {
 			if (sz >= size) return;
@@ -110,7 +102,7 @@ namespace pFROST {
 		__forceinline void		expand		(const S& size, const T& val) {
 			if (sz >= size) return;
 			reserve(size);
-			for (S i = sz; i < size; i++) _mem[i] = val;
+			init(sz, size, val);
 			sz = size;
 		}
 		__forceinline void		reserve		(const S& min_cap) {
@@ -120,9 +112,18 @@ namespace pFROST {
 			pfalloc(_mem, sizeof(T) * cap);
 		}
 		__forceinline void		shrinkCap	() {
-			if (sz == 0) { clear(true); return; }
+			if (!sz) { clear(true); return; }
 			pfshrinkAlloc(_mem, sizeof(T) * sz);
 			cap = sz;
+		}
+		__forceinline void		copyFrom	(Vec<T, S>& copy) {
+			resize(copy.size());
+			std::memcpy(_mem, copy, sz * sizeof(T));
+		}
+		template<class SS = uint32>
+		__forceinline void		copyFrom	(T* copy, const SS& copy_sz) {
+			assert(copy_sz <= sz);
+			std::memcpy(_mem, copy, sz * sizeof(T));
 		}
 		__forceinline void		clear		(const bool& _free = false) {
 			if (_mem != NULL) {

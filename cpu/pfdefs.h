@@ -32,6 +32,7 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 #include <climits>
 #include <cstdlib>
 #include <csignal>
+#include <random>
 #include "pflogging.h"
 #include "pfdtypes.h"
 #include "pfconst.h"
@@ -41,11 +42,16 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 #include <sys/mman.h>
 #include <sys/sysinfo.h>
 #include <unistd.h>
+#include <cpuid.h>
 #elif _WIN32
 #define NOMINMAX
 #include <windows.h>
 #include <psapi.h>
+#include <intrin.h>
+#include <Winnt.h>
+#include <io.h>
 #endif
+#undef ERROR
 using std::swap;
 using std::string;
 using std::ostream;
@@ -54,62 +60,87 @@ using std::ifstream;
 
 namespace pFROST {
 
-	// interrupt handlers
-	void set_timeout(int);
-	void handler_terminate(int);
-	void handler_mercy_intr(int);
-	void handler_mercy_timeout(int);
-	void sig_handler(void h_intr(int), void h_timeout(int) = NULL);
 	//===================================================//
 	//       Global Data structures primitives           //
 	//===================================================//
 	struct OCCUR { uint32 ps, ns; };
 	struct CNF_INFO {
-		uint32 maxVar, maxFrozen, maxMelted, nDualVars, nDelVars, n_del_vars_after;
-		uint32 nOrgCls, nOrgBins, nOrgLits, n_cls_after, n_lits_after;
-		uint32 nClauses, nGlues, nLiterals, nLearntBins, nLearntLits;
-		CNF_INFO() {
-			nOrgCls = 0, nOrgBins = 0, nOrgLits = 0;
-			maxVar = 0, maxFrozen = 0, maxMelted = 0, nDualVars = 0;
-			nDelVars = 0, nLearntBins = 0, nClauses = 0, nGlues = 0, nLiterals = 0;
-			n_del_vars_after = 0, n_cls_after = 0, n_lits_after = 0, nLearntLits = 0;
-		}
+		uint32 orgVars, maxVar, maxFrozen, maxMelted, nDualVars, n_del_vars_after;
+		uint32 nOrgCls, nOrgLits, n_cls_after, n_lits_after;
+		uint32 nClauses, nLiterals, nLearntLits;
+		CNF_INFO() { memset(this, 0, sizeof(*this)); }
 	};
 	extern CNF_INFO inf;
 
 	class TIMER {
 	private:
 		clock_t _start, _stop;
+		clock_t _start_p, _stop_p;
 		float _cpuTime;
 	public:
-		float par, solve, pre;
-		TIMER			() {
-			_start = 0, _stop = 0, _cpuTime = 0;
-			par = 0, solve = 0, pre = 0;
-		}
+		float parse, solve, simp;
+		float vo, ve, hse, bce, ere, cot, rot, sot, gc, io;
+		TIMER			() { memset(this, 0, sizeof(*this)); }
 		void start		() { _start = clock(); }
 		void stop		() { _stop = clock(); }
 		float cpuTime	() { return _cpuTime = ((float)abs(_stop - _start)) / CLOCKS_PER_SEC; }
+		void pstart		() { _start_p = clock(); }
+		void pstop		() { _stop_p = clock(); }
+		float pcpuTime	() { return _cpuTime = (((float)abs(_stop_p - _start_p)) / CLOCKS_PER_SEC) * float(1000.0); }
 	};
+	//====================================================//
+	//                 iterators & checkers               //
+	//====================================================//
+	template <class T>
+	inline bool  _checkvar(const T VAR) {
+		const bool invariant = VAR <= 0 || VAR > inf.maxVar;
+		if (invariant)
+			PFLOGEN("invariant \"VAR > 0 && VAR <= inf.maxVar\" failed on variable (%lld), bound = %lld",
+				int64(VAR), int64(inf.maxVar));
+		return !invariant;
+	}
+	template <class T>
+	inline bool  _checklit(const T LIT) {
+		const bool invariant = LIT <= 1 || LIT >= inf.nDualVars;
+		if (invariant)
+			PFLOGEN("invariant \"LIT > 1 && LIT < inf.nDualVars\" failed on literal (%lld), bound = %lld",
+				int64(LIT), int64(inf.nDualVars));
+		return !invariant;
+	}
+	#define CHECKVAR(VAR) assert(_checkvar(VAR))
+
+	#define CHECKLIT(LIT) assert(_checklit(LIT))
+
+	#define forall_variables(VAR) for (uint32 VAR = 1; VAR <= inf.maxVar; VAR++)
+
+	#define forall_literals(LIT) for (uint32 LIT = 2; LIT < inf.nDualVars; LIT++)
 	//====================================================//
 	//                 Global Inline helpers              //
 	//====================================================//
 	template<class T>
-	__forceinline bool		eq				(T& in, arg_t ref) {
+	inline bool		eq				(T& in, arg_t ref) {
 		while (*ref) { if (*ref != *in) return false; ref++; in++; }
 		return true;
 	}
-	__forceinline LIT_ST	flip			(const LIT_ST& sign) { return FLIP(sign); }
-	__forceinline LIT_ST	sign			(const uint32& lit) { assert(lit > 1); return LIT_ST(ISNEG(lit)); }
-	__forceinline uint32	flip			(const uint32& lit) { assert(lit > 1); return FLIP(lit); }
-	__forceinline uint32	neg				(const uint32& lit) { assert(lit > 1); return NEG(lit); }
-	__forceinline uint32	l2a				(const uint32& lit) { assert(lit > 1); return ABS(lit); }
-	__forceinline uint32	l2x				(const uint32& lit) { assert(lit > 1); return V2X(lit); }
-	__forceinline int		l2i				(const uint32& lit) { assert(lit > 1); return sign(lit) ? -int(l2a(lit)) : int(l2a(lit)); }
-	__forceinline uint32	v2l				(const uint32& v) { assert(v); return V2D(v); }
-	__forceinline uint32	v2dec			(const uint32& v, const LIT_ST phase) { assert(v); return (v2l(v) | phase); }
-	__forceinline uint32	nVarsRemained	() { return inf.maxVar - inf.nDelVars; }
-	__forceinline int64		maxLiterals		() { return inf.nLiterals + ((int64)inf.nOrgBins << 1) + inf.nLearntLits + ((int64)inf.nLearntBins << 1); }
+	template<class T>
+	inline bool		eqn				(T in, arg_t ref, const bool& lower = false) {
+		if (lower) {
+			while (*ref) {
+				if (tolower(*ref) != tolower(*in))
+					return false;
+				ref++; in++;
+			}
+		}
+		else {
+			while (*ref) { if (*ref != *in) return false; ref++; in++; }
+		}
+		return true;
+	}
+	inline double	ratio			(const double& x, const double& y) { return y ? x / y : 0; }
+	inline int		l2i				(const uint32& lit) { assert(lit > 1); return SIGN(lit) ? -int(ABS(lit)) : int(ABS(lit)); }
+	inline uint32	maxInactive		() { return inf.maxMelted + inf.maxFrozen; }
+	inline uint32	maxActive		() { assert(inf.maxVar >= maxInactive()); return inf.maxVar - maxInactive(); }
+	inline uint32	maxLiterals		() { return inf.nLiterals + inf.nLearntLits; }
 }
 
 #endif // __GL_DEFS_

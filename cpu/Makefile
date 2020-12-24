@@ -23,8 +23,8 @@ HOST_COMPILER ?= g++
 TARGET_SIZE := $(shell getconf LONG_BIT)
 
 # compiler flags
-MTHREADS  := -pthreads
-CCFLAGS   := -m${TARGET_SIZE} -std=c++14 -Wno-format-zero-length
+MTHREADS  := -pthread
+CCFLAGS   := -m${TARGET_SIZE} -std=c++17 -Wno-format-zero-length
 LDFLAGS   := 
 
 # Debug build flags
@@ -47,42 +47,29 @@ INCLUDES  :=
 LIBRARIES :=
 
 # Target rules
-all: build
 
-build: parafrost
+mainsrc := pfmain.cpp
+allsrc := $(sort $(wildcard *.cpp))
+src := $(filter-out $(mainsrc),$(allsrc))
+obj := $(patsubst %.cpp,%.o,$(src))
 
-pfsimp.o:pfsimp.cpp
-	$(EXEC) $(HOST_COMPILER) $(INCLUDES) $(CCFLAGS) -o $@ -c $(WARN) $<
+all: parafrost
 
-pfguess.o:pfguess.cpp
-	$(EXEC) $(HOST_COMPILER) $(INCLUDES) $(CCFLAGS) -o $@ -c $(WARN) $<
-
-pfdecide.o:pfdecide.cpp
-	$(EXEC) $(HOST_COMPILER) $(INCLUDES) $(CCFLAGS) -o $@ -c $(WARN) $<
-
-pfsolve.o:pfsolve.cpp
-	$(EXEC) $(HOST_COMPILER) $(INCLUDES) $(CCFLAGS) -o $@ -c $(WARN) $<
-
-pfmdm.o:pfmdm.cpp
-	$(EXEC) $(HOST_COMPILER) $(INCLUDES) $(CCFLAGS) -o $@ -c $(WARN) $<
-
-pfargs.o:pfargs.cpp
-	$(EXEC) $(HOST_COMPILER) $(INCLUDES) $(CCFLAGS) -o $@ -c $(WARN) $<
- 
-pfextend.o:pfextend.cpp
-	$(EXEC) $(HOST_COMPILER) $(INCLUDES) $(CCFLAGS) -o $@ -c $(WARN) $<
-
-pfmain.o:pfmain.cpp
-	$(EXEC) $(HOST_COMPILER) $(INCLUDES) $(CCFLAGS) -o $@ -c $(WARN) $<
-
-libpfrost.a: pfargs.o pfsimp.o pfdecide.o pfmdm.o pfguess.o pfextend.o pfsolve.o
-	$(EXEC) ar rc $@ $+
-	$(EXEC) ranlib $@
+libpfrost.a: $(obj)
+	ar rc $@ $+
+	ranlib $@
 
 parafrost: pfmain.o libpfrost.a
-	$(EXEC) $(HOST_COMPILER) $(CCFLAGS) -o $@ pfmain.o -L. -lpfrost $(LIBRARIES)
-	$(EXEC) mkdir -p build/$(BUILD_TYPE)
-	$(EXEC) cp $@ build/$(BUILD_TYPE)
+	$(HOST_COMPILER) $(CCFLAGS) -o $@ pfmain.o -L. -lpfrost $(LIBRARIES)
+	mkdir -p build/$(BUILD_TYPE)
+	cp $@ build/$(BUILD_TYPE)/
+	cp $@ $(HOME)/bin/parafrost_cpu
+
+pfmain.o:pfmain.cpp
+	$(HOST_COMPILER) -I$(INCLUDES) -L$(LIBRARIES) $(CCFLAGS) -o $@ -c $(WARN) $<
+
+%.o:%.cpp
+	$(HOST_COMPILER) -I$(INCLUDES) -L$(LIBRARIES) $(CCFLAGS) -o $@ -c $(WARN) $<
 
 clean:
 	rm -f *.o libpfrost.a parafrost  

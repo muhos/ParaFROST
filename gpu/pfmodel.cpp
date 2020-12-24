@@ -32,24 +32,23 @@ void MODEL::extend(LIT_ST* currValue)
 			updated++;
 		}
 	}
-	PFLOG2(2, " Extending model updated %d mapped values.", updated);
-	if (!resolved.empty()) {
+	PFLOG2(2, "");
+	PFLOG2(2, " Extending model updated %d mapped values", updated);
+	if (resolved.size()) {
 		uint32 before = updated;
-		PFLOGN2(2, " Extending model with eliminated variables..");
-		if (verbose == 4) putc('\n', stdout);
-		uint32* x = resolved.end(), lit;
-		while (x != resolved) {
-			bool sat = false;
-			PFLOGN2(4, " Checking clause: ");
-			while (lit = *--x) {
-				if (verbose == 4) printLit(lit);
-				if (sat) continue;
-				if (satisfied(*x)) sat = true;
+		uint32* x = resolved.end() - 1, k;
+		while (x > resolved) {
+			bool unsat = true;
+			for (k = *x--; k > 1; k--, x--) {
+				if (satisfied(*x)) { unsat = false; break; }
 			}
-			if (sat) while (*--x);
-			else while (lit = *--x) value[l2a(*x)] = !sign(*x), updated++;
-			if (verbose == 4) putc('\n', stdout);
+			if (unsat) {
+				value[ABS(*x)] = !SIGN(*x);
+				updated++;
+			}
+			x -= k;
 		}
-		PFLENDING(2, 4, "(%d updated)", updated - before);
+		PFLOG2(2, " Extending model with eliminated variables updated %d values", updated - before);
 	}
+	PFLOG2(2, "");
 }

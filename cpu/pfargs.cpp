@@ -25,22 +25,27 @@ namespace pFROST {
 
     void printUsage(int argc, char** argv, bool verbose)
     {
-        PFNAME("ParaFROST");
-        PFLOG0(" Usage: parafrost [<option> ...][<infile>.<cnf>][<option> ...]");
+        PFNAME("ParaFROST (Parallel Formal Reasoning Of Satisfiability)");
+        PFAUTHORS("Muhammad Osama and Anton Wijs");
+        PFRIGHTS("Technische Universiteit Eindhoven (TU/e)");
+        PFLRULER('-', RULELEN);
+        PFLOG0("");
+        PFLOG1(" %sUsage: parafrost [<option> ...][<infile>.<cnf>][<option> ...]%s", CLGREEN, CNORMAL);
+        PFLOG0("");
         Sort(options.data(), options.size(), ARG::ARG_CMP());
         arg_t prev_type = NULL;
         PFLOG0("");
-        PFLOG0(" Options (simplification + solve):");
+        PFLOG1(" %sOptions (simplification + solve):%s", CLBLUE, CNORMAL);
         for (int i = 0; i < options.size(); i++) {
             if (options[i]->type != prev_type) fprintf(stdout, "c |\n");
             options[i]->help(verbose);
             prev_type = options[i]->type;
         }
         PFLOG0("");
-        PFLOG0("  -h or --help  print available options.");
-        PFLOG0("  --help-more   print available options with verbose message.");
+        PFLOG1("  %s-h or --help  print available options.%s", CLBLUE, CNORMAL);
+        PFLOG1("  %s--helpmore   print available options with verbose message.%s", CLBLUE, CNORMAL);
         PFLOG0("");
-        PFLOGR('-', RULELEN);
+        PFLRULER('-', RULELEN);
         exit(EXIT_SUCCESS);
     }
 
@@ -48,12 +53,13 @@ namespace pFROST {
     {
         int i, j;
         for (i = j = 1; i < argc; i++) {
-            if (string(argv[i]) == "-h") printUsage(argc, argv);
+            if (strlen(argv[i]) == 2 && eqn(argv[i], "-h"))
+                printUsage(argc, argv);
             char* arg = argv[i];
             if (eq(arg, "--") && eq(arg, "help")) {
                 if (*arg == '\0')
                     printUsage(argc, argv);
-                else if (eq(arg, "-more"))
+                else if (eq(arg, "more"))
                     printUsage(argc, argv, true);
             }
             else {
@@ -61,7 +67,7 @@ namespace pFROST {
                 bool parsed = false;
                 while (k < options.size() && !(parsed = options[k++]->parse(argv[i])));
                 if (!parsed) {
-                    if (eq(argv[i], "--"))
+                    if (eqn(argv[i], "--") || eqn(argv[i], "-"))
                         PFLOGE("unknown input \"%s\". Use '-h or --help' for help.", argv[i]);
                     else
                         argv[j++] = argv[i];

@@ -20,6 +20,7 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 #define __ARGS_
 
 #include "pfdefs.h"
+#include "pfvec.h"
 
 namespace pFROST {
 
@@ -59,7 +60,7 @@ namespace pFROST {
 		void insert(ARG*);
 		bool isParsed() { return parsed; }
 	};
-	
+
 	struct INT32R {
 		int h, t;
 		INT32R() { h = UNDEFINED; t = UNDEFINED; }
@@ -85,8 +86,12 @@ namespace pFROST {
 		int val;
 
 	public:
+
 		INT_OPT(arg_t a, arg_t x, int val = 0, INT32R r = INT32R(INT32_MIN, INT32_MAX))
 			: ARG(a, x, "<int>"), r(r), val(val) {}
+
+		INT_OPT(arg_t a, arg_t x, double val = 0, INT32R r = INT32R(INT32_MIN, INT32_MAX))
+			: ARG(a, x, "<int>"), r(r), val(int(val)) {}
 
 		operator int(void) const { return val; }
 		operator int& (void) { return val; }
@@ -110,19 +115,21 @@ namespace pFROST {
 		}
 
 		virtual void help(bool verbose = false) {
-			PFLOGN1("  --%-15s = %-8s [", arg, type);
-			if (r.h == INT32_MIN) fprintf(stdout, "%-5s", "-I32");
-			else fprintf(stdout, "%-5d", r.h);
+			PFLOGN1("  %s--%-20s = %-8s [", CHELP, arg, type);
+			if (r.h == INT32_MIN) fprintf(stdout, "%-8s", "-I32");
+			else fprintf(stdout, "%-8d", r.h);
 			fprintf(stdout, " .. ");
-			if (r.t == INT32_MAX) fprintf(stdout, "%-5s", "+I32");
-			else fprintf(stdout, "%5d", r.t);
-			fprintf(stdout, "] (default: %6d)\n", val);
+			if (r.t == INT32_MAX) fprintf(stdout, "%8s", "+I32");
+			else fprintf(stdout, "%8d", r.t);
+			fprintf(stdout, "]%s (%sdefault: %s%10d%s)\n", CNORMAL, CARGDEFAULT, CARGVALUE, val, CNORMAL);
 			if (verbose) {
 				PFLOG1("   %s", text);
 				PFLOG0("");
 			}
 		}
-		virtual void printArgument() { fprintf(stdout, " %s<%d> ", arg, val); }
+		virtual void printArgument() {
+			fprintf(stdout, " %s%s%s<%d>%s", CARGDEFAULT, arg, CARGVALUE, val, CNORMAL);
+		}
 	};
 
 	class INT64_OPT : public ARG
@@ -132,8 +139,12 @@ namespace pFROST {
 		int64  val;
 
 	public:
+
 		INT64_OPT(arg_t a, arg_t x, int64 val = 0LL, INT64R r = INT64R(INT64_MIN, INT64_MAX))
 			: ARG(a, x, "<int64>"), r(r), val(val) {}
+
+		INT64_OPT(arg_t a, arg_t x, double val = 0LL, INT64R r = INT64R(INT64_MIN, INT64_MAX))
+			: ARG(a, x, "<int64>"), r(r), val(int64(val)) {}
 
 		operator int64 (void) const { return val; }
 		operator int64& (void) { return val; }
@@ -160,19 +171,21 @@ namespace pFROST {
 		}
 
 		virtual void help(bool verbose = false) {
-			PFLOGN1("  --%-15s = %-8s [", arg, type);
-			if (r.h == INT64_MIN) fprintf(stdout, "%-5s", "-I64");
-			else fprintf(stdout, "%5lld", r.h);
+			PFLOGN1("  %s--%-20s = %-8s [", CHELP, arg, type);
+			if (r.h == INT64_MIN) fprintf(stdout, "%-8s", "-I64");
+			else fprintf(stdout, "%8lld", r.h);
 			fprintf(stdout, " .. ");
-			if (r.t == INT64_MAX) fprintf(stdout, "%5s", "+I64");
-			else fprintf(stdout, "%5lld", r.t);
-			fprintf(stdout, "] (default: %6lld)\n", val);
+			if (r.t == INT64_MAX) fprintf(stdout, "%8s", "+I64");
+			else fprintf(stdout, "%8lld", r.t);
+			fprintf(stdout, "]%s (%sdefault: %s%10lld%s)\n", CNORMAL, CARGDEFAULT, CARGVALUE, val, CNORMAL);
 			if (verbose) {
 				PFLOG1("   %s", text);
 				PFLOG0("");
 			}
 		}
-		virtual void printArgument() { fprintf(stdout, " %s<%lld> ", arg, val); }
+		virtual void printArgument() {
+			fprintf(stdout, " %s%s%s<%lld>%s", CARGDEFAULT, arg, CARGVALUE, val, CNORMAL);
+		}
 	};
 
 	class DOUBLE_OPT : public ARG
@@ -206,20 +219,22 @@ namespace pFROST {
 		}
 
 		virtual void help(bool verbose = false) {
-			PFLOGN1("  --%-15s = %-8s [", arg, type);
-			if (r.h == -INFINITY) fprintf(stdout, "%-6s", "-inf");
-			else fprintf(stdout, "%6.2f", r.h);
+			PFLOGN1("  %s--%-20s = %-8s [", CHELP, arg, type);
+			if (r.h == -INFINITY) fprintf(stdout, "%-8s", "-inf");
+			else fprintf(stdout, "%-8.2f", r.h);
 			fprintf(stdout, " .. ");
-			if (r.t == INFINITY) fprintf(stdout, "%6s", "inf");
-			else fprintf(stdout, "%6.2f", r.t);
-			fprintf(stdout, "] (default: %6.2f)\n", val);
+			if (r.t == INFINITY) fprintf(stdout, "%8s", "inf");
+			else fprintf(stdout, "%8.2f", r.t);
+			fprintf(stdout, "]%s (%sdefault: %s%10.2f%s)\n", CNORMAL, CARGDEFAULT, CARGVALUE, val, CNORMAL);
 			if (verbose) {
 				PFLOG1("   %s", text);
 				PFLOG0("");
 			}
 		}
 
-		virtual void printArgument() { fprintf(stdout, " %s<%.2f> ", arg, val); }
+		virtual void printArgument() {
+			fprintf(stdout, " %s%s%s<%.2f>%s", CARGDEFAULT, arg, CARGVALUE, val, CNORMAL);
+		}
 	};
 
 	class STRING_OPT : public ARG
@@ -234,6 +249,8 @@ namespace pFROST {
 		operator arg_t& (void) { return val; }
 		STRING_OPT& operator=(arg_t x) { val = x; return *this; }
 
+		size_t length() const { assert(val != NULL); return strlen(val); }
+
 		virtual bool parse(const char* input) {
 			arg_t strVal = input;
 			if (!eq(strVal, "--") || !eq(strVal, arg) || !eq(strVal, "="))
@@ -244,14 +261,16 @@ namespace pFROST {
 		}
 
 		virtual void help(bool verbose = false) {
-			PFLOG1("  --%-15s = %8s  (default: %s)", arg, type, val);
+			PFLOG1("  %s--%-20s = %8s%s  (%sdefault: %s%s%s)", CHELP, arg, type, CNORMAL, CARGDEFAULT, CARGVALUE, val, CNORMAL);
 			if (verbose) {
 				PFLOG1("   %s", text);
 				PFLOG0("");
 			}
 		}
 
-		virtual void printArgument() { fprintf(stdout, " %s<%s> ", arg, val); }
+		virtual void printArgument() {
+			fprintf(stdout, " %s%s%s<%s>%s", CARGDEFAULT, arg, CARGVALUE, val, CNORMAL);
+		}
 	};
 
 	class BOOL_OPT : public ARG
@@ -281,16 +300,22 @@ namespace pFROST {
 		}
 
 		virtual void help(bool verbose = false) {
-			PFLOGN1("  -%-10s -no-%-10s", arg, arg);
+			PFLOGN1("  %s-%-20s -no-%-20s%s", CHELP, arg, arg, CNORMAL);
 			fprintf(stdout, "                 ");
-			fprintf(stdout, "(default: %s)\n", val ? "on" : "off");
+			if (val) fprintf(stdout, "(%sdefault: %s%3s%s)\n", CARGDEFAULT, CARGON, "on", CNORMAL);
+			else fprintf(stdout, "(%sdefault: %s%3s%s)\n", CARGDEFAULT, CARGOFF, "off", CNORMAL);
 			if (verbose) {
 				PFLOG1("   %s", text);
 				PFLOG0("");
 			}
 		}
 
-		virtual void printArgument() { fprintf(stdout, " %s:%s ", arg, val ? "on" : "off"); }
+		virtual void printArgument() {
+			fprintf(stdout, " %s%s:", CARGDEFAULT, arg);
+			if (val) fprintf(stdout, "%son ", CARGON);
+			else fprintf(stdout, "%soff ", CARGOFF);
+			SETCOLOR(CNORMAL, stdout);
+		}
 	};
 }
 

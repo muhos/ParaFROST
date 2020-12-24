@@ -44,30 +44,6 @@ namespace pFROST {
 		return n;
 	}
 
-	inline void toClause(Lits_t& c, char*& str)
-	{
-		c.clear();
-		uint32 v = 0, s = 0;
-		while ((v = toInteger(str, s)) != 0) {
-			if (v > inf.maxVar) PFLOGE("too many variables");
-			c.push(v2dec(v, s));
-		}
-	}
-
-	inline bool checkClause(Lits_t& c)
-	{
-		if (c.size() == 1) return true;
-		Sort(c, LESS<uint32>());
-		// check if duplicates exist before doing rewriting
-		int c_sz = 1;
-		for (int l = 1; l < c.size(); l++) {
-			if ((c[l - 1] ^ c[l]) == NEG_SIGN) return false; // c is a tautology
-			if (c[l - 1] != c[l]) c[c_sz++] = c[l];
-		}
-		c.resize(c_sz);
-		return true;
-	}
-
 }
 
 #endif 

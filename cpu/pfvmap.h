@@ -32,7 +32,7 @@ namespace pFROST {
 							~VMAP			() { destroy(); }
 							VMAP			() : sp(NULL), newVars(0), firstDL0(0), mappedFirstDL0(0), valFirstDL0(UNDEFINED) {}
 		inline uint32*		operator*		() { return _mapped; }
-		inline bool			empty			() const { return newVars == 0; }
+		inline bool			empty			() const { return !newVars; }
 		inline uint32		size			() const { return newVars + 1; }
 		inline uint32		numVars			() const { return newVars; }
 		inline uint32		firstL0			() const { return firstDL0; }
@@ -41,19 +41,19 @@ namespace pFROST {
 		inline uint32		mapLit			(const uint32& lit) {
 			assert(!_mapped.empty());
 			assert(lit > 1);
-			uint32 oldVar = l2a(lit), newVar = mapped(oldVar);
+			uint32 oldVar = ABS(lit), newVar = mapped(oldVar);
 			assert(newVar <= newVars);
 			if (newVar && oldVar != firstDL0) {
-				assert(sp->value[lit] == UNDEFINED); 
+				assert(UNASSIGNED(sp->value[lit]));
 				assert(sp->vstate[oldVar] == ACTIVE);
-				return v2dec(newVar, sign(lit)); 
+				return V2DEC(newVar, SIGN(lit));
 			}
 			LIT_ST val = sp->value[lit];
-			if (val == UNDEFINED) return 0;
+			if (UNASSIGNED(val)) return 0;
 			assert(val >= 0);
 			assert(sp->vstate[oldVar] == FROZEN);
-			uint32 newLitDL0 = v2l(mappedFirstDL0);
-			if (valFirstDL0 != val) newLitDL0 = flip(newLitDL0);
+			uint32 newLitDL0 = V2L(mappedFirstDL0);
+			if (valFirstDL0 != val) newLitDL0 = FLIP(newLitDL0);
 			return newLitDL0;
 		}
 		inline void			initiate		(SP* _sp) {
@@ -65,7 +65,7 @@ namespace pFROST {
 			for (uint32 old = 1; old <= oldVars; old++) {
 				if (sp->vstate[old] == ACTIVE) map(old);
 				else if (sp->vstate[old] == FROZEN && !firstDL0) {
-					firstDL0 = old, valFirstDL0 = sp->value[v2l(firstDL0)];
+					firstDL0 = old, valFirstDL0 = sp->value[V2L(firstDL0)];
 					map(firstDL0), mappedFirstDL0 = newVars;
 				}
 			}
@@ -78,15 +78,16 @@ namespace pFROST {
 			for (uint32 v = 1; v <= inf.maxVar; v++) {
 				uint32 mVar = mapped(v);
 				if (mVar) {
-					uint32 p = v2l(v), n = neg(p);
-					uint32 mpos = v2l(mVar), mneg = neg(mpos);
+					uint32 p = V2L(v), n = NEG(p);
+					uint32 mpos = V2L(mVar), mneg = NEG(mpos);
 					to->value[mpos] = sp->value[p];
 					to->value[mneg] = sp->value[n];
 				}
 			}
-			// map lock, variable state, phases
+			// map lock, variable state, subsume, and phases
 			mapVars(to->locked	,	sp->locked);
 			mapVars(to->vstate	,	sp->vstate);
+			mapVars(to->subsume ,	sp->subsume);
 			mapVars(to->pbest	,	sp->pbest);
 			mapVars(to->psaved	,	sp->psaved);
 			mapVars(to->ptarget	,	sp->ptarget);
@@ -99,12 +100,13 @@ namespace pFROST {
 			sp = NULL; // nullify local reference
 		}
 		inline void			mapOrgs			(uVec1D& lits) {
-			for (uint32 i = 0; i < lits.size(); i++) {
-				uint32 lit = lits[i];
+			uint32* end = lits.end();
+			for (uint32* i = lits; i != end; i++) {
+				uint32 lit = *i;
 				if (lit) {
 					assert(lit > 1);
-					lits[i] = mapLit(lit);
-					PFLOG2(4, " Literal %d mapped to %d", l2i(lit), lits[i] ? l2i(lits[i]) : 0);
+					*i = mapLit(lit);
+					PFLOG2(4, " Literal %d mapped to %d", l2i(lit), *i ? l2i(*i) : 0);
 				}
 			}
 		}
@@ -131,8 +133,8 @@ namespace pFROST {
 			uint32 *s = lits, *end = lits.end(), *d = s;
 			while (s != end) {
 				assert(*s > 1);
-				uint32 mVar = mapped(l2a(*s));
-				if (mVar) *d++ = v2dec(mVar, sign(*s));
+				uint32 mVar = mapped(ABS(*s));
+				if (mVar) *d++ = V2DEC(mVar, SIGN(*s));
 				s++;
 			}
 			lits.resize(uint32(d - lits));
@@ -152,7 +154,8 @@ namespace pFROST {
 			assert(!src.deleted());
 			PFLCLAUSE(4, src, " Clause    ");
 			for (int i = 0; i < src.size(); i++) {
-				assert(sp->value[src[i]] == UNDEFINED);
+				assert(src[i] > 1);
+				assert(UNASSIGNED(sp->value[src[i]]));
 				dest[i] = mapLit(src[i]);
 			}
 			PFLCLAUSE(4, dest, " mapped to ");
@@ -163,19 +166,12 @@ namespace pFROST {
 			assert(!c.deleted());
 			assert(!c.moved());
 			PFLCLAUSE(4, c, " Clause    ");
-			for (int i = 0; i < c.size(); i++) {
-				assert(sp->value[c[i]] == UNDEFINED);
-				c[i] = mapLit(c[i]);
+			uint32* end = c.end();
+			for (uint32 *i = c; i != end; i++) {
+				assert(*i > 1);
+				assert(UNASSIGNED(sp->value[*i]));
+				*i = mapLit(*i);
 			}
-			PFLCLAUSE(4, c, " mapped to ");
-		}
-		template <class C>
-		inline void			mapBinClause	(C& c) {
-			assert(c.size() == 2);
-			assert(!c.deleted());
-			assert(!c.moved());
-			PFLCLAUSE(4, c, " Clause    ");
-			*c = mapLit(*c), *(c + 1) = mapLit(*(c + 1));
 			PFLCLAUSE(4, c, " mapped to ");
 		}
 		inline void			destroy			() {

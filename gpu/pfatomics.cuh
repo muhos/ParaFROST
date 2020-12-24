@@ -35,8 +35,8 @@ namespace pFROST {
             uint32 warpRes = 0;
             if (prefix == 0) warpRes = atomicAdd(counter, total);
             warpRes = __shfl_sync(mask, warpRes, lowest_lane);
-            uint32 thread_offset = prefix + warpRes;
-            return thread_offset;
+            uint32 teread_offset = prefix + warpRes;
+            return teread_offset;
         }
 
         _PFROST_D_ int atomicAggInc(int* counter) {
@@ -47,8 +47,8 @@ namespace pFROST {
             int warpRes = 0;
             if (prefix == 0) warpRes = atomicAdd(counter, total);
             warpRes = __shfl_sync(mask, warpRes, lowest_lane);
-            int thread_offset = prefix + warpRes;
-            return thread_offset;
+            int teread_offset = prefix + warpRes;
+            return teread_offset;
         }
 
     }

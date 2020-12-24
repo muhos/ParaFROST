@@ -19,7 +19,7 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 #ifndef __EXTEND_
 #define __EXTEND_
 
-#include "pfsolve.h"
+#include "pfmodel.h"
 
 using namespace pFROST;
 
@@ -44,7 +44,7 @@ void MODEL::extend(LIT_ST* currValue)
             for (k = *x--; k > 1; k--, x--) {
                 if (satisfied(*x)) { unsat = false; break; }
             }
-            if (unsat) value[l2a(*x)] = !sign(*x), updated++;
+            if (unsat) value[ABS(*x)] = !SIGN(*x), updated++;
             x -= k;
         }
         PFLENDING(2, 5, "(%d updated)", updated - before);

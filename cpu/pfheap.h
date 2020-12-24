@@ -24,7 +24,7 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 namespace pFROST {
 
-#define ILLEGAL_POS NOREF
+#define ILLEGAL_POS UINT32_MAX
 
 	template <class CMP>
 	class HEAP {
@@ -67,7 +67,7 @@ namespace pFROST {
 		__forceinline uint32*	data		() { return heap; }
 		__forceinline uint32	top			() { assert(!empty()); return *heap; }
 		__forceinline uint32	size		() const { return heap.size(); }
-		__forceinline bool		empty		() const { return heap.size() == 0; }
+		__forceinline bool		empty		() const { return !heap.size(); }
 		__forceinline uint32	pop			() {
 			uint32 top_x = heap[0], last = heap.back();
 			if (heap.size() > 1) exch(top_x, last);

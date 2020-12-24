@@ -25,17 +25,93 @@ using namespace pFROST;
 
 namespace SIGmA {
 
-#define LIT_REM_THR 10
-#define MIN_PARALLEL_VARS 2
+#define VE_DBG 0
+#define HSE_DBG 0
+#define SUB_DBG 0
 #define CE_POS_LMT 512
 #define CE_NEG_LMT 512
+#define	MAX_ERE_OUT 350
+#define HSE_MAX_CL_SIZE 1000
+	// OT sorting comparator
+	struct CNF_CMP_KEY {
+		bool operator () (S_REF x, S_REF y) {
+			if (x->size() != y->size()) return x->size() < y->size();
+			else if (x->lit(0) != y->lit(0)) return x->lit(0) < y->lit(0);
+			else if (x->lit(1) != y->lit(1)) return x->lit(1) < y->lit(1);
+			else if (x->size() > 2 && x->back() != y->back()) return x->back() < y->back();
+			else return x->sig() < y->sig();
+		}
+	};
+	struct CNF_CMP_SZ {
+		bool operator () (S_REF x, S_REF y) {
+			return x->size() < y->size();
+		}
+	};
 
-	/* Elimination sub-routines */
+	// Elimination sub-routines 
+
+	inline bool checkMolten(OL& poss, OL& negs)
+	{
+		for (int i = 0; i < poss.size(); i++)
+			if (poss[i]->molten()) return false;
+		for (int i = 0; i < negs.size(); i++)
+			if (negs[i]->molten()) return false;
+		return true;
+	}
+
+	inline bool checkDeleted(OL& poss, OL& negs)
+	{
+		for (int i = 0; i < poss.size(); i++)
+			if (poss[i]->deleted()) return false;
+		for (int i = 0; i < negs.size(); i++)
+			if (negs[i]->deleted()) return false;
+		return true;
+	}
+
+	inline void printGate(OL& poss, OL& negs)
+	{
+		for (int i = 0; i < poss.size(); i++) {
+			if (poss[i]->molten()) {
+				PFLOGN0(" ");
+				poss[i]->print();
+			}
+		}
+		for (int i = 0; i < negs.size(); i++) {
+			if (negs[i]->molten()) {
+				PFLOGN0(" ");
+				negs[i]->print();
+			}
+		}
+	}
+
+	inline bool equal3(S_REF d, uint32 a, uint32 b, uint32 c) {
+		assert(d->original());
+		int found = 0;
+		for (int i = 0; i < d->size(); i++) {
+			uint32 lit = d->lit(i);
+			if (a != lit && b != lit && c != lit) return false;
+			found++;
+		}
+		return found == 3;
+	}
+
+	inline S_REF equality_check(OT& ot, uint32 a, uint32 b, uint32 c) {
+		if (ot[b].size() > ot[c].size()) swap(b, c);
+		if (ot[a].size() > ot[b].size()) swap(a, b);
+		OL& list = ot[a];
+		for (S_REF* i = list; i != list.end(); i++) {
+			if ((*i)->learnt()) continue;
+			if (equal3(*i, a, b, c))
+				return *i;
+		}
+		return NULL;
+	}
+
 	inline bool isTautology(const uint32& elim_v, const S_REF c1, const S_REF c2)
 	{
 		assert(elim_v > 0);
-		assert(c1->status() != DELETED);
-		assert(c2->status() != DELETED);
+		assert(!c1->deleted());
+		assert(!c2->deleted());
 		int it1 = 0, it2 = 0;
 		while (it1 < c1->size() && it2 < c2->size()) {
 			uint32 v1 = ABS(c1->lit(it1)), v2 = ABS(c2->lit(it2));
@@ -49,79 +125,11 @@ namespace SIGmA {
 		return false;
 	}
 
-	inline bool isTautology_and(const S_REF org_c, const Lits_t& defs)
-	{
-		assert(org_c->status() != DELETED);
-		for (int i = 0; i < defs.size(); i++) {
-			if (org_c->has(defs[i])) return true;
-		}
-		return false;
-	}
-
-	inline bool isTautology_or(const S_REF org_c, const Lits_t& defs)
-	{
-		assert(org_c->status() != DELETED);
-		for (int i = 0; i < defs.size(); i++) {
-			if (org_c->has(FLIP(defs[i]))) return true;
-		}
-		return false;
-	}
-
-	inline void clause_extend_and(const uint32& neg_x, const S_REF org_c, const Lits_t& defs, Lits_t& out_c)
-	{
-		assert(org_c->status() != DELETED);
-		out_c.clear();
-		for (int i = 0; i < org_c->size(); i++) {
-			if (org_c->lit(i) == neg_x) {
-				for (int k = 0; k < defs.size(); k++) out_c.push(FLIP(defs[k]));
-			}
-			else out_c.push(org_c->lit(i));
-		}
-		Sort(out_c, LESS<uint32>());
-	}
-
-	inline void clause_extend_or(const uint32& x, const S_REF org_c, const Lits_t& defs, Lits_t& out_c)
-	{
-		assert(org_c->status() != DELETED);
-		out_c.clear();
-		for (int i = 0; i < org_c->size(); i++) {
-			if (org_c->lit(i) == x) {
-				for (int k = 0; k < defs.size(); k++) out_c.push(defs[k]);
-			}
-			else out_c.push(org_c->lit(i));
-		}
-		Sort(out_c, LESS<uint32>());
-	}
-
-	inline void clause_split_and(const uint32& x, const S_REF org_c, const uint32& def, Lits_t& out_c)
-	{
-		assert(org_c->status() != DELETED);
-		out_c.clear();
-		for (int k = 0; k < org_c->size(); k++) {
-			if (org_c->lit(k) == def) continue; // repeated literal
-			if (org_c->lit(k) == x) out_c.push(def);
-			else out_c.push(org_c->lit(k));
-		}
-		Sort(out_c, LESS<uint32>());
-	}
-
-	inline void clause_split_or(const uint32& neg_x, const S_REF org_c, const uint32& def, Lits_t& out_c)
-	{
-		assert(org_c->status() != DELETED);
-		out_c.clear();
-		for (int k = 0; k < org_c->size(); k++) {
-			if (org_c->lit(k) == FLIP(def)) continue; // repeated literal
-			if (org_c->lit(k) == neg_x) out_c.push(FLIP(def));
-			else out_c.push(org_c->lit(k));
-		}
-		Sort(out_c, LESS<uint32>());
-	}
-
 	inline void merge(const uint32& elim_v, const S_REF c1, const S_REF c2, Lits_t& out_c)
 	{
 		assert(elim_v > 0);
-		assert(c1->status() != DELETED);
-		assert(c2->status() != DELETED);
+		assert(c1->original());
+		assert(c2->original());
 		out_c.clear();
 		int it1 = 0, it2 = 0;
 		register uint32 lit1, lit2, v1, v2;
@@ -150,11 +158,11 @@ namespace SIGmA {
 		}
 	}
 
-	inline bool merge_hre(const uint32& elim_var, const S_REF c1, const S_REF c2, Lits_t& out_c)
+	inline bool merge_ere(const uint32& elim_var, const S_REF c1, const S_REF c2, Lits_t& out_c)
 	{
 		assert(elim_var);
-		assert(c1->status() != DELETED);
-		assert(c2->status() != DELETED);
+		assert(!c1->deleted());
+		assert(!c2->deleted());
 		out_c.clear();
 		int it1 = 0, it2 = 0;
 		uint32 lit1, lit2, v1, v2;
@@ -185,18 +193,222 @@ namespace SIGmA {
 		return true;
 	}
 
-	inline bool subset_sig(const uint32& A, const uint32& B) { return (A & ~B) == 0; }
+	inline void substitute_single(const uint32& dx, SCLAUSE& org, const uint32& def)
+	{
+		assert(dx > 1);
+		assert(def != dx);
+		assert(org.original());
+#if VE_DBG
+		PFLCLAUSE(1, org, " Clause ");
+#endif
+		int n = 0;
+		for (int i = 0; i < org.size(); i++) {
+			if (org[i] == dx) org[n++] = def;
+			else if (org[i] != def) org[n++] = org[i];
+		}
+		org.resize(n);
+		Sort(org.data(), org.size(), LESS<uint32>());
+		org.calcSig();
+		assert(org.isSorted());
+#if VE_DBG
+		PFLCLAUSE(1, org, " Substituted to ");
+#endif
+		if (org.size() == 1 && pfrost->unassigned(*org)) pfrost->enqueue(*org);
+	}
+
+	inline void substitute_single(const uint32& p, const uint32& def, OL& poss, OL& negs)
+	{
+		assert(def > 1);
+		assert(!SIGN(p));
+		// substitute negatives 
+		uint32 n = NEG(p);
+		for (int i = 0; i < negs.size(); i++) {
+			if (negs[i]->learnt() || negs[i]->has(def)) negs[i]->markDeleted(); // learnt or tautology
+			else substitute_single(n, *negs[i], FLIP(def));
+		}
+		// substitute positives
+		for (int i = 0; i < poss.size(); i++) {
+			if (poss[i]->learnt() || poss[i]->has(FLIP(def))) poss[i]->markDeleted();
+			else substitute_single(p, *poss[i], def);
+		}
+	}
+
+	inline void substitute_x(const uint32& x, OL& poss, OL& negs, Lits_t& out_c)
+	{
+		assert(x);
+		out_c.clear();
+		for (int i = 0; i < poss.size(); i++) {
+			if (poss[i]->learnt()) continue;
+			for (int j = 0; j < negs.size(); j++) {
+				if (negs[j]->learnt()) continue;
+				bool a = poss[i]->molten(), b = negs[j]->molten();
+				if (a != b && !isTautology(x, poss[i], negs[j])) {
+					merge(x, poss[i], negs[j], out_c);
+					S_REF added = new SCLAUSE(out_c);
+					pfrost->newResolvent(added);
+#if VE_DBG
+					PFLCLAUSE(1, (*added), " Added ");
+#endif
+				}
+			}
+		}
+	}
+
+	inline bool subset_sig(const uint32& A, const uint32& B) { return !(A & ~B); }
 
 	inline bool selfSubset_sig(const uint32& A, const uint32& B)
 	{
 		uint32 B_tmp = B | ((B & 0xAAAAAAAAUL) >> 1) | ((B & 0x55555555UL) << 1);
-		return (A & ~B_tmp) == 0;
+		return !(A & ~B_tmp);
+	}
+
+	inline bool isEqual(const SCLAUSE& c1, const Lits_t& c2)
+	{
+		assert(!c1.deleted());
+		assert(c1.size() == c2.size());
+		int it = 0;
+		while (it < c2.size()) {
+			if (c1[it] != c2[it]) return false;
+			else it++;
+		}
+		return true;
+	}
+
+	inline bool isAlmostEqual(const uint32& dx, const int& bitpos, SCLAUSE& c1, Lits_t& c2)
+	{
+		assert(c1.original());
+		assert(c1.size() - 1 == c2.size());
+		assert(c1.isSorted());
+		assert(isSorted(c2.data(), c2.size(), LESS<uint32>()));
+		int it1 = 0, it2 = 0;
+		bool found = false;
+		while (it1 < c1.size() && it2 < c2.size()) {
+			if (c1[it1] == dx) it1++;
+			else if (it2 == bitpos && (c1[it1] ^ c2[it2]) == NEG_SIGN) found = true, it1++, it2++;
+			else if (c1[it1] != c2[it2]) return false;
+			else it1++, it2++;
+		}
+		if (it1 < c1.size() && c1[it1++] != dx) return false; 
+		assert(it1 == it2 + 1);
+		return found;
+	}
+
+	inline bool isAlmostEqual(const uint32& dx, SCLAUSE& c1, Lits_t& c2)
+	{
+		assert(c1.original());
+		assert(c1.size() - 1 == c2.size());
+		assert(c1.isSorted());
+		assert(isSorted(c2.data(), c2.size(), LESS<uint32>()));
+		int it1 = 0, it2 = 0;
+		while (it1 < c1.size() && it2 < c2.size()) {
+			if (c1[it1] == dx) it1++;
+			else if (c1[it1] != c2[it2]) return false;
+			else it1++, it2++;
+		}
+		if (it1 < c1.size() && c1[it1++] != dx) return false; 
+		assert(it1 == it2 + 1);
+		return true;
+	}
+
+	inline S_REF find_all(const uint32& gate_out, OT& ot, Lits_t& out_c)
+	{
+		uint32 best = gate_out;
+		assert(best > 1);
+		int msize = ot[gate_out].size();
+		for (uint32* k = out_c; k != out_c.end(); k++) {
+			int lsize = ot[*k].size();
+			if (lsize < msize) msize = lsize, best = *k;
+		}
+		OL& list = ot[best];
+		for (S_REF* i = list; i != list.end(); i++) {
+			SCLAUSE& c = **i;
+			if (c.molten() || (c.size() - 1) != out_c.size()) continue;
+			if (c.original() && isAlmostEqual(gate_out, **i, out_c))
+				return *i;
+		}
+		return NULL;
+	}
+
+	inline void flip_all(Lits_t& out_c)
+	{
+		for (uint32* k = out_c; k != out_c.end(); k++) *k = FLIP(*k);
+	}
+
+	inline void cswap(uint32& x, uint32& y)
+	{
+		uint32 ta = std::min(x, y);
+		uint32 tb = std::max(x, y);
+		x = ta, y = tb;
+	}
+
+	inline void sort3(uint32& x, uint32& y, uint32& z)
+	{
+		cswap(y, z);
+		cswap(x, z);
+		cswap(x, y);
+	}
+
+	inline S_REF fast_equality_check(OT& ot, uint32 x, uint32 y, uint32 z) {
+		if (ot[y].size() > ot[z].size()) swap(y, z);
+		if (ot[x].size() > ot[y].size()) swap(x, y);
+		OL& list = ot[x];
+		sort3(x, y, z);
+		assert(x <= y && y <= z && x <= z);
+		for (S_REF* i = list; i != list.end(); i++) {
+			SCLAUSE& c = **i;
+			if (c.molten()) continue;
+			assert(c.isSorted());
+			if (c.original() && c.size() == 3 &&
+				c[0] == x && c[1] == y && c[2] == z) return *i;
+		}
+		return NULL;
+	}
+
+	inline void forward_equ(Lits_t& m_c, OT& ot, const CL_ST& type)
+	{
+		pfrost->getStats().n_triedreduns++;
+		int msize = m_c.size();
+		assert(msize > 1);
+		uint32 best = *m_c, m_sig = MAPHASH(best);
+		assert(best > 1);
+		int minsize = ot[best].size();
+		for (int k = 1; k < msize; k++) {
+			int lsize = ot[m_c[k]].size();
+			if (lsize < minsize) minsize = lsize, best = m_c[k];
+			m_sig |= MAPHASH(m_c[k]);
+		}
+		OL& minList = ot[best];
+		for (int i = 0; i < minList.size(); i++) {
+			CL_ST st = minList[i]->status();
+			if (msize == minList[i]->size() && ((st & LEARNT) || (st & type)) &&
+				subset_sig(m_sig, minList[i]->sig()) && isEqual(*minList[i], m_c)) {
+				minList[i]->markDeleted();  //  HR found --> eliminate
+				if (st & LEARNT) pfrost->getStats().n_lrnreduns++;
+				else pfrost->getStats().n_orgreduns++;
+				break;
+			}
+		}
+	}
+
+	inline void updateOL(OL& ol)
+	{
+		if (ol.empty()) return;
+		S_REF* i, * j, * rend = ol.end();
+		for (i = ol, j = i; i != rend; i++) {
+			SCLAUSE& c = **i;
+			if (c.molten()) c.freeze();
+			else if (!c.deleted()) *j++ = *i;
+		}
+		ol.shrink(int(rend - j));
 	}
 
 	inline bool subset(const S_REF sm, const S_REF lr)
 	{
-		assert(sm->status() != DELETED);
-		assert(lr->status() != DELETED);
+		assert(!sm->deleted());
+		assert(!lr->deleted());
+		assert(sm->size() > 1);
+		assert(lr->size() > 1);
+		assert(sm->size() <= lr->size());
 		int it1 = 0, it2 = 0, sub = 0;
 		while (it1 < sm->size() && it2 < lr->size()) {
 			if (sm->lit(it1) < lr->lit(it2)) it1++;
@@ -208,48 +420,13 @@ namespace SIGmA {
 		return false;
 	}
 
-	inline bool isEqual(const SCLAUSE& c1, const Lits_t& c2)
-	{
-		assert(c1.status() != DELETED);
-		assert(c1.size() == c2.size());
-		int it = 0;
-		while (it < c2.size()) {
-			if (c1[it] != c2[it]) return false;
-			else it++;
-		}
-		return true;
-	}
-
-	inline bool forward_equ(const Lits_t& m_c, const uint32& m_sig, OL& x_ol)
-	{
-		for (int i = 0; i < x_ol.size(); i++) {
-			if (x_ol[i]->status() != DELETED && m_c.size() == x_ol[i]->size() &&
-				subset_sig(m_sig, x_ol[i]->sig()) && isEqual(*x_ol[i], m_c)) {
-				x_ol[i]->markDeleted();  //  HR found --> eliminate
-				return true;
-			}
-		}
-		return false;
-	}
-
-	inline void updateOL(OL& ol)
-	{
-		if (ol.size() == 0) return;
-		int idx = 0, ol_sz = ol.size();
-		while (idx < ol_sz) {
-			S_REF c_ref = ol[idx];
-			if (c_ref->status() == DELETED) ol[idx] = ol[--ol_sz];
-			else if (c_ref->molten()) { c_ref->freeze(); ol[idx] = ol[--ol_sz]; }
-			else idx++;
-		}
-		int remOccurs = ol.size() - ol_sz;
-		if (remOccurs) ol.shrink(remOccurs);
-	}
-
 	inline bool selfSubset(const uint32& x, const S_REF sm, const S_REF lr)
 	{
-		assert(sm->status() != DELETED);
-		assert(lr->status() != DELETED);
+		assert(!sm->deleted());
+		assert(!lr->deleted());
+		assert(sm->size() > 1);
+		assert(lr->size() > 1);
+		assert(sm->size() <= lr->size());
 		int it1 = 0, it2 = 0, sub = 0;
 		bool self = false;
 		while (it1 < sm->size() && it2 < lr->size()) {
@@ -271,326 +448,495 @@ namespace SIGmA {
 		return false;
 	}
 
+	inline void freeze_binaries(OL& list)
+	{
+		for (S_REF* i = list; i != list.end(); i++)
+			if ((*i)->size() == 2) (*i)->freeze();
+	}
+
+	inline void freeze_arities(OL& list)
+	{
+		for (S_REF* i = list; i != list.end(); i++)
+			if ((*i)->size() > 2 && (*i)->molten()) (*i)->freeze();
+	}
+
+	inline void countOrgs(OL& list, int& orgs)
+	{
+		assert(!orgs);
+		for (S_REF* i = list; i != list.end(); i++)
+			if ((*i)->original()) orgs++;
+	}
+
+	inline void countLitsBefore(OL& list, int& nLitsBefore)
+	{
+		for (S_REF* i = list; i != list.end(); i++) {
+			if ((*i)->original()) nLitsBefore += (*i)->size();
+		}
+	}
+
+	inline void countSubstituted(const uint32& x, OL& me, OL& other, int& nAddedCls, int& nAddedLits)
+	{
+		for (int i = 0; i < me.size(); i++) {
+			if (me[i]->learnt()) continue;
+			for (int j = 0; j < other.size(); j++) {
+				if (other[j]->learnt()) continue;
+				bool a = me[i]->molten(), b = other[j]->molten();
+				if (a != b && !isTautology(x, me[i], other[j]))
+					nAddedCls++, nAddedLits += me[i]->size() + other[j]->size() - 2;
+			}
+		}
+	}
+
+	inline void countSubstituted(const uint32& x, OL& me, OL& other, int& nAddedCls)
+	{
+		for (int i = 0; i < me.size(); i++) {
+			if (me[i]->learnt()) continue;
+			for (int j = 0; j < other.size(); j++) {
+				if (other[j]->learnt()) continue;
+				bool a = me[i]->molten(), b = other[j]->molten();
+				if (a != b && !isTautology(x, me[i], other[j]))
+					nAddedCls++;
+			}
+		}
+	}
+
+	inline void countResolvents(const uint32& x, const int& pOrgs, const int& nOrgs, OL& poss, OL& negs, int& nAddedCls, int& nAddedLits)
+	{
+		int nTs = 0;
+		for (int i = 0; i < poss.size(); i++) {
+			if (poss[i]->learnt()) continue;
+			for (int j = 0; j < negs.size(); j++) {
+				if (negs[j]->learnt()) continue;
+				if (isTautology(x, poss[i], negs[j])) nTs++;
+				else nAddedLits += poss[i]->size() + negs[j]->size() - 2;
+			}
+		}
+		assert(pOrgs * nOrgs >= nTs);
+		nAddedCls = pOrgs * nOrgs - nTs;
+	}
+
 	inline void	saveResolved(uVec1D& resolved, const uint32& lit) { resolved.push(lit), resolved.push(1); }
 
 	inline void	saveResolved(uVec1D& resolved, SCLAUSE& c, const uint32& x)
 	{
-		uint32 off = resolved.size(), xpos = NOVAR;
-		for (int i = 0; i < c.size(); i++) {
-			resolved.push(c[i]);
-			if (x == l2a(c[i])) xpos = i;
-		}
-		assert(xpos < NOVAR);
-		if (!xpos) swap(resolved[xpos + off], resolved[off]);
+		assert(c.original());
+		for (int i = 0; i < c.size(); i++) resolved.push(c[i]);
 		resolved.push(c.size());
 	}
 
-	inline void toblivion(uVec1D& resolved, OL& p_ol, OL& n_ol, const uint32 v)
+	inline void saveResolved(const uint32& p, const int& pOrgs, const int& nOrgs, OL& poss, OL& negs, uVec1D& resolved)
 	{
-		uint32 p = v2l(v);
-		if (p_ol.size() > n_ol.size()) {
-			for (int i = 0; i < n_ol.size(); i++)
-				saveResolved(resolved, *n_ol[i], v);
+		assert(p > 1);
+		bool which = pOrgs > nOrgs;
+		if (which) {
+			for (int i = 0; i < negs.size(); i++)
+				if (negs[i]->original()) saveResolved(resolved, *negs[i], NEG(p));
 			saveResolved(resolved, p);
 		}
 		else {
-			for (int i = 0; i < p_ol.size(); i++)
-				saveResolved(resolved, *p_ol[i], v);
-			saveResolved(resolved, neg(p));
-		}
-		for (int i = 0; i < p_ol.size(); i++) p_ol[i]->markDeleted();
-		for (int i = 0; i < n_ol.size(); i++) n_ol[i]->markDeleted();
-		p_ol.clear(true), n_ol.clear(true);
-	}
-
-	void resolve_x(const uint32& x, OL& p_ol, OL& n_ol)
-	{
-		assert(x);
-		Lits_t out;
-		out.reserve(INIT_CAP);
-		for (int i = 0; i < p_ol.size(); i++) {
-			for (int j = 0; j < n_ol.size(); j++) {
-				if (!isTautology(x, p_ol[i], n_ol[j])) {
-					merge(x, p_ol[i], n_ol[j], out);
-					S_REF added = new SCLAUSE(out);
-					pfrost->newClause(added);
-				}
-			}
+			for (int i = 0; i < poss.size(); i++)
+				if (poss[i]->original()) saveResolved(resolved, *poss[i], p);
+			saveResolved(resolved, NEG(p));
 		}
 	}
 
-	bool substitute_AND(const uint32& x, const Lits_t& defs, OL& p_ol, OL& n_ol, Lits_t& out_c)
+	inline void toblivion(const uint32& p, const int& pOrgs, const int& nOrgs, OL& poss, OL& negs, uVec1D& resolved)
 	{
-		int numAddedClauses = 0;
-		// count number of added clauses & literals for negatives
-		for (int i = 0; i < n_ol.size(); i++) {
-			if (!isTautology_and(n_ol[i], defs))
-				numAddedClauses++;
+		assert(p > 1);
+		bool which = pOrgs > nOrgs;
+		if (which) {
+			for (int i = 0; i < negs.size(); i++)
+				if (negs[i]->original()) saveResolved(resolved, *negs[i], NEG(p));
+			saveResolved(resolved, p);
 		}
-		// count number of added clauses & literals for positives
-		for (int k = 0; k < defs.size(); k++) {
-			for (int i = 0; i < p_ol.size(); i++) {
-				if (!(p_ol[i]->has(FLIP(defs[k]))))
-					numAddedClauses++;
-			}
+		else {
+			for (int i = 0; i < poss.size(); i++)
+				if (poss[i]->original()) saveResolved(resolved, *poss[i], p);
+			saveResolved(resolved, NEG(p));
 		}
-		if (numAddedClauses > p_ol.size() + n_ol.size()) return false;
-		// substitute negatives 
-		for (int i = 0; i < n_ol.size(); i++) {
-			if (!isTautology_and(n_ol[i], defs)) {
-				clause_extend_and(NEG(x), n_ol[i], defs, out_c);
-				int newSz = 1;
-				for (int k = 1; k < out_c.size(); k++)
-					if (out_c[k - 1] != out_c[k]) out_c[newSz++] = out_c[k];
-				out_c.resize(newSz);
-				S_REF added = new SCLAUSE(out_c);
-				pfrost->newClause(added);
-			}
-		}
-		// substitute positives
-		for (int d = 0; d < defs.size(); d++) {
-			for (int i = 0; i < p_ol.size(); i++) {
-				if (!(p_ol[i]->has(FLIP(defs[d])))) {
-					clause_split_and(x, p_ol[i], defs[d], out_c);
-					S_REF added = new SCLAUSE(out_c);
-					pfrost->newClause(added);
-				}
-			}
-		}
-		return true; // AND-substitution successful
+		for (int i = 0; i < poss.size(); i++) poss[i]->markDeleted();
+		for (int i = 0; i < negs.size(); i++) negs[i]->markDeleted();
+		poss.clear(true), negs.clear(true);
 	}
 
-	bool substitute_OR(const uint32& x, const Lits_t& defs, OL& p_ol, OL& n_ol, Lits_t& out_c)
+	inline uint32 find_sfanin(const uint32& gate_out, OL& list)
 	{
-		// count number of added clauses & literals for positives
-		int numAddedClauses = 0;
-		for (int i = 0; i < p_ol.size(); i++)
-			if (!isTautology_or(p_ol[i], defs))
-				numAddedClauses++;
-		// count number of added clauses & literals for negatives
-		for (int d = 0; d < defs.size(); d++)
-			for (int i = 0; i < n_ol.size(); i++)
-				if (!(n_ol[i]->has(defs[d])))
-					numAddedClauses++;
-		if (numAddedClauses > p_ol.size() + n_ol.size()) return false;
-		// substitute positives
-		for (int i = 0; i < p_ol.size(); i++) {
-			if (!isTautology_or(p_ol[i], defs)) {
-				clause_extend_or(x, p_ol[i], defs, out_c);
-				int newSz = 1;
-				for (int k = 1; k < out_c.size(); k++)
-					if (out_c[k - 1] != out_c[k]) out_c[newSz++] = out_c[k];
-				out_c.resize(newSz);
-				S_REF added = new SCLAUSE(out_c);
-				pfrost->newClause(added);
+		assert(gate_out > 1);
+		uint32 imp = 0;
+		int nImps = 0;
+		for (S_REF* i = list; i != list.end(); i++) {
+			SCLAUSE& c = **i;
+			if (c.original() && c.size() == 2) {
+				imp = FLIP(c[0] ^ c[1] ^ gate_out);
+				nImps++;
 			}
+			if (nImps > 1) return 0; // cannot be a single-input gate
 		}
-		// substitute negatives
-		for (int d = 0; d < defs.size(); d++) {
-			for (int i = 0; i < n_ol.size(); i++) {
-				if (!(n_ol[i]->has(defs[d]))) {
-					clause_split_or(NEG(x), n_ol[i], defs[d], out_c);
-					S_REF added = new SCLAUSE(out_c);
-					pfrost->newClause(added);
-				}
-			}
-		}
-		return true; // OR-substitution successful
+		return imp;
 	}
 
-	bool gateReasoning_x(const uint32& x, OL& p_ol, OL& n_ol)
+	inline uint32 find_BN_gate(const uint32& p, OL& poss, OL& negs)
 	{
-		uint32 imp;
-		uint32 sig = 0;
-		Lits_t out_c;
-		out_c.reserve(INIT_CAP);
-		// AND-gate Reasoning
-		for (int i = 0; i < n_ol.size(); i++) {
-			SCLAUSE& c = *n_ol[i];
-			if (c.size() == 2) {
-				if ((c[0] ^ x) == NEG_SIGN) { // found x with negative sign
-					imp = FLIP(c[1]); // toggle implied literal sign
-					out_c.push(imp);
-					sig |= MAPHASH(imp);
-				}
-				else if ((c[1] ^ x) == NEG_SIGN) {
-					imp = FLIP(c[0]); // toggle implied literal sign
-					out_c.push(imp);
-					sig |= MAPHASH(imp);
-				}
-			}
-		}
-		if (out_c.size() > 1) {
-			out_c.push(x);
-			sig |= MAPHASH(x);
-			Sort(out_c, LESS<uint32>());
-			for (int i = 0; i < p_ol.size(); i++) {
-				SCLAUSE& c = *p_ol[i];
-				if (c.size() == out_c.size() && subset_sig(c.sig(), sig) && isEqual(c, out_c)) {
-					Lits_t defs(out_c.size() - 1);
-					int nDefs = 0;
-					for (int k = 0; k < out_c.size(); k++)
-						if (out_c[k] != x) defs[nDefs++] = FLIP(out_c[k]);
-					assert(nDefs == out_c.size() - 1);
-					if (substitute_AND(x, defs, p_ol, n_ol, out_c)) {
-						defs.clear(true);
-						out_c.clear(true);
-						return true;
-					}
+		assert(p > 1);
+		assert(!SIGN(p));
+		assert(checkMolten(poss, negs));
+		uint32 n = NEG(p);
+		uint32 first = find_sfanin(p, poss);
+		if (first) {
+			uint32 second = n, def = first;
+			if (second < first) first = second, second = def;
+			for (int i = 0; i < negs.size(); i++) {
+				SCLAUSE& c = *negs[i];
+				if (c.learnt()) continue;
+				if (c.size() == 2 && c[0] == first && c[1] == second) {
+#if VE_DBG
+					PFLOG1(" Gate %d = -/+%d found", ABS(p), ABS(def));
+					pfrost->printOL(poss), pfrost->printOL(negs);
+#endif
+					return def;
 				}
 			}
 		}
-		// OR-gate Reasoning
+		return 0;
+	}
+
+	inline void find_fanin(const uint32& gate_out, OL& list, Lits_t& out_c, uint32& sig)
+	{
+		assert(gate_out > 1);
 		out_c.clear();
 		sig = 0;
-		for (int i = 0; i < p_ol.size(); i++) {
-			SCLAUSE& c = *p_ol[i];
+		uint32 imp = 0;
+		for (S_REF* i = list; i != list.end(); i++) {
+			SCLAUSE& c = **i;
+			if (c.learnt()) continue;
+			assert(!c.molten());
 			if (c.size() == 2) {
-				if (c[0] == x) { // found x with positive sign
-					imp = FLIP(c[1]); // toggle implied literal sign
-					out_c.push(imp);
-					sig |= MAPHASH(imp);
-				}
-				else if (c[1] == x) {
-					imp = FLIP(c[0]); // toggle implied literal sign
-					out_c.push(imp);
-					sig |= MAPHASH(imp);
+				imp = FLIP(c[0] ^ c[1] ^ gate_out);
+				out_c.push(imp);
+				sig |= MAPHASH(imp);
+				c.melt(); // mark as gate clause
+			}
+		}
+	}
+
+	inline bool find_AO_gate(const uint32& dx, const int& nOrgCls, OT& ot, Lits_t& out_c)
+	{
+		assert(dx > 1);
+		assert(checkMolten(ot[dx], ot[FLIP(dx)]));
+		out_c.clear();
+		uint32 sig, x = ABS(dx);
+		// (-) ==> look for AND , (+) ==> look for OR
+#if VE_DBG
+		const char* type = SIGN(dx) ? "AND" : "OR";
+#endif
+		OL& itarget = ot[dx]; 
+		find_fanin(dx, itarget, out_c, sig);
+		if (out_c.size() > 1) {
+			uint32 f_dx = FLIP(dx);
+			out_c.push(f_dx);
+			sig |= MAPHASH(f_dx);
+			Sort(out_c, LESS<uint32>());
+			OL& otarget = ot[f_dx];
+			for (int i = 0; i < otarget.size(); i++) {
+				SCLAUSE& c = *otarget[i];
+				if (c.learnt()) continue;
+				if (c.size() == out_c.size() && subset_sig(c.sig(), sig) && isEqual(c, out_c)) {
+					c.melt(); // mark as fanout clause
+					// check resolvability
+					int nAddedCls = 0;
+					countSubstituted(x, itarget, otarget, nAddedCls);
+					if (nAddedCls > nOrgCls) { c.freeze(); break; }
+					// can be substituted
+#if VE_DBG
+					PFLOGN1(" Gate %d = %s(", ABS(dx), type);
+					for (int k = 0; k < out_c.size(); k++) {
+						if (ABS(out_c[k]) == ABS(dx)) continue;
+						fprintf(stdout, " %d", ABS(out_c[k]));
+						if (k < out_c.size() - 1) putc(',', stdout);
+					}
+					fprintf(stdout, " ) found ==> added = %d, deleted = %d\n", nAddedCls, itarget.size() + otarget.size());
+					printGate(itarget, otarget);
+#endif
+					substitute_x(x, itarget, otarget, out_c);
+					return true;
 				}
 			}
 		}
-		if (out_c.size() > 1) {
-			out_c.push(FLIP(x));
-			sig |= MAPHASH(FLIP(x));
-			Sort(out_c, LESS<uint32>());
-			for (int i = 0; i < n_ol.size(); i++) {
-				SCLAUSE& c = *n_ol[i];
-				if (c.size() == out_c.size() && subset_sig(c.sig(), sig) && isEqual(c, out_c)) {
-					Lits_t defs(out_c.size() - 1);
-					int nDefs = 0;
-					for (int k = 0; k < out_c.size(); k++)
-						if (out_c[k] != FLIP(x)) defs[nDefs++] = out_c[k];
-					assert(nDefs == out_c.size() - 1);
-					if (substitute_OR(x, defs, p_ol, n_ol, out_c)) {
-						defs.clear(true);
-						out_c.clear(true);
-						return true;
-					}
+		freeze_binaries(itarget);
+		return false;
+	}
+
+	inline bool find_ITE_gate(const uint32& dx, const int& nOrgCls, OT& ot, Lits_t& out_c)
+	{
+		assert(checkMolten(ot[dx], ot[FLIP(dx)]));
+		OL& itarget = ot[dx];
+		for (S_REF* i = itarget; i != itarget.end(); i++) {
+			SCLAUSE& ci = **i;
+			if (ci.learnt() || ci.size() < 3 || ci.size() > 3) continue;
+			assert(ci.original());
+			uint32 xi = ci[0], yi = ci[1], zi = ci[2];
+			if (yi == dx) swap(xi, yi);
+			if (zi == dx) swap(xi, zi);
+			assert(xi == dx);
+			for (S_REF* j = i + 1; j != itarget.end(); j++) {
+				SCLAUSE& cj = **j;
+				if (cj.learnt() || cj.size() < 3 || cj.size() > 3) continue;
+				assert(cj.original());
+				uint32 xj = cj[0], yj = cj[1], zj = cj[2];
+				if (yj == dx) swap(xj, yj);
+				if (zj == dx) swap(xj, zj);
+				assert(xj == dx);
+				if (ABS(yi) == ABS(zj)) swap(yj, zj);
+				if (ABS(zi) == ABS(zj)) continue;
+				if (yi != FLIP(yj)) continue;
+				uint32 f_dx = FLIP(dx);
+				S_REF d1 = fast_equality_check(ot, f_dx, yi, FLIP(zi));
+				if (!d1) continue;
+				S_REF d2 = fast_equality_check(ot, f_dx, yj, FLIP(zj));
+				if (!d2) continue;
+				assert(d1->original());
+				assert(d2->original());
+				// mark gate clauses
+				ci.melt(), cj.melt();
+				d1->melt(), d2->melt();
+				// check resolvability
+				uint32 v = ABS(dx);
+				int nAddedCls = 0;
+				OL& otarget = ot[f_dx];
+				countSubstituted(v, itarget, otarget, nAddedCls);
+				if (nAddedCls > nOrgCls) {
+					ci.freeze(), cj.freeze();
+					d1->freeze(), d2->freeze();
+					return false;
 				}
+				// can be substituted
+#if VE_DBG
+				PFLOG1(" Gate %d = ITE(%d, %d, %d) found ==> added = %d, deleted = %d", l2i(dx), ABS(yi), ABS(zi), ABS(zj), nAddedCls, itarget.size() + otarget.size());
+				printGate(itarget, otarget);
+#endif
+				substitute_x(v, itarget, otarget, out_c);
+				return true;
 			}
 		}
 		return false;
 	}
 
-	bool mayResolve_x(const uint32& x, OL& p_ol, OL& n_ol)
+	inline S_REF find_fanin(const uint32& gate_out, const int& bitpos, OL& list, Lits_t& out_c)
+	{
+		for (S_REF* i = list; i != list.end(); i++) {
+			SCLAUSE& c = **i;
+			if (c.molten() || (c.size() - 1) != out_c.size()) continue;
+			if (c.original() && isAlmostEqual(gate_out, bitpos, **i, out_c))
+				return *i;
+		}
+		return NULL;
+	}
+
+	inline bool find_XOR_gate(const uint32& dx, const int& nOrgCls, OT& ot, Lits_t& out_c, const bool& bound)
+	{
+		assert(checkMolten(ot[dx], ot[FLIP(dx)]));
+		OL& itarget = ot[dx];
+		for (S_REF* i = itarget; i != itarget.end(); i++) {
+			SCLAUSE& ci = **i;
+			int size = ci.size();
+			int arity = size - 1; // XOR arity
+			if (ci.learnt() || size < 3 || arity > pfrost->opts.xor_max_arity) continue;
+			assert(ci.original());
+			// share to out_c except dx
+			out_c.clear();
+			for (int k = 0; k < size; k++) if (ci[k] != dx) out_c.push(POS(ci[k]));
+			assert(out_c.size() == arity);
+			// find arity clauses
+			int itargets = 0;
+			for (int j = 0; j < arity; j++) {
+				S_REF cj = find_fanin(dx, j, itarget, out_c);
+				if (cj) {
+					assert(cj->original());
+					cj->melt(), itargets++;
+				}
+				else break;
+			}
+			if (itargets < arity) {
+				freeze_arities(itarget);
+				continue;
+			}
+			// find all +/-  
+			uint32 f_dx = FLIP(dx);
+			S_REF d1 = find_all(f_dx, ot, out_c);
+			if (!d1) break;
+			flip_all(out_c);
+			S_REF d2 = find_all(f_dx, ot, out_c);
+			if (!d2) break;
+			assert(d1->original());
+			assert(d2->original());
+			d1->melt(), d2->melt();
+			// check resolvability
+			uint32 v = ABS(dx);
+			OL& otarget = ot[f_dx];
+			int nAddedCls = 0, nAddedLits = 0;
+			countSubstituted(v, itarget, otarget, nAddedCls, nAddedLits);
+			if (nAddedCls > nOrgCls) {
+				d1->freeze(), d2->freeze();
+				break;
+			}
+			if (bound) {
+				int lits_before = 0;
+				countLitsBefore(itarget, lits_before);
+				countLitsBefore(otarget, lits_before);
+				if (nAddedLits > lits_before) {
+					d1->freeze(), d2->freeze();
+					break;
+				}
+			}
+			// can be substituted
+#if VE_DBG
+			PFLOGN1(" Gate %d = XOR(", l2i(dx));
+			for (int k = 0; k < out_c.size(); k++) {
+				fprintf(stdout, " %d", ABS(out_c[k]));
+				if (k < out_c.size() - 1) putc(',', stdout);
+			}
+			fprintf(stdout, " ) found ==> added = %d, deleted = %d\n", nAddedCls, itarget.size() + otarget.size());
+			printGate(itarget, otarget);
+#endif
+			substitute_x(v, itarget, otarget, out_c);
+			return true;
+		}
+		freeze_arities(itarget);
+		return false;
+	}
+
+	inline bool resolve_x(const uint32& x, const int& pOrgs, const int& nOrgs, OL& poss, OL& negs, Lits_t& out_c, const bool& bound)
 	{
 		assert(x);
-		int numTautologies = 0;
-		int64 numAddedLiterals = 0;
+		assert(checkMolten(poss, negs));
+		out_c.clear();
+		uint32 p = V2L(x);
 		// check resolvability
-		for (int i = 0; i < p_ol.size(); i++)
-			for (int j = 0; j < n_ol.size(); j++)
-				if (isTautology(x, p_ol[i], n_ol[j]))
-					numTautologies++;
-				else
-					numAddedLiterals += (int64)p_ol[i]->size() + (int64)n_ol[j]->size() - 2;
-		int resolvents = p_ol.size() * n_ol.size() - numTautologies;
-		if (resolvents == 0) return true; // No resolvents to add
-		if (resolvents > p_ol.size() + n_ol.size()) return false;
+		int nAddedCls = 0, nAddedLits = 0;
+		countResolvents(x, pOrgs, nOrgs, poss, negs, nAddedCls, nAddedLits);
+		if (nAddedCls == 0) return true; // No resolvents to add
+		if (nAddedCls > pOrgs + nOrgs) return false;
 		// count literals before elimination
-		int64 lits_before = 0;
-		for (int i = 0; i < p_ol.size(); i++) lits_before += (int64)p_ol[i]->size();
-		for (int j = 0; j < n_ol.size(); j++) lits_before += (int64)n_ol[j]->size();
-		if (numAddedLiterals > lits_before) return false;
+		if (bound) {
+			int lits_before = 0;
+			countLitsBefore(poss, lits_before);
+			countLitsBefore(negs, lits_before);
+			if (nAddedLits > lits_before) return false;
+		}
 		// can be eliminated
-		resolve_x(x, p_ol, n_ol);
+#if VE_DBG
+		PFLOG1(" Resolving(%d) ==> added = %d, deleted = %d", x, nAddedCls, poss.size() + negs.size());
+		pfrost->printOL(poss), pfrost->printOL(negs);
+#endif
+		for (int i = 0; i < poss.size(); i++) {
+			if (poss[i]->learnt()) continue;
+			for (int j = 0; j < negs.size(); j++) {
+				if (negs[j]->learnt()) continue;
+				if (!isTautology(x, poss[i], negs[j])) {
+					merge(x, poss[i], negs[j], out_c);
+					S_REF added = new SCLAUSE(out_c);
+					pfrost->newResolvent(added);
+#if VE_DBG
+					PFLCLAUSE(1, (*added), " Resolvent ");
+#endif
+				}
+			}
+		}
 		return true;
 	}
 
-	void self_sub_x(const uint32& x, OL& p_ol, OL& n_ol)
+	inline void self_sub_x(const uint32& x, OL& poss, OL& negs)
 	{
+		assert(checkMolten(poss, negs));
 		// positives vs negatives
-		for (int i = 0; i < p_ol.size(); i++) {
-			S_REF pos_c = p_ol[i];
-			if (pos_c->status() == DELETED) continue;
+		for (int i = 0; i < poss.size(); i++) {
+			S_REF pos = poss[i];
+			if (pos->size() > HSE_MAX_CL_SIZE) break;
+			if (pos->deleted()) continue;
 			// self-subsumption check
-			for (int j = 0; j < n_ol.size(); j++) {
-				S_REF neg_c = n_ol[j];
-				if (neg_c->status() == DELETED) continue;
-				if (neg_c->size() > 1 && neg_c->size() < pos_c->size() &&
-					selfSubset_sig(neg_c->sig(), pos_c->sig()) && selfSubset(x, neg_c, pos_c)) {
-					pfrost->strengthen(pos_c, x);
-					pos_c->melt(); // mark for fast recongnition in ot update 
-				}
-				else if (neg_c->size() > 1 && neg_c->size() == pos_c->size() &&
-					selfSubset_sig(neg_c->sig(), pos_c->sig()) && selfSubset(x, neg_c, pos_c)) {
-					// shorten the positive occur and delete the negative occur subsumed by the former
-					pfrost->strengthen(pos_c, x);
-					pos_c->melt();
-					neg_c->markDeleted();
+			for (int j = 0; j < negs.size(); j++) {
+				S_REF neg = negs[j];
+				if (neg->size() > pos->size()) break;
+				if (neg->deleted()) continue;
+				if (neg->size() > 1 && selfSubset_sig(neg->sig(), pos->sig()) && selfSubset(x, neg, pos)) {
+#if HSE_DBG
+					PFLCLAUSE(1, (*pos), " Clause ");
+					PFLCLAUSE(1, (*neg), " Strengthened by ");
+#endif 
+					pfrost->strengthen(pos, x);
+					pos->melt(); // mark for fast recongnition in ot update 
+					break; // cannot strengthen "pos" anymore, 'x' already removed
 				}
 			}
 			// subsumption check
-			for (int j = 0; j < p_ol.size(); j++) {
-				S_REF sm_c = p_ol[j];
-				if (sm_c->status() != DELETED && sm_c->size() < pos_c->size() &&
-					subset_sig(sm_c->sig(), pos_c->sig()) && subset(sm_c, pos_c)) {
-					pos_c->markDeleted();
-					break; // mission accomplished!
+			for (int j = 0; j < i; j++) {
+				S_REF sm_c = poss[j];
+				if (sm_c->deleted()) continue;
+				if (pos->molten() && sm_c->size() > pos->size()) continue;
+				if (sm_c->size() > 1 && subset_sig(sm_c->sig(), pos->sig()) && subset(sm_c, pos)) {
+					if (sm_c->learnt() && pos->original()) sm_c->set_status(ORIGINAL);
+#if HSE_DBG
+					PFLCLAUSE(1, (*pos), " Clause ");
+					PFLCLAUSE(1, (*sm_c), " Subsumed by ");
+#endif 
+					pos->markDeleted();
+					break;
 				}
 			}
 		}
-		updateOL(p_ol);
+		updateOL(poss);
 		// negatives vs positives
-		for (int i = 0; i < n_ol.size(); i++) {
-			S_REF neg_c = n_ol[i];
-			if (neg_c->status() == DELETED) continue;
+		for (int i = 0; i < negs.size(); i++) {
+			S_REF neg = negs[i];
+			if (neg->size() > HSE_MAX_CL_SIZE) break;
+			if (neg->deleted()) continue;
 			// self-subsumption check
-			for (int j = 0; j < p_ol.size(); j++) {
-				S_REF pos_c = p_ol[j];
-				if (pos_c->status() == DELETED) continue;
-				if (pos_c->size() > 1 && pos_c->size() < neg_c->size() &&
-					selfSubset_sig(pos_c->sig(), neg_c->sig()) && selfSubset(NEG(x), pos_c, neg_c)) {
-					pfrost->strengthen(neg_c, NEG(x));
-					neg_c->melt();
+			for (int j = 0; j < poss.size(); j++) {
+				S_REF pos = poss[j];
+				if (pos->size() >= neg->size()) break;
+				if (pos->deleted()) continue;
+				if (pos->size() > 1 && selfSubset_sig(pos->sig(), neg->sig()) && selfSubset(NEG(x), pos, neg)) {
+#if HSE_DBG
+					PFLCLAUSE(1, (*neg), " Clause ");
+					PFLCLAUSE(1, (*pos), " Strengthened by ");
+#endif 
+					pfrost->strengthen(neg, NEG(x));
+					neg->melt();
+					break;
 				}
 			}
 			// subsumption check
-			for (int j = 0; j < n_ol.size(); j++) {
-				S_REF sm_c = n_ol[j];
-				if (sm_c->status() != DELETED && sm_c->size() < neg_c->size() &&
-					subset_sig(sm_c->sig(), neg_c->sig()) && subset(sm_c, neg_c)) {
-					neg_c->markDeleted();
-					break; // mission accomplished!
+			for (int j = 0; j < i; j++) {
+				S_REF sm_c = negs[j];
+				if (sm_c->deleted()) continue;
+				if (neg->molten() && sm_c->size() > neg->size()) continue;
+				if (sm_c->size() > 1 && subset_sig(sm_c->sig(), neg->sig()) && subset(sm_c, neg)) {
+					if (sm_c->learnt() && neg->original()) sm_c->set_status(ORIGINAL);
+#if HSE_DBG
+					PFLCLAUSE(1, (*neg), " Clause ");
+					PFLCLAUSE(1, (*sm_c), " Subsumed by ");
+#endif 
+					neg->markDeleted();
+					break;
 				}
 			}
 		}
-		updateOL(n_ol);
+		updateOL(negs);
+		assert(checkMolten(poss, negs));
+		assert(checkDeleted(poss, negs));
 	}
 
-	void blocked_x(const uint32& x, OL& p_ol, OL& n_ol)
+	inline void blocked_x(const uint32& x, OL& poss, OL& negs)
 	{
-		uint32 numTautologies = 0;
-		if (p_ol.size() <= n_ol.size()) {  // start with positives
-			for (int i = 0; i < p_ol.size(); i++) {
-				numTautologies = 0;
-				if (p_ol[i]->status() == DELETED) continue;
-				for (int j = 0; j < n_ol.size(); j++) {
-					if (n_ol[j]->status() == DELETED) continue;
-					if (isTautology(x, p_ol[i], n_ol[j])) numTautologies++;
-				}
-				if (numTautologies == n_ol.size()) p_ol[i]->markDeleted();
+		// start with negs
+		for (int i = 0; i < negs.size(); i++) {
+			if (negs[i]->deleted() || negs[i]->learnt()) continue;
+			bool allTautology = true;
+			for (int j = 0; j < poss.size(); j++) {
+				if (poss[j]->deleted() || poss[j]->learnt()) continue;
+				if (!isTautology(x, negs[i], poss[j])) { allTautology = false; break; }
 			}
-		}
-		else { // start with negatives
-			for (int i = 0; i < n_ol.size(); i++) {
-				numTautologies = 0;
-				if (n_ol[i]->status() == DELETED) continue;
-				for (int j = 0; j < p_ol.size(); j++) {
-					if (p_ol[j]->status() == DELETED) continue;
-					if (isTautology(x, n_ol[i], p_ol[j])) numTautologies++;
-				}
-				if (numTautologies == p_ol.size()) n_ol[i]->markDeleted();
-			}
+			if (allTautology) negs[i]->markDeleted();
 		}
 	}
 

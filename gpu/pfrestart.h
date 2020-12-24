@@ -29,12 +29,16 @@ namespace pFROST {
         int64 c, p;
 
         inline EMA() : val(0), a(0), b(0), c(0), p(0) {}
-        inline EMA(const int& window) : val(0), p(0), b(1.0), c(0) { assert(window); a = 1.0 / (double)window; assert(b >= a); }
+        inline EMA(const int& window) : val(0), p(0), b(1.0), c(0) { 
+            assert(window >= 1);
+            a = 1.0 / (double)window;
+            assert(a >= 0), assert(b >= a), assert(b <= 1);
+        }
         inline operator double() const { return val; }
         inline void update(const double& x) {
             val += b * (x - val);
             if (b <= a || c--) return;
-            p <<= 1, c = ++p; // next count down
+            c = p = ((p + 1) << 1) - 1;
             b *= 0.5;
             if (b < a) b = a;
         }
@@ -67,35 +71,26 @@ namespace pFROST {
 
     // reference: MiniSat, SAT4j, CadiCal
     class LUBYREST {
-        int64 u, v, limit;
-        int64 factor, bound;
-        bool _restart, _limited;
+        uint64 u, v, limit;
+        uint64 period, countdown;
+        bool restart, limited;
+
     public:
-        LUBYREST() : factor(0), _restart(false) { }
-        inline void init(int _factor, int64 _limit = 0) {
-            assert(_factor);
-            limit = _limit, factor = bound = _factor;
-            _limited = limit > 0, _restart = false;
-            reset();
-            PFLOG2(2, " Initializing Luby restart with (factor: %lld, limit: %lld)", factor, limit);
+        LUBYREST() : period(0), restart(false) {}
+        void init(int p, int64 l) {
+            assert(p > 0);
+            u = v = 1;
+            period = countdown = p;
+            restart = false;
+            if (l <= 0) limited = false;
+            else limited = true, limit = l;
         };
-        inline void reset() { u = v = 1; }
-        inline void disable() { factor = 0, _restart = false; }
-        inline bool limitReached() const { return _limited && v >= limit; }
-        inline int64 nextLuby() {
-            if ((u & -u) == v) u++, v = 1;
-            else v <<= 1;
-            if (limitReached()) reset();
-            return v;
-        }
-        inline void update() {
-            if (!factor || _restart || --bound) return;
-            bound = nextLuby() * factor;
-            _restart = true;
-        }
-        inline bool restart() {
-            if (_restart) { _restart = false; return true; }
-            return false;
+        void disable() { period = 0, restart = false; }
+        void update();
+        operator bool() {
+            if (!restart) return false;
+            restart = false;
+            return true;
         }
     };
 

@@ -22,178 +22,234 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 #include <cstdio>
 #include <cstring>
 #include "pfconst.h"
+#include "pfcolor.h"
 
 #define RULELEN 90
+#define UNDERLINE	"\u001b[4m"
 
 inline void REPCH(const char& ch, const size_t& size, const size_t& off = 0) {
     for (size_t i = off; i < size; i++) putc(ch, stdout);
 }
 
-#define PFLDONE(lvl, max) if (verbose >= lvl && verbose < max) fprintf(stdout, "done.\n");
+#define PFLDONE(VERBOSITY, MAXVERBOSITY) if (verbose >= VERBOSITY && verbose < MAXVERBOSITY) fprintf(stdout, "done.\n");
 
-#define PFLENDING(lvl, max, format, ...) \
+#define PFLENDING(VERBOSITY, MAXVERBOSITY, FORMAT, ...) \
     do { \
-        if (verbose >= lvl && verbose < max) { \
-            fprintf(stdout, format, ## __VA_ARGS__); \
+        if (verbose >= VERBOSITY && verbose < MAXVERBOSITY) { \
+            fprintf(stdout, FORMAT, ## __VA_ARGS__); \
             fprintf(stdout, " done.\n"); \
         } \
     }while(0)
 
-#define PFLMEMCALL(s, lvl) PFLOG2(lvl, " Memory used in %s call = %lld MB", __func__, s->sysMemUsed() / MBYTE);
+#define PFLMEMCALL(SOLVER, VERBOSITY) PFLOG2(VERBOSITY, " Memory used in %s call = %lld MB", __func__, sysMemUsed() / MBYTE);
 
-#define PFLGCMEM(lvl, oldB, newB) \
-    if (verbose >= lvl) { \
+#define PFLGCMEM(VERBOSITY, oldB, newB) \
+    if (verbose >= VERBOSITY) { \
         double diff = abs(double(oldB.size() - newB.size())) * oldB.bucket(); \
         fprintf(stdout, "(%.2f KB saved) ", diff / KBYTE); \
     }
 
-#define PFLOG0(msg) fprintf(stdout, "c |%s\n", msg);
+#define PFLOG0(MESSAGE) fprintf(stdout, "c |%s\n", MESSAGE);
 
-#define PFLOG1(format, ...) \
+#define PFLOG1(FORMAT, ...) \
     do { \
-        fprintf(stdout, "c |"), fprintf(stdout, format, ## __VA_ARGS__), putc('\n', stdout); \
+        fprintf(stdout, "c |"), fprintf(stdout, FORMAT, ## __VA_ARGS__), putc('\n', stdout); \
     } while (0)
 
-#define PFLOG2(lvl, format, ...) \
+#define PFLOG2(VERBOSITY, FORMAT, ...) \
     do { \
-        if (verbose >= lvl) { fprintf(stdout, "c |"), fprintf(stdout, format, ## __VA_ARGS__), putc('\n', stdout); } \
+        if (verbose >= VERBOSITY) { fprintf(stdout, "c |"), fprintf(stdout, FORMAT, ## __VA_ARGS__), putc('\n', stdout); } \
     } while (0)
 
-#define PFLOGN0(msg) fprintf(stdout, "c |%s", msg);
-
-#define PFLOGN1(format, ...) \
+#define PFPRINT(VERBOSITY, MAXVERBOSITY, FORMAT, ...) \
     do { \
-        fprintf(stdout, "c |"), fprintf(stdout, format, ## __VA_ARGS__); \
+        if (verbose >= VERBOSITY && verbose < MAXVERBOSITY) { fprintf(stdout, FORMAT, ## __VA_ARGS__); } \
     } while (0)
 
-#define PFLOGN2(lvl, format, ...) \
+#define PFLOGN0(MESSAGE) fprintf(stdout, "c |%s", MESSAGE);
+
+#define PFLOGN1(FORMAT, ...) \
     do { \
-        if (verbose >= lvl) { fprintf(stdout, "c |"), fprintf(stdout, format, ## __VA_ARGS__); } \
+        fprintf(stdout, "c |"), fprintf(stdout, FORMAT, ## __VA_ARGS__); \
+    } while (0)
+
+#define PFLOGN2(VERBOSITY, FORMAT, ...) \
+    do { \
+        if (verbose >= VERBOSITY) { fprintf(stdout, "c |"), fprintf(stdout, FORMAT, ## __VA_ARGS__); } \
     } while(0)
 
-#define PFLOGS(sat) \
+#define PFLOGS(RESULT) \
     do { \
         if (!quiet_en) PFLOG0(""); \
-        fprintf(stdout, "s %s\n", sat); \
+        fprintf(stdout, "s %s\n", RESULT); \
     } while (0)
 
-#define PFLOGE(format, ...) \
+#define PFLOGE(FORMAT, ...) \
   do { \
-     fprintf(stderr, "ERROR - "), fprintf(stderr, format, ## __VA_ARGS__), putc('\n', stdout); \
+     SETCOLOR(CERROR, stderr); \
+     fprintf(stderr, "ERROR - "); \
+     fprintf(stderr, FORMAT, ## __VA_ARGS__); \
+     putc('\n', stderr); \
+     SETCOLOR(CNORMAL, stderr); \
      exit(1); \
   } while (0)
 
-#define PFLOGEN(format, ...) \
+#define PFLOGEN(FORMAT, ...) \
   do { \
-     fprintf(stderr, "ERROR - "), fprintf(stderr, format, ## __VA_ARGS__), putc('\n', stdout); \
+     SETCOLOR(CERROR, stderr); \
+     fprintf(stderr, "ERROR - "); \
+     fprintf(stderr, FORMAT, ## __VA_ARGS__); \
+     putc('\n', stderr); \
+     SETCOLOR(CNORMAL, stderr); \
   } while (0)
 
-#define PFLOGW(format, ...) \
+#define PFLOGW(FORMAT, ...) \
   do { \
-     fprintf(stderr, "c | WARNING - "), fprintf(stderr, format, ## __VA_ARGS__), putc('\n', stdout); \
+     SETCOLOR(CWARNING, stderr); \
+     fprintf(stderr, "WARNING - ");\
+     fprintf(stderr, FORMAT, ## __VA_ARGS__);\
+     putc('\n', stdout); \
+     SETCOLOR(CNORMAL, stderr); \
   } while (0)
 
-#define PFLOGR(ch, x) \
+#define PFLRULER(CH, TIMES) \
   do { \
      fprintf(stdout, "c |"); \
-     REPCH(ch, x);      \
+     REPCH(CH, TIMES);      \
      fprintf(stdout, "|\n"); \
   } while (0)
 
-#define PFNAME(name) \
-  PFLOGR('-', RULELEN); \
+#define PFNAME(NAME) \
+  PFLRULER('-', RULELEN); \
   do { \
      const char* suffix = "SAT Solver"; \
-     size_t len = strlen(name) + strlen(suffix); \
+     size_t len = strlen(NAME) + strlen(suffix); \
      if (RULELEN < len) PFLOGE("ruler length is smaller than the title"); \
-     size_t gap = (RULELEN - len) / 2; \
+     size_t gap = (RULELEN - len - 3) / 2; \
      PFLOGN0(" "); \
      REPCH(' ', gap); \
-     fprintf(stdout, "%s %s", name, suffix); \
+     fprintf(stdout, "%s%s%s %s%s%s", UNDERLINE, CSOLVER, NAME, CSOLVER, suffix, CNORMAL); \
      REPCH(' ', RULELEN + 1, len + gap + 3), fprintf(stdout, "|\n"); \
   } while (0); \
 
-#define PFAUTHORS(authors) \
+#define PFAUTHORS(AUTHORS) \
   do { \
      const char *prefix = "Authors: "; \
-     size_t len = strlen(prefix) + strlen(authors); \
+     size_t len = strlen(prefix) + strlen(AUTHORS); \
      if (RULELEN < len) PFLOGE("ruler length is smaller than the authors"); \
      size_t gap = RULELEN - len - 1; \
-     PFLOGN1(" %s%s", prefix, authors); \
+     PFLOGN0(" "); \
+     fprintf(stdout, "%s%s%s%s", CAUTHOR, prefix, AUTHORS, CNORMAL); \
      REPCH(' ', gap), fprintf(stdout, "|\n"); \
   } while (0); \
 
-#define PFRIGHTS(rights) \
+#define PFRIGHTS(RIGHTS) \
   do { \
      const char *suffix = ", all rights reserved."; \
-     size_t len = strlen(rights) + strlen(suffix); \
+     size_t len = strlen(RIGHTS) + strlen(suffix); \
      if (RULELEN < len) PFLOGE("ruler length is smaller than the rights"); \
      size_t gap = RULELEN - len - 1; \
-     PFLOGN1(" %s%s", rights, suffix); \
+     PFLOGN0(" "); \
+     fprintf(stdout, "%s%s%s%s", CRIGHTS, RIGHTS, CNORMAL, suffix); \
      REPCH(' ', gap), fprintf(stdout, "|\n"); \
   } while (0); \
 
-#define PFLBCPS(s, lvl, lit) \
-     if (verbose >= lvl) { \
-		PFLOG1("\t Before BCP(%d)", l2i(lit)); \
-		s->printWatched(ABS(lit)); }
+#define PFLBCPS(SOLVER, VERBOSITY, LIT) \
+     if (verbose >= VERBOSITY) { \
+		PFLOG1("\t Before BCP(%d)", l2i(LIT)); \
+		SOLVER->printWatched(ABS(LIT)); }
 
-#define PFLBCP(s, lvl, lit) \
-     if (verbose >= lvl) { \
-		PFLOG1("\t BCP(%d)", l2i(lit)); \
-		s->printOL(lit); \
-        s->printOL(FLIP(lit)); }
+#define PFLBCP(SOLVER, VERBOSITY, LIT) \
+     if (verbose >= VERBOSITY) { \
+		PFLOG1("\t BCP(%d)", l2i(LIT)); \
+		SOLVER->printOL(LIT); \
+        SOLVER->printOL(FLIP(LIT)); }
 
-#define PFLTRAIL(s, lvl) if (verbose >= lvl) s->printTrail();
+#define PFLTRAIL(SOLVER, VERBOSITY) if (verbose >= VERBOSITY) SOLVER->printTrail();
 
-#define PFLLEARNT(s, lvl) if (verbose >= lvl) s->printLearnt();
+#define PFLLEARNT(SOLVER, VERBOSITY) if (verbose >= VERBOSITY) SOLVER->printLearnt();
 
-#define PFLCLAUSE(lvl, c, format, ...) \
+#define PFLSORTED(SOLVER, VERBOSITY) if (verbose >= VERBOSITY) SOLVER->printSortedStack();
+
+#define PFLCLAUSE(VERBOSITY, CLAUSE, FORMAT, ...) \
     do { \
-        if (verbose >= lvl) { \
-            fprintf(stdout, "c |"), fprintf(stdout, format, ## __VA_ARGS__); \
-            c.print(); \
+        if (verbose >= VERBOSITY) { \
+            fprintf(stdout, "c |");\
+            fprintf(stdout, FORMAT, ## __VA_ARGS__); \
+            SETCOLOR(CLOGGING, stdout);\
+            CLAUSE.print(); \
+            SETCOLOR(CNORMAL, stdout);\
         } \
     } while (0)
 
-#define PFLDL(s, lvl) PFLOG2(lvl, " Current decision level: %d", s->DL());
+#define PFLDL(SOLVER, VERBOSITY) PFLOG2(VERBOSITY, " Current decision level: %d", SOLVER->DL());
 
-#define PFLMH(ch) \
+#define PFLMH(CH) fprintf(stdout, "%c ", CH);
+
+#define PFLMLIT(VAR, VALUE) fprintf(stdout, "%c%d ", VALUE ? ' ' : '-', VAR); 
+
+#define PFLBCPE(SOLVER, VERBOSITY, LIT) \
+     if (verbose >= VERBOSITY) { \
+		PFLOG1("\t After BCP(%d)", l2i(LIT)); \
+		SOLVER->printWatched(ABS(LIT)); \
+        PFLRULER('-', 30); }
+
+#define PFLNEWLIT(SOLVER, VERBOSITY, SRC, LIT) \
     do { \
-        fprintf(stdout, "%c ", ch);\
-    } while (0); \
+        PFLOG2(VERBOSITY, "   %sNew %s( %d@%d )%s", CREPORTVAL, SRC == NOREF ? !SOLVER->DL() ? "forced unit" : "decision" : "unit", l2i(LIT), l2dl(LIT), CNORMAL); \
+    } while (0)
 
-#define PFLMLIT(v, val) fprintf(stdout, "%c%d ", val ? ' ' : '-', v); 
-
-#define PFLBCPE(s, lvl, lit) \
-     if (verbose >= lvl) { \
-		PFLOG1("\t After BCP(%d)", l2i(lit)); \
-		s->printWatched(ABS(lit)); \
-        PFLOGR('-', 30); }
-
-#define PFLNEWLIT(s, lvl, src, lit) \
+#define PFLCONFLICT(SOLVER, VERBOSITY, LIT) \
     do { \
-        PFLOG2(lvl, "   New %s( %d@%d )", src == NOREF ? s->DL() == ROOT_LEVEL ? "forced unit" : "decision"  : "unit", l2i(lit), l2dl(lit)); \
-    }while(0)
+        PFLOG2(VERBOSITY, " %sConflict detected in literal( %d@%d )%s", CCONFLICT, l2i(LIT), l2dl(LIT), CNORMAL); \
+    } while (0)
 
-#define PFLCONFLICT(s, lvl, lit) PFLOG2(lvl, " Conflict detected in literal( %d@%d )", l2i(lit), l2dl(lit));
+#define PFLREDALL(SOLVER, VERBOSITY, MESSAGE) \
+    if (verbose >= VERBOSITY) { \
+        SOLVER->evalReds(); \
+        PFLOG1("\t\t %s%s%s", CLBLUE, MESSAGE, CNORMAL); \
+        SOLVER->logReductions(); }
 
-#define PFLREDALL(s, lvl, msg) \
-    if (verbose >= lvl) { \
-        if (!sync_always) sync(); \
-        s->filterPVs(); \
-        s->evalReds(); \
-        PFLOG1("\t\t %s",msg); \
-        s->logReductions();\
-    }
+#define PFLREDALLHOST(SOLVER, VERBOSITY, MESSAGE) \
+    if (verbose >= VERBOSITY) { \
+        SOLVER->evalReds(1); \
+        PFLOG1("\t\t %s", MESSAGE); \
+        SOLVER->logReductions(); }
 
-#define PFLREDCL(s, lvl, msg) \
-    if (verbose >= lvl) { \
+#define PFLREDCL(SOLVER, VERBOSITY, MESSAGE) \
+    if (verbose >= VERBOSITY) { \
         inf.n_del_vars_after = 0; \
-        if (!sync_always) sync(); \
-        s->countAll(); \
-        PFLOG1("\t\t %s", msg); \
-        s->logReductions(); \
-    }
+        SOLVER->countAll(); \
+        PFLOG1("\t\t %s%s%s", CLBLUE, MESSAGE, CNORMAL); \
+        SOLVER->logReductions(); }
+
+#define PFORGINF(SOLVER, CLS, LITS) \
+    int64 CLS = SOLVER->stats.clauses.original; \
+    int64 LITS = SOLVER->stats.literals.original; \
+
+#define PFLEARNTINF(SOLVER, CLS, LITS) \
+    int64 CLS = SOLVER->stats.clauses.learnt; \
+    int64 LITS = SOLVER->stats.literals.learnt; \
+
+#define PFLSHRINKALL(SOLVER, VERBOSITY, BCLS, BLITS) \
+    do { \
+        int64 RCLS = BCLS - maxClauses(), RLITS = BLITS - maxLiterals(); \
+        SOLVER->stats.shrink.clauses += RCLS, SOLVER->stats.shrink.literals += RLITS; \
+        PFLENDING(VERBOSITY, 5, "(-%lld clauses, -%lld literals)", RCLS, RLITS); \
+    } while (0)
+
+#define PFLSHRINKORG(SOLVER, VERBOSITY, BCLS, BLITS) \
+    do { \
+        int64 RCLS = BCLS - SOLVER->stats.clauses.original, RLITS = BLITS - SOLVER->stats.literals.original; \
+        SOLVER->stats.shrink.clauses += RCLS, SOLVER->stats.shrink.literals += RLITS; \
+        PFLENDING(VERBOSITY, 5, "(-%lld clauses, -%lld literals)", RCLS, RLITS); \
+    } while (0)
+
+#define PFLSHRINKLEARNT(SOLVER, VERBOSITY, BCLS, BLITS) \
+    do { \
+        int64 RCLS = BCLS - SOLVER->stats.clauses.learnt, RLITS = BLITS - SOLVER->stats.literals.learnt; \
+        SOLVER->stats.shrink.clauses += RCLS, SOLVER->stats.shrink.literals += RLITS; \
+        PFLENDING(VERBOSITY, 5, "(-%lld clauses, -%lld literals)", RCLS, RLITS); \
+    } while (0)
 
 #endif

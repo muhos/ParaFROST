@@ -34,7 +34,7 @@ namespace pFROST {
 				PFLOG2(2, " Initially mapping original variables to literals..");
 				maxVar = inf.maxVar;
 				lits.resize(maxVar + 1), lits[0] = 0;
-				for (uint32 v = 1; v <= inf.maxVar; v++) lits[v] = v2l(v);
+				for (uint32 v = 1; v <= inf.maxVar; v++) lits[v] = V2L(v);
 			}
 			void		print() {
 				PFLMH('v');
@@ -45,7 +45,7 @@ namespace pFROST {
 			}
 			void		extend(LIT_ST*);
 			__forceinline
-			bool		satisfied(const uint32& lit) { return value[l2a(lit)] == !sign(lit); }
+			bool		satisfied(const uint32& lit) { return value[ABS(lit)] == !SIGN(lit); }
 		};
 	}
 }

@@ -25,55 +25,69 @@ extern bool quiet_en;
 extern int verbose;
 
 namespace pFROST {
-//=======================================//
-//      ParaFROST Parameters & Macros    //
-//=======================================//
-#define MBYTE 0x00100000
-#define KBYTE 0x00000400
-#define GBYTE 0x40000000
-#define NOREF UINT32_MAX
-#define NOVAR UINT32_MAX
-#define INIT_CAP 32
-#define UNSOLVED -1
-#define TERMINATE -2
-#define ROOT_LEVEL 0
-#define TAUTOLOGY 0
-#define UNKNOWN 0
-#define UNSAT 0
-#define SAT 1
-#define ORGPHASE 3
-#define FLIPPHASE 4
-#define BESTPHASE 5
-//======== DANGER ZONE =========
-#define NEG_SIGN	0x00000001
-#define HASH_MASK	0x0000001F
-#define NOVAL_MASK	(LIT_ST)-2
-#define UNDEFINED	(LIT_ST)-1
-#define VAL_MASK	(LIT_ST) 1
-#define ACTIVE		(LIT_ST) 0
-#define MELTED		(LIT_ST) 1
-#define FROZEN		(LIT_ST) 2
-#define NOREASON	(CL_ST)0x00
-#define CFREEZE		(CL_ST)0x00
-#define STILL		(CL_ST)0x00
-#define CMELT		(CL_ST)0x01
-#define MOVED		(CL_ST)0x01
-#define REASON		(CL_ST)0x01
-#define USAGET3		(CL_ST)0x01
-#define USAGET2		(CL_ST)0x02
-#define ORIGINAL	(CL_ST)0x01
-#define LEARNT		(CL_ST)0x02
-#define DELETED		(CL_ST)0x04
-#define ABS(x)		((x) >> 1)
-#define V2D(x)		((x) << 1)
-#define V2X(x)		(ABS(x) - 1)
-#define SIGN(x)		(x & NEG_SIGN)
-#define NEG(x)		(x | NEG_SIGN)
-#define FLIP(x)		(x ^ NEG_SIGN)
-#define HASH(x)		(x & HASH_MASK)
-#define MAPHASH(x)	(1 << HASH(x))
-#define POS(x)		(x & 0xFFFFFFFE)
-//==============================
+	//=======================================//
+	//      ParaFROST Parameters & Macros    //
+	//=======================================//
+	#define MBYTE 0x00100000
+	#define KBYTE 0x00000400
+	#define GBYTE 0x40000000
+	#define NOREF UINT64_MAX
+	#define NOVAR UINT32_MAX
+	#define INIT_CAP 32
+	#define UNSOLVED -1
+	#define UNSAT 0
+	#define SAT 1
+	#define ORGPHASE 1
+	#define INVPHASE 2
+	#define FLIPPHASE 3
+	#define BESTPHASE 4
+	#define RANDPHASE 5
+	#define AWAKEN_SUCC	0
+	#define AWAKEN_FAIL 1
+	#define SALLOC_FAIL 2
+	//======== DANGER ZONE =========
+	#define NEG_SIGN	0x00000001
+	#define HASH_MASK	0x0000001F
+	#define NOVAL_MASK	(LIT_ST)-2
+	#define UNDEFINED	(LIT_ST)-1
+	#define VAL_MASK	(LIT_ST) 1
+	#define ACTIVE		(LIT_ST) 0
+	#define MELTED		(LIT_ST) 1
+	#define FROZEN		(LIT_ST) 2
+	#define ANALYZED_M	(LIT_ST) 0x01
+	#define REMOVABLE_M	(LIT_ST) 0x02
+	#define POISONED_M	(LIT_ST) 0x04
+	#define KEEP_M		(LIT_ST) 0x08
+	#define USAGE_MAX	(CL_ST)0x03
+	#define USAGE_RES	(CL_ST)0x03
+	#define USAGE_OFF	(CL_ST)0x02
+	#define CMOLTEN		(CL_ST)0x01
+	#define CADDED		(CL_ST)0x02
+	#define RMOLTEN		(CL_ST)0xFE
+	#define USAGET3		(CL_ST)0x01
+	#define USAGET2		(CL_ST)0x02
+	#define ORIGINAL	(CL_ST)0x01
+	#define LEARNT		(CL_ST)0x02
+	#define DELETED		(CL_ST)0x04
+	#define ISORG(x)		((x) & ORIGINAL)
+	#define POS(x)			((x) & 0xFFFFFFFE)
+	#define ABS(x)			((x) >> 1)
+	#define V2L(x)			((x) << 1)
+	#define SIGN(x)			((x) & NEG_SIGN)
+	#define NEG(x)			((x) | NEG_SIGN)
+	#define V2DEC(x,s)		(V2L(x) | (s))
+	#define FLIP(x)			((x) ^ NEG_SIGN)
+	#define HASH(x)			((x) & HASH_MASK)
+	#define MAPHASH(x)		(1UL << HASH(x))
+	#define	REMOVABLE(x)	((x) & REMOVABLE_M)	
+	#define	POISONED(x)		((x) & POISONED_M)
+	#define	KEPT(x)			((x) & KEEP_M)
+	#define UNASSIGNED(x)	((x) & NOVAL_MASK)
+	#define REASON(x)		((x) ^ NOREF)
+	#define DECISION(x)		(!REASON(x))
+	//==============================
+	extern size_t hc_bucket, hc_nbuckets;
+
 }
 
 #endif
