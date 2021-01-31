@@ -63,7 +63,6 @@ parafrost: pfmain.o libpfrost.a
 	$(HOST_COMPILER) $(CCFLAGS) -o $@ pfmain.o -L. -lpfrost $(LIBRARIES)
 	mkdir -p build/$(BUILD_TYPE)
 	cp $@ build/$(BUILD_TYPE)/
-	cp $@ $(HOME)/bin/parafrost_cpu
 
 pfmain.o:pfmain.cpp
 	$(HOST_COMPILER) -I$(INCLUDES) -L$(LIBRARIES) $(CCFLAGS) -o $@ -c $(WARN) $<
