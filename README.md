@@ -7,4 +7,4 @@ Run `make -C gpu` to build the gpu solver or `make -C cpu` to build a CPU-only v
 The solver has a complete artefact for performance evluation and comparisons with CaDiCaL solver. More information can be found in: https://gears.win.tue.nl/software/parafrost
 
 # Run
-The solver can be used via `parafrost [<option> ...][<infile>.<cnf>][<option> ...]`. For more options, type `parafrost -h` or 'parafrost --helpmore'.
+The solver can be used via the command `parafrost [<option> ...][<infile>.<cnf>][<option> ...]`. For more options, type `parafrost -h` or `parafrost --helpmore`.
