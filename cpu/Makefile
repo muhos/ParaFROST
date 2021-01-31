@@ -29,7 +29,7 @@ LDFLAGS   :=
 
 # Debug build flags
 WARN := -w 
-ifeq ($(dbg),1)
+ifeq ($(debug),1)
       CCFLAGS += -g
       BUILD_TYPE := debug
       WARN :=
