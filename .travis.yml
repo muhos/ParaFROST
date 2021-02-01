@@ -1,0 +1,4 @@
+language: c++
+before_script: cd cpu
+script:
+- make
