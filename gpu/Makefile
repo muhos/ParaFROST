@@ -7,7 +7,7 @@
 ################################################################################
 
 # CUDA path
-CUDA_PATH ?= /usr/local/cuda-11.0
+CUDA_PATH ?= /usr/local/cuda
 
 # operating system
 HOST_OS   := $(shell uname -s 2>/dev/null | tr "[:upper:]" "[:lower:]")
@@ -108,7 +108,6 @@ parafrost: pfmain.o libpfrost.a
 	$(NVCC) $(ALL_LDFLAGS) $(GENCODE_FLAGS) -o $@ pfmain.o -L. -lpfrost $(LIBRARIES)
 	mkdir -p build/$(BUILD_TYPE)
 	cp $@ build/$(BUILD_TYPE)
-	cp $@ $(HOME)/bin/parafrost_gpu
 
 pfmain.o:pfmain.cpp
 	$(NVCC) $(INCLUDES) $(ALL_CCFLAGS) $(GENCODE_FLAGS) -o $@ -c $(WARN) $<
