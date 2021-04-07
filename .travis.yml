@@ -7,20 +7,6 @@ sudo: enabled
 
 matrix:
   include:
-    - name: CUDA 9.2
-      env:
-      - CUDA=9.2.148-1
-      - CUDA_SHORT=9.2
-      - CUDA_APT=9-2
-      - UBUNTU_VERSION=ubuntu1604
-      dist: xenial
-    - name: CUDA 10.1
-      env:
-      - CUDA=10.1.105-1
-      - CUDA_APT=10-1
-      - CUDA_SHORT=10.1
-      - UBUNTU_VERSION=ubuntu1804
-      dist: bionic
     - name: CUDA 10.2
       env:
       - CUDA=10.2.89-1
@@ -41,7 +27,9 @@ before_install:
   - CUDA_HOME=/usr/local/cuda-${CUDA_SHORT}
   - LD_LIBRARY_PATH=${CUDA_HOME}/lib64:${LD_LIBRARY_PATH}
   - PATH=${CUDA_HOME}/bin:${PATH}
-  - ls -l ${CUDA_HOME} /usr/local/cuda
+  - CUDA_SYM=/usr/local/cuda
+  - mkdir -p $CUDA_SYM
+  - ls -l $CUDA_HOME $CUDA_SYM
   
 script:
 - cd gpu; make
