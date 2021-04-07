@@ -7,7 +7,7 @@
 ################################################################################
 
 # CUDA path
-CUDA_PATH ?= $CUDA_HOME
+CUDA_PATH ?= $(CUDA_HOME)
 
 # operating system
 HOST_OS   := $(shell uname -s 2>/dev/null | tr "[:upper:]" "[:lower:]")
@@ -23,7 +23,7 @@ TARGET_ARCH   := $(shell uname -m)
 HOST_COMPILER := g++
 
 # device compiler
-NVCC          := $CUDA_HOME/bin/nvcc -ccbin $(HOST_COMPILER)
+NVCC          := $(CUDA_HOME)/bin/nvcc -ccbin $(HOST_COMPILER)
 
 # target size
 TARGET_SIZE   := $(shell getconf LONG_BIT)
