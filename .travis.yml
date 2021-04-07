@@ -7,29 +7,26 @@ sudo: enabled
 
 matrix:
   include:
-    - name: CUDA 10.2
+    - name: CUDA 11.2
       env:
-      - CUDA=10.2.89-1
-      - CUDA_APT=10-2
-      - CUDA_SHORT=10.2
+      - CUDA=11.2.152-1
+      - CUDA_APT=11-2
+      - CUDA_SHORT=11.2
       - UBUNTU_VERSION=ubuntu1804
       dist: bionic
 
 before_install:
-  - INSTALLER=cuda-repo-${UBUNTU_VERSION}_${CUDA}_amd64.deb
+  - INSTALLER=cuda-toolkit-${CUDA_APT}_${CUDA_SHORT}.2-1_amd64.deb
   - wget http://developer.download.nvidia.com/compute/cuda/repos/${UBUNTU_VERSION}/x86_64/${INSTALLER}
   - sudo dpkg -i ${INSTALLER}
   - wget https://developer.download.nvidia.com/compute/cuda/repos/${UBUNTU_VERSION}/x86_64/7fa2af80.pub
   - sudo apt-key add 7fa2af80.pub
   - sudo apt update -qq
-  - sudo apt install -y cuda-core-${CUDA_APT} cuda-cudart-dev-${CUDA_APT} cuda-nvtx-${CUDA_APT}
+  - sudo apt install -y cuda-cudart-dev-${CUDA_APT} cuda-nvtx-${CUDA_APT}
   - sudo apt clean
   - CUDA_HOME=/usr/local/cuda-${CUDA_SHORT}
   - LD_LIBRARY_PATH=${CUDA_HOME}/lib64:${LD_LIBRARY_PATH}
   - PATH=${CUDA_HOME}/bin:${PATH}
-  - CUDA_SYM=/usr/local/cuda
-  - sudo mkdir -p $CUDA_SYM
-  - sudo ls -l $CUDA_HOME $CUDA_SYM
   
 script:
 - cd gpu; make
