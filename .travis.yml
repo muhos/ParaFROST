@@ -3,7 +3,10 @@ language: c++
 #script:
 #- cd cpu; make
 
+dist: focal
+
 sudo: enabled
+
 
 matrix:
   include:
@@ -18,7 +21,7 @@ before_install:
   - sudo apt update
   #- sudo apt install -y nvidia-driver-450
   - sudo apt install -y nvidia-cuda-toolkit
-  - CUDA_HOME=/usr/local/cuda-${CUDA_SHORT}
+  - export CUDA_HOME=/usr/local/cuda-${CUDA_SHORT}
   - LD_LIBRARY_PATH=${CUDA_HOME}/lib64:${LD_LIBRARY_PATH}
   - PATH=${CUDA_HOME}/bin:${PATH}
   
