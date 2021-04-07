@@ -44,4 +44,4 @@ before_install:
   
 script:
 - cd gpu; make
-- cd cpu; make
+- cd ../cpu; make
