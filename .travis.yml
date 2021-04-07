@@ -16,10 +16,10 @@ matrix:
       dist: bionic
 
 before_install:
-  - sudo add-apt-repository ppa:graphics-drivers/ppa
+  - sudo add-apt-repository -y ppa:graphics-drivers/ppa
   - sudo apt update
-  - sudo apt install nvidia-455 nvidia-455-dev
-  - sudo apt install nvidia-cuda-toolkit
+  - sudo apt install -y nvidia-455 nvidia-455-dev
+  - sudo apt install -y nvidia-cuda-toolkit
   - CUDA_HOME=/usr/local/cuda-${CUDA_SHORT}
   - LD_LIBRARY_PATH=${CUDA_HOME}/lib64:${LD_LIBRARY_PATH}
   - PATH=${CUDA_HOME}/bin:${PATH}
