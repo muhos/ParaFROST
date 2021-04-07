@@ -28,8 +28,8 @@ before_install:
   - LD_LIBRARY_PATH=${CUDA_HOME}/lib64:${LD_LIBRARY_PATH}
   - PATH=${CUDA_HOME}/bin:${PATH}
   - CUDA_SYM=/usr/local/cuda
-  - mkdir -p $CUDA_SYM
-  - ls -l $CUDA_HOME $CUDA_SYM
+  - sudo mkdir -p $CUDA_SYM
+  - sudo ls -l $CUDA_HOME $CUDA_SYM
   
 script:
 - cd gpu; make
