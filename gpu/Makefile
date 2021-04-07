@@ -23,7 +23,7 @@ TARGET_ARCH   := $(shell uname -m)
 HOST_COMPILER := g++
 
 # device compiler
-NVCC          := ${CUDA_HOME}/bin/nvcc -ccbin $(HOST_COMPILER)
+NVCC          := $CUDA_HOME/bin/nvcc -ccbin $(HOST_COMPILER)
 
 # target size
 TARGET_SIZE   := $(shell getconf LONG_BIT)
