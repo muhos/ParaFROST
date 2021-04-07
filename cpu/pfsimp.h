@@ -32,6 +32,12 @@ namespace SIGmA {
 #define CE_NEG_LMT 512
 #define	MAX_ERE_OUT 350
 #define HSE_MAX_CL_SIZE 1000
+#ifdef __linux__ 
+#define COUNTFLIPS(X) while (__builtin_parity(++X)); 
+#elif _WIN32
+#define COUNTFLIPS(X) while (__popcnt(++X) & 1); 
+#endif
+
 	// OT sorting comparator
 	struct CNF_CMP_KEY {
 		bool operator () (S_REF x, S_REF y) {
@@ -93,18 +99,6 @@ namespace SIGmA {
 			found++;
 		}
 		return found == 3;
-	}
-
-	inline S_REF equality_check(OT& ot, uint32 a, uint32 b, uint32 c) {
-		if (ot[b].size() > ot[c].size()) swap(b, c);
-		if (ot[a].size() > ot[b].size()) swap(a, b);
-		OL& list = ot[a];
-		for (S_REF* i = list; i != list.end(); i++) {
-			if ((*i)->learnt()) continue;
-			if (equal3(*i, a, b, c))
-				return *i;
-		}
-		return NULL;
 	}
 
 	inline bool isTautology(const uint32& elim_v, const S_REF c1, const S_REF c2)
@@ -274,66 +268,6 @@ namespace SIGmA {
 		return true;
 	}
 
-	inline bool isAlmostEqual(const uint32& dx, const int& bitpos, SCLAUSE& c1, Lits_t& c2)
-	{
-		assert(c1.original());
-		assert(c1.size() - 1 == c2.size());
-		assert(c1.isSorted());
-		assert(isSorted(c2.data(), c2.size(), LESS<uint32>()));
-		int it1 = 0, it2 = 0;
-		bool found = false;
-		while (it1 < c1.size() && it2 < c2.size()) {
-			if (c1[it1] == dx) it1++;
-			else if (it2 == bitpos && (c1[it1] ^ c2[it2]) == NEG_SIGN) found = true, it1++, it2++;
-			else if (c1[it1] != c2[it2]) return false;
-			else it1++, it2++;
-		}
-		if (it1 < c1.size() && c1[it1++] != dx) return false; 
-		assert(it1 == it2 + 1);
-		return found;
-	}
-
-	inline bool isAlmostEqual(const uint32& dx, SCLAUSE& c1, Lits_t& c2)
-	{
-		assert(c1.original());
-		assert(c1.size() - 1 == c2.size());
-		assert(c1.isSorted());
-		assert(isSorted(c2.data(), c2.size(), LESS<uint32>()));
-		int it1 = 0, it2 = 0;
-		while (it1 < c1.size() && it2 < c2.size()) {
-			if (c1[it1] == dx) it1++;
-			else if (c1[it1] != c2[it2]) return false;
-			else it1++, it2++;
-		}
-		if (it1 < c1.size() && c1[it1++] != dx) return false; 
-		assert(it1 == it2 + 1);
-		return true;
-	}
-
-	inline S_REF find_all(const uint32& gate_out, OT& ot, Lits_t& out_c)
-	{
-		uint32 best = gate_out;
-		assert(best > 1);
-		int msize = ot[gate_out].size();
-		for (uint32* k = out_c; k != out_c.end(); k++) {
-			int lsize = ot[*k].size();
-			if (lsize < msize) msize = lsize, best = *k;
-		}
-		OL& list = ot[best];
-		for (S_REF* i = list; i != list.end(); i++) {
-			SCLAUSE& c = **i;
-			if (c.molten() || (c.size() - 1) != out_c.size()) continue;
-			if (c.original() && isAlmostEqual(gate_out, **i, out_c))
-				return *i;
-		}
-		return NULL;
-	}
-
-	inline void flip_all(Lits_t& out_c)
-	{
-		for (uint32* k = out_c; k != out_c.end(); k++) *k = FLIP(*k);
-	}
-
 	inline void cswap(uint32& x, uint32& y)
 	{
 		uint32 ta = std::min(x, y);
@@ -460,6 +394,80 @@ namespace SIGmA {
 			if ((*i)->size() > 2 && (*i)->molten()) (*i)->freeze();
 	}
 
+	inline void freeze_arities(OL& me, OL& other)
+	{
+		for (S_REF* i = me; i != me.end(); i++) {
+			S_REF c = *i;
+			if (c->size() > 2 && c->molten())
+				c->freeze();
+		}
+		for (S_REF* i = other; i != other.end(); i++) {
+			S_REF c = *i;
+			if (c->size() > 2 && c->molten())
+				c->freeze();
+		}
+	}
+
+	inline void copyClause(SCLAUSE& c, Lits_t& out_c)
+	{
+		out_c.clear();
+		for (uint32* k = c; k != c.end(); k++) {
+			out_c.push(*k);
+		}
+	}
+
+	inline bool checkArity(SCLAUSE& c, uint32* literals, const int& size)
+	{
+		assert(literals);
+		const uint32* end = literals + size;
+		for (uint32* i = c; i != c.end(); i++) {
+			const uint32 lit = *i;
+			uint32* j;
+			for (j = literals; j != end; j++) {
+				if (lit == *j) {
+					break;
+				}
+			}
+			if (j == end) return false;
+		}
+		return true;
+	}
+
+	inline bool makeArity(OT& ot, uint32& parity, uint32* literals, const int& size)
+	{
+		const uint32 oldparity = parity;
+		COUNTFLIPS(parity);
+		for (int k = 0; k < size; k++) {
+			const uint32 bit = (1UL << k);
+			if ((parity & bit) != (oldparity & bit))
+				literals[k] = FLIP(literals[k]);
+		}
+		// search for an arity clause
+		assert(size > 2);
+		uint32 best = *literals;
+		CHECKLIT(best);
+		int minsize = ot[best].size();
+		for (int k = 1; k < size; k++) {
+			const uint32 lit = literals[k];
+			CHECKLIT(lit);
+			int lsize = ot[lit].size();
+			if (lsize < minsize) {
+				minsize = lsize;
+				best = literals[k];
+			}
+		}
+		OL& minlist = ot[best];
+		for (S_REF* i = minlist; i != minlist.end(); i++) {
+			SCLAUSE& c = **i;
+			if (c.original() && c.size() == size && checkArity(c, literals, size)) {
+				assert(c.original());
+				c.melt();
+				return true;
+			}
+		}
+		return false;
+	}
+
 	inline void countOrgs(OL& list, int& orgs)
 	{
 		assert(!orgs);
@@ -520,7 +528,17 @@ namespace SIGmA {
 	inline void	saveResolved(uVec1D& resolved, SCLAUSE& c, const uint32& x)
 	{
 		assert(c.original());
-		for (int i = 0; i < c.size(); i++) resolved.push(c[i]);
+		const uint32 last = resolved.size();
+		int pos = -1;
+		for (int i = 0; i < c.size(); i++) {
+			const uint32 lit = c[i];
+			if (lit == x)
+				pos = i;
+			resolved.push(c[i]);
+		}
+		assert(pos >= 0);
+		if (pos)
+			swap(resolved[pos + last], resolved[last]);
 		resolved.push(c.size());
 	}
 
@@ -721,87 +739,52 @@ namespace SIGmA {
 		return false;
 	}
 
-	inline S_REF find_fanin(const uint32& gate_out, const int& bitpos, OL& list, Lits_t& out_c)
+	inline bool find_XOR_gate(const uint32& dx, const int& nOrgCls, OT& ot, Lits_t& out_c)
 	{
-		for (S_REF* i = list; i != list.end(); i++) {
-			SCLAUSE& c = **i;
-			if (c.molten() || (c.size() - 1) != out_c.size()) continue;
-			if (c.original() && isAlmostEqual(gate_out, bitpos, **i, out_c))
-				return *i;
-		}
-		return NULL;
-	}
-
-	inline bool find_XOR_gate(const uint32& dx, const int& nOrgCls, OT& ot, Lits_t& out_c, const bool& bound)
-	{
-		assert(checkMolten(ot[dx], ot[FLIP(dx)]));
+		const uint32 fx = FLIP(dx), v = ABS(dx);
+		assert(checkMolten(ot[dx], ot[fx]));
 		OL& itarget = ot[dx];
+		OL& otarget = ot[fx];
 		for (S_REF* i = itarget; i != itarget.end(); i++) {
 			SCLAUSE& ci = **i;
-			int size = ci.size();
-			int arity = size - 1; // XOR arity
-			if (ci.learnt() || size < 3 || arity > pfrost->opts.xor_max_arity) continue;
-			assert(ci.original());
-			// share to out_c except dx
-			out_c.clear();
-			for (int k = 0; k < size; k++) if (ci[k] != dx) out_c.push(POS(ci[k]));
-			assert(out_c.size() == arity);
-			// find arity clauses
-			int itargets = 0;
-			for (int j = 0; j < arity; j++) {
-				S_REF cj = find_fanin(dx, j, itarget, out_c);
-				if (cj) {
-					assert(cj->original());
-					cj->melt(), itargets++;
+			if (ci.original()) {
+				const int size = ci.size();
+				const int arity = size - 1; // XOR arity
+				if (size < 3 || arity > pfrost->opts.xor_max_arity) continue;
+				// share to out_c
+				copyClause(ci, out_c);
+				// find arity clauses
+				uint32 parity = 0;
+				int itargets = (1 << arity);
+				while (--itargets && makeArity(ot, parity, out_c, size));
+				assert(parity < (1UL << size)); // overflow check
+				assert(itargets >= 0);
+				if (itargets)
+					freeze_arities(itarget, otarget);
+				else {
+					ci.melt();
+					// check resolvability
+					int nAddedCls = 0;
+					countSubstituted(v, itarget, otarget, nAddedCls);
+					if (nAddedCls > nOrgCls) {
+						freeze_arities(itarget, otarget);
+						break;
+					}
+					// can be substituted
+					if (verbose >= 4) {
+						PFLOGN1(" Gate %d = XOR(", l2i(dx));
+						for (int k = 0; k < out_c.size(); k++) {
+							printf(" %d", ABS(out_c[k]));
+							if (k < out_c.size() - 1) putchar(',');
+						}
+						printf(" ) found ==> added = %d, deleted = %d\n", nAddedCls, itarget.size() + otarget.size());
+						printGate(itarget, otarget);
+					}
+					substitute_x(v, itarget, otarget, out_c);
+					return true;
 				}
-				else break;
-			}
-			if (itargets < arity) {
-				freeze_arities(itarget);
-				continue;
-			}
-			// find all +/-  
-			uint32 f_dx = FLIP(dx);
-			S_REF d1 = find_all(f_dx, ot, out_c);
-			if (!d1) break;
-			flip_all(out_c);
-			S_REF d2 = find_all(f_dx, ot, out_c);
-			if (!d2) break;
-			assert(d1->original());
-			assert(d2->original());
-			d1->melt(), d2->melt();
-			// check resolvability
-			uint32 v = ABS(dx);
-			OL& otarget = ot[f_dx];
-			int nAddedCls = 0, nAddedLits = 0;
-			countSubstituted(v, itarget, otarget, nAddedCls, nAddedLits);
-			if (nAddedCls > nOrgCls) {
-				d1->freeze(), d2->freeze();
-				break;
-			}
-			if (bound) {
-				int lits_before = 0;
-				countLitsBefore(itarget, lits_before);
-				countLitsBefore(otarget, lits_before);
-				if (nAddedLits > lits_before) {
-					d1->freeze(), d2->freeze();
-					break;
-				}
-			}
-			// can be substituted
-#if VE_DBG
-			PFLOGN1(" Gate %d = XOR(", l2i(dx));
-			for (int k = 0; k < out_c.size(); k++) {
-				fprintf(stdout, " %d", ABS(out_c[k]));
-				if (k < out_c.size() - 1) putc(',', stdout);
-			}
-			fprintf(stdout, " ) found ==> added = %d, deleted = %d\n", nAddedCls, itarget.size() + otarget.size());
-			printGate(itarget, otarget);
-#endif
-			substitute_x(v, itarget, otarget, out_c);
-			return true;
+			} // original block
 		}
-		freeze_arities(itarget);
 		return false;
 	}
 

@@ -64,6 +64,7 @@ void ParaFROST::map(const bool& sigmified)
 	vmap.initiate(sp);
 	// map original literals with current values
 	vmap.mapOrgs(model.lits);
+	vmap.mapShrinkVars(vorg);
 	// map clauses and watch tables
 	if (!sigmified) map(orgs), map(learnts), map(wt);
 	else mapped = true, newBeginning(), mapped = false;

@@ -23,7 +23,7 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 using namespace pFROST;
 
-void MODEL::extend(LIT_ST* currValue)
+void MODEL::extend(const LIT_ST* currValue, const uVec1D& vorg)
 {
     uint32 updated = 0;
     value.resize(maxVar + 1, 0);
@@ -39,14 +39,29 @@ void MODEL::extend(LIT_ST* currValue)
         uint32 before = updated;
         PFLOGN2(2, " Extending model with eliminated variables..");
         uint32 *x = resolved.end() - 1, k;
-        while (x > resolved) {
-            bool unsat = true;
-            for (k = *x--; k > 1; k--, x--) {
-                if (satisfied(*x)) { unsat = false; break; }
-            }
-            if (unsat) value[ABS(*x)] = !SIGN(*x), updated++;
-            x -= k;
-        }
+		uint32 witness, orgWitness = 0;
+		while (x > resolved) {
+			assert(*x);
+			witness = 0;
+			bool unsat = true;
+			for (k = *x--; k > 1; k--, x--) {
+				witness = *x;
+				CHECKLIT(witness);
+				orgWitness = V2DEC(vorg[ABS(witness)], SIGN(witness));
+				if (satisfied(orgWitness)) { unsat = false; break; }
+			}
+			if (unsat) {
+				if (!witness) {
+					witness = *x;
+					CHECKLIT(witness);
+					orgWitness = V2DEC(vorg[ABS(witness)], SIGN(witness));
+				}
+				assert(orgWitness > 1);
+				value[ABS(orgWitness)] = !SIGN(orgWitness);
+				updated++;
+			}
+			x -= k;
+		}
         PFLENDING(2, 5, "(%d updated)", updated - before);
     }
 }

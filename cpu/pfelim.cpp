@@ -104,7 +104,7 @@ void ParaFROST::bve()
 				sp->vstate[v] = MELTED, v = 0;
 			}
 			// XOR-gate Reasoning
-			else if (find_XOR_gate(p, pOrgs + nOrgs, ot, out_c, false)) {
+			else if (find_XOR_gate(p, pOrgs + nOrgs, ot, out_c)) {
 				toblivion(p, pOrgs, nOrgs, poss, negs, model.resolved);
 				sp->vstate[v] = MELTED, v = 0;
 			}

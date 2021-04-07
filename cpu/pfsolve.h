@@ -59,7 +59,9 @@ namespace pFROST {
 		Vec<double>		activity;
 		Vec<WOL>		wot;
 		Vec<BOL>		bot;
-		uVec1D			trail, dlevels, eligible, analyzed, minimized, subhist;
+		uVec1D			trail, dlevels;
+		uVec1D          eligible, analyzed, minimized;
+		uVec1D          vorg, subhist;
 		HEAP<HEAP_CMP>	vsids;
 		QUEUE			vmfq;
 		LBDREST			lbdrest;
@@ -188,8 +190,12 @@ namespace pFROST {
 			memset(sp->ptarget, UNDEFINED, maxSize);
 			memset(sp->pbest, UNDEFINED, maxSize);
 			memset(sp->psaved, opts.polarity, maxSize);
-			for (uint32 v = 1; v <= inf.maxVar; v++)
+			vorg.resize((uint32)maxSize);
+			vorg[0] = 0;
+			for (uint32 v = 1; v <= inf.maxVar; v++) {
 				sp->level[v] = UNDEFINED, sp->source[v] = NOREF;
+				vorg[v] = v;
+			}
 		}
 		inline bool		canRestart			() {
 			if (DL() < 2) return false;
