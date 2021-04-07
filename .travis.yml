@@ -1,18 +1,6 @@
 language: c++
-#before_script: cd cpu
-#script:
-#- cd cpu; make
 
 sudo: enabled
-
-
-matrix:
-  include:
-    - name: CUDA 11.2
-      env:
-      - CUDA_SHORT=11.2
-      - UBUNTU_VERSION=ubuntu2004
-      dist: bionic
 
 before_install:
   - sudo add-apt-repository -y ppa:graphics-drivers/ppa
