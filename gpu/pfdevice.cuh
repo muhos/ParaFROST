@@ -442,12 +442,23 @@ namespace pFROST {
 			*saved++ = lit, *saved++ = 1;
 		}
 
-		_PFROST_D_ void	saveResolved(uint32*& saved, SCLAUSE& c)
+		_PFROST_D_ void	saveResolved(uint32*& saved, SCLAUSE& c, const uint32& x)
 		{
+			uint32* first = saved, * witness = NULL;
 			assert(c.original());
-			uint32* lit = c, * cend = c.end();
-			while (lit != cend)
-				*saved++ = *lit++;
+			uint32* k = c, * cend = c.end();
+			while (k != cend) {
+				const uint32 lit = *k++;
+				if (lit == x) {
+					witness = saved;
+				}
+				*saved++ = lit;
+			}
+			assert(witness >= first);
+			if (witness != first)
+				devSwap(*first, *witness);
+			else
+				assert(*witness == *first);
 			*saved++ = c.size();
 		}
 

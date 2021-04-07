@@ -276,7 +276,7 @@ void ParaFROST::wrapup() {
 	if (cnfstate == SAT) {
 		PFLOGS("SATISFIABLE");
 		if (opts.model_en) {
-			model.extend(sp->value);
+			model.extend(sp->value, vorg);
 			model.print();
 		}
 	}

@@ -25,9 +25,15 @@ namespace pFROST {
 
 	namespace SIGmA {
 
+#define COUNTFLIPS(X) \
+	{ \
+		while (__popc(++X) & 1); \
+	}
+
 		_PFROST_D_ void toblivion(const uint32& p, const uint32& pOrgs, const uint32& nOrgs, CNF& cnf, OL& poss, OL& negs, cuVecU* resolved)
 		{
 			bool which = pOrgs > nOrgs;
+			const uint32 n = NEG(p);
 			if (which) {
 				uint32 nsLits = 0;
 				countLitsBefore(cnf, negs, nsLits);
@@ -36,7 +42,7 @@ namespace pFROST {
 #pragma unroll
 				for (S_REF* i = negs; i != negs.end(); i++) {
 					SCLAUSE& c = cnf[*i];
-					if (c.original()) saveResolved(saved, c);
+					if (c.original()) saveResolved(saved, c, n);
 					c.markDeleted();
 				}
 				saveResolved(saved, p);
@@ -49,10 +55,10 @@ namespace pFROST {
 #pragma unroll
 				for (S_REF* i = poss; i != poss.end(); i++) {
 					SCLAUSE& c = cnf[*i];
-					if (c.original()) saveResolved(saved, c);
+					if (c.original()) saveResolved(saved, c, p);
 					c.markDeleted();
 				}
-				saveResolved(saved, NEG(p));
+				saveResolved(saved, n);
 			}
 			OL& other = which ? poss : negs;
 #pragma unroll
@@ -63,6 +69,7 @@ namespace pFROST {
 		_PFROST_D_ void saveResolved(const uint32& p, const uint32& pOrgs, const uint32& nOrgs, CNF& cnf, OL& poss, OL& negs, cuVecU* resolved)
 		{
 			bool which = pOrgs > nOrgs;
+			const uint32 n = NEG(p);
 			if (which) {
 				uint32 nsLits = 0;
 				countLitsBefore(cnf, negs, nsLits);
@@ -71,7 +78,7 @@ namespace pFROST {
 #pragma unroll
 				for (S_REF* i = negs; i != negs.end(); i++) {
 					SCLAUSE& c = cnf[*i];
-					if (c.original()) saveResolved(saved, c);
+					if (c.original()) saveResolved(saved, c, n);
 				}
 				saveResolved(saved, p);
 			}
@@ -83,9 +90,9 @@ namespace pFROST {
 #pragma unroll
 				for (S_REF* i = poss; i != poss.end(); i++) {
 					SCLAUSE& c = cnf[*i];
-					if (c.original()) saveResolved(saved, c);
+					if (c.original()) saveResolved(saved, c, p);
 				}
-				saveResolved(saved, NEG(p));
+				saveResolved(saved, n);
 			}
 		}
 
@@ -188,14 +195,6 @@ namespace pFROST {
 			}
 		}
 
-		_PFROST_D_ void shareXORClause(const uint32& dx, SCLAUSE& c, uint32* shared)
-		{
-#pragma unroll
-			for (uint32 *k = c; k != c.end(); k++) 
-				if (*k != dx) 
-					*shared++ = POS(*k);
-		}
-
 		_PFROST_D_ int find_fanin(const uint32& gate_out, CNF& cnf, OL& list, uint32* out_c, uint32& sig)
 		{
 			assert(gate_out > 1);
@@ -251,79 +250,73 @@ namespace pFROST {
 			return GNOREF;
 		}
 
-		_PFROST_D_ bool isAlmostEqual(const uint32& dx, const int& bitpos, SCLAUSE& c1, uint32* c2, const int& size)
+		_PFROST_D_ void freeze_arities(CNF& cnf, OL& me, OL& other)
 		{
-			assert(c1.original());
-			assert(c1.isSorted());
-			assert(c1.size() - 1 == size);
-			assert(devIsSorted(c2, size, DEFAULT_CMP<uint32>()));
-			int it1 = 0, it2 = 0;
-			bool found = false;
-			while (it1 < c1.size() && it2 < size) {
-				if (c1[it1] == dx) it1++;
-				else if (it2 == bitpos && (c1[it1] ^ c2[it2]) == NEG_SIGN) found = true, it1++, it2++;
-				else if (c1[it1] != c2[it2]) return false;
-				else it1++, it2++;
-			}
-			if (it1 < c1.size() && c1[it1++] != dx) return false;
-			assert(it1 == it2 + 1);
-			return found;
+			freeze_arities(cnf, me);
+			freeze_arities(cnf, other);
 		}
 
-		_PFROST_D_ bool isAlmostEqual(const uint32& dx, SCLAUSE& c1, uint32* c2, const int& size)
+		_PFROST_D_ void shareXORClause(SCLAUSE& c, uint32* shared)
 		{
-			assert(c1.original());
-			assert(c1.size() - 1 == size);
-			assert(c1.isSorted());
-			assert(devIsSorted(c2, size, DEFAULT_CMP<uint32>()));
-			int it1 = 0, it2 = 0;
-			while (it1 < c1.size() && it2 < size) {
-				if (c1[it1] == dx) it1++;
-				else if (c1[it1] != c2[it2]) return false;
-				else it1++, it2++;
+
+			uint32* lit = c, * cend = c.end();
+#pragma unroll
+			while (lit != cend)
+				*shared++ = *lit++;
+		}
+
+		_PFROST_D_ bool checkArity(SCLAUSE& c, uint32* literals, const int& size)
+		{
+			assert(literals);
+			const uint32* end = literals + size;
+			uint32* i = c, * cend = c.end();
+#pragma unroll
+			while (i != cend) {
+				const uint32 lit = *i++;
+				uint32* j;
+				for (j = literals; j != end; j++) {
+					if (lit == *j) {
+						break;
+					}
+				}
+				if (j == end) return false;
 			}
-			if (it1 < c1.size() && c1[it1++] != dx) return false;
-			assert(it1 == it2 + 1);
 			return true;
 		}
 
-		_PFROST_D_ S_REF find_fanin(const uint32& gate_out, const int& bitpos, CNF& cnf, OL& list, uint32* out_c, const int& size)
+		_PFROST_D_ bool makeArity(CNF& cnf, OT& ot, uint32& parity, uint32* literals, const int& size)
 		{
-#pragma unroll
-			for (S_REF* i = list; i != list.end(); i++) {
-				SCLAUSE& c = cnf[*i];
-				if (c.molten() || (c.size() - 1) != size) continue;
-				if (c.original() && isAlmostEqual(gate_out, bitpos, c, out_c, size))
-					return *i;
+			const uint32 oldparity = parity;
+			COUNTFLIPS(parity);
+			for (int k = 0; k < size; k++) {
+				const uint32 bit = (1UL << k);
+				if ((parity & bit) ^ (oldparity & bit))
+					literals[k] = FLIP(literals[k]);
 			}
-			return GNOREF;
-		}
-
-		_PFROST_D_ S_REF find_all(const uint32& gate_out, CNF& cnf, OT& ot, uint32* out_c, const int& size)
-		{
-			uint32 best = gate_out;
+			// search for an arity clause
+			assert(size > 2);
+			uint32 best = *literals;
 			assert(best > 1);
-			int msize = ot[gate_out].size();
-#pragma unroll
-			for (uint32* k = out_c; k != out_c + size; k++) {
-				int lsize = ot[*k].size();
-				if (lsize < msize) msize = lsize, best = *k;
+			int minsize = ot[best].size();
+			for (int k = 1; k < size; k++) {
+				const uint32 lit = literals[k];
+				assert(lit > 1);
+				int lsize = ot[lit].size();
+				if (lsize < minsize) {
+					minsize = lsize;
+					best = literals[k];
+				}
 			}
-			OL& list = ot[best];
-#pragma unroll
-			for (S_REF* i = list; i != list.end(); i++) {
+			OL& minlist = ot[best];
+			for (S_REF* i = minlist; i != minlist.end(); i++) {
 				SCLAUSE& c = cnf[*i];
-				if (c.molten() || (c.size() - 1) != size) continue;
-				if (c.original() && isAlmostEqual(gate_out, c, out_c, size))
-					return *i;
+				if (c.original() && c.size() == size && checkArity(c, literals, size)) {
+					assert(c.original());
+					c.melt();
+					return true;
+				}
 			}
-			return GNOREF;
-		}
-
-		_PFROST_D_ void flip_all(uint32* out_c, const int& size)
-		{
-#pragma unroll
-			for (uint32* k = out_c; k != out_c + size; k++) *k = FLIP(*k);
+			return false;
 		}
 
 	}

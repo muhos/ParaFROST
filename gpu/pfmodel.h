@@ -43,7 +43,7 @@ namespace pFROST {
 				putc('\n', stdout);
 				if (!quiet_en) PFLOG0("");
 			}
-			void		extend(LIT_ST*);
+			void		extend(const LIT_ST*, const uVec1D&);
 			__forceinline
 			bool		satisfied(const uint32& lit) { return value[ABS(lit)] == !SIGN(lit); }
 		};

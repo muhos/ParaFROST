@@ -31,10 +31,11 @@ namespace pFROST {
 		_PFROST_D_ void toblivion(const uint32& dx, const uint32& nSaved, CNF& cnf, OL& toSave, OL& other, cuVecU* resolved)
 		{
 			uint32* saved = resolved->jump(nSaved);
+			const uint32 fx = FLIP(dx);
 #pragma unroll
 			for (S_REF* i = toSave; i != toSave.end(); i++) {
 				SCLAUSE& c = cnf[*i];
-				if (c.original()) saveResolved(saved, c);
+				if (c.original()) saveResolved(saved, c, fx);
 				c.markDeleted();
 			}
 			saveResolved(saved, dx);
@@ -46,10 +47,11 @@ namespace pFROST {
 		_PFROST_D_ void saveResolved(const uint32& dx, const uint32& nSaved, CNF& cnf, OL& toSave, cuVecU* resolved)
 		{
 			uint32* saved = resolved->jump(nSaved);
+			const uint32 fx = FLIP(dx);
 #pragma unroll
 			for (S_REF* i = toSave; i != toSave.end(); i++) {
 				SCLAUSE& c = cnf[*i];
-				if (c.original()) saveResolved(saved, c);
+				if (c.original()) saveResolved(saved, c, fx);
 			}
 			saveResolved(saved, dx);
 		}
@@ -328,60 +330,41 @@ namespace pFROST {
 		_PFROST_D_ bool find_xor_gate(const uint32& dx, const uint32& nOrgCls, const int& xor_max_arity, CNF& cnf, OT& ot, cuVecU* units, cuVecU* resolved, uint32* out_c)
 		{
 			assert(dx > 1);
-			assert(checkMolten(cnf, ot[dx], ot[FLIP(dx)]));
+			assert(dx > 1);
+			const uint32 fx = FLIP(dx), v = ABS(dx);
+			assert(checkMolten(cnf, ot[dx], ot[fx]));
 			OL& itarget = ot[dx];
+			OL& otarget = ot[fx];
 			for (S_REF* i = itarget; i != itarget.end(); i++) {
 				SCLAUSE& ci = cnf[*i];
 				int size = ci.size();
 				int arity = size - 1; // XOR arity
 				if (ci.learnt() || size < 3 || arity > xor_max_arity || arity > SH_MAX_BVE_OUT) continue;
-				// share to out_c except dx
-				shareXORClause(dx, ci, out_c);
+				assert(arity <= SH_MAX_BVE_OUT1);
+				// share to out_c
+				shareXORClause(ci, out_c);
 				// find arity clauses
-				int itargets = 0;
-				for (int j = 0; j < arity; j++) {
-					S_REF r = find_fanin(dx, j, cnf, itarget, out_c, arity);
-					if (r == GNOREF) break;
-					cnf[r].melt(), itargets++;
+				uint32 parity = 0;
+				int itargets = (1 << arity);
+				while (--itargets && makeArity(cnf, ot, parity, out_c, size));
+				assert(parity < (1UL << size)); // overflow check
+				assert(itargets >= 0);
+				if (itargets)
+					freeze_arities(cnf, itarget, otarget);
+				else {
+					ci.melt();
+					// check resolvability
+					uint32 nAddedCls = 0, nAddedLits = 0;
+					countSubstituted(v, cnf, itarget, otarget, nAddedCls, nAddedLits);
+					if (nAddedCls > nOrgCls) {
+						freeze_arities(cnf, itarget, otarget);
+						break;
+					}
+					// can be substituted
+					if (nAddedCls) substitute_x(v, nAddedCls, nAddedLits, cnf, itarget, otarget, units, out_c);
+					return true;
 				}
-				if (itargets < arity) {
-					freeze_arities(cnf, itarget);
-					continue;
-				}
-				// find all +/-  
-				uint32 f_dx = FLIP(dx);
-				S_REF r1 = find_all(f_dx, cnf, ot, out_c, arity);
-				if (r1 == GNOREF) break;
-				flip_all(out_c, arity);
-				S_REF r2 = find_all(f_dx, cnf, ot, out_c, arity);
-				if (r2 == GNOREF) break;
-				assert(cnf[r1].original());
-				assert(cnf[r2].original());
-				cnf[r1].melt(), cnf[r2].melt();
-				// check resolvability
-				uint32 v = ABS(dx);
-				OL& otarget = ot[f_dx];
-				uint32 nAddedCls = 0, nAddedLits = 0;
-				countSubstituted(v, cnf, itarget, otarget, nAddedCls, nAddedLits);
-				if (nAddedCls > nOrgCls) {
-					cnf[r1].freeze(), cnf[r2].freeze();
-					break;
-				}
-				// can be substituted
-#if VE_DBG
-				printf("c | Gate %d = XOR(", ABS(dx));
-				for (int k = 0; k < arity; k++) {
-					printf(" %d", ABS(out_c[k]));
-					if (k < arity - 1) printf(",");
-				}
-				printf(" ) found ==> added = %d, deleted = %d\f_dx", nAddedCls, itarget.size() + otarget.size());
-				pClauseSet(cnf, itarget, otarget);
-#endif
-				// substitute
-				if (nAddedCls) substitute_x(v, nAddedCls, nAddedLits, cnf, itarget, otarget, units, out_c);
-				return true;
 			}
-			freeze_arities(cnf, itarget);
 			return false;
 		}
 
@@ -677,60 +660,39 @@ namespace pFROST {
 		_PFROST_D_ bool find_xor_gate(const uint32& dx, const uint32& nOrgCls, const int& xor_max_arity, CNF& cnf, OT& ot, cuVecU* resolved, uint32* out_c, uint32& nAddedCls, uint32& nAddedLits)
 		{
 			assert(dx > 1);
-			assert(checkMolten(cnf, ot[dx], ot[FLIP(dx)]));
+			assert(dx > 1);
+			const uint32 fx = FLIP(dx), v = ABS(dx);
+			assert(checkMolten(cnf, ot[dx], ot[fx]));
 			OL& itarget = ot[dx];
+			OL& otarget = ot[fx];
 			for (S_REF* i = itarget; i != itarget.end(); i++) {
 				SCLAUSE& ci = cnf[*i];
 				int size = ci.size();
 				int arity = size - 1; // XOR arity
-				if (ci.learnt() || size < 3 || arity > xor_max_arity || arity > SH_MAX_BVE_OUT1) continue;
-				assert(ci.original());
-				// share to out_c except dx
-				shareXORClause(dx, ci, out_c);
+				if (ci.learnt() || size < 3 || arity > xor_max_arity || arity > SH_MAX_BVE_OUT) continue;
+				assert(arity <= SH_MAX_BVE_OUT1);
+				// share to out_c
+				shareXORClause(ci, out_c);
 				// find arity clauses
-				int itargets = 0;
-				for (int j = 0; j < arity; j++) {
-					S_REF r = find_fanin(dx, j, cnf, itarget, out_c, arity);
-					if (r == GNOREF) break;
-					assert(cnf[r].original());
-					cnf[r].melt(), itargets++;
+				uint32 parity = 0;
+				int itargets = (1 << arity);
+				while (--itargets && makeArity(cnf, ot, parity, out_c, size));
+				assert(parity < (1UL << size)); // overflow check
+				assert(itargets >= 0);
+				if (itargets)
+					freeze_arities(cnf, itarget, otarget);
+				else {
+					ci.melt();
+					// check resolvability
+					nAddedCls = 0, nAddedLits = 0;
+					countSubstituted(v, cnf, itarget, otarget, nAddedCls, nAddedLits);
+					if (nAddedCls > nOrgCls) {
+						freeze_arities(cnf, itarget, otarget);
+						break;
+					}
+					return true;
 				}
-				if (itargets < arity) {
-					freeze_arities(cnf, itarget);
-					continue;
-				}
-				// find all +/-  
-				uint32 f_dx = FLIP(dx);
-				S_REF r1 = find_all(f_dx, cnf, ot, out_c, arity);
-				if (r1 == GNOREF) break;
-				flip_all(out_c, arity);
-				S_REF r2 = find_all(f_dx, cnf, ot, out_c, arity);
-				if (r2 == GNOREF) break;
-				assert(cnf[r1].original());
-				assert(cnf[r2].original());
-				cnf[r1].melt(), cnf[r2].melt();
-				// check resolvability
-				uint32 v = ABS(dx);
-				OL& otarget = ot[f_dx];
-				nAddedCls = 0, nAddedLits = 0;
-				countSubstituted(v, cnf, itarget, otarget, nAddedCls, nAddedLits);
-				if (nAddedCls > nOrgCls) {
-					cnf[r1].freeze(), cnf[r2].freeze();
-					break;
-				}
-				// can be substituted
-#if VE_DBG
-				printf("c | Gate %d = XOR(", ABS(dx));
-				for (int k = 0; k < arity; k++) {
-					printf(" %d", ABS(out_c[k]));
-					if (k < arity - 1) printf(",");
-				}
-				printf(" ) found ==> added = %d, deleted = %d\f_dx", nAddedCls, itarget.size() + otarget.size());
-				printGate(cnf, itarget, otarget);
-#endif
-				return true;
 			}
-			freeze_arities(cnf, itarget);
 			return false;
 		}
 
