@@ -1,4 +1,4 @@
 language: c++
-before_script: cd cpu
+#before_script: cd cpu
 script:
-- make
+- cd cpu; make
