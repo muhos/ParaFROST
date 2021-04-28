@@ -19,8 +19,8 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 #ifndef __GL_WARP_
 #define __GL_WARP_
 
-#include "pfcudefs.h"
-#include "pfdtypes.h"
+#include "pfdefinitions.cuh"
+#include "pfdatatypes.h"
 
 namespace pFROST {
 

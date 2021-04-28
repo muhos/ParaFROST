@@ -19,8 +19,8 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 #ifndef __GRID_INFO_
 #define __GRID_INFO_
 
-#include "pfcudefs.h"
-#include "pfdtypes.h"
+#include "pfdefinitions.cuh"
+#include "pfdatatypes.h"
 
 namespace pFROST {
 

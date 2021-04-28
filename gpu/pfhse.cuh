@@ -73,10 +73,10 @@ namespace pFROST {
 			assert(sm.size() > 1);
 			assert(lr.size() > 1);
 			assert(sm.size() <= lr.size());
-			int it1 = 0, it2 = 0;
-			int sm_sz = sm.size(), lr_sz = lr.size(), sub = 0;
+			int it1 = 0, it2 = 0, sub = 0;
+			const int sm_sz = sm.size(), lr_sz = lr.size();
 			while (it1 < sm_sz && it2 < lr_sz) {
-				uint32 lit1 = sm[it1], lit2 = lr[it2];
+				const uint32 lit1 = sm[it1], lit2 = lr[it2];
 				if (lit1 < lit2) it1++;
 				else if (lit2 < lit1) it2++;
 				else { sub++; it1++; it2++; }
@@ -92,9 +92,9 @@ namespace pFROST {
 			assert(lr_sz > 1);
 			assert(sm.size() <= lr_sz);
 			int it1 = 0, it2 = 0, sub = 0;
-			int sm_sz = sm.size();
+			const int sm_sz = sm.size();
 			while (it1 < sm_sz && it2 < lr_sz) {
-				uint32 lit1 = sm[it1], lit2 = lr[it2];
+				const uint32 lit1 = sm[it1], lit2 = lr[it2];
 				if (lit1 < lit2) it1++;
 				else if (lit2 < lit1) it2++;
 				else { sub++; it1++; it2++; }
@@ -110,11 +110,11 @@ namespace pFROST {
 			assert(sm.size() > 1);
 			assert(lr.size() > 1);
 			assert(sm.size() <= lr.size());
-			int it1 = 0, it2 = 0;
-			int sm_sz = sm.size(), lr_sz = lr.size(), sub = 0;
+			int it1 = 0, it2 = 0, sub = 0;
+			const int sm_sz = sm.size(), lr_sz = lr.size();
 			bool self = false;
 			while (it1 < sm_sz && it2 < lr_sz) {
-				uint32 lit1 = sm[it1], lit2 = lr[it2];
+				const uint32 lit1 = sm[it1], lit2 = lr[it2];
 				if (lit1 == fx) it1++;
 				else if (lit2 == x) { self = true; it2++; }
 				else if (lit1 < lit2) it1++;
@@ -139,11 +139,11 @@ namespace pFROST {
 			assert(sm.size() > 1);
 			assert(lr_sz > 1);
 			assert(sm.size() <= lr_sz);
-			int it1 = 0, it2 = 0;
-			int sm_sz = sm.size(), sub = 0;
+			int it1 = 0, it2 = 0, sub = 0;
+			const int sm_sz = sm.size();
 			bool self = false;
 			while (it1 < sm_sz && it2 < lr_sz) {
-				uint32 lit1 = sm[it1], lit2 = lr[it2];
+				const uint32 lit1 = sm[it1], lit2 = lr[it2];
 				if (lit1 == fx) it1++;
 				else if (lit2 == x) { self = true; it2++; }
 				else if (lit1 < lit2) it1++;
@@ -167,9 +167,9 @@ namespace pFROST {
 #define MIN(x, y) (x < y ? x : y)
 			assert(c.learnt());
 			assert(c.size() > 1);
-			int old_lbd = c.lbd();
+			const int old_lbd = c.lbd();
 			if (old_lbd <= LBD_TIER1) return; // always keep Tier1 value
-			int new_lbd = MIN(c.size() - 1, old_lbd);
+			const int new_lbd = MIN(c.size() - 1, old_lbd);
 			if (new_lbd >= old_lbd) return;
 			c.set_lbd(new_lbd);
 			c.set_usage(USAGET3);
@@ -179,14 +179,14 @@ namespace pFROST {
 #endif
 		}
 
-		_PFROST_D_ void strengthen(cuVecU* units, SCLAUSE& c, uint32* sh_c, uint32 self_lit)
+		_PFROST_D_ void strengthen(cuVecU* units, SCLAUSE& c, uint32* sh_c, const uint32& self_lit)
 		{
 			assert(!c.deleted());
 			assert(c.size() > 1);
 			assert(self_lit > 1);
 			int n = 0;
 			for (int k = 0; k < c.size(); k++) {
-				uint32 lit = sh_c[k];
+				const uint32 lit = sh_c[k];
 				if (lit != self_lit) {
 					c[n] = lit, sh_c[n] = lit;
 					n++;
@@ -205,14 +205,14 @@ namespace pFROST {
 #endif
 		}
 
-		_PFROST_D_ void strengthen(cuVecU* units, SCLAUSE& c, uint32 self_lit)
+		_PFROST_D_ void strengthen(cuVecU* units, SCLAUSE& c, const uint32& self_lit)
 		{
 			assert(!c.deleted());
 			assert(c.size() > 1);
 			assert(self_lit > 1);
 			int n = 0;
 			for (int k = 0; k < c.size(); k++) {
-				uint32 lit = c[k];
+				const uint32 lit = c[k];
 				if (lit != self_lit) c[n++] = lit;
 			}
 			assert(n == c.size() - 1);
@@ -230,18 +230,18 @@ namespace pFROST {
 		_PFROST_D_ void updateOL(CNF& cnf, OL& ol)
 		{
 			if (ol.empty()) return;
-			S_REF *i, *j, *rend = ol.end();
-			for (i = ol, j = ol; i != rend; i++) {
+			S_REF *j = ol;
+			forall_occurs(ol, i) {
 				SCLAUSE& c = cnf[*i];
 				if (c.molten()) c.freeze();
 				else if (!c.deleted()) *j++ = *i;
 			}
-			ol._shrink(rend - j);
+			ol.resize(j - ol);
 		}
 
 		_PFROST_D_ void subsume(CNF& cnf, OL& list, S_REF* end, SCLAUSE& cand)
 		{
-			int candsz = cand.size();
+			const int candsz = cand.size();
 			for (S_REF* j = list; j != end; j++) {
 				SCLAUSE& subsuming = cnf[*j];
 				if (subsuming.deleted()) continue;
@@ -256,7 +256,7 @@ namespace pFROST {
 
 		_PFROST_D_ void subsume(CNF& cnf, OL& list, S_REF* end, SCLAUSE& cand, uint32* sh_cand)
 		{
-			int candsz = cand.size();
+			const int candsz = cand.size();
 			for (S_REF* j = list; j != end; j++) {
 				SCLAUSE& subsuming = cnf[*j];
 				if (subsuming.deleted()) continue;
@@ -273,7 +273,7 @@ namespace pFROST {
 		_PFROST_D_ void selfsubsume(const uint32& x, const uint32& fx, CNF& cnf, OL& list, cuVecU* units, SCLAUSE& cand)
 		{
 			// try to strengthen 'cand' by removing 'x'
-			int candsz = cand.size();
+			const int candsz = cand.size();
 			for (S_REF* j = list; j != list.end(); j++) {
 				SCLAUSE& subsuming = cnf[*j];
 				if (subsuming.size() > candsz) break;
@@ -289,7 +289,7 @@ namespace pFROST {
 		_PFROST_D_ void selfsubsume(const uint32& x, const uint32& fx, CNF& cnf, OL& list, cuVecU* units, SCLAUSE& cand, uint32* sh_cand)
 		{
 			// try to strengthen 'cand' by removing 'x' using shared memory 
-			int candsz = cand.size();
+			const int candsz = cand.size();
 			for (S_REF* j = list; j != list.end(); j++) {
 				SCLAUSE& subsuming = cnf[*j];
 				if (subsuming.size() > candsz) break;
@@ -305,9 +305,9 @@ namespace pFROST {
 		_PFROST_D_ void subsume_x(const uint32& p, CNF& cnf, OL& poss, OL& negs, cuVecU* units, uint32* sh_c)
 		{
 			assert(checkMolten(cnf, poss, negs));
-			uint32 n = NEG(p);
+			const uint32 n = NEG(p);
 			// positives vs negatives
-			for (S_REF* i = poss; i != poss.end(); i++) {
+			forall_occurs(poss, i) {
 				SCLAUSE& pos = cnf[*i];
 				if (pos.size() > HSE_MAX_CL_SIZE) break;
 				if (pos.deleted()) continue;
@@ -328,7 +328,7 @@ namespace pFROST {
 			updateOL(cnf, poss); // discard deleted or strengthened clauses from 'p' list
 #endif
 			// negatives vs positives
-			for (S_REF* i = negs; i != negs.end(); i++) {
+			forall_occurs(negs, i) {
 				SCLAUSE& neg = cnf[*i];
 				if (neg.size() > HSE_MAX_CL_SIZE) break;
 				if (neg.deleted()) continue;

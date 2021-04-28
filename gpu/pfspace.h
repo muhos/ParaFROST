@@ -19,8 +19,9 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 #ifndef __SPACE_
 #define __SPACE_
 
-#include "pfralloc.h"
-#include "pfdefs.h"
+#include "pfmalloc.h"
+#include "pfdefinitions.h"
+#include "pfvstate.h"
 
 namespace pFROST {
 	/*****************************************************/
@@ -31,84 +32,117 @@ namespace pFROST {
 		addr_t		_mem;
 		size_t		_sz, _cap;
 		template <class T>
-		size_t		calcBytes(const uint32& sz, const uint32& nVecs) {
-			assert(sz); return size_t(sz) * nVecs * sizeof(T);
+		inline size_t calcBytes(const uint32& sz, const uint32& nVecs) const {
+			assert(sz); 
+			return sz * nVecs * sizeof(T);
 		}
+
+		#define forall_space(X) for (uint32 X = 1; X < _sz; X++)
+		#define	breakline(X) if (X > 1 && X < _sz - 2 && X % 10 == 0) { \
+						PUTCH('\n'); PFLOGN0("\t\t"); }
 	public:
-		int* level, * board, learnt_lbd;
-		LIT_ST* locked, * seen, * frozen, * vstate, * marks, * subsume;
-		LIT_ST* value, * psaved, * ptarget, * pbest;
-		uint32* tmp_stack, propagated, trailpivot, simplified;
+		// arrays
+		int* level;
+		uint32* tmp_stack, *stacktail;
+		uint64* board;
 		C_REF* source;
-		SP(const uint32& size) :
-			_mem(NULL)
-			, _sz(size)
-			, _cap(0)
-			, trailpivot(0)
-			, propagated(0)
-			, simplified(0)
-			, learnt_lbd(0)
+		VSTATE* vstate;
+		LIT_ST* seen, * frozen, * marks;
+		LIT_ST* value, * psaved, * ptarget, * pbest;
+		// scalers
+		int learntLBD;
+		uint32 trailpivot;
+		uint32 simplified;
+		uint32 propagated;
+		//================
+		SP() { RESETSTRUCT(this); }
+		SP(const uint32& size) 
 		{
-			size_t vec1Bytes = calcBytes<LIT_ST>(size, 11);
-			size_t vec4Bytes = calcBytes<uint32>(size, 3);
-			size_t vec8Bytes = calcBytes<C_REF>(size, 1);
+			RESETSTRUCT(this);
+			assert(sizeof(C_REF) == sizeof(uint64));
+			assert(sizeof(VSTATE) == sizeof(Byte));
+			const size_t vec8Bytes = calcBytes<C_REF>(size, 2);
+			const size_t vec4Bytes = calcBytes<uint32>(size, 2);
+			const size_t vec1Bytes = calcBytes<LIT_ST>(size, 9);
+			_sz = size;
 			_cap = vec1Bytes + vec4Bytes + vec8Bytes;
 			assert(_cap);
-			pfalloc(_mem, _cap);
+			pfralloc(_mem, _cap);
 			assert(_mem != NULL);
 			memset(_mem, 0, _cap);
+			// 8-byte arrays
+			source = (C_REF*)_mem;
+			board = (uint64*)(source + _sz);
+			// 4-byte arrays
+			level = (int*)(_mem + vec8Bytes);
+			tmp_stack = (uint32*)(level + _sz);
 			// 1-byte arrays
-			value = (LIT_ST*)_mem;
-			locked = value + _sz + _sz;
-			frozen = locked + _sz;
+			value = (LIT_ST*)(_mem + vec8Bytes + vec4Bytes);
+			frozen = value + _sz + _sz;
 			seen = frozen + _sz;
 			psaved = seen + _sz;
 			ptarget = psaved + _sz;
 			pbest = ptarget + _sz;
-			vstate = pbest + _sz;
-			marks = vstate + _sz;
-			subsume = marks + _sz;
-			// 4-byte arrays
-			level = (int*)(_mem + vec1Bytes);
-			board = level + _sz;
-			tmp_stack = (uint32*)(board + _sz);
-			// 8-byte arrays
-			source = (C_REF*)(_mem + vec4Bytes + vec1Bytes);
-			assert(_mem + _cap == addr_t(source) + vec8Bytes);
+			marks = pbest + _sz;
+			vstate = (VSTATE*)(marks + _sz);
+			assert(_mem + _cap == addr_t(vstate) + _sz);
+			// initialize with custom values
+			memset(value, UNDEFINED, _sz + _sz);
+			memset(marks, UNDEFINED, _sz);
+			memset(ptarget, UNDEFINED, _sz);
+			memset(pbest, UNDEFINED, _sz);
+			forall_space(v) {
+				level[v] = UNDEFINED;
+				source[v] = NOREF;
+			}
 		}
-		void		printStates(const uint32& size) {
+		size_t	size		() const { return _sz; }
+		size_t	capacity	() const { return _cap; }
+		void	initSaved	(const LIT_ST& pol) {
+			memset(psaved, pol, _sz);
+		}
+		void	copyFrom	(SP* src)
+		{
+			propagated = src->propagated;
+			trailpivot = src->trailpivot;
+			simplified = src->simplified;
+			forall_space(v) {
+				const uint32 p = V2L(v), n = NEG(p);
+				value[p] = src->value[p];
+				value[n] = src->value[n];
+				level[v] = src->level[v];
+				marks[v] = src->marks[v];
+				vstate[v] = src->vstate[v];
+			}
+		}
+		void	printStates	() {
 			PFLOGN1(" States->[");
-			for (uint32 v = 1; v <= size; v++) {
-				fprintf(stdout, "%5d:%d ", v, vstate[v]);
-				if (v > 1 && v < size - 1 && v % 10 == 0) { putc('\n', stdout); PFLOGN0("\t "); }
+			forall_space(v) {
+				PRINT("%5d:%d ", v, vstate[v].state);
+				breakline(v);
 			}
-			putc(']', stdout), putc('\n', stdout);
+			putc(']', stdout), PUTCH('\n');
 		}
-		void		printValues(const uint32& size) {
+		void	printValues	() {
 			PFLOGN1(" Values->[");
-			for (uint32 lit = 2; lit <= V2L(size); lit++) {
-				fprintf(stdout, "%5d:%d ", l2i(lit), value[lit]);
-				if (lit > 2 && lit < size - 1 && lit % 10 == 0) { putc('\n', stdout); PFLOGN0("\t "); }
+			forall_space(v) {
+				uint32 lit = V2L(v);
+				PRINT("%5d:%d ", l2i(lit), value[lit]);
+				breakline(v);
 			}
-			putc(']', stdout), putc('\n', stdout);
+			putc(']', stdout), PUTCH('\n');
 		}
-		void		printLevels(const uint32& size) {
+		void	printLevels	() {
 			PFLOGN1(" Levels->[");
-			for (uint32 v = 1; v <= size; v++) {
-				fprintf(stdout, "%5d@%d ", v, level[v]);
-				if (v > 1 && v < size - 1 && v % 10 == 0) { putc('\n', stdout); PFLOGN0("\t "); }
+			forall_space(v) {
+				PRINT("%5d@%d ", v, level[v]);
+				breakline(v);
 			}
-			putc(']', stdout), putc('\n', stdout);
+			putc(']', stdout), PUTCH('\n');
 		}
-		void		lockMelted(const uint32& size) {
-			for (uint32 v = 1; v <= size; v++)
-				if (vstate[v] == MELTED)
-					locked[v] = 1;
-		}
-		void		clearBoard() { memset(board, 0, _sz); }
-		void		clearSubsume() { memset(subsume, 0, _sz); }
-		void		destroy() { if (_mem != NULL) std::free(_mem); }
-		~SP() { destroy(); }
+		void	clearSubsume() { forall_space(v) vstate[v].subsume = 0; }
+		void	destroy		() { if (_mem != NULL) std::free(_mem); }
+				~SP			() { destroy(); }
 	};
 }
 

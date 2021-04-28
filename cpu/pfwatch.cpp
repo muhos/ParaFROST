@@ -23,48 +23,103 @@ using namespace pFROST;
 void ParaFROST::attachBins(BCNF& src)
 {
     assert(!wt.empty());
-    C_REF* end = src.end();
-    for (C_REF* i = src; i != end; i++) {
-        C_REF r = *i;
+    forall_cnf(src, i) {
+        const C_REF r = *i;
+        if (cm.deleted(r)) continue;
         assert(r < cm.size());
-        CLAUSE& c = cm[r];
-        if (c.deleted() || !c.binary()) continue;
-        attachWatch(r, c);
+        const CLAUSE& c = cm[r];
+        if (c.binary()) attachWatch(r, c);
     }
 }
 
 void ParaFROST::attachNonBins(BCNF& src)
 {
     assert(!wt.empty());
-    C_REF* end = src.end();
-    for (C_REF* i = src; i != end; i++) {
-        C_REF r = *i;
+    const int level = DL();
+    forall_cnf(src, i) {
+        const C_REF r = *i;
+        if (cm.deleted(r)) continue;
         assert(r < cm.size());
         CLAUSE& c = cm[r];
-        if (c.deleted() || c.binary()) continue;
+        if (c.binary()) continue;
+        sortClause(c);
         attachWatch(r, c);
+        if (!level) {
+            if (isFalse(c[0])) {
+                const uint32 p0 = sp->index[ABS(c[0])];
+                if (p0 < sp->propagated) sp->propagated = p0;
+            }
+            if (isFalse(c[1])) {
+                const uint32 p1 = sp->index[ABS(c[1])];
+                if (p1 < sp->propagated) sp->propagated = p1;
+            }
+        }
     }
 }
 
 void ParaFROST::attachClauses(BCNF& src)
 {
     assert(!wt.empty());
-    C_REF* end = src.end();
-    for (C_REF* i = src; i != end; i++) {
-        C_REF r = *i;
+    const int level = DL();
+    forall_cnf(src, i) {
+        const C_REF r = *i;
+        if (cm.deleted(r)) continue;
         assert(r < cm.size());
         CLAUSE& c = cm[r];
-        if (c.deleted()) continue;
+        if (!c.binary()) sortClause(c);
         attachWatch(r, c);
+        if (!level && !c.binary()) {
+            if (isFalse(c[0])) {
+                const uint32 p0 = sp->index[ABS(c[0])];
+                if (p0 < sp->propagated) sp->propagated = p0;
+            }
+            if (isFalse(c[1])) {
+                const uint32 p1 = sp->index[ABS(c[1])];
+                if (p1 < sp->propagated) sp->propagated = p1;
+            }
+        }
     }
 }
 
-void ParaFROST::rebuildWT(const bool& binfirst)
+void ParaFROST::rebuildWT(const CL_ST& code)
 {
-	assert(!wt.empty());
-    if (binfirst) {
-        attachBins(orgs), attachBins(learnts);
-        attachNonBins(orgs), attachNonBins(learnts);
+    wt.resize(inf.nDualVars);
+    uint32 proped = sp->propagated;
+    if (PRIORALLBINS(code)) {
+        if (PRIORLEARNTBINS(code)) {
+            attachBins(learnts);
+            attachBins(orgs);
+        }
+        else {
+            attachBins(orgs);
+            attachBins(learnts);
+        }
+        attachNonBins(orgs);
+        attachNonBins(learnts);
     }
-    else attachClauses(orgs), attachClauses(learnts);
+    else {
+        attachClauses(orgs);
+        attachClauses(learnts);
+    }
+    if (proped != sp->propagated)
+        PFLOG2(2, "  trail reset to position %d at literal %d in %s", sp->propagated, l2i(trail[sp->propagated]), __func__);
+}
+
+void ParaFROST::sortWT()
+{
+    WL saved;
+    forall_literal(lit) {
+        assert(saved.empty());
+        WL& ws = wt[lit];
+        WATCH *j = ws;
+        forall_watches(ws, i) {
+            const WATCH w = *i;
+            if (w.binary()) *j++ = w;
+            else saved.push(w);
+        }
+        ws.resize(int(j - ws));
+        forall_watches(saved, i) { ws.push(*i); }
+        saved.clear();
+    }
+    saved.clear(true);
 }

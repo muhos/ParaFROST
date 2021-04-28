@@ -48,6 +48,9 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 #define CVIOLET4	"\x1B[38;5;163m"
 #define CVIOLET5	"\x1B[38;5;125m"
 
+#define CORANGE0	"\x1B[38;5;203m"
+#define CORANGE1	"\x1B[38;5;202m"
+#define CMDM		"\x1B[38;5;221m"
 #define CSOLVER		"\x1B[38;5;117m"
 #define CAUTHOR		"\x1B[38;5;116m"
 #define CRIGHTS		"\x1B[38;5;1m"

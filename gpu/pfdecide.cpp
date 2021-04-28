@@ -21,35 +21,40 @@ using namespace pFROST;
 
 uint32 ParaFROST::nextVSIDS()
 {
+	assert(inf.unassigned);
+	VSTATE* states = sp->vstate;
 	uint32 cand = 0;
 	while (!vsids.empty()) {
 		cand = vsids.top();
 		assert(cand && cand <= inf.maxVar);
-		if (!sp->locked[cand]) break;
+		if (!states[cand].state && UNASSIGNED(sp->value[V2L(cand)])) break;
 		vsids.pop();
 	}
 	assert(cand);
-	PFLOG2(4, " Next heap choice %d, activity %g", cand, activity[cand]);
+	PFLOG2(4, " Next heap choice %d, activity %e", cand, activity[cand]);
 	return cand;
 }
 
 uint32 ParaFROST::nextVMFQ()
 {
+	assert(inf.unassigned);
+	VSTATE* states = sp->vstate;
 	LIT_ST assigned = UNDEFINED;
-	uint32 free = vmfq.free();
+	uint32 free = vmtf.free();
 	assert(free);
-	assigned = sp->locked[free];
-	while (sp->locked[free]) free = vmfq.previous(free);
-	assert(!assigned || assigned == 1);
-	if (assigned) vmfq.update(free, bumps[free]);
+	if (states[free].state || !UNASSIGNED(sp->value[V2L(free)])) {
+		do { free = vmtf.previous(free); } 
+		while (states[free].state || !UNASSIGNED(sp->value[V2L(free)]));
+		vmtf.update(free, bumps[free]);
+	}
 	PFLOG2(4, " Next queue choice %d, bumped %lld", free, bumps[free]);
 	return free;
 }
 
 uint32 ParaFROST::makeAssign(const uint32& v, const bool& tphase) {
-	assert(v < NOVAR);
+	CHECKVAR(v);
 	LIT_ST pol = UNDEFINED;
-	if (UNASSIGNED(pol) && tphase) pol = sp->ptarget[v];
+	if (tphase) pol = sp->ptarget[v];
 	if (UNASSIGNED(pol)) pol = sp->psaved[v];
 	if (UNASSIGNED(pol)) pol = opts.polarity;
 	assert(pol >= 0);
@@ -58,13 +63,12 @@ uint32 ParaFROST::makeAssign(const uint32& v, const bool& tphase) {
 
 void ParaFROST::decide()
 {
-	assert(trail.size() < inf.maxVar - inf.maxMelted);
+	assert(inf.unassigned);
 	assert(sp->propagated == trail.size());
 	assert(conflict == NOREF);
 	assert(cnfstate == UNSOLVED);
 	uint32 cand = vsidsEnabled() ? nextVSIDS() : nextVMFQ();
 	uint32 dec = makeAssign(cand, useTarget());
-	incDL();
-	enqueue(dec, DL());
-	stats.n_fuds++;
+	enqueueDecision(dec);
+	stats.decisions.single++;
 }

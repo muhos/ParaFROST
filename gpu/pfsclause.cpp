@@ -21,43 +21,44 @@ using namespace pFROST;
 
 void ParaFROST::newClause(SCLAUSE& s)
 {
-	if (s.deleted()) return;
-	assert(s.size() > 1);
-	assert(!s.molten());
-	int sz = s.size();
-	assert(sz > 1);
+	int size = s.size();
+	assert(size > 1);
+	assert(!s.deleted());
+	assert(!s.molten());	
 	// NOTE: 's' should be used with 'sp' before any mapping is done
-	if (stats.sigmifications > 1 && s.added()) markSubsume(s);
-	C_REF r = cm.alloc(sz);
+	if (stats.sigma.calls > 1 && s.added()) markSubsume(s);
+	C_REF r = cm.alloc(size);
 	CLAUSE& new_c = cm[r];
 	if (mapped) vmap.mapClause(new_c, s);
 	else new_c.copyLitsFrom(s);
-	assert(sz == new_c.size());
+	assert(size == new_c.size());
 	assert(new_c.keep());
 	assert(new_c[0] > 1 && new_c[1] > 1);
 	assert(new_c[0] <= NOVAR && new_c[1] <= NOVAR);
-	new_c.set_status(s.status());
+	assert(!new_c.deleted());
+	assert(s.status() == ORIGINAL || s.status() == LEARNT);
 	if (s.learnt()) {
 		assert(s.lbd());
 		assert(s.usage() <= USAGET2);
 		assert(!s.added());
+		new_c.markLearnt();
 		int lbd = s.lbd();
-		if (sz > 2 && lbd > opts.lbd_tier1)
-			new_c.set_keep(0);
+		if (size > 2 && lbd > opts.lbd_tier1) new_c.set_keep(0);
 		new_c.set_lbd(lbd);
 		new_c.set_usage(s.usage());
 		learnts.push(r);
-		inf.nLearntLits += sz;
+		stats.literals.learnt += size;
 	}
 	else {
 		assert(new_c.original());
 		orgs.push(r);
-		inf.nLiterals += sz;
+		stats.literals.original += size;
 	}
 }
 
 void ParaFROST::markSubsume(SCLAUSE& s) {
 	assert(s.added());
-	for (uint32* k = s; k != s.end(); k++)
-		sp->subsume[ABS(*k)] = 1;
+	forall_clause(s, k) {
+		markSubsume(*k);
+	}
 }

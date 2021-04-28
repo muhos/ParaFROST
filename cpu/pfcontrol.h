@@ -19,7 +19,7 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 #ifndef __CONTROL_
 #define __CONTROL_
 
-#include "pfdefs.h"
+#include "pfdefinitions.h"
 #include "pfdimacs.h"
 #include "pfdtypes.h"
 

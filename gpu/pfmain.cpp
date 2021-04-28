@@ -23,8 +23,8 @@ using namespace pFROST;
 bool quiet_en = false;
 int verbose = -1;
 
-int main(int argc, char** argv)
-{
+int main(int argc, char **argv)
+{             
 	BOOL_OPT opt_quiet_en("quiet", "enable quiet mode, same as verbose=0", false);
 	INT_OPT opt_verbose("verbose", "set the verbosity", 1, INT32R(0, 4));
 	INT_OPT opt_timeout("timeout", "set the timeout in seconds", 0, INT32R(0, INT32_MAX));
@@ -36,7 +36,7 @@ int main(int argc, char** argv)
 		if (quiet_en) verbose = 0;
 		else if (!verbose) quiet_en = true;
 		if (!quiet_en && verbose) {
-			PFNAME("ParaFROST (Parallel Formal Reasoning Of Satisfiability)");
+			PFNAME("ParaFROST (Parallel Formal Reasoning On Satisfiability)");
 			PFAUTHORS("Muhammad Osama and Anton Wijs");
 			PFRIGHTS("Technische Universiteit Eindhoven (TU/e)");
 			PFLRULER('-', RULELEN);

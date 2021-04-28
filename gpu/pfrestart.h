@@ -19,7 +19,7 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 #ifndef __RESTART_
 #define __RESTART_
 
-#include "pfdefs.h"
+#include "pfdefinitions.h"
 
 namespace pFROST {
 
@@ -46,7 +46,7 @@ namespace pFROST {
     struct LBDFS { EMA fast, slow; };
 
     class LBDREST {
-        LBDFS current, saved;
+        LBDFS average[2];
         double rate;
         int lbdfast, lbdslow;
     public:
@@ -56,17 +56,18 @@ namespace pFROST {
         }
         inline void reset() {
             assert(rate && lbdfast && lbdslow);
-            current.fast = EMA(lbdfast);
-            current.slow = EMA(lbdslow);
-            saved.fast = EMA(lbdfast);
-            saved.slow = EMA(lbdslow);
+            average[0].fast = EMA(lbdfast);
+            average[0].slow = EMA(lbdslow);
+            average[1].fast = EMA(lbdfast);
+            average[1].slow = EMA(lbdslow);
         }
-        inline void update(const double& x) {
-            current.fast.update(x);
-            current.slow.update(x);
+        inline void update(const bool& stable, const double& x) {
+            average[stable].fast.update(x);
+            average[stable].slow.update(x);
         }
-        inline void swap() { std::swap(current, saved); }
-        inline bool restart() const { return (rate * current.slow) <= current.fast; }
+        inline bool restart(const bool& stable) const { 
+            return (rate * average[stable].slow) <= average[stable].fast;
+        }
     };
 
     // reference: MiniSat, SAT4j, CadiCal
@@ -76,14 +77,16 @@ namespace pFROST {
         bool restart, limited;
 
     public:
-        LUBYREST() : period(0), restart(false) {}
-        void init(int p, int64 l) {
-            assert(p > 0);
-            u = v = 1;
-            period = countdown = p;
+        LUBYREST() : u(1), v(1), limit(0), period(0), countdown(0), restart(false), limited(false) {}
+        void enable(uint64 period, uint64 limit) {
+            if (limit && period > limit) period = limit;
+            this->period = period;
+            this->limit = limit;
+            countdown = period;
+            limited = (limit > 0);
             restart = false;
-            if (l <= 0) limited = false;
-            else limited = true, limit = l;
+            u = v = 1;
+            
         };
         void disable() { period = 0, restart = false; }
         void update();

@@ -17,7 +17,7 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 **********************************************************************************/
 
 #include "pfsolve.h" 
-#include "pfcudefs.h"
+#include "pfdefinitions.cuh"
 
 namespace pFROST {
 
@@ -76,41 +76,43 @@ namespace pFROST {
 #endif
 	}
 
+	void set_memoryout(int memory_limit)
+	{
+#ifdef __linux__ 
+		if (memory_limit) {
+			rlim64_t limitbytes = (rlim64_t)memory_limit * GBYTE;
+			rlimit64 limit;
+			getrlimit64(RLIMIT_AS, &limit);
+			if (limit.rlim_max == RLIM_INFINITY || limitbytes < limit.rlim_max) {
+				limit.rlim_cur = limitbytes;
+				if (setrlimit64(RLIMIT_AS, &limit) == -1) PFLOGW("memoryout cannot be set");
+			}
+		}
+#elif _WIN32
+		PFLOGW("memoryout not supported on Windows");
+#endif
+	}
+
 	void handler_terminate(int)
 	{
 		fflush(stdout);
-		if (!quiet_en) {
-			PFLOG0("");
-			PFLOG1("%s%45s%s", CYELLOW, "Interrupted", CNORMAL);
-			PFLOG0("");
-		}
+		PFPRINT(0, 5, "%s%s%s", CYELLOW, "INTERRUPTED\n", CNORMAL);
 		PFLOGS("UNKNOWN");
-		if (!quiet_en) {
-			PFLOG0("");
-			PFLRULER('-', RULELEN);
-		}
 		_exit(EXIT_FAILURE);
 	}
 
 	void handler_mercy_interrupt(int)
 	{
 		fflush(stdout);
-		if (!quiet_en) {
-			PFLOG0("");
-			PFLOG1("%s%45s%s", CYELLOW, "Interrupted", CNORMAL);
-			PFLOG0("");
-		}
+		PFPRINT(0, 5, "%s%s%s", CYELLOW, "INTERRUPTED\n", CNORMAL);
 		pfrost->interrupt();
 	}
 
 	void handler_mercy_timeout(int)
 	{
 		fflush(stdout);
-		if (!quiet_en) {
-			PFLOG0("");
-			PFLOG1("%s%45s%s", CYELLOW, "Timeout", CNORMAL);
-			PFLOG0("");
-		}
+		PFPRINT(0, 5, "%s%s%s", CYELLOW, "TIME OUT\n", CNORMAL);
+		PFLOGS("UNKNOWN");
 		pfrost->interrupt();
 	}
 
@@ -121,6 +123,27 @@ namespace pFROST {
 #ifdef SIGXCPU
 		if (h_timeout != NULL) signal(SIGXCPU, h_timeout);
 #endif
+	}
+
+	void segmentation_fault(int)
+	{
+		fflush(stdout);
+		PFLOGEN("segmentation fault detected.");
+		_exit(EXIT_FAILURE);
+	}
+
+	void illegal_code(int)
+	{
+		fflush(stdout);
+		PFLOGEN("illegal code detected.");
+		_exit(EXIT_FAILURE);
+	}
+
+	void arithmetic_error(int)
+	{
+		fflush(stdout);
+		PFLOGEN("arithmetic flaw detected.");
+		_exit(EXIT_FAILURE);
 	}
 
 	void getCPUInfo(uint64& _free)
@@ -149,7 +172,7 @@ namespace pFROST {
 		}
 		_free = getAvailSysMem();
 		PFLOG2(1, " Available CPU: %s%s%s", CREPORTVAL, cpuid, CNORMAL);
-		PFLOG2(1, " Available system memory: %lld GB", _free / GBYTE);
+		PFLOG2(1, " Available System memory: %lld GB", _free / GBYTE);
 	}
 
 	inline int	SM2Cores(int major, int minor) {
@@ -165,7 +188,7 @@ namespace pFROST {
 			}
 			index++;
 		}
-		PFLOGEN("MapSMtoCores for SM %d.%d is undefined. Default to use %d Cores/SM", major, minor, nCores[index - 1].Cores);
+		PFLOGEN("cannot map to cores for SM %d.%d. Default to use %d Cores/SM", major, minor, nCores[index - 1].Cores);
 		return nCores[index - 1].Cores;
 	}
 

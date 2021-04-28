@@ -19,8 +19,8 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 #ifndef __HEAP_
 #define __HEAP_
 
-#include "pfvec.h"
-#include "pfdefs.h"
+#include "pfvector.h"
+#include "pfdefinitions.h"
 
 namespace pFROST {
 
@@ -63,6 +63,7 @@ namespace pFROST {
 		}
 	public:
 								HEAP		(const CMP& _cmp) : cmp(_cmp) {}
+								HEAP		() {}
 								~HEAP		() { destroy(); }
 		__forceinline uint32*	data		() { return heap; }
 		__forceinline uint32	top			() { assert(!empty()); return *heap; }
@@ -105,6 +106,7 @@ namespace pFROST {
 			for (uint32 i = 0; i < vars.size(); i++)
 				insert(vars[i]);
 		}
+		__forceinline void		init		(const CMP& _cmp) { cmp = _cmp; }
 		
 	};
 

@@ -20,11 +20,37 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 #define __DIMACS_
 
 #include "pfsort.h"
-#include "pfdefs.h"
+#include "pfdefinitions.h"
 #include <fcntl.h>
 #include <sys/stat.h>
 
 namespace pFROST {
+
+	struct FORMULA {
+		string path;
+		uint64 size;
+		double c2v;
+		uint32 units, binaries, ternaries, large;
+		int maxClauseSize;
+		FORMULA() : 
+			path()
+			, c2v(0)
+			, size(0)
+			, units(0)
+			, large(0)
+			, binaries(0)
+			, ternaries(0)
+			, maxClauseSize(0) {}
+		FORMULA(const string& path) :
+			path(path)
+			, c2v(0)
+			, size(0)
+			, units(0)
+			, large(0)
+			, binaries(0)
+			, ternaries(0)
+			, maxClauseSize(0) {}
+	};
 
 	inline bool isDigit(const char& ch) { return (ch ^ '0') <= 9; }
 
@@ -42,6 +68,18 @@ namespace pFROST {
 		uint32 n = 0;
 		while (isDigit(*str)) n = n * 10 + (*str++ - '0');
 		return n;
+	}
+
+	inline bool canAccess(const char* path, struct stat& st)
+	{
+		if (stat(path, &st)) return false;
+#ifdef _WIN32
+#define R_OK 4
+		if (_access(path, R_OK)) return false;
+#else
+		if (access(path, R_OK)) return false;
+#endif
+		return true;
 	}
 
 }

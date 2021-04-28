@@ -16,33 +16,38 @@ You should have received a copy of the GNU General Public License
 along with this program.  If not, see <https://www.gnu.org/licenses/>.
 **********************************************************************************/
 
+#include "pfcontrol.h"
 #include "pfsolve.h"
+
 using namespace pFROST;
 
-void ParaFROST::map(BCNF& cnf) {
+void ParaFROST::map(BCNF& cnf)
+{
+	if (cnf.empty()) return;
 	assert(!vmap.empty());
-	for (uint32 i = 0; i < cnf.size(); i++) {
-		CLAUSE& c = cm[cnf[i]];
-		assert(!c.deleted());
-		vmap.mapClause(c);
+	forall_cnf(cnf, i) {
+		vmap.mapClause(cm[*i]);
 	}
 }
 
-void ParaFROST::map(WL& ws) {
+void ParaFROST::map(WL& ws)
+{
 	if (ws.empty()) return;
-	for (WATCH* w = ws; w != ws.end(); w++)
+	forall_watches(ws, w) {
 		w->imp = vmap.mapLit(w->imp);
+	}
 }
 
-void ParaFROST::map(WT& wt) {
+void ParaFROST::map(WT& wt)
+{
 	if (wt.empty()) return;
 	assert(!vmap.empty());
-	for (uint32 v = 1; v <= inf.maxVar; v++) {
-		uint32 mVar = vmap.mapped(v);
+	forall_variables(v) {
+		const uint32 mVar = vmap.mapped(v);
 		if (mVar) {
-			uint32 p = V2L(v), n = NEG(p);
-			uint32 mpos = V2L(mVar), mneg = NEG(mpos);
-			if (mVar != v) { // map watch lists
+			const uint32 p = V2L(v), n = NEG(p);
+			const uint32 mpos = V2L(mVar), mneg = NEG(mpos);
+			if (NEQUAL(mVar, v)) { // map watch lists
 				wt[mpos].copyFrom(wt[p]);
 				wt[mneg].copyFrom(wt[n]);
 			}
@@ -55,16 +60,22 @@ void ParaFROST::map(WT& wt) {
 
 void ParaFROST::map(const bool& sigmified)
 {
-	assert(!satisfied());
+	assert(inf.unassigned);
 	assert(conflict == NOREF);
 	assert(!DL());
 	assert(trail.size() == sp->propagated);
 	stats.mappings++;
 	int64 memBefore = sysMemUsed();
 	vmap.initiate(sp);
-	// map original literals with current values
+	// map model literals
 	vmap.mapOrgs(model.lits);
-	vmap.mapShrinkVars(vorg);
+	// map assumptions
+	if (incremental && assumptions.size()) {
+		vmap.mapOrgs(assumptions);
+		vmap.mapShrinkVars(ifrozen);
+	}
+	// map transitive start literal
+	vmap.mapTransitive(last.transitive.literals);
 	// map clauses and watch tables
 	if (!sigmified) map(orgs), map(learnts), map(wt);
 	else mapped = true, newBeginning(), mapped = false;
@@ -72,8 +83,9 @@ void ParaFROST::map(const bool& sigmified)
 	vmap.mapShrinkLits(trail);
 	sp->propagated = trail.size();
 	const uint32 firstFrozen = vmap.firstL0();
-	vmfq.map(*vmap, firstFrozen);
-	vmap.mapShrinkVars(vmfq.data());
+	if (!firstFrozen) assert(trail.empty());
+	vmtf.map(*vmap, firstFrozen);
+	vmap.mapShrinkVars(vmtf.data());
 	vmap.mapShrinkVars(bumps);
 	uVec1D tmp;
 	while (vsids.size()) {
@@ -89,23 +101,21 @@ void ParaFROST::map(const bool& sigmified)
 	vmap.mapSP(newSP);
 	delete sp;
 	sp = newSP;
-	// update phase-saving counters and
-	sp->trailpivot = 0, lrn.best = lrn.target = 0;
+	vmap.mapShrinkVars(vorg); 
+	model.init(vorg);
+	if (opts.proof_en) proof.init(sp, vorg);
+	// update phase-saving counters
+	sp->trailpivot = 0, last.rephase.best = last.rephase.target = 0;
 	for (uint32 v = 1; v <= vmap.numVars(); v++) {
-		if (sp->vstate[v] != ACTIVE) continue;
-		if (sp->pbest[v] != UNDEFINED) lrn.best++;
-		if (sp->ptarget[v] != UNDEFINED) lrn.target++;
+		if (sp->vstate[v].state) continue;
+		if (!UNASSIGNED(sp->pbest[v])) last.rephase.best++;
+		if (!UNASSIGNED(sp->ptarget[v])) last.rephase.target++;
 	}
-	// reset markers
-	stats.marker = 0;
-	memset(sp->marks, UNDEFINED, vmap.size());
 	PFLOG2(2, " Variable mapping compressed %d to %d, saving %.2f KB of memory",
 		inf.maxVar, vmap.numVars(), double(abs(memBefore - sysMemUsed())) / KBYTE);
 	inf.maxVar = vmap.numVars();
 	inf.nDualVars = V2L(inf.maxVar + 1);
-	inf.maxFrozen = inf.maxMelted = 0;
-	int64 current_inc = opts.map_inc * (stats.mappings + 1LL);
-	lrn.map_conf_max = nConflicts + current_inc;
-	PFLOG2(2, " map limit increased to %lld conflicts by a value %lld", lrn.map_conf_max, current_inc);
+	inf.maxFrozen = inf.maxMelted = inf.maxSubstituted = 0;
 	vmap.destroy();
+	printStats(1, 'a', CGREEN2);
 }

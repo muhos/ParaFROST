@@ -19,8 +19,8 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 #ifndef __QUEUE_
 #define __QUEUE_
 
-#include "pfvec.h"
-#include "pfdefs.h"
+#include "pfvector.h"
+#include "pfdefinitions.h"
 
 namespace pFROST {
 
@@ -31,10 +31,11 @@ namespace pFROST {
 	typedef Vec<LINK> Links;
 	class QUEUE {
 		Links links;
-		int64 _bumped;
+		uint64 _bumped;
 		uint32 _first, _last, _free;
 
 		__forceinline void		inQue		(const uint32& v) {
+			CHECKVAR(v);
 			LINK& link = links[v];
 			link.prev = _last;
 			if (_last) links[_last].next = v;
@@ -43,6 +44,7 @@ namespace pFROST {
 			link.next = 0;
 		}
 		__forceinline void		outQue		(const uint32& v) {
+			CHECKVAR(v);
 			LINK& link = links[v];
 			if (link.prev) links[link.prev].next = link.next;
 			else _first = link.next;
@@ -52,7 +54,9 @@ namespace pFROST {
 
 	public:
 								QUEUE		() : _first(0), _last(0), _free(0), _bumped(0) {}
+								~QUEUE		() { links.clear(true); }
 		__forceinline void		init		(const uint32& v) {
+			CHECKVAR(v);
 			links.expand(v + 1);
 			LINK& link = links[v];
 			link.next = 0;
@@ -86,15 +90,19 @@ namespace pFROST {
 			_free = _last = _mPrev;
 
 		}
-		__forceinline void		update		(const uint32& v, const int64& bump) { _free = v, _bumped = bump; PFLOG2(4, "  - Queue free updated to (v: %d, bump: %lld)", _free, _bumped); }
-		__forceinline void		toFront		(const uint32& v) { outQue(v), inQue(v); }
-		__forceinline uint32	previous	(const uint32& v) { return links[v].prev; }
-		__forceinline uint32	next		(const uint32& v) { return links[v].next; }
+		__forceinline void		update		(const uint32& v, const uint64& bump) { 
+			CHECKVAR(v);
+			_free = v, _bumped = bump;
+			PFLOG2(4, "  queue free updated to (v: %d, bump: %lld)", _free, _bumped); 
+		}
+		__forceinline void		toFront		(const uint32& v) { CHECKVAR(v); outQue(v), inQue(v); }
+		__forceinline uint32	previous	(const uint32& v) { CHECKVAR(v); return links[v].prev; }
+		__forceinline uint32	next		(const uint32& v) { CHECKVAR(v); return links[v].next; }
 		__forceinline Links&	data		() { return links; }
 		__forceinline uint32	free		() { return _free; }
 		__forceinline uint32	first		() { return _first; }
 		__forceinline uint32	last		() { return _last; }
-		__forceinline int64		bumped		() { return _bumped; }
+		__forceinline uint64	bumped		() { return _bumped; }
 					  void		print		() {
 			PFLOG1(" Queue (first: %d, last: %d, free: %d, bumped: %lld):", _first, _last, _free, _bumped);
 			for (uint32 i = 0; i < links.size(); i++) 

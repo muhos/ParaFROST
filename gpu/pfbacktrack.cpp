@@ -19,52 +19,66 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 #include "pfsolve.h"
 using namespace pFROST;
 
-inline void ParaFROST::savePhases(const int& bt_level) {
+inline void ParaFROST::savePhases() 
+{
 
-	LIT_ST reset = (lrn.lastrephased && nConflicts > lrn.rephase_last_max);
-	if (reset) {
-		lrn.target = 0;
-		if (lrn.lastrephased == BESTPHASE) lrn.best = 0;
+	const LIT_ST reset = (last.rephase.type && stats.conflicts > last.rephase.conflicts);
+	if (!probed) {
+		if (reset) last.rephase.target = 0;
+		if (sp->trailpivot > last.rephase.target) {
+			last.rephase.target = sp->trailpivot;
+			memcpy(sp->ptarget, sp->psaved, inf.maxVar + 1ULL);
+		}
+		if (sp->trailpivot > last.rephase.best) {
+			last.rephase.best = sp->trailpivot;
+			memcpy(sp->pbest, sp->psaved, inf.maxVar + 1ULL);
+		}
+		sp->trailpivot = 0;
 	}
-	if (sp->trailpivot > lrn.target) {
-		lrn.target = sp->trailpivot;
-		savePhases(sp->ptarget);
-	}
-	if (sp->trailpivot > lrn.best) {
-		lrn.best = sp->trailpivot;
-		savePhases(sp->pbest);
-	}
-	if (reset) lrn.lastrephased = 0;
+	if (reset) last.rephase.type = 0;
 }
 
-inline void	ParaFROST::cancelAssign(const uint32& lit) {
-	assert(lit > 1);
+inline void	ParaFROST::cancelAssign(const uint32& lit) 
+{
+	CHECKLIT(lit);
+	assert(inf.unassigned < inf.maxVar);
 	sp->value[lit] = UNDEFINED;
 	sp->value[FLIP(lit)] = UNDEFINED;
-	PFLOG2(4, " Literal %d@%d cancelled", l2i(lit), l2dl(lit));
+	inf.unassigned++;
+	PFLOG2(4, "  literal %d@%d cancelled", l2i(lit), l2dl(lit));
 }
 
-void ParaFROST::backtrack(const int& bt_level)
+void ParaFROST::backtrack(const int& jmplevel)
 {
-	if (DL() == bt_level) return;
-	int pivot = bt_level + 1;
-	PFLOG2(3, " Backtracking to level %d, at trail index %d", bt_level, dlevels[pivot]);
-	savePhases(bt_level);
-	uint32 from = dlevels[pivot], i = from, j = from;
-	while (i < trail.size()) {
-		uint32 lit = trail[i++], v = ABS(lit);
-		if (sp->level[v] > bt_level) {
-			cancelAssign(lit);
-			sp->locked[v] = 0;
-			if (!vsids.has(v)) vsids.insert(v);
-			if (vmfq.bumped() < bumps[v]) vmfq.update(v, bumps[v]);
+	if (DL() == jmplevel) return;
+	const int pivot = jmplevel + 1;
+	PFLOG2(3, " Backtracking to level %d, at trail index %d", jmplevel, dlevels[pivot]);
+	savePhases();
+	const uint32 from = dlevels[pivot];
+	uint32 i = from, j = from;
+	if (stable) {
+		while (i < trail.size()) {
+			const uint32 lit = trail[i++], v = ABS(lit);
+			if (sp->level[v] > jmplevel) {
+				cancelAssign(lit);
+				if (!vsids.has(v)) vsids.insert(v);
+			}
+			else trail[j++] = lit;
 		}
-		else assert(opts.chrono_en), trail[j++] = lit;
 	}
-	PFLOG2(3, " %d literals kept (%d are saved) and %d are cancelled", j, j - from, trail.size() - j);
+	else {
+		while (i < trail.size()) {
+			const uint32 lit = trail[i++], v = ABS(lit);
+			if (sp->level[v] > jmplevel) {
+				cancelAssign(lit);
+				if (vmtf.bumped() < bumps[v]) vmtf.update(v, bumps[v]);
+			}
+			else trail[j++] = lit;
+		}
+	}
+	PFLOG2(3, "  %d literals kept (%d are saved) and %d are cancelled", j, j - from, trail.size() - j);
 	trail.resize(j);
 	if (sp->propagated > from) sp->propagated = from;
-	if (sp->trailpivot > from) sp->trailpivot = from;
 	dlevels.resize(pivot);
-	assert(DL() == bt_level);
+	assert(DL() == jmplevel);
 }

@@ -19,7 +19,11 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 #ifndef __GL_MACROS_
 #define __GL_MACROS_
 
-#include "pfdtypes.h"
+#include "pfdatatypes.h"
+
+#if __linux__
+#pragma GCC diagnostic ignored "-Wreorder"
+#endif
 
 extern bool quiet_en;
 extern int verbose;
@@ -28,48 +32,44 @@ namespace pFROST {
 	//=======================================//
 	//      ParaFROST Parameters & Macros    //
 	//=======================================//
-	#define MBYTE 0x00100000
-	#define KBYTE 0x00000400
-	#define GBYTE 0x40000000
-	#define NOREF UINT64_MAX
-	#define NOVAR UINT32_MAX
-	#define INIT_CAP 32
-	#define UNSOLVED -1
-	#define UNSAT 0
-	#define SAT 1
-	#define ORGPHASE 1
-	#define INVPHASE 2
-	#define FLIPPHASE 3
-	#define BESTPHASE 4
-	#define RANDPHASE 5
-	#define AWAKEN_SUCC	0
-	#define AWAKEN_FAIL 1
-	#define SALLOC_FAIL 2
+	#define MBYTE			0x00100000
+	#define KBYTE			0x00000400
+	#define GBYTE			0x40000000
+	#define NOREF			UINT64_MAX
+	#define GNOREF			UINT64_MAX
+	#define NOVAR			UINT32_MAX
+	#define INIT_CAP		32
+	#define UNSOLVED		-1
+	#define UNDEFINED		-1
+	#define UNSAT			0
+	#define SAT				1
+	#define ORGPHASE		1
+	#define INVPHASE		2
+	#define FLIPPHASE		3
+	#define BESTPHASE		4
+	#define RANDPHASE		5
+	#define AWAKEN_SUCC		0
+	#define AWAKEN_FAIL		1
 	//======== DANGER ZONE =========
-	#define NEG_SIGN	0x00000001
-	#define HASH_MASK	0x0000001F
-	#define NOVAL_MASK	(LIT_ST)-2
-	#define UNDEFINED	(LIT_ST)-1
-	#define VAL_MASK	(LIT_ST) 1
-	#define ACTIVE		(LIT_ST) 0
-	#define MELTED		(LIT_ST) 1
-	#define FROZEN		(LIT_ST) 2
-	#define ANALYZED_M	(LIT_ST) 0x01
-	#define REMOVABLE_M	(LIT_ST) 0x02
-	#define POISONED_M	(LIT_ST) 0x04
-	#define KEEP_M		(LIT_ST) 0x08
-	#define USAGE_MAX	(CL_ST)0x03
-	#define USAGE_RES	(CL_ST)0x03
-	#define USAGE_OFF	(CL_ST)0x02
-	#define CMOLTEN		(CL_ST)0x01
-	#define CADDED		(CL_ST)0x02
-	#define RMOLTEN		(CL_ST)0xFE
-	#define USAGET3		(CL_ST)0x01
-	#define USAGET2		(CL_ST)0x02
-	#define ORIGINAL	(CL_ST)0x01
-	#define LEARNT		(CL_ST)0x02
-	#define DELETED		(CL_ST)0x04
-	#define ISORG(x)		((x) & ORIGINAL)
+	#define NEG_SIGN		0x00000001
+	#define HASH_MASK		0x0000001F
+	#define MAX_DLC			0x00000003
+	#define MAX_LBD			0x08000000UL
+	#define MAX_LBD_M		0x07FFFFFFUL
+	#define NOVAL_MASK		(LIT_ST)-2
+	#define VAL_MASK		(LIT_ST) 1
+	#define MELTED_M		(LIT_ST)0x01
+	#define FROZEN_M		(LIT_ST)0x02
+	#define SUBSTITUTED_M	(LIT_ST)0x04
+	#define ANALYZED_M		(LIT_ST)0x01
+	#define REMOVABLE_M		(LIT_ST)0x02
+	#define POISONED_M		(LIT_ST)0x04
+	#define KEEP_M			(LIT_ST)0x08
+	#define USAGET3			(CL_ST)0x01
+	#define USAGET2			(CL_ST)0x02
+	#define ORIGINAL		(CL_ST)0x00
+	#define LEARNT			(CL_ST)0x01
+	#define DELETED			(CL_ST)0x02
 	#define POS(x)			((x) & 0xFFFFFFFE)
 	#define ABS(x)			((x) >> 1)
 	#define V2L(x)			((x) << 1)
@@ -79,15 +79,19 @@ namespace pFROST {
 	#define FLIP(x)			((x) ^ NEG_SIGN)
 	#define HASH(x)			((x) & HASH_MASK)
 	#define MAPHASH(x)		(1UL << HASH(x))
+	#define MELTED(x)		((x) & MELTED_M)
+	#define FROZEN(x)		((x) & FROZEN_M)
+	#define SUBSTITUTED(x)	((x) & SUBSTITUTED_M)
+	#define ANALYZED(x)		((x) & ANALYZED_M)
 	#define	REMOVABLE(x)	((x) & REMOVABLE_M)	
 	#define	POISONED(x)		((x) & POISONED_M)
 	#define	KEPT(x)			((x) & KEEP_M)
 	#define UNASSIGNED(x)	((x) & NOVAL_MASK)
 	#define REASON(x)		((x) ^ NOREF)
 	#define DECISION(x)		(!REASON(x))
+	#define NEQUAL(x,y)		((x) ^ (y))
 	//==============================
-	extern size_t hc_bucket, hc_nbuckets;
-
+	
 }
 
 #endif

@@ -22,192 +22,176 @@ using namespace pFROST;
 
 void ParaFROST::markLits(CLAUSE& c) {
 	assert(c.size() > 1);
-	for (uint32* k = c; k != c.end(); k++)
+	forall_clause(c, k) {
+		assert(UNASSIGNED(l2marker(*k)));
 		markLit(*k);
+	}
 }
 
 void ParaFROST::unmarkLits(CLAUSE& c) {
-	for (uint32* k = c; k != c.end(); k++)
+	forall_clause(c, k) {
+		assert(!UNASSIGNED(l2marker(*k)));
 		unmarkLit(*k);
+	}
 }
 
 void ParaFROST::markSubsume(CLAUSE& c) {
 	assert(keeping(c));
-	for (uint32* k = c; k != c.end(); k++)
-		sp->subsume[ABS(*k)] = 1;
+	forall_clause(c, k) {
+		markSubsume(*k);
+	}
 }
 
 bool ParaFROST::keeping(CLAUSE& c) {
 	if (c.original()) return true;
 	if (c.keep()) return true;
-	if (c.lbd() > lrn.keptlbd) return false;
-	if (c.size() > lrn.keptsize) return false;
+	if (c.lbd() > limit.keptlbd) return false;
+	if (c.size() > limit.keptsize) return false;
 	return true;
 }
 
-void ParaFROST::bumpShrunken(CLAUSE& c) {
-	assert(c.learnt());
-	assert(c.size() > 1);
-	if (c.keep()) return;
-	int old_lbd = c.lbd();
-	int new_lbd = std::min(c.size() - 1, old_lbd);
-	if (new_lbd >= old_lbd) return;
-	if (new_lbd <= opts.lbd_tier1) c.set_keep(1);
-	else if (old_lbd > opts.lbd_tier2 && new_lbd <= opts.lbd_tier2) c.initTier2();
-	c.set_lbd(new_lbd);
-	PFLCLAUSE(4, c, " Bumping shrunken clause with LBD %d ", new_lbd);
-}
-
-CL_ST ParaFROST::rooted(CLAUSE& c) {
+void ParaFROST::removeClause(CLAUSE& c, const C_REF& cref) {
+	assert(cm[cref] == c);
 	assert(!c.deleted());
-	CL_ST st = UNDEFINED;
-	for (uint32* k = c; k != c.end(); k++) {
-		uint32 lit = *k;
-		if (!l2dl(lit)) {
-			LIT_ST val = sp->value[lit];
-			assert(!UNASSIGNED(val));
-			if (val > 0) return 1;
-			if (!val) st = 0;
-		}
-	}
-	return st;
-}
-
-inline int ParaFROST::removeRooted(CLAUSE& c)
-{
-	uint32 *i, *j, *end = c.end();
-	for (i = c, j = i; i != end; i++) {
-		uint32 lit = *i;
-		if (!l2dl(lit)) { assert(!value(lit)); continue; }
-		*j++ = lit;
-	}
-	return int(end - j);
-}
-
-void ParaFROST::shrinkClause(CLAUSE& c, const int& remLits)
-{
-	if (!remLits) return;
-	c.shrink(remLits); // adjusts "pos" also
-	cm.collect(remLits);
 	assert(c.size() > 1);
-	if (c.original()) { assert(inf.nLiterals), inf.nLiterals -= remLits; }
+	const int size = c.size();
+	if (c.learnt()) {
+		assert(stats.clauses.learnt > 0);
+		stats.clauses.learnt--;
+		assert(stats.literals.learnt > 0);
+		stats.literals.learnt -= size;
+	}
 	else {
-		// all shrunken must get bumped to "update" new binaries
-		bumpShrunken(c);
-		assert(inf.nLearntLits), inf.nLearntLits -= remLits;
+		assert(c.original());
+		assert(stats.clauses.original > 0);
+		stats.clauses.original--;
+		assert(stats.literals.original > 0);
+		stats.literals.original -= size;
+		stats.shrunken += size;
+	}
+	if (opts.proof_en) proof.deleteClause(c);
+	c.markDeleted();
+	cm.collectClause(cref, size);
+}
+
+void ParaFROST::newClause(const C_REF& cref, CLAUSE& c, const bool& learnt)
+{
+	assert(cm[cref] == c);
+	const int size = c.size();
+	assert(size > 1);
+	if (learnt) {
+		assert(sp->learntLBD > 0);
+		int trimlbd = sp->learntLBD > size ? size : sp->learntLBD;
+		c.markLearnt();
+		c.set_lbd(trimlbd);
+		c.set_usage(1 + (sp->learntLBD <= opts.lbd_tier2));
+		if (size > 2 && trimlbd > opts.lbd_tier1) c.set_keep(0);
+		learnts.push(cref);
+		stats.clauses.learnt++;
+		stats.literals.learnt += size;
+	}
+	else {
+		assert(c.original());
+		orgs.push(cref);
+		stats.clauses.original++;
+		stats.literals.original += size;
 	}
 	if (keeping(c)) markSubsume(c);
 }
 
-void ParaFROST::shrinkClause(const C_REF& r)
+C_REF ParaFROST::newClause(const Lits_t& in_c, const bool& learnt)
 {
+	const C_REF r = cm.alloc(in_c);
 	CLAUSE& c = cm[r];
-	assert(!c.deleted());
-	assert(c.size() > 2);
-	uint32* i, *end = c.end();
-	int numNonFalse = 0;
-	for (i = c; numNonFalse < 2 && i != end; i++)
-		if (value(*i)) {
-			assert(l2dl(*i));
-			numNonFalse++;
-		}
-	if (numNonFalse < 2) return;
-	// TODO:: implement proof here
-	shrinkClause(c, removeRooted(c));
-}
-
-void ParaFROST::removeClause(const C_REF& r) {
-	CLAUSE& c = cm[r];
-	assert(!c.deleted());
-	assert(c.size() > 1);
-	int sz = c.size();
-	if (c.original()) { lrn.elim_marked += sz, inf.nLiterals -= sz; }
-	else { 
-		assert(c.learnt());
-		inf.nLearntLits -= sz;
-	}
-	if (opts.proof_en) {
-		wrProof('d');
-		wrProof(c, sz);
-		wrProof(0);
-	}
-	c.markDeleted(), cm.collect(r);
-}
-
-C_REF ParaFROST::newClause(const Lits_t& in_c, const CL_ST& type)
-{
-	C_REF r = cm.alloc(in_c);
-	int sz = in_c.size();
-	CLAUSE& c = cm[r];
-	assert(sz > 1);
-	assert(sz == c.size());
-	assert(c[0] > 1 && c[1] > 1);
-	assert(c[0] <= NOVAR && c[1] <= NOVAR);
 	assert(c.keep());
-	c.set_status(type);
-	// attach to watch table
+	assert(!c.deleted());
 	attachWatch(r, c);
-	// attach to database
-	if (ISORG(type)) {
-		orgs[inf.nClauses++] = r;
-		inf.nLiterals += sz;
-	}
-	else {
-		assert(sp->learnt_lbd > 0);
-		int trim_lbd = sp->learnt_lbd > sz ? sz : sp->learnt_lbd;
-		c.set_lbd(trim_lbd);
-		c.set_keep(trim_lbd <= opts.lbd_tier1);
-		if (sp->learnt_lbd <= opts.lbd_tier1) c.initTier1(), stats.n_glues++;			// Tier1
-		else if (sp->learnt_lbd <= opts.lbd_tier2) c.initTier2();						// Tier2
-		else c.initTier3();																// Tier3
-		learnts.push(r);
-		inf.nLearntLits += sz;
-	}
-	if (keeping(c)) markSubsume(c);
+	newClause(r, c, learnt);
 	return r;
 }
 
-bool ParaFROST::toClause(Lits_t& c, Lits_t& org, char*& str)
+void ParaFROST::newHyper2(const bool& learnt)
 {
-	assert(c.empty());
-	assert(org.empty());
-	uint32 v = 0, s = 0;
-	bool satisfied = false;
-	while ((v = toInteger(str, s)) != 0) {
-		if (v > inf.maxVar) PFLOGE("too many variables");
-		uint32 lit = V2DEC(v, s);
-		org.push(lit);
-		// checking literal
-		LIT_ST marker = l2marker(lit);
-		if (UNASSIGNED(marker)) {
-			markLit(lit);
-			LIT_ST val = value(lit);
-			if (UNASSIGNED(val)) c.push(lit);
-			else if (val) satisfied = true;
+	assert(learntC.size() == 2);
+	stats.binary.resolvents++;
+	const C_REF r = cm.alloc(learntC);
+	CLAUSE& c = cm[r];
+	const uint32 first = c[0], second = c[1];
+	delayWatch(first, second, r, 2);
+	delayWatch(second, first, r, 2);
+	sp->learntLBD = 2;
+	newClause(r, c, learnt);
+	if (learnt) c.markHyper();
+	learntC.clear();
+}
+
+void ParaFROST::newHyper3(const bool& learnt)
+{
+	const int size = learntC.size();
+	assert(size > 1 && size <= 3);
+	last.ternary.resolvents++;
+	const C_REF r = cm.alloc(learntC);
+	CLAUSE& c = cm[r];
+	sp->learntLBD = size;
+	newClause(r, c, learnt);
+	if (learnt) c.markHyper();
+	attachClause(r, c);
+	PFLCLAUSE(4, c, "  added new hyper ternary resolvent");
+}
+
+inline LIT_ST ParaFROST::sortClause(CLAUSE& c, const int& start, const int& size, const bool& satonly)
+{
+	assert(size > 1);
+	assert(start < size);
+	LIT_ST* values = sp->value;
+	uint32 x = c[start];
+	CHECKLIT(x);
+	LIT_ST xval = values[x];
+	if (UNASSIGNED(xval) || (xval && satonly)) return xval;
+	uint32 best = x;
+	int xlevel = l2dl(x), pos = 0;
+	assert(xlevel > -1);
+	for (int i = start + 1; i < size; i++) {
+		const uint32 y = c[i];
+		CHECKLIT(y);
+		const LIT_ST yval = values[y];
+		if (UNASSIGNED(yval) || (yval && satonly)) {
+			best = y;
+			pos = i;
+			xval = yval;
+			break;
 		}
-		else if (marker != SIGN(lit)) satisfied = true; // tautology
-	}
-	for (uint32* k = org; k != org.end(); k++)
-		unmarkLit(*k);
-	if (satisfied) {
-		if (opts.proof_en) wrProof('d'), wrProof(org, org.size()), wrProof(0);
-	}
-	else {
-		if (!org.size()) { if (opts.proof_en) wrProof('0'); return false; }
-		int newsize = c.size();
-		if (newsize == 1) {
-			LIT_ST val = value(*c);
-			if (UNASSIGNED(val)) enqueueOrg(*c);
-			else if (!val) return false;
+		const int ylevel = l2dl(y);
+		assert(ylevel > -1);
+		bool better;
+		if (!xval && yval > 0) better = true;
+		else if (xval > 0 && !yval) better = false;
+		else if (!xval) {
+			assert(!yval);
+			better = (xlevel < ylevel);
 		}
-		else if (inf.nClauses + 1 > inf.nOrgCls) PFLOGE("too many clauses");
-		else if (newsize) newClause(c);
-		if (opts.proof_en && newsize < org.size()) {
-			wrProof('a'), wrProof(c, newsize), wrProof(0);
-			wrProof('d'), wrProof(org, org.size()), wrProof(0);
-			org.clear();
+		else {
+			assert(xval > 0);
+			assert(yval > 0);
+			assert(!satonly);
+			better = (xlevel > ylevel);
+		}
+		if (better) {
+			best = y;
+			pos = i;
+			xval = yval;
+			xlevel = ylevel;
 		}
 	}
-	c.clear(), org.clear();
-	return true;
+	if (!pos) return xval;
+	c[start] = best;
+	c[pos] = x;
+	return xval;
+}
+
+void ParaFROST::sortClause(CLAUSE& c)
+{
+	int size = c.size();
+	LIT_ST val = sortClause(c, 0, size, false);
+	if (size > 2) sortClause(c, 1, size, val);
 }

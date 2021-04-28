@@ -20,31 +20,36 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 #define __RANDOM_
 
 #include <cassert>
-#include "pfdtypes.h"
+#include "pfdatatypes.h"
 
 namespace pFROST {
 
     // Cadical-style random generator
     class RANDOM {
         uint64 state;
-        void    add             (uint64 val) {
-            if (!(state += val)) state = 1;
-            next();
-        }
 
     public:
-        RANDOM                  () : state(0) {};
-        RANDOM                  (const uint64& seed) : state(seed) { }
-        void operator +=        (uint64 val) { add(val); }
-        uint64  seed            () const { return state; }
-        uint64  next            () {
-            state *= 6364136223846793005ull;
-            state += 1442695040888963407ull;
+                       RANDOM          () : state(0) {};
+                       RANDOM          (const uint64& seed) : state(seed) {}
+        inline void    init            (const uint64& seed) { state = seed; }
+        inline uint64  seed            () const { return state; }
+        inline uint64  next64          () {
+            state *= 6364136223846793005ul;
+            state += 1442695040888963407ul;
             assert(state);
             return state;
         }
-        uint32  generate        () { next(); return state >> 32; }
-        bool    generate_bool   () { return generate() < 2147483648u; }
+        inline uint32  next32          () {
+            return next64() >> 32;
+        }
+        inline bool    genbool          () {
+            const uint32 next = next32();
+            const double fraction = next / 4294967296.0;
+            assert(fraction >= 0 && fraction < 1);
+            const uint32 value = uint32(2 * fraction);
+            assert(value < 2);
+            return value;
+        }
     };
 
 }

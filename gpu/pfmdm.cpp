@@ -20,7 +20,8 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 #include "pfsolve.h" 
 using namespace pFROST;
 
-inline bool	ParaFROST::verifyMDM() {
+inline bool	ParaFROST::verifyMDM() 
+{
 	for (uint32 i = sp->propagated; i < trail.size(); i++) {
 		uint32 v = ABS(trail[i]);
 		if (sp->frozen[v]) {
@@ -33,7 +34,8 @@ inline bool	ParaFROST::verifyMDM() {
 	return true;
 }
 
-inline bool	ParaFROST::verifySeen() {
+inline bool	ParaFROST::verifySeen()
+{
 	for (uint32 v = 0; v <= inf.maxVar; v++) {
 		if (sp->seen[v]) {
 			PFLOG0("");
@@ -45,33 +47,56 @@ inline bool	ParaFROST::verifySeen() {
 	return true;
 }
 
+inline void	ParaFROST::clearMDM() 
+{
+	assert(verifyMDM());
+	uint32* start = trail + sp->propagated, *end = trail.end();
+	while (start != end)
+		sp->seen[ABS(*start++)] = 0;
+	assert(verifySeen());
+	assert((sp->stacktail - sp->tmp_stack) <= (inf.maxVar - last.mdm.decisions));
+	clearFrozen();
+}
+
 inline void ParaFROST::pumpFrozenHeap(const uint32& lit)
 {
+	CHECKLIT(lit);
 	WL& ws = wt[lit];
 	if (ws.empty()) return;
 	uint32 v = ABS(lit);
 	assert(!sp->frozen[v]);
-	double norm_act = (double)sp->level[v] / lrn.numMDs;
-	for (WATCH* w = ws; w != ws.end(); w++) {
-		CLAUSE& c = cm[w->ref];
-		if (c.deleted()) continue;
-		uint32 frozen_w = ABS(c[0]) ^ ABS(c[1]) ^ v;
-		assert(frozen_w != v);
-		if (activity[frozen_w] == 0) varBumpHeap(frozen_w, norm_act);
+	double norm_act = (double)sp->level[v] / last.mdm.decisions;
+	forall_watches(ws, w) {
+		if (cm.deleted(w->ref)) continue;
+		uint32 frozen_v;
+		if (w->binary()) frozen_v = ABS(w->imp);
+		else {
+			CLAUSE& c = cm[w->ref];
+			frozen_v = ABS(c[0]) ^ ABS(c[1]) ^ v;
+			assert(frozen_v != v);
+		}
+		CHECKVAR(frozen_v);
+		if (activity[frozen_v] == 0) varBumpHeap(frozen_v, norm_act);
 	}
 }
 
 inline void ParaFROST::pumpFrozenQue(const uint32& lit)
 {
+	CHECKLIT(lit);
 	WL& ws = wt[lit];
 	if (ws.empty()) return;
 	uint32 v = ABS(lit);
 	assert(!sp->frozen[v]);
-	for (WATCH* w = ws; w != ws.end(); w++) {
-		CLAUSE& c = cm[w->ref];
-		if (c.deleted()) continue;
-		uint32 frozen_v = ABS(c[0]) ^ ABS(c[1]) ^ v;
-		assert(frozen_v != v);
+	forall_watches(ws, w) {
+		if (cm.deleted(w->ref)) continue;
+		uint32 frozen_v;
+		if (w->binary()) frozen_v = ABS(w->imp);
+		else {
+			CLAUSE& c = cm[w->ref];
+			frozen_v = ABS(c[0]) ^ ABS(c[1]) ^ v;
+			assert(frozen_v != v);
+		}
+		CHECKVAR(frozen_v);
 		if (sp->frozen[frozen_v]) {
 			analyzed.push(frozen_v);
 			sp->frozen[frozen_v] = 0;
@@ -81,7 +106,7 @@ inline void ParaFROST::pumpFrozenQue(const uint32& lit)
 
 void ParaFROST::pumpFrozen()
 {
-	if (!lrn.numMDs) return;
+	if (!last.mdm.decisions) return;
 	assert(trail.size() > sp->propagated);
 	if (verbose == 4) PFLOG1(" Pumping frozen variables..");
 	else PFLOGN2(2, " Pumping frozen variables..");
@@ -93,15 +118,15 @@ void ParaFROST::pumpFrozen()
 	}
 	else if (opts.mdm_vmfq_pumps) { // VMFQ (requires special handling)
 		assert(analyzed.empty());
-		assert(inf.maxVar >= lrn.numMDs);
-		analyzed.reserve(inf.maxVar - lrn.numMDs);
+		assert(inf.maxVar >= last.mdm.decisions);
+		analyzed.reserve(inf.maxVar - last.mdm.decisions);
 		for (uint32* assign = trail.end() - 1; assign >= start; assign--)
 			pumpFrozenQue(*assign);
 		if (analyzed.size()) {
 			for (uint32* v = analyzed.end() - 1; v >= analyzed; v--)
 				varBumpQueueNU(*v);
 			uint32 first = *analyzed;
-			if (!sp->locked[first]) vmfq.update(first, bumps[first]);
+			if (UNASSIGNED(sp->value[V2L(first)])) vmtf.update(first, bumps[first]);
 			analyzed.clear();
 			opts.mdm_vmfq_pumps--;
 		}
@@ -113,10 +138,12 @@ void ParaFROST::pumpFrozen()
 void ParaFROST::varOrder()
 {
 	PFLOGN2(2, " Finding eligible decisions at initial round..");
-	assert(!learnts.size());
-	hist(orgs, true);
+	histCNF(orgs, true);
+	histCNF(learnts);
 	uint32* scores = sp->tmp_stack;
-	for (uint32 v = 1; v <= inf.maxVar; v++) eligible[v - 1] = v, scores[v] = rscore(v);
+	forall_variables(v) {
+		eligible[v - 1] = v, scores[v] = prescore(v);
+	}
 	if (opts.mdm_mcv_en) rSort(eligible, MCV_CMP(scores), MCV_RANK(scores));
 	else rSort(eligible, LCV_CMP(scores), LCV_RANK(scores));
 	PFLDONE(2, 5);
@@ -131,85 +158,140 @@ void ParaFROST::varOrder()
 
 void ParaFROST::MDMInit()
 {
-	assert(!satisfied());
+	if (!last.mdm.rounds) return;
+	assert(inf.unassigned);
 	assert(sp->propagated == trail.size());
 	assert(conflict == NOREF);
 	assert(cnfstate == UNSOLVED);
-	if (!lrn.rounds) return;
-	stats.mdm_calls++;
+	stats.mdm.calls++;
+	PFLOG2(2, " MDM %d: electing decisions at decaying round %d..", stats.mdm.calls, last.mdm.rounds);
 	eligible.resize(inf.maxVar);
 	occurs.resize(inf.maxVar + 1);
 	varOrder(); // initial variable ordering
-	if (verbose == 4) PFLOG1(" Electing decisions (rounds=%d)..", lrn.rounds);
-	else PFLOGN2(2, " Electing decisions (rounds=%d)..", lrn.rounds);
-	for (uint32 i = 0; i < inf.maxVar; i++) {
-		uint32 cand = eligible[i];
-		assert(cand && cand <= inf.maxVar);
-		if (sp->frozen[cand] || sp->locked[cand]) continue;
-		uint32 p = V2L(cand), n = NEG(p);
-		uint32 dec = wt[p].size() >= wt[n].size() ? p : n;
-		if (valid(wt[dec]) && depFreeze(wt[dec], cand)) {
-			incDL();
-			enqueue(dec, DL());
-			sp->seen[cand] = 1;
+	sp->stacktail = sp->tmp_stack;
+	if (opts.mdmassume_en && assumptions.size()) {
+		assert(sp->stacktail == sp->tmp_stack);
+		int level = DL();
+		while (level < assumptions.size()) {
+			const uint32 a = assumptions[level];
+			CHECKLIT(a);
+			assert(ifrozen[ABS(a)]);
+			const uint32 cand = ABS(a);
+			const LIT_ST val = sp->value[a];
+			if (UNASSIGNED(val)) {
+				level++;
+				uint32 dec = a;
+				if (valid(wt[dec]) && depFreeze(wt[dec], cand)) {
+					enqueueDecision(dec);
+					sp->seen[cand] = 1;
+					stats.decisions.massumed++;
+				}
+			}
+			else if (!val) {
+				ianalyze(FLIP(a));
+				cnfstate = UNSAT;
+				clearMDM(), eligible.clear(true), occurs.clear(true);
+				return;
+			}
 		}
 	}
-	assert(verifyMDM());
-	for (uint32 i = sp->propagated; i < trail.size(); i++) sp->seen[ABS(trail[i])] = 0;
-	assert(verifySeen());
-	lrn.numMDs = trail.size() - sp->propagated;
-	lrn.nRefVars = inf.maxVar - lrn.numMDs, lrn.rounds--;
-	stats.n_mds += lrn.numMDs;
-	PFLENDING(2, 4, "(%d elected)", lrn.numMDs);
+	else 
+		assert(sp->stacktail == sp->tmp_stack);
+	for (uint32 i = 0; i < inf.maxVar; i++) {
+		uint32 cand = eligible[i];
+		CHECKVAR(cand);
+		if (sp->frozen[cand] || sp->vstate[cand].state || iassumed(cand)) continue;
+		const uint32 p = V2L(cand), n = NEG(p);
+		if (UNASSIGNED(sp->value[p])) {
+			const uint32 dec = wt[p].size() >= wt[n].size() ? p : n;
+			if (valid(wt[dec]) && depFreeze(wt[dec], cand)) {
+				enqueueDecision(dec);
+				sp->seen[cand] = 1;
+			}
+		}
+	}
+	last.mdm.decisions = trail.size() - sp->propagated;
+	last.mdm.unassigned = inf.maxVar - last.mdm.decisions;
+	last.mdm.rounds--;
+	stats.decisions.multiple += last.mdm.decisions;
+	PFLOG2(2, " MDM %d: %d decisions are elected (%.2f%%)",
+		stats.mdm.calls, last.mdm.decisions, percent(last.mdm.decisions, maxActive()));
 	if (opts.mdm_vsids_pumps || opts.mdm_vmfq_pumps) pumpFrozen();
-	memset(sp->frozen, 0, inf.maxVar + 1LL);
-	printStats(1, 'm');
-	eligible.clear(true);
-	occurs.clear(true);
+	clearMDM(), eligible.clear(true), occurs.clear(true);
+	printStats(1, 'm', CMDM);
 }
 
 void ParaFROST::MDM()
 {
-	assert(!satisfied());
+	const bool vsidsActive = vsidsEnabled();
+	if (opts.mdmvsidsonly_en && !vsidsActive) {
+		last.mdm.rounds--;
+		return;
+	}
+	assert(inf.unassigned);
 	assert(sp->propagated == trail.size());
 	assert(conflict == NOREF);
 	assert(cnfstate == UNSOLVED);
+	stats.mdm.calls++;
+	PFLOG2(2, " MDM %d: electing decisions at decaying round %d..", stats.mdm.calls, last.mdm.rounds);
 	eligible.clear(true);
-	occurs.resize(inf.maxVar + 1);
-	if (vsidsEnabled()) eligibleVSIDS();
-	else if (!opts.mdmvsidsonly_en) eligibleVMFQ();
+	if (vsidsActive) eligibleVSIDS();
+	else eligibleVMFQ();
 	assert(eligible.size() >= 1);
-	if (verbose == 4) PFLOG1(" Electing decisions (rounds=%d)...", lrn.rounds);
-	else PFLOGN2(2, " Electing decisions (rounds=%d)...", lrn.rounds);
-	stats.mdm_calls++;
+	sp->stacktail = sp->tmp_stack;
+	if (opts.mdmassume_en && assumptions.size()) {
+		assert(sp->stacktail == sp->tmp_stack);
+		int level = DL();
+		while (level < assumptions.size()) {
+			const uint32 a = assumptions[level];
+			CHECKLIT(a);
+			assert(ifrozen[ABS(a)]);
+			const uint32 cand = ABS(a);
+			const LIT_ST val = sp->value[a];
+			if (UNASSIGNED(val)) {
+				level++;
+				uint32 dec = a;
+				if (valid(wt[dec]) && depFreeze(wt[dec], cand)) {
+					enqueueDecision(dec);
+					sp->seen[cand] = 1;
+					stats.decisions.massumed++;
+				}
+			}
+			else if (!val) {
+				ianalyze(FLIP(a));
+				cnfstate = UNSAT;
+				clearMDM();
+				return;
+			}
+		}
+	}
+	else 
+		assert(sp->stacktail == sp->tmp_stack);
 	for (uint32 i = 0; i < eligible.size(); i++) {
 		uint32 cand = eligible[i];
-		assert(cand && cand <= inf.maxVar);
-		if (sp->frozen[cand] || sp->locked[cand]) continue;
+		CHECKVAR(cand);
+		if (sp->frozen[cand] || sp->vstate[cand].state || iassumed(cand)) continue;
 		uint32 dec = makeAssign(cand, useTarget());
 		if (valid(wt[dec]) && depFreeze(wt[dec], cand)) {
-			incDL();
-			enqueue(dec, DL());
+			enqueueDecision(dec);
 			sp->seen[cand] = 1;
 		}
 	}
-	assert(verifyMDM());
-	for (uint32 i = sp->propagated; i < trail.size(); i++) sp->seen[ABS(trail[i])] = 0;
-	assert(verifySeen());
-	lrn.numMDs = trail.size() - sp->propagated;
-	lrn.nRefVars = inf.maxVar - lrn.numMDs, lrn.rounds--;
-	stats.n_mds += lrn.numMDs;
-	PFLENDING(2, 4, "(%d elected)", lrn.numMDs);
-	if (opts.mdm_vmfq_pumps) pumpFrozen();
-	memset(sp->frozen, 0, inf.maxVar + 1LL);
-	printStats(lrn.rounds == 0, 'm');
+	last.mdm.decisions = trail.size() - sp->propagated;
+	last.mdm.unassigned = inf.maxVar - last.mdm.decisions;
+	last.mdm.rounds--;
+	stats.decisions.multiple += last.mdm.decisions;
+	PFLOG2(2, " MDM %d: %d decisions are elected (%.2f%%)", 
+		stats.mdm.calls, last.mdm.decisions, percent(last.mdm.decisions, maxActive()));
+	if (opts.mdm_vsids_pumps || opts.mdm_vmfq_pumps) pumpFrozen();
+	clearMDM();
+	printStats(last.mdm.rounds == opts.mdm_rounds, 'm', CMDM);
 }
 
 inline bool ParaFROST::valid(WL& ws)
 {
-	WATCH* wend = ws.end();
-	for (WATCH* i = ws; i != wend; i++) {
-		WATCH& w = *i;
+	forall_watches(ws, i) {
+		const WATCH w = *i;
 		assert(w.imp);
 		if (isTrue(w.imp)) continue; // clause satisfied
 		if (w.binary()) return false; // if 'w.imp' not satisfied then it's an implication of 'cand'
@@ -219,11 +301,12 @@ inline bool ParaFROST::valid(WL& ws)
 			CLAUSE& c = cm[w.ref];
 			assert(c.size() > 2);
 			bool satisfied = false, unAssigned = false;
-			uint32* k = c + 2, *cend = c.end();
+			uint32* k = c + 2, * cend = c.end();
 			while (k != cend && !satisfied && !unAssigned) {
-				LIT_ST val = value(*k);
-				if (val > 0) satisfied = true; // clause satisfied
-				else if (val < 0) unAssigned = true;
+				CHECKLIT(*k);
+				const LIT_ST val = sp->value[*k];
+				if (UNASSIGNED(val)) unAssigned = true;
+				else if (val) satisfied = true;
 				k++;
 			}
 			if (!satisfied && !unAssigned) return false;
@@ -234,21 +317,29 @@ inline bool ParaFROST::valid(WL& ws)
 
 inline bool ParaFROST::depFreeze(WL& ws, const uint32& cand)
 {
-	WATCH* wend = ws.end();
-	for (WATCH* i = ws; i != wend; i++) {
-		WATCH& w = *i;
-		CLAUSE& c = cm[w.ref];
-		assert(c.size() > 1);
-		if (isTrue(w.imp)) continue; 
+	LIT_ST* frozen = sp->frozen;
+	uint32*& frozen_stack = sp->stacktail;
+	forall_watches(ws, i) {
+		const WATCH w = *i;
+		if (isTrue(w.imp)) continue;
 		assert(!w.binary());
-		uint32 other_w = ABS(c[0]) ^ ABS(c[1]) ^ cand;
-		if (sp->seen[other_w]) return false;
-		sp->frozen[other_w] = 1;
-		uint32* k = c + 2, *cend = c.end();
+		CLAUSE& c = cm[w.ref];
+		uint32 othervar = ABS(c[0]) ^ ABS(c[1]) ^ cand;
+		if (sp->seen[othervar]) return false;
+		if (!frozen[othervar]) {
+			frozen[othervar] = 1;
+			assert(frozen_stack < sp->tmp_stack + inf.maxVar);
+			*frozen_stack++ = othervar;
+		}
+		uint32* k = c + 2, * cend = c.end();
 		while (k != cend) {
-			uint32 v = ABS(*k++);
-			if (sp->seen[v]) return false;
-			sp->frozen[v] = 1;
+			othervar = ABS(*k++);
+			if (sp->seen[othervar]) return false;
+			if (!frozen[othervar]) {
+				frozen[othervar] = 1;
+				assert(frozen_stack < sp->tmp_stack + inf.maxVar);
+				*frozen_stack++ = othervar;
+			}
 		}
 	}
 	return true;
@@ -256,21 +347,25 @@ inline bool ParaFROST::depFreeze(WL& ws, const uint32& cand)
 
 void ParaFROST::eligibleVSIDS()
 {
-	PFLOGN2(2, " Finding VSIDS eligible decisions at MDM round %d..", lrn.rounds);
-	hist(orgs, true);
-	hist(learnts);
-	uint32 *scores = sp->tmp_stack;
+	PFLOGN2(2, "  finding VSIDS eligible decisions..");
+	stats.mdm.vsids++;
+	occurs.resize(inf.maxVar + 1);
+	histCNF(orgs, true);
+	histCNF(learnts);
+	uint32* scores = sp->tmp_stack;
 	for (uint32 i = 0; i < vsids.size(); i++) {
-		uint32 v = vsids[i];
-		if (sp->locked[v]) continue;
-		eligible.push(v);
-		scores[v] = rscore(v);
+		const uint32 v = vsids[i];
+		if (sp->vstate[v].state) continue;
+		if (UNASSIGNED(sp->value[V2L(v)])) {
+			eligible.push(v);
+			scores[v] = prescore(v);
+		}
 	}
 	assert(eligible.size() >= 1);
 	Sort(eligible, KEY_CMP_ACTIVITY(activity, scores));
 	PFLDONE(2, 5);
 	if (verbose >= 3) {
-		PFLOG0(" Eligible decisions:");
+		PFLOG0("  eligible decisions:");
 		for (uint32 i = 0; i < eligible.size(); i++)
 			PFLOG1("  e[%d]->(s: %d, a: %g)", eligible[i], scores[eligible[i]], activity[eligible[i]]);
 	}
@@ -278,39 +373,32 @@ void ParaFROST::eligibleVSIDS()
 
 void ParaFROST::eligibleVMFQ()
 {
-	PFLOGN2(2, " Finding VMFQ eligible decisions at MDM round %d..", lrn.rounds);
-	uint32 free = vmfq.free();
+	PFLOGN2(2, "  finding VMFQ eligible decisions..");
+	stats.mdm.vmtf++;
+	uint32 free = vmtf.free();
 	assert(free);
 	while (free) {
-		if (!sp->locked[free]) eligible.push(free);
-		free = vmfq.previous(free);
+		if (!sp->vstate[free].state && UNASSIGNED(sp->value[V2L(free)])) eligible.push(free);
+		free = vmtf.previous(free);
 	}
 	assert(eligible.size() >= 1);
 	rSort(eligible, KEY_CMP_BUMP(bumps), KEY_RANK_BUMP(bumps));
 	PFLDONE(2, 5);
 	if (verbose >= 3) {
-		PFLOG0(" Eligible decisions:");
+		PFLOG0("  eligible decisions:");
 		for (uint32 i = 0; i < eligible.size(); i++)
 			PFLOG1("  e[%d]->(b: %lld)", eligible[i], bumps[eligible[i]]);
 	}
 }
 
-void ParaFROST::MDMFuseMaster() {
-	if (opts.mdm_rounds && nConflicts >= lrn.mdm_conf_max) {
-		lrn.rounds = opts.mdm_rounds;
-		double current_inc = scale(double(opts.mdm_minc));
-		lrn.mdm_conf_max = nConflicts + current_inc;
-		PFLOG2(2, " MDM limit increased by (conflicts: %lld, Increment: %.2f) to %lld", nConflicts, current_inc, lrn.mdm_conf_max);
+bool ParaFROST::canMMD()
+{
+	if (!opts.mdm_rounds) return false;
+	const bool enough = varsEnough();
+	const bool rounds = last.mdm.rounds;
+	if (enough && !rounds && stats.conflicts >= limit.mdm) {
+		last.mdm.rounds = opts.mdm_rounds;
+		INCREASE_LIMIT(this, mdm, stats.mdm.calls, linear, true);
 	}
-}
-
-void ParaFROST::MDMFuseSlave() {
-	if (opts.mdm_rounds && opts.mdm_div) {
-		int q = int(nConflicts / opts.mdm_div) + 1;
-		if (starts % q == 0) {
-			lrn.nRefVars = 0, lrn.rounds = opts.mdm_rounds;
-			PFLOG2(2, " Starts: %d, conflicts: %lld, dividor: %d, q: %d, rounds: %d", starts, nConflicts, opts.mdm_div, q, lrn.rounds);
-		}
-		if (nConflicts % opts.mdm_freq == 0) opts.mdm_div += opts.mdm_sinc;
-	}
+	return enough && rounds;
 }

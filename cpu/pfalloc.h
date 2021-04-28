@@ -1,4 +1,4 @@
-/***********************************************************************[pfalloc.h]
+/***********************************************************************[pfmalloc.h]
 Copyright(c) 2020, Muhammad Osama - Anton Wijs,
 Technische Universiteit Eindhoven (TU/e).
 
@@ -19,7 +19,7 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 #ifndef __ALLOC_
 #define __ALLOC_
 
-#include "pfralloc.h"
+#include "pfmalloc.h"
 #include "pfdtypes.h"
 #include "pflogging.h"
 #include <cstdint>
@@ -29,6 +29,7 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 namespace pFROST {
     /******************************************************/
     /*  Usage: global memory manager with garbage monitor */
+    /*         and boundary checker                       */
     /*  Dependency:  none                                 */
     /******************************************************/
     template<class T, class S = size_t>
@@ -38,6 +39,7 @@ namespace pFROST {
         S sz, cap, maxCap;
         S _junk;
         size_t _bucket;
+    protected:
         bool check(const S& d) const {
             if (d >= sz) {
                 PFLOGEN("memory index (%zd) violates memory boundary (%zd)", d, sz);
@@ -88,18 +90,18 @@ namespace pFROST {
             if (!init_cap) return;
             assert(_bucket);
             if (init_cap > maxCap) {
-                PFLOG1("Error - initial size exceeds maximum memory size: (max = %zd, size = %zd)\n", maxCap, init_cap);
+                PFLOGEN("initial size exceeds maximum memory size: (max = %zd, size = %zd)", maxCap, init_cap);
                 throw MEMOUTEXCEPTION();
             }
             cap = init_cap;
-            pfalloc(_mem, _bucket * cap);
+            pfralloc(_mem, _bucket * cap);
         }
         inline void     reserve     (const S& min_cap) {
             if (cap >= min_cap) return;
-            if (cap > (maxCap - cap)) cap = min_cap;
-            else { cap <<= 1; if (cap < min_cap) cap = min_cap; }
+            cap = (cap > (maxCap - cap)) ? min_cap : (cap << 1);
+            if (cap < min_cap) cap = min_cap;
             assert(_bucket);
-            pfalloc(_mem, _bucket * cap);
+            pfralloc(_mem, _bucket * cap);
         }
         inline S        alloc       (const S& size) {
             assert(size > 0);
@@ -110,7 +112,7 @@ namespace pFROST {
             assert(sz > 0);
             return oldSz;
         }
-        inline void     migrate     (SMM& newBlock) {
+        inline void     migrateTo   (SMM& newBlock) {
             if (newBlock._mem != NULL) std::free(newBlock._mem);
             newBlock._mem = _mem, newBlock.sz = sz, newBlock.cap = cap, newBlock._junk = _junk;
             _mem = NULL, sz = 0, cap = 0, _junk = 0;

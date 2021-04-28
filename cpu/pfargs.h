@@ -19,8 +19,8 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 #ifndef __ARGS_
 #define __ARGS_
 
-#include "pfdefs.h"
-#include "pfvec.h"
+#include "pfdefinitions.h"
+#include "pfvector.h"
 
 namespace pFROST {
 
@@ -60,7 +60,7 @@ namespace pFROST {
 		void insert(ARG*);
 		bool isParsed() { return parsed; }
 	};
-
+	
 	struct INT32R {
 		int h, t;
 		INT32R() { h = UNDEFINED; t = UNDEFINED; }
@@ -127,7 +127,7 @@ namespace pFROST {
 				PFLOG0("");
 			}
 		}
-		virtual void printArgument() {
+		virtual void printArgument() { 
 			fprintf(stdout, " %s%s%s<%d>%s", CARGDEFAULT, arg, CARGVALUE, val, CNORMAL);
 		}
 	};
@@ -232,7 +232,7 @@ namespace pFROST {
 			}
 		}
 
-		virtual void printArgument() {
+		virtual void printArgument() { 
 			fprintf(stdout, " %s%s%s<%.2f>%s", CARGDEFAULT, arg, CARGVALUE, val, CNORMAL);
 		}
 	};
@@ -268,7 +268,7 @@ namespace pFROST {
 			}
 		}
 
-		virtual void printArgument() {
+		virtual void printArgument() { 
 			fprintf(stdout, " %s%s%s<%s>%s", CARGDEFAULT, arg, CARGVALUE, val, CNORMAL);
 		}
 	};
@@ -310,7 +310,7 @@ namespace pFROST {
 			}
 		}
 
-		virtual void printArgument() {
+		virtual void printArgument() { 
 			fprintf(stdout, " %s%s:", CARGDEFAULT, arg);
 			if (val) fprintf(stdout, "%son ", CARGON);
 			else fprintf(stdout, "%soff ", CARGOFF);

@@ -21,24 +21,21 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 #include "pfgrid.cuh"
 #include "pfatomics.cuh"
-#include "pfsimp.cuh"
+#include "pfsimptypes.h"
 
 namespace pFROST {
 
 	namespace SIGmA {
 
+		#define VE_DBG 0 // set to serialize BVE
+        #define IS_TAUTOLOGY(x,y)   (((x) ^ (y)) == NEG_SIGN)
+
 		// [0] = hse_limit, [1] = bce_limit,
 		// [2] = ere_limit, [3] = xor_max_arity
+		// [4] = ve_clause_limit, [5] = opts.ve_lbound_en
 		__constant__ uint32 dc_limits[NLIMITS];
 		// number of buckets to store 'SCLAUSE'
 		__constant__ int dc_nbuckets = sizeof(SCLAUSE) / sizeof(uint32);
-
-		template<class T>
-		struct DEFAULT_CMP {
-			_PFROST_D_ bool operator () (T& x, T& y) {
-				return x < y;
-			}
-		};
 
 		_PFROST_H_D_ void pLit(const uint32& l) { printf("%d", SIGN(l) ? -int(ABS(l)) : ABS(l)); }
 
@@ -111,7 +108,7 @@ namespace pFROST {
 		template<typename T, typename CMP>
 		_PFROST_D_ void cswap(T& x, T& y, CMP cmp)
 		{
-			bool which = cmp(x, y);
+			const bool which = cmp(x, y);
 			T ta = which ? x : y;
 			T tb = which ? y : x;
 			x = ta, y = tb;
@@ -203,8 +200,8 @@ namespace pFROST {
 		{
 			if (size <= 1) return;
 			assert(data != NULL);
-			devSort(data, size, DEFAULT_CMP<T>());
-			assert(devIsSorted(data, size, DEFAULT_CMP<T>()));
+			devSort(data, size, GPU_DEFAULT_CMP<T>());
+			assert(devIsSorted(data, size, GPU_DEFAULT_CMP<T>()));
 		}
 
 		template<typename T, typename CMP>
@@ -332,44 +329,39 @@ namespace pFROST {
 		template<typename T>
 		_PFROST_D_ void cuVec<T>::insert(const T& val)
 		{
-			uint32 idx = atomicInc(&sz, cap);
+			const uint32 idx = atomicInc(&sz, cap);
 			assert(idx < cap);
 			_mem[idx] = val;
 		}
 
 		template<typename T>
 		_PFROST_D_ void cuVec<T>::push(const T& val) {
-			uint32 idx = atomicAggInc(&sz);
+			const uint32 idx = atomicAggInc(&sz);
 			assert(idx < cap);
 			_mem[idx] = val;
 		}
 
 		template<typename T>
 		_PFROST_D_ T* cuVec<T>::jump(const uint32& n) {
-			uint32 idx = atomicAdd(&sz, n);
+			const uint32 idx = atomicAdd(&sz, n);
 			assert(idx < cap);
 			return _mem + idx;
 		}
 
 		_PFROST_D_ S_REF* CNF::jump(S_REF& ref, const uint32& nCls, const uint32& nLits) {
 			assert(nLits >= nCls);
-			S_REF regionSize = (nLits - nCls) + dc_nbuckets * nCls;
+			const S_REF regionSize = nLits + dc_nbuckets * nCls;
 			ref = atomicAdd(&_data.size, regionSize);
 			assert(ref < _data.cap);
-			return cs.jump(nCls);
-		}
-
-		_PFROST_D_ uint32 rscore(const uint32& ps, const uint32& ns) {
-			return (!ps || !ns) ? ps | ns : ps * ns;
+			return _refs.jump(nCls);
 		}
 
 		_PFROST_D_ void calcSig(SCLAUSE& c)
 		{
 			if (c.size() <= 1) return;
 			uint32 sig = 0;
-			uint32* lit = c, *cend = c.end();
 #pragma unroll
-			while (lit != cend) sig |= MAPHASH(*lit++);
+			forall_clause(c, lit) { sig |= MAPHASH(*lit); }
 			c.set_sig(sig);
 		}
 
@@ -382,15 +374,14 @@ namespace pFROST {
 			while (data != end) _sig |= MAPHASH(*data++);
 		}
 
-		_PFROST_D_ void countOrgs(CNF& cnf, OL& list, uint32& orgs)
+		_PFROST_D_ void freeze_binaries(CNF& cnf, OL& list)
 		{
-			assert(!orgs);
 #pragma unroll
-			for (S_REF* i = list; i != list.end(); i++)
-				if (cnf[*i].original()) orgs++;
+			forall_occurs(list, i) {
+				SCLAUSE& c = cnf[*i];
+				if (c.size() == 2) c.freeze();
+			}
 		}
-
-		_PFROST_D_ bool isTautology(const uint32& a, const uint32& b) { return (a ^ b) == NEG_SIGN; }
 
 		_PFROST_D_ bool isTautology(const uint32& x, SCLAUSE& c1, SCLAUSE& c2)
 		{
@@ -399,18 +390,16 @@ namespace pFROST {
 			assert(!c2.deleted());
 			assert(c1.size() > 1);
 			assert(c2.size() > 1);
-			int n1 = c1.size(), n2 = c2.size();
-			int it1 = 0, it2 = 0;
-			uint32 lit1, lit2, v1, v2;
-			while (it1 < n1 && it2 < n2) {
-				lit1 = c1[it1], lit2 = c2[it2];
-				v1 = ABS(lit1), v2 = ABS(lit2);
-				if (v1 == x) it1++;
-				else if (v2 == x) it2++;
-				else if (isTautology(lit1, lit2)) return true;
-				else if (v1 < v2) it1++;
-				else if (v2 < v1) it2++;
-				else { it1++; it2++; }
+			uint32 *n1 = c1.end(), *n2 = c2.end();
+			uint32 *lit1 = c1, *lit2 = c2, v1, v2;
+			while (lit1 != n1 && lit2 != n2) {
+				v1 = ABS(*lit1), v2 = ABS(*lit2);
+				if (v1 == x) lit1++;
+				else if (v2 == x) lit2++;
+				else if (IS_TAUTOLOGY(*lit1, *lit2)) return true;
+				else if (v1 < v2) lit1++;
+				else if (v2 < v1) lit2++;
+				else { lit1++, lit2++; }
 			}
 			return false;
 		}
@@ -421,7 +410,7 @@ namespace pFROST {
 			assert(!c1.deleted());
 			assert(c1.size() > 1);
 			assert(n2 > 1);
-			int n1 = c1.size();
+			const int n1 = c1.size();
 			int it1 = 0, it2 = 0;
 			uint32 lit1, lit2, v1, v2;
 			while (it1 < n1 && it2 < n2) {
@@ -429,7 +418,7 @@ namespace pFROST {
 				v1 = ABS(lit1), v2 = ABS(lit2);
 				if (v1 == x) it1++;
 				else if (v2 == x) it2++;
-				else if (isTautology(lit1, lit2)) return true; 
+				else if (IS_TAUTOLOGY(lit1, lit2)) return true;
 				else if (v1 < v2) it1++;
 				else if (v2 < v1) it2++;
 				else { it1++; it2++; }
@@ -437,38 +426,62 @@ namespace pFROST {
 			return false;
 		}
 
-		_PFROST_D_ void	saveResolved(uint32*& saved, const uint32& lit)
+		_PFROST_D_ int merge(const uint32& x, SCLAUSE& c1, SCLAUSE& c2)
 		{
-			*saved++ = lit, *saved++ = 1;
-		}
-
-		_PFROST_D_ void	saveResolved(uint32*& saved, SCLAUSE& c, const uint32& x)
-		{
-			uint32* first = saved, * witness = NULL;
-			assert(c.original());
-			uint32* k = c, * cend = c.end();
-			while (k != cend) {
-				const uint32 lit = *k++;
-				if (lit == x) {
-					witness = saved;
+			assert(x);
+			assert(c1.original());
+			assert(c2.original());
+			assert(c1.size() > 1);
+			assert(c2.size() > 1);
+			const int n1 = c1.size(), n2 = c2.size();
+			int it1 = 0, it2 = 0;
+			int len = n1 + n2 - 2;
+			while (it1 < n1 && it2 < n2) {
+				const uint32 lit1 = c1[it1], lit2 = c2[it2];
+				const uint32 v1 = ABS(lit1), v2 = ABS(lit2);
+				if (v1 == x) it1++;
+				else if (v2 == x) it2++;
+				else if (IS_TAUTOLOGY(lit1, lit2)) return 0;
+				else if (v1 < v2) it1++;
+				else if (v2 < v1) it2++;
+				else { // repeated literal
+					it1++, it2++;
+					assert(len > 1);
+					len--;
 				}
-				*saved++ = lit;
 			}
-			assert(witness >= first);
-			if (witness != first)
-				devSwap(*first, *witness);
-			else
-				assert(*witness == *first);
-			*saved++ = c.size();
+			assert(len > 0);
+			return len;
 		}
 
-		_PFROST_D_ void countLitsBefore(CNF& cnf, OL& list, uint32& nLitsBefore)
+		_PFROST_D_ int merge(const uint32& x, SCLAUSE& c1, SCLAUSE& c2, uint32& unit)
 		{
-#pragma unroll
-			for (S_REF* i = list; i != list.end(); i++) {
-				SCLAUSE& c = cnf[*i];
-				if (c.original()) nLitsBefore += c.size();
+			assert(x);
+			assert(c1.original());
+			assert(c2.original());
+			assert(c1.size() > 1);
+			assert(c2.size() > 1);
+			const int n1 = c1.size(), n2 = c2.size();
+			int it1 = 0, it2 = 0;
+			int len = n1 + n2 - 2;
+			unit = 0;
+			while (it1 < n1 && it2 < n2) {
+				const uint32 lit1 = c1[it1], lit2 = c2[it2];
+				const uint32 v1 = ABS(lit1), v2 = ABS(lit2);
+				if (v1 == x) it1++;
+				else if (v2 == x) it2++;
+				else if (IS_TAUTOLOGY(lit1, lit2)) return 0;
+				else if (v1 < v2) it1++;
+				else if (v2 < v1) it2++;
+				else { // repeated literal
+					it1++, it2++;
+					assert(len > 1);
+					len--;
+					if (len == 1) unit = lit1;
+				}
 			}
+			assert(len > 0);
+			return len;
 		}
 
 		_PFROST_D_ void merge(const uint32& x, SCLAUSE& c1, SCLAUSE& c2, SCLAUSE* out_c)
@@ -479,33 +492,29 @@ namespace pFROST {
 			assert(c1.size() > 1);
 			assert(c2.size() > 1);
 			assert(out_c->empty());
-			int n1 = c1.size(), n2 = c2.size();
+			const int n1 = c1.size(), n2 = c2.size();
 			int it1 = 0, it2 = 0;
-			uint32 lit1, lit2, v1, v2;
 			while (it1 < n1 && it2 < n2) {
-				lit1 = c1[it1], lit2 = c2[it2];
-				v1 = ABS(lit1), v2 = ABS(lit2);
+				const uint32 lit1 = c1[it1], lit2 = c2[it2];
+				const uint32 v1 = ABS(lit1), v2 = ABS(lit2);
 				if (v1 == x) it1++;
 				else if (v2 == x) it2++;
-				else if (v1 < v2) { it1++; out_c->push(lit1); }
-				else if (v2 < v1) { it2++; out_c->push(lit2); }
+				else if (v1 < v2) { it1++, out_c->push(lit1); }
+				else if (v2 < v1) { it2++, out_c->push(lit2); }
 				else { // repeated literal
 					it1++, it2++;
 					out_c->push(lit1);
 				}
 			}
 			while (it1 < n1) {
-				lit1 = c1[it1];
-				if (ABS(lit1) == x) it1++;
-				else { it1++; out_c->push(lit1); }
+				const uint32 lit1 = c1[it1++];
+				if (NEQUAL(ABS(lit1), x)) out_c->push(lit1);
 			}
 			while (it2 < n2) {
-				lit2 = c2[it2];
-				if (ABS(lit2) == x) it2++;
-				else { it2++; out_c->push(lit2); }
+				const uint32 lit2 = c2[it2++];
+				if (NEQUAL(ABS(lit2), x)) out_c->push(lit2);
 			}
 			calcSig(*out_c);
-			out_c->set_status(ORIGINAL);
 			assert(out_c->isSorted());
 			assert(out_c->hasZero() < 0);
 		}
@@ -517,16 +526,15 @@ namespace pFROST {
 			assert(c2.original());
 			assert(c1.size() > 1);
 			assert(c2.size() > 1);
-			int n1 = c1.size(), n2 = c2.size();
+			const int n1 = c1.size(), n2 = c2.size();
 			int it1 = 0, it2 = 0;
-			uint32 lit1, lit2, v1, v2;
 			int len = 0;
 			while (it1 < n1 && it2 < n2) {
-				lit1 = c1[it1], lit2 = c2[it2];
-				v1 = ABS(lit1), v2 = ABS(lit2);
+				const uint32 lit1 = c1[it1], lit2 = c2[it2];
+				const uint32 v1 = ABS(lit1), v2 = ABS(lit2);
 				if (v1 == x) it1++;
 				else if (v2 == x) it2++;
-				else if (isTautology(lit1, lit2)) return 0;
+				else if (IS_TAUTOLOGY(lit1, lit2)) return 0;
 				else if (v1 < v2) { it1++; out_c[len++] = lit1; }
 				else if (v2 < v1) { it2++; out_c[len++] = lit2; }
 				else { // repeated literal
@@ -535,53 +543,13 @@ namespace pFROST {
 				}
 			}
 			while (it1 < n1) {
-				lit1 = c1[it1];
-				if (ABS(lit1) == x) it1++;
-				else { it1++; out_c[len++] = lit1; }
+				const uint32 lit1 = c1[it1++];
+				if (NEQUAL(ABS(lit1), x)) out_c[len++] = lit1;
 			}
 			while (it2 < n2) {
-				lit2 = c2[it2];
-				if (ABS(lit2) == x) it2++;
-				else { it2++; out_c[len++] = lit2; }
+				const uint32 lit2 = c2[it2++];
+				if (NEQUAL(ABS(lit2), x)) out_c[len++] = lit2;
 			}
-			return len;
-		}
-
-		_PFROST_D_ int merge_ere(const uint32& x, SCLAUSE& c1, SCLAUSE& c2, uint32* out_c)
-		{
-			assert(x);
-			assert(!c1.deleted());
-			assert(!c2.deleted());
-			assert(c1.size() > 1);
-			assert(c2.size() > 1);
-			int n1 = c1.size(), n2 = c2.size();
-			int it1 = 0, it2 = 0;
-			uint32 lit1, lit2, v1, v2;
-			int len = 0;
-			while (it1 < n1 && it2 < n2) {
-				lit1 = c1[it1], lit2 = c2[it2];
-				v1 = ABS(lit1), v2 = ABS(lit2);
-				if (v1 == x) it1++;
-				else if (v2 == x) it2++;
-				else if (isTautology(lit1, lit2)) return 0;  
-				else if (v1 < v2) { it1++; out_c[len++] = lit1; }
-				else if (v2 < v1) { it2++; out_c[len++] = lit2; }
-				else { // repeated literal
-					it1++, it2++;
-					out_c[len++] = lit1;
-				}
-			}
-			while (it1 < n1) {
-				lit1 = c1[it1];
-				if (ABS(lit1) == x) it1++;
-				else { it1++; out_c[len++] = lit1; }
-			}
-			while (it2 < n2) {
-				lit2 = c2[it2];
-				if (ABS(lit2) == x) it2++;
-				else { it2++; out_c[len++] = lit2; }
-			}
-			assert(len <= SH_MAX_ERE_OUT);
 			return len;
 		}
 
@@ -591,16 +559,15 @@ namespace pFROST {
 			assert(n1 > 1);
 			assert(c2.original());
 			assert(c2.size() > 1);
-			int n2 = c2.size();
+			const int n2 = c2.size();
 			int it1 = 0, it2 = 0;
-			uint32 lit1, lit2, v1, v2;
 			int len = 0;
 			while (it1 < n1 && it2 < n2) {
-				lit1 = c1[it1], lit2 = c2[it2];
-				v1 = ABS(lit1), v2 = ABS(lit2);
+				const uint32 lit1 = c1[it1], lit2 = c2[it2];
+				const uint32 v1 = ABS(lit1), v2 = ABS(lit2);
 				if (v1 == x) it1++;
 				else if (v2 == x) it2++;
-				else if (isTautology(lit1, lit2)) return 0;  
+				else if (IS_TAUTOLOGY(lit1, lit2)) return 0;
 				else if (v1 < v2) { it1++; out_c[len++] = lit1; }
 				else if (v2 < v1) { it2++; out_c[len++] = lit2; }
 				else { // repeated literal
@@ -609,16 +576,272 @@ namespace pFROST {
 				}
 			}
 			while (it1 < n1) {
-				lit1 = c1[it1];
-				if (ABS(lit1) == x) it1++;
-				else { it1++; out_c[len++] = lit1; }
+				const uint32 lit1 = c1[it1++];
+				if (NEQUAL(ABS(lit1), x)) out_c[len++] = lit1;
 			}
 			while (it2 < n2) {
-				lit2 = c2[it2];
-				if (ABS(lit2) == x) it2++;
-				else { it2++; out_c[len++] = lit2; }
+				const uint32 lit2 = c2[it2++];
+				if (NEQUAL(ABS(lit2), x)) out_c[len++] = lit2;
 			}
 			return len;
+		}
+
+		_PFROST_D_ void countOrgs(CNF& cnf, OL& list, uint32& orgs)
+		{
+			assert(!orgs);
+#pragma unroll
+			forall_occurs(list, i) {
+				if (cnf[*i].original()) orgs++;
+			}
+		}
+
+		_PFROST_D_ void countOrgs(CNF& cnf, OL& list, uint32& nClsBefore, uint32& nLitsBefore)
+		{
+			assert(!nClsBefore);
+			assert(!nLitsBefore);
+#pragma unroll
+			forall_occurs(list, i) {
+				const SCLAUSE& c = cnf[*i];
+				if (c.original()) {
+					nClsBefore++;
+					nLitsBefore += c.size();
+				}
+			}
+		}
+
+		_PFROST_D_ void countLitsBefore(CNF& cnf, OL& list, uint32& nLitsBefore)
+		{
+#pragma unroll
+			forall_occurs(list, i) {
+				const SCLAUSE& c = cnf[*i];
+				if (c.original()) nLitsBefore += c.size();
+			}
+		}
+
+		_PFROST_D_ bool countResolvents(const uint32& x, const uint32& nClsBefore, CNF& cnf, OL& me, OL& other, uint32& nAddedCls, uint32& nAddedLits)
+		{
+			assert(x);
+			assert(nClsBefore);
+			assert(!nAddedLits);
+			const int rlimit = dc_limits[4];
+			forall_occurs(me, i) {
+				SCLAUSE& ci = cnf[*i];
+				if (ci.learnt()) continue;
+				forall_occurs(other, j) {
+					SCLAUSE& cj = cnf[*j];
+					if (cj.learnt()) continue;
+					const int rsize = merge(x, ci, cj);
+					if (rsize > 1) {
+						if (++nAddedCls > nClsBefore || (rlimit && rsize > rlimit)) return true;
+						nAddedLits += rsize;
+					}
+				}
+			}
+			if (nAddedCls > ADDEDCLS_MAX || nAddedLits > ADDEDLITS_MAX) return true;
+			if (dc_limits[5]) {
+				uint32 nLitsBefore = 0;
+				countLitsBefore(cnf, me, nLitsBefore);
+				countLitsBefore(cnf, other, nLitsBefore);
+				if (nAddedLits > nLitsBefore) return true;
+			}
+			return false;
+		}
+
+		_PFROST_D_ bool countSubstituted(const uint32& x, const uint32& nClsBefore, CNF& cnf, OL& me, OL& other, uint32& nAddedCls, uint32& nAddedLits)
+		{
+			assert(x);
+			assert(!nAddedCls);
+			assert(!nAddedLits);
+			const int rlimit = dc_limits[4];
+			forall_occurs(me, i) {
+				SCLAUSE& ci = cnf[*i];
+				if (ci.learnt()) continue;
+				const bool ci_m = ci.molten();
+				forall_occurs(other, j) {
+					SCLAUSE& cj = cnf[*j];
+					if (cj.learnt()) continue;
+					if (NEQUAL(ci_m, cj.molten())) {
+						const int rsize = merge(x, ci, cj);
+						if (rsize > 1) {
+							if (++nAddedCls > nClsBefore || (rlimit && rsize > rlimit)) return true;
+							nAddedLits += rsize;
+						}
+					}
+				}
+			}
+			if (nAddedCls > ADDEDCLS_MAX || nAddedLits > ADDEDLITS_MAX) return true;
+			if (dc_limits[5]) {
+				uint32 nLitsBefore = 0;
+				countLitsBefore(cnf, me, nLitsBefore);
+				countLitsBefore(cnf, other, nLitsBefore);
+				if (nAddedLits > nLitsBefore) return true;
+			}
+			return false;
+		}
+
+		_PFROST_D_ void	saveWitness(uint32*& saved, const uint32* vorg, const uint32& witness)
+		{
+			assert(witness > 1);
+			assert(vorg);
+			const uint32 orgWitness = V2DEC(vorg[ABS(witness)], SIGN(witness));
+			assert(orgWitness > 1);
+			*saved++ = orgWitness;
+			*saved++ = 1;
+		}
+
+		_PFROST_D_ void	saveLiteral(uint32*& saved, const uint32* vorg, const uint32& lit)
+		{
+			assert(lit > 1);
+			assert(vorg);
+			const uint32 orgLit = V2DEC(vorg[ABS(lit)], SIGN(lit));
+			assert(orgLit > 1);
+			*saved++ = orgLit;
+		}
+
+		_PFROST_D_ void	saveClause(uint32*& saved, SCLAUSE& c, const uint32* vorg, const uint32& witlit)
+		{
+			uint32* first = saved, * witness = NULL;
+			assert(c.original());
+			forall_clause(c, k) {
+				const uint32 lit = *k;
+				if (lit == witlit) {
+					witness = saved;
+				}
+				saveLiteral(saved, vorg, lit);
+			}
+			assert(witness >= first);
+			if (witness != first)
+				devSwap(*first, *witness);
+			else
+				assert(*witness == *first);
+			*saved++ = c.size();
+		}
+
+		_PFROST_D_ void saveResolved(const uint32& p, const uint32* vorg, CNF& cnf, OL& poss, OL& negs, cuVecU* resolved)
+		{
+			const uint32 n = NEG(p);
+			const bool which = poss.size() > negs.size();
+			if (which) {
+				uint32 nsCls = 0, nsLits = 0;
+				countOrgs(cnf, negs, nsCls, nsLits);
+				uint32* saved = resolved->jump(nsCls + nsLits + 2);
+#if VE_DBG
+				printf("c | saving witness(%d) of length %d at position %d\n",
+					ABS(p), nsCls + nsLits + 2, uint32(saved - resolved->data()));
+#endif
+#pragma unroll
+				forall_occurs(negs, i) {
+					SCLAUSE& c = cnf[*i];
+					if (c.original()) saveClause(saved, c, vorg, n);
+				}
+				saveWitness(saved, vorg, p);
+			}
+			else {
+				uint32 psCls = 0, psLits = 0;
+				countOrgs(cnf, poss, psCls, psLits);
+				uint32* saved = resolved->jump(psCls + psLits + 2);
+#if VE_DBG
+				printf("c | saving witness(%d) of length %d at position %d\n",
+					ABS(p), psCls + psLits + 2, uint32(saved - resolved->data()));
+#endif
+#pragma unroll
+				forall_occurs(poss, i) {
+					SCLAUSE& c = cnf[*i];
+					if (c.original()) saveClause(saved, c, vorg, p);
+				}
+				saveWitness(saved, vorg, n);
+			}
+		}
+
+		_PFROST_D_ void saveResolved(const uint32& p, const uint32* vorg,
+			const uint32& pOrgs, const uint32& nOrgs,
+			CNF& cnf, OL& poss, OL& negs, cuVecU* resolved)
+		{
+			const uint32 n = NEG(p);
+			const bool which = pOrgs > nOrgs;
+			if (which) {
+				uint32 nsLits = 0;
+				countLitsBefore(cnf, negs, nsLits);
+				uint32* saved = resolved->jump(nOrgs + nsLits + 2);
+#if VE_DBG
+				printf("c | saving witness(%d) of length %d at position %d\n",
+					ABS(p), nOrgs + nsLits + 2, uint32(saved - resolved->data()));
+#endif
+#pragma unroll
+				forall_occurs(negs, i) {
+					SCLAUSE& c = cnf[*i];
+					if (c.original()) saveClause(saved, c, vorg, n);
+				}
+				saveWitness(saved, vorg, p);
+			}
+			else {
+				uint32 psLits = 0;
+				countLitsBefore(cnf, poss, psLits);
+				uint32* saved = resolved->jump(pOrgs + psLits + 2);
+#if VE_DBG
+				printf("c | saving witness(%d) of length %d at position %d\n",
+					ABS(p), pOrgs + psLits + 2, uint32(saved - resolved->data()));
+#endif
+#pragma unroll
+				forall_occurs(poss, i) {
+					SCLAUSE& c = cnf[*i];
+					if (c.original()) saveClause(saved, c, vorg, p);
+				}
+				saveWitness(saved, vorg, n);
+			}
+		}
+
+		_PFROST_D_ void toblivion(const uint32& p, const uint32* vorg,
+			const uint32& pOrgs, const uint32& nOrgs, 
+			CNF& cnf, OL& poss, OL& negs, cuVecU* resolved)
+		{
+			const uint32 n = NEG(p);
+			const bool which = pOrgs > nOrgs;
+			if (which) {
+				uint32 nsLits = 0;
+				countLitsBefore(cnf, negs, nsLits);
+				uint32* saved = resolved->jump(nOrgs + nsLits + 2);
+#if VE_DBG
+				printf("c | saving witness(%d) of length %d at position %d\n",
+					ABS(p), nOrgs + nsLits + 2, uint32(saved - resolved->data()));
+#endif
+#pragma unroll
+				forall_occurs(negs, i) {
+					SCLAUSE& c = cnf[*i];
+					if (c.original()) saveClause(saved, c, vorg, n);
+					c.markDeleted();
+				}
+				saveWitness(saved, vorg, p);
+			}
+			else {
+				uint32 psLits = 0;
+				countLitsBefore(cnf, poss, psLits);
+				uint32* saved = resolved->jump(pOrgs + psLits + 2);
+#if VE_DBG
+				printf("c | saving witness(%d) of length %d at position %d\n",
+					ABS(p), pOrgs + psLits + 2, uint32(saved - resolved->data()));
+#endif
+#pragma unroll
+				forall_occurs(poss, i) {
+					SCLAUSE& c = cnf[*i];
+					if (c.original()) saveClause(saved, c, vorg, p);
+					c.markDeleted();
+				}
+				saveWitness(saved, vorg, n);
+			}
+			OL& other = which ? poss : negs;
+#pragma unroll
+			forall_occurs(other, i) cnf[*i].markDeleted();
+			poss.clear(true), negs.clear(true);
+		}
+
+		_PFROST_D_ void toblivion(CNF& cnf, OL& poss, OL& negs)
+		{
+#pragma unroll
+			forall_occurs(poss, i) cnf[*i].markDeleted();
+#pragma unroll
+			forall_occurs(negs, i) cnf[*i].markDeleted();
+			poss.clear(true), negs.clear(true);
 		}
 
 		_PFROST_D_ bool isEqual(SCLAUSE& c1, uint32* c2, const int& size)
@@ -627,7 +850,9 @@ namespace pFROST {
 			assert(c1.size() > 1);
 			assert(size > 1);
 #pragma unroll
-			for (int it = 0; it < size; it++) if (c1[it] != c2[it]) return false;
+			for (int it = 0; it < size; it++)
+				if (NEQUAL(c1[it], c2[it]))
+					return false;
 			return true;
 		}
 
@@ -639,65 +864,49 @@ namespace pFROST {
 			return !(A & ~B_tmp);
 		}
 
-		_PFROST_D_ void reduceOL(CNF& cnf, OL& ol)
+		_PFROST_D_ void reduceOL(const CNF& cnf, OL& ol)
 		{
-			if (ol.size() == 0) return;
-			S_REF* i, * j, * rend = ol.end();
-			for (i = ol, j = ol; i != rend; i++)
-				if (!cnf[*i].deleted()) *j++ = *i;
-			ol._shrink(i - j);
+			if (ol.empty()) return;
+			S_REF *j = ol;
+			forall_occurs(ol, i) {
+				const S_REF ref = *i;
+				if (!cnf[ref].deleted())
+					*j++ = ref;
+			}
+			ol.resize(j - ol);
 		}
 
-		_PFROST_D_ void forward_equ(CNF& cnf, OT& ot, uint32* m_c, const int& m_len, const CL_ST& type)
-		{
-			assert(m_len > 1);
-			assert(type != DELETED);
-			uint32 best = *m_c, m_sig = MAPHASH(best);
-			assert(best > 1);
-			int minsize = ot[best].size();
-			for (int k = 1; k < m_len; k++) {
-				int lsize = ot[m_c[k]].size();
-				if (lsize < minsize) minsize = lsize, best = m_c[k];
-				m_sig |= MAPHASH(m_c[k]);
-			}
-			OL& minList = ot[best];
-			for (S_REF* i = threadIdx.x + minList; i < minList.end(); i += blockDim.x) {
-				SCLAUSE& c = cnf[*i];
-				CL_ST st = c.status();
-				if (m_len == c.size() && ((st & LEARNT) || (st & type)) &&
-					sub(m_sig, c.sig()) && isEqual(c, m_c, m_len)) {
-					c.markDeleted();
-					break;
-				}
-			}
-		}
-
-		_PFROST_D_ void blocked_x(const uint32& x, CNF& cnf, OL& poss, OL& negs, uint32* sh_c)
+		_PFROST_D_ void blocked_x(const uint32& x, const uint32* vorg, CNF& cnf, OL& poss, OL& negs, cuVecU* resolved, uint32* sh_c)
 		{
 #pragma unroll
-			for (S_REF* i = negs; i != negs.end(); i++) { // start with negs
-				SCLAUSE& c_me = cnf[*i];
-				if (c_me.deleted() || c_me.learnt()) continue;
+			forall_occurs(negs, i) { // start with negs
+				SCLAUSE& ci = cnf[*i];
+				if (ci.deleted() || ci.learnt()) continue;
 				bool allTautology = true;
-				int c_size = c_me.size();
+				int c_size = ci.size();
 				if (c_size <= SH_MAX_BCE_IN) { // use shared memory 
-					c_me.shareTo(sh_c);
+					ci.shareTo(sh_c);
 #pragma unroll
-					for (S_REF* j = poss; j != poss.end(); j++) { // block with poss
-						SCLAUSE& c_other = cnf[*j];
-						if (c_other.deleted() || c_other.learnt()) continue;
-						if (!isTautology(x, c_other, sh_c, c_size)) { allTautology = false; break; }
+					forall_occurs(poss, j) { // block with poss
+						SCLAUSE& cj = cnf[*j];
+						if (cj.deleted() || cj.learnt()) continue;
+						if (!isTautology(x, cj, sh_c, c_size)) { allTautology = false; break; }
 					}
 				}
 				else { // use global memory
 #pragma unroll
-					for (S_REF* j = poss; j != poss.end(); j++) { // block with poss
-						SCLAUSE& c_other = cnf[*j];
-						if (c_other.deleted() || c_other.learnt()) continue;
-						if (!isTautology(x, c_me, c_other)) { allTautology = false; break; }
+					forall_occurs(poss, j) { // block with poss
+						SCLAUSE& cj = cnf[*j];
+						if (cj.deleted() || cj.learnt()) continue;
+						if (!isTautology(x, ci, cj)) { allTautology = false; break; }
 					}
 				}
-				if (allTautology) assert(c_me.size() > 1), c_me.markDeleted(); // all clauses but a unit can be blocked
+				if (allTautology) {
+					assert(ci.size() > 1);
+					uint32* saved = resolved->jump(ci.size() + 1);
+					saveClause(saved, ci, vorg, NEG(V2L(x)));
+					ci.markDeleted();
+				}
 			}
 		}
 

@@ -19,7 +19,8 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 #include "pfsolve.h"
 using namespace pFROST;
 
-inline void ParaFROST::moveClause(C_REF& r, CMM& newBlock) {
+inline void ParaFROST::moveClause(C_REF& r, CMM& newBlock)
+{
 	assert(r < cm.size());
 	CLAUSE& c = cm[r];
 	assert(!c.deleted());
@@ -28,185 +29,164 @@ inline void ParaFROST::moveClause(C_REF& r, CMM& newBlock) {
 	c.set_ref(r);
 }
 
-inline void	ParaFROST::recycleWL(WL& ws, CMM& new_cm) {
-	for (WATCH* w = ws; w != ws.end(); w++)
+inline void	ParaFROST::moveWatches(WL& ws, CMM& new_cm)
+{
+	forall_watches(ws, w) {
 		moveClause(w->ref, new_cm);
+	}
+	ws.shrinkCap();
 }
 
-inline void	ParaFROST::recycleWL(const uint32& lit) {
-	WL& ws = wt[lit], saved;
-	if (ws.empty()) { ws.clear(true); return; }
-	WATCH* i, *j = ws, *end = ws.end();
-	for (i = j; i != end; i++) {
+inline void	ParaFROST::recycleWL(const uint32& lit)
+{
+	CHECKLIT(lit);
+	WL& ws = wt[lit], hypers;
+	if (ws.empty()) return;
+	const uint32 flit = FLIP(lit);
+	WATCH *j = ws;
+	forall_watches(ws, i) {
 		WATCH w = *i;
-		assert(w.ref != NOREF);
-		const CLAUSE& c = cm[w.ref];
-		if (c.deleted()) continue;
+		const C_REF r = w.ref;
+		assert(r != NOREF);
+		if (cm.deleted(r)) continue;
+		CLAUSE& c = cm[r];
+		w.imp = c[0] ^ c[1] ^ flit;
 		w.size = c.size();
-		int litpos = (c[0] == FLIP(lit));
-		assert(c[!litpos] == FLIP(lit));
-		w.imp = c[litpos];
-		if (w.binary()) *j++ = w;
-		else saved.push(w);
+		if (c.binary()) {
+			if (c.hyper()) hypers.push(w);
+			else *j++ = w;
+		}
+		else if (c.original()) *j++ = w;
 	}
 	ws.resize(int(j - ws));
-	for (WATCH* s = saved; s != saved.end(); s++) ws.push(*s);
-	if (ws.empty()) ws.clear(true);
-	saved.clear(true);
+	forall_watches(hypers, i) ws.push(*i);
+	hypers.clear(true);
 }
 
-void ParaFROST::protectReasons() {
-	for (uint32 i = 0; i < trail.size(); i++) {
-		uint32 lit = trail[i], v = ABS(lit);
-		if (sp->vstate[v] != ACTIVE) continue;
+void ParaFROST::markReasons() 
+{
+	const VSTATE* states = sp->vstate;
+	const C_REF* sources = sp->source;
+	forall_vector(uint32, trail, t) {
+		const uint32 lit = *t, v = ABS(lit);
+		if (states[v].state) continue;
 		assert(!unassigned(lit));
 		assert(sp->level[v]);
-		C_REF r = sp->source[v];
-		if (!REASON(r)) continue;
-		assert(!cm[r].reason());
-		cm[r].markReason();
+		const C_REF r = sources[v];
+		if (REASON(r)) {
+			assert(!cm[r].reason());
+			cm[r].markReason();
+		}
 	}
 }
 
-void ParaFROST::unprotectReasons() {
-	for (uint32 i = 0; i < trail.size(); i++) {
-		uint32 lit = trail[i], v = ABS(lit);
-		if (sp->vstate[v] != ACTIVE) continue;
+void ParaFROST::unmarkReasons() 
+{
+	const VSTATE* states = sp->vstate;
+	const C_REF* sources = sp->source;
+	forall_vector(uint32, trail, t) {
+		const uint32 lit = *t, v = ABS(lit);
+		if (states[v].state) continue;
 		assert(!unassigned(lit));
 		assert(sp->level[v]);
-		C_REF r = sp->source[v];
-		if (!REASON(r)) continue;
-		assert(cm[r].reason());
-		cm[r].initReason();
+		const C_REF r = sources[v];
+		if (REASON(r)) {
+			assert(cm[r].reason());
+			cm[r].initReason();
+		}
 	}
 }
 
-void ParaFROST::recycleWT() {
-	for (uint32 v = 1; v <= inf.maxVar; v++) {
+void ParaFROST::recycleWT() 
+{
+	forall_variables(v) {
 		uint32 p = V2L(v), n = NEG(p);
 		recycleWL(p), recycleWL(n);
+	}
+	forall_cnf(learnts, i) {
+		const C_REF r = *i;
+		assert(r < cm.size());
+		if (cm.deleted(r)) continue;
+		CLAUSE& c = cm[r];
+		if (c.binary()) continue;
+		sortClause(c);
+		attachWatch(r, c);
 	}
 }
 
 void ParaFROST::recycle(CMM& new_cm)
 {
+	reduced.clear(true);
+	analyzed.clear(true);
 	recycleWT();
-	for (uint32 q = vmfq.last(); q; q = vmfq.previous(q)) {
-		uint32 lit = makeAssign(q), flit = FLIP(lit);
-		recycleWL(wt[lit], new_cm);
-		recycleWL(wt[flit], new_cm);
+	for (uint32 q = vmtf.last(); q; q = vmtf.previous(q)) {
+		const uint32 lit = makeAssign(q), flit = FLIP(lit);
+		moveWatches(wt[lit], new_cm);
+		moveWatches(wt[flit], new_cm);
 	}
-	uint32 count = 0;
-	for (uint32* t = trail; t != trail.end(); t++) {
-		uint32 lit = *t, v = ABS(lit);
-		C_REF& r = sp->source[v];
-		if (r == NOREF) continue;
-		if (!sp->level[v]) { r = NOREF; continue; }
-		assert(r < cm.size());
-		if (cm[r].deleted()) { r = NOREF; continue; }
-		assert(cm[r].reason());
-		moveClause(r, new_cm);
-		count++;
+	C_REF* sources = sp->source;
+	int* levels = sp->level;
+	forall_vector(uint32, trail, t) {
+		const uint32 lit = *t, v = ABS(lit);
+		C_REF& r = sources[v];
+		if (REASON(r)) {
+			if (levels[v]) {
+				assert(r < cm.size());
+				if (cm.deleted(r)) r = NOREF;
+				else moveClause(r, new_cm);
+			}
+			else r = NOREF;
+		}
 	}
-	PFPRINT(2, 5, "(updated %d sources)", count);
 	filter(orgs, new_cm);
 	filter(learnts, new_cm);
+	orgs.shrinkCap();
 }
 
-void ParaFROST::recycle() {
+void ParaFROST::recycle() 
+{
 	assert(sp->propagated == trail.size());
 	assert(conflict == NOREF);
 	assert(cnfstate == UNSOLVED);
-	stats.recyclings++;
 	shrink();
 	if (canCollect()) {
 		PFLOGN2(2, " Recycling garbage..");
-		CMM new_cm(cm.size() - cm.garbage());
+		stats.recycle.hard++;
+		assert(cm.size() >= cm.garbage());
+		const size_t bytes = cm.size() - cm.garbage();
+		CMM new_cm(bytes);
 		recycle(new_cm);
 		PFLGCMEM(2, cm, new_cm);
-		new_cm.migrate(cm);
+		new_cm.migrateTo(cm);
 		PFLDONE(2, 5);
 	}
-	else recycleWT(), filter(learnts);
+	else {
+		stats.recycle.soft++;
+		recycleWT();
+		filter(learnts);
+	}
 }
 
-//=========================//
-// shrinking CNF routines  //
-//=========================//
-bool ParaFROST::shrink()
+void ParaFROST::filter(BCNF& cnf) 
 {
-	if (sp->simplified >= inf.maxFrozen) return false;
-	sp->simplified = inf.maxFrozen;
-	stats.shrinkages++;
-	PFLOGN2(2, " Shrinking CNF..");
-	assert(trail.size());
-	assert(conflict == NOREF);
-	assert(cnfstate == UNSOLVED);
-	assert(sp->propagated == trail.size());
-	assert(!unassigned(trail.back()));
-	int64 beforeCls = maxClauses(), beforeLits = maxLiterals();
-	shrink(orgs);
-	shrink(learnts);
-	PFLENDING(2, 5, "(-%lld clauses, -%lld literals)", 
-		beforeCls - maxClauses(), beforeLits - maxLiterals());
-	return true;
-}
-
-void ParaFROST::shrink(BCNF& cnf) {
 	if (cnf.empty()) return;
-	C_REF* i, * j, * end = cnf.end();
-	for (i = cnf, j = i; i != end; i++) {
-		C_REF r = *i;
-		CLAUSE& c = cm[r];
-		assert(!c.moved());
-		if (c.deleted()) continue;
-		CL_ST st = rooted(c);
-		if (st > 0) removeClause(r);
-		else if (!st) {
-			shrinkClause(r);
-			*j++ = r;
-		}
-		else *j++ = r;
-	}
-	assert(j >= cnf);
-	cnf.resize(uint32(j - cnf));
-}
-
-void ParaFROST::filter(BCNF& cnf) {
-	if (cnf.empty()) return;
-	C_REF* i, * j, * end = cnf.end();
-	for (i = cnf, j = i; i != end; i++) {
-		C_REF r = *i;
-		if (cm[r].deleted()) continue;
+	C_REF* j = cnf;
+	forall_cnf(cnf, i) {
+		const C_REF r = *i;
+		if (cm.deleted(r)) continue;
 		*j++ = r;
 	}
 	assert(j >= cnf);
 	cnf.resize(uint32(j - cnf));
 }
 
-void ParaFROST::filter(BCNF& cnf, BCNF& dest, const CL_ST& t) {
+void ParaFROST::filter(BCNF& cnf, CMM& new_cm)
+{
 	if (cnf.empty()) return;
-	C_REF* i, * j, * end = cnf.end();
-	for (i = cnf, j = i; i != end; i++) {
+	C_REF* j = cnf;
+	forall_cnf(cnf, i) {
 		C_REF r = *i;
-		CL_ST st = cm[r].status();
-		if (st & DELETED) continue;
-		if (st & t) {
-			dest.push(r);
-			continue;
-		}
-		*j++ = r;
-	}
-	assert(j >= cnf);
-	cnf.resize(uint32(j - cnf));
-}
-
-void ParaFROST::filter(BCNF& cnf, CMM& new_cm) {
-	if (cnf.empty()) return;
-	C_REF* i, * j, * end = cnf.end();
-	for (i = cnf, j = i; i != end; i++) {
-		C_REF r = *i;
-		if (cm[r].deleted()) continue;
+		if (cm.deleted(r)) continue;
 		moveClause(r, new_cm);
 		*j++ = r; // must follow moveClause
 	}

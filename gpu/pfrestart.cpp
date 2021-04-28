@@ -19,31 +19,43 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 #include "pfsolve.h"
 using namespace pFROST;
 
-bool ParaFROST::vibrate() {
-	if (!opts.stable_en) return false;
-	if (vsidsOnly()) return true;
-	if (nConflicts >= lrn.stable_conf_max) {
-		lrn.stable = !lrn.stable;
-		opts.stabrestart_inc *= opts.stabrestart_rate;
-		if (opts.stabrestart_inc > int64(2e9))
-			opts.stabrestart_inc = int64(2e9);
-		lrn.stable_conf_max = nConflicts + opts.stabrestart_inc;
-		if (lrn.stable_conf_max <= nConflicts)
-			lrn.stable_conf_max = nConflicts + 1;
-		PFLOG2(2, " stable restarts limit increased to %lld conflicts", lrn.stable_conf_max);
-		lbdrest.swap();
-		printStats();
-	}
-	return lrn.stable;
+bool ParaFROST::canRestart()
+{
+	assert(inf.unassigned);
+	if (!DL()) return false;
+	if (stats.conflicts < limit.restart.conflicts) return false;
+	vibrate();
+	if (stable) return lubyrest;
+	return lbdrest.restart(stable);
 }
 
-int ParaFROST::reuse() {
+void ParaFROST::restart()
+{
+	assert(sp->propagated == trail.size());
+	assert(conflict == NOREF);
+	assert(cnfstate == UNSOLVED);
+	stats.restart.all++;
+	backtrack(opts.reusetrail_en ? reuse() : 0);
+	if (stable) stats.restart.stable++;
+	else updateUnstableLimit();
+}
+
+void ParaFROST::updateUnstableLimit()
+{
+	assert(!stable);
+	uint64 increase = opts.restart_inc - 1;
+	increase += logn(stats.restart.all);
+	limit.restart.conflicts = stats.conflicts + increase;
+}
+
+int ParaFROST::reuse() 
+{
 	bool stable = vsidsEnabled();
 	uint32 cand = stable ? nextVSIDS() : nextVMFQ();
 	assert(cand);
 	int currLevel = DL(), target = 0;
 	if (stable) {
-		HEAP_CMP hcmp(activity);
+		VSIDS_CMP hcmp(activity);
 		double candAct = activity[cand];
 		while (target < currLevel) {
 			uint32 pivot = dlevels[target + 1];
@@ -53,7 +65,7 @@ int ParaFROST::reuse() {
 		}
 	}
 	else {
-		int64 candBump = bumps[cand];
+		uint64 candBump = bumps[cand];
 		while (target < currLevel) {
 			uint32 pivot = dlevels[target + 1];
 			if (candBump < bumps[ABS(trail[pivot])])
@@ -65,26 +77,21 @@ int ParaFROST::reuse() {
 	return target;
 }
 
-void ParaFROST::restart()
-{
-	assert(sp->propagated == trail.size());
-	assert(conflict == NOREF);
-	assert(cnfstate == UNSOLVED);
-	if (lrn.stable) stats.stab_restarts++;
-	starts++;
-	backtrack(opts.reusetrail_en ? reuse() : 0);
-	if (opts.mdmfuses_en) MDMFuseSlave();
-	lrn.restarts_conf_max = nConflicts + opts.restart_inc;
-}
-
-// Donald Knuth version of Luby restart as in Cadical ..
 // implemented here to avoid overwhelming warnings about "-u"
-void LUBYREST::update() {
+void LUBYREST::update() 
+{
 	if (!period || restart) return;
+	assert(countdown > 0);
 	if (--countdown) return;
 	if ((u & -u) == v) u++, v = 1;
 	else v <<= 1;
-	if (limited && v >= limit) u = v = 1;
+	assert(v);
+	assert((UINT64_MAX / v) >= period);
 	countdown = v * period;
 	restart = true;
+	// reset if limit is reached
+	if (limited && countdown > limit) {
+		u = v = 1;
+		countdown = period;
+	}
 }

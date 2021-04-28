@@ -27,6 +27,10 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 #define RULELEN 90
 #define UNDERLINE	"\u001b[4m"
 
+#define PUTCH(CH, ...) putc(CH, stdout);
+
+#define PRINT(FORMAT, ...) fprintf(stdout, FORMAT, ## __VA_ARGS__);
+
 inline void REPCH(const char& ch, const size_t& size, const size_t& off = 0) {
     for (size_t i = off; i < size; i++) putc(ch, stdout);
 }

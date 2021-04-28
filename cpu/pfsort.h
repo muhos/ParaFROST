@@ -44,7 +44,7 @@ namespace pFROST {
 		else if (sz > 2) {
 			SZ i, j;
 			for (i = 1; i < sz; i++) {
-				register T tmp = d[i];
+				T tmp = d[i];
 				for (j = i; j > 0 && cmp(tmp, d[j - 1]); j--)
 					d[j] = d[j - 1];
 				d[j] = tmp;
@@ -111,22 +111,15 @@ namespace pFROST {
 	{
 		assert(data <= end);
 		size_t n = end - data;
-		assert(n > INSORT_THR);
-
+		if (n < 2) return;
 		const size_t sizebytes = sizeof(size_t);
 		const size_t w = (1ULL << l);
 		const size_t mask = w - 1;
 		const size_t dsize = (sizeof(rank(*data)) << 3);
-
-		size_t* count = new size_t[w];
-
 		Vec<T, size_t> b(n);
 		T* a = data, * c = a;
-
+		size_t* count = pfcalloc<size_t>(w);
 		for (size_t i = 0; i < dsize; i += l) {
-
-			memset(count, 0, sizebytes * w);
-
 			T* end = c + n;
 			size_t upper = 0, lower = SIZE_MAX;
 			for (T* p = c; p != end; p++) {
@@ -136,32 +129,27 @@ namespace pFROST {
 				upper |= s;
 				count[m]++;
 			}
-
 			if (lower == upper) break;
-
 			size_t pos = 0;
 			for (size_t j = 0; j < w; j++) {
 				size_t delta = count[j];
 				count[j] = pos;
 				pos += delta;
 			}
-
 			T* d = (c == a) ? b : a;
-
 			for (T* p = c; p != end; p++) {
 				auto s = rank(*p) >> i;
 				auto m = s & mask;
 				d[count[m]++] = *p;
 			}
 			c = d;
+			memset(count, 0, sizebytes * w);
 		}
-
 		if (c == b) {
 			for (size_t i = 0; i < n; i++)
 				a[i] = b[i];
 		}
-
-		delete[] count;
+		std::free(count);
 		assert(isSortedRadix(data, end, rank));
 	}
 

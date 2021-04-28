@@ -20,7 +20,7 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 #define __PARSER_
 
 #include "pfsort.h"
-#include "pfdefs.h"
+#include "pfdefinitions.h"
 
 inline int count_spaces(char* str)
 {

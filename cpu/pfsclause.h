@@ -27,36 +27,53 @@ namespace pFROST {
 	/*  Dependency:  none                                */
 	/*****************************************************/
 	class SCLAUSE {
-		uint32* _lits;
+		unsigned _st : 2, _f : 1, _a : 1, _u : 2;
+		unsigned _lbd : 26;
 		uint32 _sig;
-		int _sz, _lbd;
-		CL_ST _st, _f;
+		int _sz;
+		uint32* _lits;
 	public:
-						SCLAUSE		() { _lits = NULL, _sz = 0, _sig = 0, _st = 0, _f = 0; }
-						~SCLAUSE	() { clear(true); }
-						SCLAUSE		(const CLAUSE& src) {
-							_sz = src.size(), _st = src.status();
-							if (learnt()) {
-								_lbd = src.lbd();
-								assert(src.usage() <= USAGE_MAX);
-								_f = (src.usage() << USAGE_OFF);
-								assert(usage() == src.usage());
-							}
-							else { _lbd = 0, _f = 0; }
-							_lits = NULL, _sig = 0;
-							_lits = new uint32[_sz];
-							copyLitsFrom(src);
-							assert(!molten());
-							assert(!added());
-							assert(original() || size() == 2 || (learnt() && lbd()));
-						}
-						SCLAUSE		(const Lits_t& src) {
-							_sz = src.size();
-							_lits = NULL, _sig = 0, _st = 0, _f = 0;
-							_lits = new uint32[_sz];
-							copyLitsFrom(src);
-							assert(!_f);
-						}
+		SCLAUSE		() :
+			_lits(NULL)
+			, _st(ORIGINAL)
+			, _sz(0)
+			, _lbd(0)
+			, _sig(0)
+			, _f(0)
+			, _a(0)
+			, _u(0)
+		{}
+		~SCLAUSE	() { clear(true); }
+		SCLAUSE		(const CLAUSE& src) :
+			_lits(NULL)
+			, _st(src.learnt())
+			, _sz(src.size())
+			, _sig(0)
+			, _f(0)
+			, _a(0)
+		{
+			assert(!src.deleted());
+			if (learnt()) {
+				_lbd = src.lbd() & MAX_LBD_M;
+				_u = src.usage();
+			}
+			else { _lbd = 0, _u = 0; }
+			_lits = new uint32[_sz];
+			copyLitsFrom(src);
+		}
+		SCLAUSE		(const Lits_t& src) :
+			_lits(NULL)
+			, _st(ORIGINAL)
+			, _sz(src.size())
+			, _lbd(0)
+			, _sig(0)
+			, _f(0)
+			, _a(0)
+			, _u(0)
+		{
+			_lits = new uint32[_sz];
+			copyLitsFrom(src);
+		}
 		template <class SRC>
 		inline void		copyLitsFrom(const SRC& src) {
 			assert(_sz);
@@ -65,12 +82,12 @@ namespace pFROST {
 				_lits[k] = src[k];
 			}
 		}
+		inline void		set_lbd		(const unsigned& lbd) { assert(_lbd < MAX_LBD); _lbd = lbd; }
 		inline void		set_sig		(const uint32& sig) { _sig = sig; }
-		inline void		set_lbd		(const int& lbd) { _lbd = lbd; }
+		inline void		set_usage	(const CL_ST& usage) { _u = usage; }
 		inline void		set_status	(const CL_ST& status) { _st = status; }
-		inline void		set_usage	(const CL_ST& usage) { assert(usage <= USAGE_MAX); _f = (_f & USAGE_RES) | (usage << USAGE_OFF); }
 		inline void		shrink		(const int& n) { _sz -= n; }
-		inline void		resize		(const int& newSz) { _sz = newSz; }
+		inline void		resize		(const int& n) { _sz = n; }
 		inline uint32	lit			(const int& i) { assert(i < _sz); return _lits[i]; }
 		inline uint32&	operator [] (const int& i) { assert(i < _sz); return _lits[i]; }
 		inline uint32	operator [] (const int& i) const { assert(i < _sz); return _lits[i]; }
@@ -79,45 +96,46 @@ namespace pFROST {
 		inline uint32*	end			() { return _lits + _sz; }
 		inline uint32	back		() { return _lits[_sz - 1]; }
 		inline void		pop			() { _sz--; }
+		inline void		freeze		() { _f = 0; }
+		inline void		melt		() { _f = 1; }
+		inline void		markAdded	() { _a = 1; }
 		inline void		markDeleted	() { _st = DELETED; }
-		inline void		markAdded	() { _f |= CADDED; }
-		inline void		melt		() { _f |= CMOLTEN; }
-		inline void		freeze		() { _f &= RMOLTEN; }
-		inline CL_ST	usage		() const { return (_f >> USAGE_OFF); }
-		inline bool		molten		() const { return _f & CMOLTEN; }
-		inline bool		added		() const { return _f & CADDED; }
-		inline bool		original	() const { return _st & ORIGINAL; }
-		inline bool		learnt		() const { return _st & LEARNT; }
+		inline CL_ST	usage		() const { return _u; }
+		inline bool		molten		() const { return _f; }
+		inline bool		added		() const { return _a; }
+		inline bool		empty		() const { return !_sz; }
+		inline bool		original	() const { return !_st; }
 		inline bool		deleted		() const { return _st & DELETED; }
+		inline bool		learnt		() const { return _st & LEARNT; }
 		inline CL_ST	status		() const { return _st; }
-		inline int		lbd			() const { return _lbd; }
 		inline int		size		() const { return _sz; }
+		inline unsigned	lbd			() const { return _lbd; }
 		inline uint32	sig			() { return _sig; }
 		inline int		hasZero		() {
-			for (int l = 0; l < size(); l++) {
-				if (_lits[l] == 0) return l;
-			}
+			for (int i = 0; i < _sz; i++)
+				if (!_lits[i]) 
+					return i;
 			return -1;
 		}
 		inline bool		isSorted	() {
-			for (int i = 0; i < size(); i++) {
+			for (int i = 0; i < _sz; i++) {
 				if (i > 0 && _lits[i] < _lits[i - 1]) return false;
 			}
 			return true;
 		}
 		inline void		calcSig		(const uint32& init_sig = 0) {
 			_sig = init_sig;
-			for (int l = 0; l < this->size(); l++)
-				_sig |= MAPHASH(_lits[l]);
+			for (int i = 0; i < _sz; i++)
+				_sig |= MAPHASH(_lits[i]);
 		}
 		inline bool		has			(const uint32& lit) {
-			if (size() == 2) {
+			if (_sz == 2) {
 				if (_lits[0] == lit || _lits[1] == lit) return true;
 				else return false;
 			}
 			else {
 				assert(this->isSorted());
-				int low = 0, high = size() - 1, mid;
+				int low = 0, high = _sz - 1, mid;
 				uint32 first = _lits[low], last = _lits[high];
 				while (first <= lit && last >= lit) {
 					mid = (low + high) >> 1;
@@ -132,7 +150,7 @@ namespace pFROST {
 		}
 		inline void		clear		(bool _free = false) {
 			if (_free && _lits != NULL) { delete[] _lits; _lits = NULL; }
-			_sz = 0; _st = 0;
+			_sz = 0;
 		}
 		inline void		print		() const {
 			printf("(");

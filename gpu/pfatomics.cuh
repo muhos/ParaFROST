@@ -19,8 +19,8 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 #ifndef __GL_ATOMIC_
 #define __GL_ATOMIC_
 
-#include "pfcudefs.h"
-#include "pfdtypes.h"
+#include "pfdefinitions.cuh"
+#include "pfdatatypes.h"
 #include "pfwarp.cuh"
 
 namespace pFROST {

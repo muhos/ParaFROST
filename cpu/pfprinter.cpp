@@ -47,14 +47,14 @@ void ParaFROST::printTable()
 void ParaFROST::printStats(const bool& _p, const Byte& _t, const char* _c) 
 {
 	if (verbose == 1 && _p) {
-		int l2c = (int)ratio(inf.nLearntLits, learnts.size());
-		int vr = int(100.0 * double(maxActive()) / double(inf.orgVars));
+		int l2c = (int)ratio(stats.literals.learnt, stats.clauses.learnt);
+		int vr = (int)percent(maxActive(), inf.orgVars);
 		solLine[0] = _t;
 		PFLOGN0("");
 		SETCOLOR(_c, stdout);
 		fprintf(stdout, solLine.c_str(),
-			maxActive(), orgs.size(), inf.nLiterals,
-			nConflicts, starts - 1, learnts.size(), inf.nLearntLits,
+			maxActive(), stats.clauses.original, stats.literals.original,
+			stats.conflicts, stats.restart.all, stats.clauses.learnt, stats.literals.learnt,
 			l2c, vr, "%");
 		SETCOLOR(CNORMAL, stdout);
 		REPCH(' ', RULELEN - solLineLen), putc('|', stdout), putc('\n', stdout);
@@ -216,5 +216,17 @@ void ParaFROST::printLearnt()
 	PFLOGN1(" %sLearnt(", CCONFLICT);
 	for (int i = 0; i < learntC.size(); i++)
 		printf("%d@%-6d", l2i(learntC[i]), l2dl(learntC[i]));
+	fprintf(stdout, ")%s\n", CNORMAL);
+}
+
+void ParaFROST::printSortedStack(const int& tail) 
+{
+	if (!tail) return;
+	if (vhist.empty()) return;
+	PFLOGN1("  %ssorted(", CMAGENTA);
+	for (int i = 0; i < tail; i++) {
+		const uint32 lit = sp->tmp_stack[i];
+		printf("%d:%-4d", l2i(lit), vhist[lit]);
+	}
 	fprintf(stdout, ")%s\n", CNORMAL);
 }

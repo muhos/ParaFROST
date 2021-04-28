@@ -24,9 +24,7 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 #include "pfsclause.h"
 
 namespace pFROST {
-	/*****************************************************/
-	/*  Global vector types for CNF/occur lists          */
-	/*****************************************************/
+	
 	typedef Vec<C_REF> BCNF;
 	typedef Vec<WATCH, int> WL;
 	typedef Vec<WL> WT;
@@ -35,48 +33,21 @@ namespace pFROST {
 	typedef Vec<S_REF, int> OL;
 	typedef Vec<OL> OT;
 	typedef Vec<S_REF, size_t> SCNF;
-	/*****************************************************/
-	/*  Global structures and comparators		         */
-	/*****************************************************/
-	struct LEARN {
-		int64 lastreduce;
-		int64 bumped, subtried, elim_marked, elim_lastmarked;
-		int64 subsume_conf_max, sigma_conf_max, mdm_conf_max, reduce_conf_max;
-		int64 restarts_conf_max, stable_conf_max, map_conf_max;
-		int64 rephased[2], rephase_conf_max, rephase_last_max;
-		double var_inc, var_decay;
-		uint32 numMDs, nRefVars;
-		uint32 best, target;
-		int keptsize, keptlbd;
-		int	rounds;
-		LIT_ST lastrephased;
-		bool stable;
-
-		LEARN() { memset(this, 0, sizeof(*this)); }
-	};
-	struct STATS {
-		int64 sysMemAvail;
-		int64 n_rephs, n_randrephs;
-		int64 n_subchecks, n_subcalls;
-		int64 n_allsubsumed, n_allstrengthened, n_learntsubs;
-		int64 n_triedreduns, n_orgreduns, n_lrnreduns;
-		int64 n_fuds, n_mds;
-		int64 n_units, n_props, n_forced;
-		int64 tot_lits, max_lits, n_glues;
-		int64 reuses, reduces, recyclings;
-		int64 stab_restarts, ncbt, cbt;
-		int sigmifications;
-		int marker, mdm_calls;
-		int mappings, shrinkages;
-
-		STATS() { memset(this, 0, sizeof(*this)); }
-	};
+	
 	struct CSIZE {
 		C_REF ref;
 		size_t size;
 		CSIZE() {}
 		CSIZE(const C_REF& _r, const int& _s) : ref(_r), size(_s) {}
 	};
+
+	struct DFS {
+		uint32 idx, min;
+		DFS() : idx(0), min(0) { }
+	};
+
+	#define forall_occurs(LIST, PTR) \
+		for (S_REF* PTR = LIST, *END = LIST.end(); PTR != END; PTR++)
 }
 
 #endif
