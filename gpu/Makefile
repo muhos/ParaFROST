@@ -7,7 +7,7 @@
 ################################################################################
 
 # CUDA path
-CUDA_PATH ?= $(CUDA_HOME)
+CUDA_PATH ?= /usr/local/cuda
 
 # operating system
 HOST_OS   := $(shell uname -s 2>/dev/null | tr "[:upper:]" "[:lower:]")
