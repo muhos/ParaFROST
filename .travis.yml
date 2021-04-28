@@ -4,9 +4,9 @@ sudo: enabled
 
 matrix:
   include:
-    - name: CUDA 11.2
+    - name: CUDA 11.3
       env:
-      - CUDA_SHORT=11.2
+      - CUDA_SHORT=11.3
       - UBUNTU_ARCH=x86_64
       - UBUNTU_VERSION=ubuntu1804
       - NVIDIA_KEY=7fa2af80
@@ -21,9 +21,7 @@ before_install:
   - sudo add-apt-repository "deb https://developer.download.nvidia.com/compute/cuda/repos/${UBUNTU_VERSION}/${UBUNTU_ARCH}/ /"
   - sudo apt-get update
   - sudo apt-get -y install cuda
-  - export CUDA_HOME=/usr/local/cuda-${CUDA_SHORT}
-  - LD_LIBRARY_PATH=${CUDA_HOME}/lib64:${LD_LIBRARY_PATH}
-  - PATH=${CUDA_HOME}/bin:${PATH}
+  - export CUDA_HOME=/usr/local/cuda
   
 script:
 - cd gpu; make
