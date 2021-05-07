@@ -16,12 +16,6 @@ For installing the driver + CUDA, run the following commands:<br>
 `sudo apt-get update`<br>
 `sudo apt-get -y install cuda`<br>
 
-Make CUDA enviromental variables:<br>
-
-`export CUDA_HOME=/usr/local/cuda-${CUDA_SHORT}`<br>
-`LD_LIBRARY_PATH=${CUDA_HOME}/lib64:${LD_LIBRARY_PATH}`<br>
-`PATH=${CUDA_HOME}/bin:${PATH}`<br><br>
-
 Now the GPU solver is ready to install by running the makefile via the command `make -C gpu`. 
 The `parafrost` binary and the library `libparafrost.a` will be created by default in the solver local directory.<br>
 
