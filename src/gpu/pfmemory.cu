@@ -222,7 +222,7 @@ namespace pFROST {
 			size_t ebytes = 0;
 			DeviceScan::ExclusiveSum(NULL, ebytes, d_hist, d_segs, inf.nDualVars, _s);
 			DeviceScan::ExclusiveSum(tmp, ebytes, d_hist, d_segs, inf.nDualVars, _s);
-			if (!otBlocks) otBlocks = MIN((inf.nDualVars + BLOCK1D - 1) / BLOCK1D, maxGPUThreads / BLOCK1D);
+			uint32 otBlocks = MIN((inf.nDualVars + BLOCK1D - 1) / BLOCK1D, maxGPUThreads / BLOCK1D);
 			const size_t min_cap = hc_otsize + inf.nDualVars * hc_olsize + min_lits * hc_srsize;
 			assert(min_cap);
 			if (otPool.cap < min_cap) { // realloc

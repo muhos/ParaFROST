@@ -42,7 +42,6 @@ namespace pFROST {
 			// trackers
 			int64	_tot, _free, cap, dcap, maxcap, penalty;
 			size_t	nscatters;
-			uint32	otBlocks;
 			inline bool		hasUnifiedMem(const size_t& min_cap, const char* name) {
 				const int64 used = cap + min_cap;
 				PFLOG2(2, " Allocating GPU unified memory for %s (used/free = %.3f/%lld MB)", name, double(used) / MBYTE, _free / MBYTE);
