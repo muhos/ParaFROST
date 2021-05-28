@@ -4,6 +4,7 @@ sudo: enabled
 
 ignore:
   - *.md
+  - VERSION
 
 matrix:
   include:
