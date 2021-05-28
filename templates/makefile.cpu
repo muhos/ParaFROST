@@ -1,0 +1,74 @@
+################################################################################
+#
+# Muhammad Osama Mahmoud, Eindhoven University of Technology (TU/e).
+# Mathematics and Computer Science Department, SET cluster.
+# GEARS Project, All rights reserved.
+#
+################################################################################
+
+# advance progress
+
+ifndef PROGRESS
+T := $(shell $(MAKE) $(MAKECMDGOALS) --no-print-directory -nrRf $(firstword $(MAKEFILE_LIST)) PROGRESS="COUNTME" | grep -c "COUNTME")
+N := x
+C = $(words $N)$(eval N := x $N)
+PERC = `expr $C '*' 100 / $T`
+PROGRESS = printf "| [ %3d%% ] compiling: %-15s\r" $(PERC)
+ARCHIVE  = printf "| [ 100%% ] compiling: %-20s\r\n| building archive ( %-15s )..."
+ENDING   = printf "| building binary  ( %-15s )..."
+DONE     = printf "%-20s\n" " done."
+endif
+
+HOST_COMPILER := g++
+
+# compiler flags
+
+CCFLAGS := NONE
+
+# generated binaries
+
+BIN := NONE
+LIB := NONE
+
+ifneq ($(MAKECMDGOALS),clean)
+ifeq ($(CCFLAGS),NONE)
+$(error No compiler flags have been specified)
+endif
+ifeq ($(BIN),NONE)
+$(error No binary name is given)
+else ifeq ($(LIB),NONE)
+$(error No library name is given)
+endif
+endif
+
+# target rules
+mainsrc := main
+allsrc := $(sort $(wildcard *.cpp))
+src := $(filter-out $(mainsrc).cpp,$(allsrc))
+obj := $(patsubst %.cpp,%.o,$(src))
+
+all: $(BIN)
+
+$(LIB): $(obj)
+	@$(ARCHIVE) "done." $@
+	@ar rc $@ $+
+	@ranlib $@
+	@$(DONE)
+
+$(BIN): $(mainsrc).o $(LIB)
+	@$(ENDING) $@
+	@$(HOST_COMPILER) $(CCFLAGS) -o $@ $(mainsrc).o -L. -l$(BIN) $(LIBRARIES)
+	@$(DONE)
+
+$(mainsrc).o:$(mainsrc).cpp
+	@$(PROGRESS) $<
+	@$(HOST_COMPILER) $(CCFLAGS) -o $@ -c $<
+
+%.o:%.cpp
+	@$(PROGRESS) $<
+	@$(HOST_COMPILER) $(CCFLAGS) -o $@ -c $<
+
+clean:
+	rm -f *.o $(LIB) $(BIN)  
+	
+.PHONY: all clean
