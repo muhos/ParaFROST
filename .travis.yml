@@ -22,5 +22,4 @@ before_install:
   - sudo apt-get -y install cuda
   
 script:
-- make -C src/gpu
-- make -C src/cpu
+- bash install.sh -c -g
