@@ -2,10 +2,6 @@ language: c++
 
 sudo: enabled
 
-ignore:
-  - *.md
-  - VERSION
-
 matrix:
   include:
     - name: CUDA
