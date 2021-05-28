@@ -10,10 +10,9 @@ The inprocessing engine extends our previous work in SIGmA simplifier with new d
 
 To install either the CPU or the GPU solvers, use the `install.sh` script which has the following usage:
 
-`
- usage: install.sh [ <option> ... ]
 
- where '<option>' is one of the following
+&nbsp; usage: `install.sh [ <option> ... ]`<br>
+&nbsp; where `<option>` is one of the following
 
        -h or --help          print this usage summary
        -c or --cpu           install CPU solver
@@ -28,7 +27,7 @@ To install either the CPU or the GPU solvers, use the `install.sh` script which 
        --clean=<target>      remove old installation of <cpu | gpu | all> solvers
        --standard=<n>        compile with <11 | 14 | 17 > c++ standard
        --extra="flags"       pass extra "flags" to the compiler(s)
-`
+
 
 ## GPU solver
 To build the GPU solver, make sure you have a CUDA-capable GPU with pre-installed NVIDIA driver and CUDA toolkit.
@@ -42,8 +41,8 @@ For installing the driver + CUDA, run the following commands:<br>
 `sudo apt-get update`<br>
 `sudo apt-get -y install cuda`<br>
 
-Now the GPU solver is ready to install by running the install script via the command `./install -g'. 
-The `parafrost` binary and the library `libparafrost.a` will be created by default in the solver local directory.<br>
+Now the GPU solver is ready to install by running the install script via the command `./install -g`. 
+The `parafrost` binary and the library `libparafrost.a` will be created by default in the build directory.<br>
 
 ## CPU solver
 To build a CPU-only version of the solver, run `./install -c`.<br>
