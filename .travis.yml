@@ -11,9 +11,9 @@ matrix:
     - name: CUDA
       env:
       - UBUNTU_ARCH=x86_64
-      - UBUNTU_VERSION=ubuntu1804
+      - UBUNTU_VERSION=ubuntu2004
       - NVIDIA_KEY=7fa2af80
-      dist: bionic
+      dist: focal
 
 before_install:
   - sudo add-apt-repository -y ppa:graphics-drivers/ppa
