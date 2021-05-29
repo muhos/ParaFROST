@@ -15,6 +15,8 @@ To install either the CPU or the GPU solvers, use the `install.sh` script which 
 &nbsp; where `<option>` is one of the following
 
        -h or --help          print this usage summary
+       -n or --less          print less verbose messages
+       -q or --quiet         be quiet (make steps still be saved in the log)
        -c or --cpu           install CPU solver
        -g or --gpu           install GPU solver (if CUDA exists)
        -w or --wall          compile with '-Wall' flag
