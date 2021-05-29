@@ -2,7 +2,6 @@
 
 ch='|'
 lineWidth=90
-rulerStr="------------------------------------------------------------------------------------"
 logfile=install.log
 cputemplate=templates/makefile.cpu
 gputemplate=templates/makefile.gpu
@@ -11,14 +10,17 @@ library=lib${binary}.a
 
 echo -n > $logfile
 
-# functions
+# general functions
 usage () {
+printf "+%${lineWidth}s+\n" |tr ' ' '-'
 cat << EOF
 $ch usage: install [ <option> ... ]
 $ch 
 $ch where '<option>' is one of the following
 $ch
 $ch	-h or --help          print this usage summary
+$ch	-n or --less          print less verbose messages
+$ch	-q or --quiet         be quiet (make steps still be saved in the log)
 $ch	-c or --cpu           install CPU solver
 $ch	-g or --gpu           install GPU solver (if CUDA exists)
 $ch	-w or --wall          compile with '-Wall' flag
@@ -27,87 +29,26 @@ $ch	-t or --assert        enable only code assertions
 $ch	-p or --pedantic      compile with '-pedantic' flag
 $ch	-l or --logging       enable logging (needed for verbosity level > 2)
 $ch	-s or --statistics    enable costly statistics (may impact runtime)
-$ch	-a or --all           enable all above flags except 'assert'
+$ch	-a or --all           enable all above flags except 'assert' and 'verbosity'
 $ch	--clean=<target>      remove old installation of <cpu | gpu | all> solvers
 $ch	--standard=<n>        compile with <11 | 14 | 17 > c++ standard
 $ch	--extra="flags"       pass extra "flags" to the compiler(s)
-$ch$rulerStr
 EOF
+printf "+%${lineWidth}s+\n" |tr ' ' '-'
 exit 0
 }
 
-pfbanner () {
-printf "+%${lineWidth}s+\n" |tr ' ' '-'
-printf "$ch %-$((lineWidth - 1))s$ch\n"  \
-"                    ParaFROST solver installer (use -h for options)"
-printf "+%${lineWidth}s+\n" |tr ' ' '-'
-}
-
-pffinal () {
-log ""
-log "check '$1' directory for '$binary' and its library '$library'" 
-printf "+%${lineWidth}s+\n" |tr ' ' '-'
-}
-
-ruler () {
-echo -n $ch
-printf "%${lineWidth}s+\n" |tr ' ' '-'
-echo -n $ch >> $logfile
-printf "%${lineWidth}s+\n" |tr ' ' '-' >> $logfile
-}
-
-log () {
-printf "$ch %-$((lineWidth - 1))s\n" "$1"
-echo printf "$ch %-$((lineWidth - 1))s\n" "$1" >> $logfile
-}
-
-logn () {
-printf "$ch %s" "$1"
-echo printf "$ch %s" "$1" >> $logfile
-}
-
-endline () {
-echo "done."
-echo "done." >> $logfile
-}
-
 error () {
-log "$prefix error: $*"
-ruler
+printf "$ch error: %-$((lineWidth - 1))s\n" "$1"
+printf "$ch %${lineWidth}s\n" |tr ' ' '-'
 exit 1
 }
-
-# banner
-pfbanner
-
-# operating system
-HOST_OS=$(uname -srmn 2>/dev/null | tr "[:upper:]" "[:lower:]")
-[ -z "$HOST_OS" ] && error "cannot communicate with the operating system"
-
-# host compiler
-HOST_COMPILER=g++
-
-# compiler version
-compilerVer=$(g++ --version | sed -n '1p')
-compilerVer=$(echo $compilerVer|tr -d '\n')
-compilerVer=$(echo $compilerVer|tr -d '\r')
-[ -z "$compilerVer" ] && error "cannot read the compiler version"
-
-# target arch
-TARGET_ARCH=$(uname -m)
-[ -z "$TARGET_ARCH" ] && error "cannot read the system architecture"
-
-# target size
-TARGET_SIZE=$(getconf LONG_BIT)
-[ -z "$TARGET_SIZE" ] && error "cannot read the architecture bit-size"
-
-# time
-now=$(date)
-[ -z "$now" ] && error "cannot read the system date"
 
 #---------
 # options
 #---------
+noverb=0
+quiet=0
 all=0
 wall=1
 icpu=0
@@ -126,7 +67,9 @@ do
   case $1 in
 
     -h|--help) usage;;
-		
+	-n|--less) noverb=1;;
+	-q|--quiet) quiet=1;;	
+	
 	-w|--wall) wall=1;;
     -d|--debug) debug=1;;
     -t|--assert) assert=1;;
@@ -170,6 +113,56 @@ fi
 
 if [ $all = 1 ]; then wall=1;debug=1;assert=0;pedantic=1;logging=1;statistics=1; fi
 
+pfbanner () {
+if [ $noverb = 0 ] && [ $quiet = 0 ]; then
+	printf "+%${lineWidth}s+\n" |tr ' ' '-'
+	printf "$ch %-$((lineWidth - 1))s$ch\n"  \
+	"                    ParaFROST solver installer (use -h for options)"
+	printf "+%${lineWidth}s+\n" |tr ' ' '-'
+fi
+}
+
+pffinal () {
+if [ $noverb = 0 ] && [ $quiet = 0 ]; then
+	log ""
+	log "check '$1' directory for '$binary' and its library '$library'" 
+	printf "+%${lineWidth}s+\n" |tr ' ' '-'
+fi
+}
+
+ruler () {
+if [ $noverb = 0 ] && [ $quiet = 0 ]; then
+	echo -n $ch
+	printf "%${lineWidth}s+\n" |tr ' ' '-'
+	echo -n $ch >> $logfile
+	printf "%${lineWidth}s+\n" |tr ' ' '-' >> $logfile
+fi
+}
+
+log () {
+if [ $noverb = 0 ] && [ $quiet = 0 ]; then
+	printf "$ch %-$((lineWidth - 1))s\n" "$1"
+	echo printf "$ch %-$((lineWidth - 1))s\n" "$1" >> $logfile
+fi
+}
+
+logn () {
+if [ $noverb = 0 ] && [ $quiet = 0 ]; then
+	printf "$ch %s" "$1"
+	echo printf "$ch %s" "$1" >> $logfile
+fi
+}
+
+endline () {
+if [ $noverb = 0 ] && [ $quiet = 0 ]; then
+	echo "done."
+	echo "done." >> $logfile
+fi
+}
+
+# banner
+pfbanner
+
 # cleaning
 cleanCPU=0
 cleanGPU=0
@@ -196,6 +189,31 @@ if [[ "$clean" = "gpu" ]] || [[ "$clean" = "all" ]]; then
 	ruler
 fi
 [ $cleanCPU = 1 ] || [ $cleanGPU = 1 ] && exit 0
+
+# operating system
+HOST_OS=$(uname -srmn 2>/dev/null | tr "[:upper:]" "[:lower:]")
+[ -z "$HOST_OS" ] && error "cannot communicate with the operating system"
+
+# host compiler
+HOST_COMPILER=g++
+
+# compiler version
+compilerVer=$(g++ --version | sed -n '1p')
+compilerVer=$(echo $compilerVer|tr -d '\n')
+compilerVer=$(echo $compilerVer|tr -d '\r')
+[ -z "$compilerVer" ] && error "cannot read the compiler version"
+
+# target arch
+TARGET_ARCH=$(uname -m)
+[ -z "$TARGET_ARCH" ] && error "cannot read the system architecture"
+
+# target size
+TARGET_SIZE=$(getconf LONG_BIT)
+[ -z "$TARGET_SIZE" ] && error "cannot read the architecture bit-size"
+
+# time
+now=$(date)
+[ -z "$now" ] && error "cannot read the system date"
 
 #---------------------------
 # start building CPU solver
@@ -279,12 +297,12 @@ log ""
 mkdir -p $builddir
 
 cd $srcdir
-make
+if [ $quiet = 0 ]; then make; else make >> $logfile; fi
 cd ../../
 
 if [ ! -f $srcdir/$binary ] || [ ! -f $srcdir/$library ]; then
 	log ""
-	log "could not install the solver due to previous errors"
+	error "could not install the solver due to previous errors"
 	error "check 'install.log' for more information"
 fi
 mv $srcdir/$binary $builddir
@@ -393,12 +411,12 @@ log ""
 mkdir -p $builddir
 
 cd $srcdir
-make
+if [ $quiet = 0 ]; then make; else make >> $logfile; fi
 cd ../../
 
 if [ ! -f $srcdir/$binary ] || [ ! -f $srcdir/$library ]; then
 	log ""
-	log "could not install the solver due to previous errors"
+	error "could not install the solver due to previous errors"
 	error "check 'install.log' for more information"
 fi
 mv $srcdir/$binary $builddir
