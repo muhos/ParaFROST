@@ -42,7 +42,7 @@ inline bool verifyMarkings(Vec<LIT_ST>& marks, Lits_t& clause)
 	return true;
 }
 
-uint32 ParaFROST::incVariable() 
+uint32 ParaFROST::iadd() 
 {
 	inf.unassigned++;
 	const uint32 v = inf.orgVars = ++inf.maxVar;

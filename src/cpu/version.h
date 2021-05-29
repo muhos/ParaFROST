@@ -25,7 +25,3 @@ namespace pFROST {
 	const char* date();
 
 }
-#define VERSION "2.1.2"
-#define COMPILER "g++ (Ubuntu 9.3.0-17ubuntu1~20.04) 9.3.0"
-#define OSYSTEM "linux nbwin1583 5.4.72-microsoft-standard-wsl2 x86_64"
-#define DATE "Fri May 28 14:52:08 CEST 2021"

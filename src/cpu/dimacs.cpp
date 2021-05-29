@@ -78,7 +78,7 @@ bool ParaFROST::parser() {
 			incremental = true;
 			uint32 v = 0, s = 0;
 			while ((v = toInteger(str, s)) != 0) {
-				while (v > inf.maxVar) incVariable();
+				while (v > inf.maxVar) iadd();
 				org.push(V2DEC(v, s));
 			}
 			if (!itoClause(in_c, org)) return false;

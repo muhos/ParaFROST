@@ -786,7 +786,7 @@ namespace pFROST {
 						ParaFROST			();
 		void			iunassume			();
 		void			iallocSpace			();
-		uint32			incVariable			();
+		uint32			iadd				();
 		void			idecide				();
 		void			ianalyze            (const uint32&);
 		bool			itoClause           (Lits_t&, Lits_t&);
