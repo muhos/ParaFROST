@@ -41,11 +41,11 @@ For installing the driver + CUDA, run the following commands:<br>
 `sudo apt-get update`<br>
 `sudo apt-get -y install cuda`<br>
 
-Now the GPU solver is ready to install by running the install script via the command `./install -g`. 
+Now the GPU solver is ready to install by running the install script via the command `./install.sh -g`. 
 The `parafrost` binary and the library `libparafrost.a` will be created by default in the build directory.<br>
 
 ## CPU solver
-To build a CPU-only version of the solver, run `./install -c`.<br>
+To build a CPU-only version of the solver, run `./install.sh -c`.<br>
 
 ## Debug and Testing
 Add `-t` argument with the install command to enable assertions or `-d` to collect debugging information for both the CPU and GPU solvers.<br>
