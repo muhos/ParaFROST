@@ -37,6 +37,7 @@ ParaFROST::ParaFROST() :
 	, simpstate(AWAKEN_SUCC)
 {
 	PFNAME("ParaFROST (Parallel Formal Reasoning On Satisfiability)", version());
+	assert(pfrost);
 	getCPUInfo(stats.sysmem);
 	getBuildInfo();
 	initSolver();
@@ -74,6 +75,7 @@ void ParaFROST::iallocSpace()
 
 void ParaFROST::isolve(Lits_t& assumptions)
 {
+	FAULT_DETECTOR;
 	timer.start();
 	iallocSpace();
 	iunassume();
