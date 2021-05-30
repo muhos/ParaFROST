@@ -61,6 +61,7 @@ ParaFROST::ParaFROST() :
 	}
 	else cumm.init(_gfree, _gpenalty);
 	if (opts.sigma_en || opts.sigma_live_en) { optSimp(), createStreams(); }
+	if (!quiet_en) PFLRULER('-', RULELEN);
 }
 
 void ParaFROST::iallocSpace()
@@ -76,6 +77,7 @@ void ParaFROST::iallocSpace()
 	assert(ilevel.size() == ivstate.size());
 	assert(ilevel.size() == inf.maxVar + 1);
 	assert(imarks.empty());
+	inf.nOrgCls = orgs.size();
 	vorg[0] = 0;
 	model.lits[0] = 0;
 	model.init(vorg);
@@ -127,4 +129,5 @@ void ParaFROST::isolve(Lits_t& assumptions)
 	}
 	timer.stop(), timer.solve += timer.cpuTime();
 	wrapup();
+	if (!quiet_en) PFLRULER('-', RULELEN);
 }

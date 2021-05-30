@@ -41,6 +41,7 @@ ParaFROST::ParaFROST() :
 	getCPUInfo(stats.sysmem);
 	getBuildInfo();
 	initSolver();
+	if (!quiet_en) PFLRULER('-', RULELEN);
 }
 
 void ParaFROST::iallocSpace()
@@ -48,6 +49,7 @@ void ParaFROST::iallocSpace()
 	imarks.clear(true);
 	if (sp->size() == size_t(inf.maxVar) + 1) return; // avoid allocation if 'maxVar' didn't change
 	assert(inf.maxVar);
+	PFLOGN2(2, " Allocating fixed memory for %d variables..", inf.maxVar);
 	assert(inf.orgVars == inf.maxVar);
 	assert(vorg.size() == inf.maxVar + 1);
 	assert(V2L(inf.maxVar + 1) == inf.nDualVars);
@@ -55,10 +57,10 @@ void ParaFROST::iallocSpace()
 	assert(ilevel.size() == ivstate.size());
 	assert(ilevel.size() == inf.maxVar + 1);
 	assert(imarks.empty());
+	inf.nOrgCls = orgs.size();
 	vorg[0] = 0;
 	model.lits[0] = 0;
 	model.init(vorg);
-	PFLOGN2(2, " Allocating fixed memory for %d variables..", inf.maxVar);
 	SP* newSP = new SP(inf.maxVar + 1);
 	newSP->initSaved(opts.polarity);
 	newSP->copyFrom(sp);
@@ -109,4 +111,5 @@ void ParaFROST::isolve(Lits_t& assumptions)
 	}
 	timer.stop(), timer.solve += timer.cpuTime();
 	wrapup();
+	if (!quiet_en) PFLRULER('-', RULELEN);
 }
