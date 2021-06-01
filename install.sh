@@ -142,14 +142,14 @@ fi
 log () {
 if [ $noverb = 0 ] && [ $quiet = 0 ]; then
 	printf "$ch %-$((lineWidth - 1))s\n" "$1"
-	echo printf "$ch %-$((lineWidth - 1))s\n" "$1" >> $logfile
+	printf "$ch %-$((lineWidth - 1))s\n" "$1" >> $logfile
 fi
 }
 
 logn () {
 if [ $noverb = 0 ] && [ $quiet = 0 ]; then
 	printf "$ch %s" "$1"
-	echo printf "$ch %s" "$1" >> $logfile
+	printf "$ch %s" "$1" >> $logfile
 fi
 }
 

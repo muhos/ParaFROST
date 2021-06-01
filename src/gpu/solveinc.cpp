@@ -111,21 +111,23 @@ void ParaFROST::isolve(Lits_t& assumptions)
 		iassume(assumptions);
 		if (verbose == 1) printTable();
 		if (canPreSigmify()) sigmify();
-		PFLOG2(2, "-- Incremental CDCL search started..");
-		if (cnfstate == UNSOLVED) MDMInit();
-		while (cnfstate == UNSOLVED && !interrupted()) {
-			PFLDL(this, 3);
-			if (BCP()) analyze();
-			else if (!inf.unassigned) cnfstate = SAT;
-			else if (canReduce()) reduce();
-			else if (canRestart()) restart();
-			else if (canRephase()) rephase();
-			else if (canSigmify()) sigmify();
-			else if (canProbe()) probe();
-			else if (canMMD()) MDM();
-			else idecide();
+		if (cnfstate == UNSOLVED) {
+			PFLOG2(2, "-- Incremental CDCL search started..");
+			MDMInit();
+			while (cnfstate == UNSOLVED && !interrupted()) {
+				PFLDL(this, 3);
+				if (BCP()) analyze();
+				else if (!inf.unassigned) cnfstate = SAT;
+				else if (canReduce()) reduce();
+				else if (canRestart()) restart();
+				else if (canRephase()) rephase();
+				else if (canSigmify()) sigmify();
+				else if (canProbe()) probe();
+				else if (canMMD()) MDM();
+				else idecide();
+			}
+			PFLOG2(2, "-- Incremental CDCL search completed successfully");
 		}
-		PFLOG2(2, "-- Incremental CDCL search completed successfully");
 	}
 	timer.stop(), timer.solve += timer.cpuTime();
 	wrapup();

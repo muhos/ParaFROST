@@ -754,6 +754,7 @@ namespace pFROST {
 			if (sync_always) sync(stream);
 		}
 		inline void		cacheResolved		(const cudaStream_t& stream) {
+			syncAll();
 			uint32* devStart = *vars->resolved, devSize = vars->resolved->size();
 			if (devSize == 0) return;
 			uint32 off = model.resolved.size();

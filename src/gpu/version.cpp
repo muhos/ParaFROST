@@ -29,7 +29,7 @@ using namespace pFROST;
 char buffer[BUFFERSIZE];
 
 #ifndef VERSION
-	#define VERSION "2.1"
+	#define VERSION "2.0"
 #endif
 
 #ifndef COMPILER
