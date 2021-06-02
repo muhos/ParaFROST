@@ -1,0 +1,3 @@
+install.log
+src/cpu/*.o
+src/gpu/*.o
