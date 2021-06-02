@@ -390,6 +390,8 @@ logn "generating header '$buildfile' from 'version.in'.."
 
 version=unknown
 [ -f VERSION ] && version=$(head -n 1 VERSION)
+version=$(echo $version|tr -d '\n')
+version=$(echo $version|tr -d '\r')
 [ ! -z "$version" ] && echo "#define VERSION \"$version\"" >> $buildfile
 echo "#define COMPILER \"$compilerVer + $NVCCVER\"" >> $buildfile
 echo "#define OSYSTEM \"$HOST_OS\"" >> $buildfile
