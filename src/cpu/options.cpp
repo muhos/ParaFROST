@@ -44,7 +44,6 @@ INT_OPT opt_phases("phases", "set the number of phases in to run reductions", 5,
 INT_OPT opt_cnf_free("garbagefreq", "set the frequency of CNF memory shrinkage in SIGmA", 2, INT32R(0, 5));
 
 // solver options
-BOOL_OPT opt_boundsearch_en("boundsearch", "activate search bounds on decisions and/or conflicts", false);
 BOOL_OPT opt_chrono_en("chrono", "enable chronological backtracking", true);
 BOOL_OPT opt_chronoreuse_en("chronoreusetrail", "enable reuse trail when chronological backtracking", false);
 BOOL_OPT opt_bumpreason_en("bumpreason", "bump reason literals via learnt clause", true);
@@ -133,8 +132,6 @@ INT_OPT opt_lbd_slow("lbdslow", "initial lbd slow window", 1e5, INT32R(100, INT3
 INT_OPT opt_luby_inc("lubyinc", "luby increment value based on conflicts", 1 << 10, INT32R(1, INT32_MAX));
 INT_OPT opt_luby_max("lubymax", "luby sequence maximum value", 1 << 20, INT32R(1, INT32_MAX));
 INT_OPT opt_learntsub_max("subsumelearntmax", "maximum learnt clauses to subsume", 20, INT32R(0, INT32_MAX));
-INT64_OPT opt_conflictout("conflictout", "set out-of-conflicts limit (must be enabled by \"boundsearch\")", INT64_MAX, INT64R(0, INT64_MAX));
-INT64_OPT opt_decisionout("decisionout", "set out-of-decisions limit (must be enabled by \"boundsearch\")", INT64_MAX, INT64R(0, INT64_MAX));
 DOUBLE_OPT opt_stable_rate("stablerestartrate", "stable restart increase rate", 1.0, FP64R(1, 5));
 DOUBLE_OPT opt_lbd_rate("lbdrate", "slow rate in firing lbd restarts", 1.1, FP64R(1, 10));
 DOUBLE_OPT opt_ternary_perc("ternaryperc", "percentage of maximum hyper clauses to add", 0.2, FP64R(0, 1));
