@@ -16,8 +16,8 @@ You should have received a copy of the GNU General Public License
 along with this program.  If not, see <https://www.gnu.org/licenses/>.
 **********************************************************************************/
 
-#ifndef __HSE_
-#define __HSE_
+#ifndef __SUB_
+#define __SUB_
 
 #include "solve.h" 
 using namespace pFROST;
@@ -160,7 +160,7 @@ namespace SIGmA {
 				if (neg->size() > pos->size()) break;
 				if (neg->deleted()) continue;
 				if (neg->size() > 1 && selfsub(neg->sig(), pos->sig()) && selfsub(x, neg, pos)) {
-#if HSE_DBG
+#if SUB_DBG
 					PFLCLAUSE(1, (*pos), " Clause ");
 					PFLCLAUSE(1, (*neg), " Strengthened by ");
 #endif 
@@ -176,7 +176,7 @@ namespace SIGmA {
 				if (pos->molten() && sm_c->size() > pos->size()) continue;
 				if (sm_c->size() > 1 && sub(sm_c->sig(), pos->sig()) && sub(sm_c, pos)) {
 					if (sm_c->learnt() && pos->original()) sm_c->set_status(ORIGINAL);
-#if HSE_DBG
+#if SUB_DBG
 					PFLCLAUSE(1, (*pos), " Clause ");
 					PFLCLAUSE(1, (*sm_c), " Subsumed by ");
 #endif 
@@ -197,7 +197,7 @@ namespace SIGmA {
 				if (pos->size() >= neg->size()) break;
 				if (pos->deleted()) continue;
 				if (pos->size() > 1 && selfsub(pos->sig(), neg->sig()) && selfsub(NEG(x), pos, neg)) {
-#if HSE_DBG
+#if SUB_DBG
 					PFLCLAUSE(1, (*neg), " Clause ");
 					PFLCLAUSE(1, (*pos), " Strengthened by ");
 #endif 
@@ -213,7 +213,7 @@ namespace SIGmA {
 				if (neg->molten() && sm_c->size() > neg->size()) continue;
 				if (sm_c->size() > 1 && sub(sm_c->sig(), neg->sig()) && sub(sm_c, neg)) {
 					if (sm_c->learnt() && neg->original()) sm_c->set_status(ORIGINAL);
-#if HSE_DBG
+#if SUB_DBG
 					PFLCLAUSE(1, (*neg), " Clause ");
 					PFLCLAUSE(1, (*sm_c), " Subsumed by ");
 #endif 

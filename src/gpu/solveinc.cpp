@@ -61,7 +61,6 @@ ParaFROST::ParaFROST() :
 	}
 	else cumm.init(_gfree, _gpenalty);
 	if (opts.sigma_en || opts.sigma_live_en) { optSimp(), createStreams(); }
-	if (!quiet_en) PFLRULER('-', RULELEN);
 }
 
 void ParaFROST::iallocSpace()

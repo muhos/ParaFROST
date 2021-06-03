@@ -60,8 +60,8 @@ namespace pFROST {
 		int		minimize_depth;
 		int		luby_inc, luby_max;
 		int		lbd_tier2, lbd_tier1, lbd_fast, lbd_slow;
-		int		mdm_rounds,	mdm_freq, mdm_div, mdm_inc, mdm_sinc, mdm_vsids_pumps, mdm_vmfq_pumps;
-		int		subsume_priorbins, subsume_inc, subsume_min_occs, subsume_min_eff, subsume_max_eff, subsume_rel_eff, subsume_max_csize;
+		int		mdm_rounds,	mdm_freq, mdm_div, mdm_inc, mdm_sinc, mdm_vsids_pumps, mdm_vmtf_pumps;
+		int		subsume_priorbins, subsume_inc, subsume_max_occs, subsume_min_eff, subsume_max_eff, subsume_rel_eff, subsume_max_csize;
 		int		probe_inc, probe_min, probe_min_eff, probe_max_eff, probe_rel_eff;
 		int		ternary_priorbins, ternary_min_eff, ternary_max_eff, ternary_rel_eff;
 		int		transitive_min_eff, transitive_max_eff, transitive_rel_eff;
@@ -90,7 +90,7 @@ namespace pFROST {
 		//==========================================//
 		//             Simplifier options           //
 		//==========================================//
-		bool	hse_en;
+		bool	sub_en;
 		bool	bce_en;
 		bool	ere_en;
 		bool	all_en;
@@ -104,7 +104,7 @@ namespace pFROST {
 		int		shrink_rate;
 		int		xor_max_arity;
 		int		ve_clause_limit;
-		int		hse_limit, bce_limit, ere_limit;
+		int		sub_limit, bce_limit, ere_limit;
 		//------------------------------------------//
 		uint32	lcve_min;
 		uint32	lits_min;

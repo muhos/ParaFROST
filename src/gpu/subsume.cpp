@@ -237,7 +237,7 @@ bool ParaFROST::subsumeAll()
 		// current scheduled clause cannot subsume more clauses
 		if (!subsume) continue; 
 		// attach new occurrence
-		if (minsize <= opts.subsume_min_occs) {
+		if (minsize <= opts.subsume_max_occs) {
 			if (orgbin) {
 				PFLOG2(4, "  watching %d with %d current original binary and total %d histogram", l2i(minlit), minsize, minhist);
 				assert(c.original());

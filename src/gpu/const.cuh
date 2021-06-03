@@ -77,9 +77,9 @@ namespace pFROST {
 		#define SH_MAX_BVE_OUT2	95
 		#define BLBCE			128
 		#define SH_MAX_BCE_IN	95 
-		#define BLHSE			64
-		#define HSE_MAX_CL_SIZE 1000
-		#define SH_MAX_HSE_IN	190
+		#define BLSUB			64
+		#define SUB_MAX_CL_SIZE 1000
+		#define SH_MAX_SUB_IN	190
 		#define BLERE			64
 		#define SH_MAX_ERE_OUT	190
 

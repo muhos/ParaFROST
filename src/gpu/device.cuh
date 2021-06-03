@@ -30,7 +30,7 @@ namespace pFROST {
 		#define VE_DBG 0 // set to serialize BVE
         #define IS_TAUTOLOGY(x,y)   (((x) ^ (y)) == NEG_SIGN)
 
-		// [0] = hse_limit, [1] = bce_limit,
+		// [0] = sub_limit, [1] = bce_limit,
 		// [2] = ere_limit, [3] = xor_max_arity
 		// [4] = ve_clause_limit, [5] = opts.ve_lbound_en
 		__constant__ uint32 dc_limits[NLIMITS];

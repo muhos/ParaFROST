@@ -42,7 +42,7 @@ namespace pFROST {
 		void reduceOTAsync(CNF*, OT*, const bool&);
 		void sortOTAsync(CNF*, OT*, VARS* vars, cudaStream_t*);
 		void veAsync(CNF*, OT*, VARS*, cudaStream_t*, cuMM&, const cuHist&, const bool&);
-		void hseAsync(CNF*, OT*, VARS*);
+		void subAsync(CNF*, OT*, VARS*);
 		void bceAsync(CNF*, OT*, VARS*, const uint32*);
 		void ereAsync(CNF*, OT*, VARS*);
 		void evalReds(CNF*, GSTATS*, VSTATE*);

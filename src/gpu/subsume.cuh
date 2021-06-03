@@ -16,8 +16,8 @@ You should have received a copy of the GNU General Public License
 along with this program.  If not, see <https://www.gnu.org/licenses/>.
 **********************************************************************************/
 
-#ifndef __SIGMA_HSE_
-#define __SIGMA_HSE_
+#ifndef __SIGMA_SUB_
+#define __SIGMA_SUB_
 
 #include "device.cuh"
 
@@ -25,7 +25,7 @@ namespace pFROST {
 
 	namespace SIGmA {
 
-#define SS_DBG 0 // set to 1 to serialize HSE
+#define SS_DBG 0 // set to 1 to serialize SUB
 #define LBD_TIER1 2
 
 #if SS_DBG
@@ -192,7 +192,7 @@ namespace pFROST {
 				}
 			}
 			assert(n == c.size() - 1);
-			assert(n <= SH_MAX_HSE_IN);
+			assert(n <= SH_MAX_SUB_IN);
 			assert(c.hasZero() < 0);
 			assert(c.isSorted());
 			c.pop();
@@ -308,9 +308,9 @@ namespace pFROST {
 			// positives vs negatives
 			forall_occurs(poss, i) {
 				SCLAUSE& pos = cnf[*i];
-				if (pos.size() > HSE_MAX_CL_SIZE) break;
+				if (pos.size() > SUB_MAX_CL_SIZE) break;
 				if (pos.deleted()) continue;
-				if (pos.size() > SH_MAX_HSE_IN) { // use global memory 
+				if (pos.size() > SH_MAX_SUB_IN) { // use global memory 
 					selfsubsume(p, n, cnf, negs, units, pos);
 					subsume(cnf, poss, i, pos);
 				}
@@ -329,9 +329,9 @@ namespace pFROST {
 			// negatives vs positives
 			forall_occurs(negs, i) {
 				SCLAUSE& neg = cnf[*i];
-				if (neg.size() > HSE_MAX_CL_SIZE) break;
+				if (neg.size() > SUB_MAX_CL_SIZE) break;
 				if (neg.deleted()) continue;
-				if (neg.size() > SH_MAX_HSE_IN) {
+				if (neg.size() > SH_MAX_SUB_IN) {
 					selfsubsume(n, p, cnf, poss, units, neg);
 					subsume(cnf, negs, i, neg);
 				}

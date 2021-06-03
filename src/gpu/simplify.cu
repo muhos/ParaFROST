@@ -181,14 +181,14 @@ void ParaFROST::sigmifying()
 		if (!LCVE()) break;
 		sortOTAsync(cnf, ot, vars, streams);
 		if (simpstate == CNFALLOC_FAIL) {
-			HSE();
+			SUB();
 			cacheNumUnits(streams[3]);
 			cacheUnits(streams[3]);
 			ERE();
 			break;
 		}
 		if (stop(cdiff, ldiff)) { ERE(); break; }
-		HSE(), VE(), BCE();
+		SUB(), VE(), BCE();
 		countAll();
 		cacheNumUnits(streams[3]);
 		inf.nClauses = inf.n_cls_after, inf.nLiterals = inf.n_lits_after;
@@ -254,7 +254,7 @@ void ParaFROST::optSimp()
 		else 
 			opts.phases = 2, opts.ve_clause_limit = 20;
 	}
-	culimit.limits[0] = opts.hse_limit;
+	culimit.limits[0] = opts.sub_limit;
 	culimit.limits[1] = opts.bce_limit;
 	culimit.limits[2] = opts.ere_limit;
 	culimit.limits[3] = opts.xor_max_arity;

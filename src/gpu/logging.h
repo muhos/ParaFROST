@@ -155,7 +155,7 @@ inline void REPCH(const char& ch, const size_t& size, const size_t& off = 0) {
         } \
     } while(0)
 
-#define PFLMEMCALL(SOLVER, VERBOSITY) PFLOG2(VERBOSITY, " Memory used in %s call = %lld MB", __func__, sysMemUsed() / MBYTE);
+#define PFLMEMCALL(SOLVER, VERBOSITY) PFLOG2(VERBOSITY, " Memory used in %s call: %lld MB", __func__, sysMemUsed() / MBYTE);
 
 #define PFLGCMEM(VERBOSITY, oldB, newB) \
     if (verbose >= VERBOSITY) { \

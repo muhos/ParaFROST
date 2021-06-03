@@ -79,14 +79,14 @@ void ParaFROST::postVE()
 	vars->numPVs = n;
 }
 
-void ParaFROST::HSE()
+void ParaFROST::SUB()
 {
-	if (opts.hse_en || opts.ve_plus_en) {
+	if (opts.sub_en || opts.ve_plus_en) {
 		if (interrupted()) killSolver();
 		PFLOGN2(2, "  Eliminating (self)-subsumptions..");
-		hseAsync(cnf, ot, vars);
+		subAsync(cnf, ot, vars);
 		PFLDONE(2, 5);
-		PFLREDALL(this, 2, "HSE Reductions");
+		PFLREDALL(this, 2, "SUB Reductions");
 	}
 }
 

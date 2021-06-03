@@ -470,17 +470,17 @@ namespace pFROST {
 			}
 		}
 
-		__global__ void hse_k(CNF* __restrict__ cnf, OT* __restrict__ ot, const cuVecU* __restrict__ pVars, cuVecU* __restrict__ units)
+		__global__ void sub_k(CNF* __restrict__ cnf, OT* __restrict__ ot, const cuVecU* __restrict__ pVars, cuVecU* __restrict__ units)
 		{
 			uint32 tid = global_tx;
-			__shared__ uint32 sh_cls[BLHSE * SH_MAX_HSE_IN];
+			__shared__ uint32 sh_cls[BLSUB * SH_MAX_SUB_IN];
 			while (tid < pVars->size()) {
 				const uint32 x = (*pVars)[tid];
 				assert(x);
 				assert(!ELIMINATED(x));
 				const uint32 p = V2L(x), n = NEG(p);
 				if ((*ot)[p].size() <= dc_limits[0] && (*ot)[n].size() <= dc_limits[0])
-					subsume_x(p, *cnf, (*ot)[p], (*ot)[n], units, sh_cls + threadIdx.x * SH_MAX_HSE_IN);
+					subsume_x(p, *cnf, (*ot)[p], (*ot)[n], units, sh_cls + threadIdx.x * SH_MAX_SUB_IN);
 				tid += stride_x;
 			}
 		}
@@ -815,7 +815,7 @@ namespace pFROST {
 			}
 			if (profile_gpu) cutimer->stop(), cutimer->ve += cutimer->gpuTime();
 		}
-		void hseAsync(CNF* cnf, OT* ot, VARS* vars)
+		void subAsync(CNF* cnf, OT* ot, VARS* vars)
 		{
 			assert(cnf);
 			assert(ot);
@@ -823,14 +823,14 @@ namespace pFROST {
 			if (profile_gpu) cutimer->start();
 #if SS_DBG
 			putchar('\n');
-			hse_k << <1, 1 >> > (cnf, ot, vars->pVars, vars->units);
+			sub_k << <1, 1 >> > (cnf, ot, vars->pVars, vars->units);
 #else
-			OPTIMIZEBLOCKS(vars->numPVs, BLHSE);
-			hse_k << <nBlocks, BLHSE >> > (cnf, ot, vars->pVars, vars->units);
+			OPTIMIZEBLOCKS(vars->numPVs, BLSUB);
+			sub_k << <nBlocks, BLSUB >> > (cnf, ot, vars->pVars, vars->units);
 #endif
-			if (profile_gpu) cutimer->stop(), cutimer->hse += cutimer->gpuTime();
+			if (profile_gpu) cutimer->stop(), cutimer->sub += cutimer->gpuTime();
 			if (sync_always) { 
-				LOGERR("HSE Elimination failed");
+				LOGERR("SUB Elimination failed");
 				syncAll();
 			}
 		}

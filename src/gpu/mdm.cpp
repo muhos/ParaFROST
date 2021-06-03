@@ -116,7 +116,7 @@ void ParaFROST::pumpFrozen()
 			pumpFrozenHeap(*assign);
 		opts.mdm_vsids_pumps--;
 	}
-	else if (opts.mdm_vmfq_pumps) { // VMFQ (requires special handling)
+	else if (opts.mdm_vmtf_pumps) { // VMFQ (requires special handling)
 		assert(analyzed.empty());
 		assert(inf.maxVar >= last.mdm.decisions);
 		analyzed.reserve(inf.maxVar - last.mdm.decisions);
@@ -128,7 +128,7 @@ void ParaFROST::pumpFrozen()
 			uint32 first = *analyzed;
 			if (UNASSIGNED(sp->value[V2L(first)])) vmtf.update(first, bumps[first]);
 			analyzed.clear();
-			opts.mdm_vmfq_pumps--;
+			opts.mdm_vmtf_pumps--;
 		}
 	}
 	PFLDONE(2, 4);
@@ -216,7 +216,7 @@ void ParaFROST::MDMInit()
 	stats.decisions.multiple += last.mdm.decisions;
 	PFLOG2(2, " MDM %d: %d decisions are elected (%.2f%%)",
 		stats.mdm.calls, last.mdm.decisions, percent(last.mdm.decisions, maxActive()));
-	if (opts.mdm_vsids_pumps || opts.mdm_vmfq_pumps) pumpFrozen();
+	if (opts.mdm_vsids_pumps || opts.mdm_vmtf_pumps) pumpFrozen();
 	clearMDM(), eligible.clear(true), occurs.clear(true);
 	printStats(1, 'm', CMDM);
 }
@@ -283,7 +283,7 @@ void ParaFROST::MDM()
 	stats.decisions.multiple += last.mdm.decisions;
 	PFLOG2(2, " MDM %d: %d decisions are elected (%.2f%%)", 
 		stats.mdm.calls, last.mdm.decisions, percent(last.mdm.decisions, maxActive()));
-	if (opts.mdm_vsids_pumps || opts.mdm_vmfq_pumps) pumpFrozen();
+	if (opts.mdm_vsids_pumps || opts.mdm_vmtf_pumps) pumpFrozen();
 	clearMDM();
 	printStats(last.mdm.rounds == opts.mdm_rounds, 'm', CMDM);
 }

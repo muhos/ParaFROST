@@ -183,7 +183,7 @@ inline void	ParaFROST::cleanProped() {
 		PFLREDALL(this, 2, "BCP Reductions");
 		nForced = 0, vars->tmpObj.clear();
 		assert(vars->tmpObj.data() == cumm.unitsdPtr());
-		if (!opts.hse_en) reduceOTAsync(cnf, ot, 0);
+		if (!opts.sub_en) reduceOTAsync(cnf, ot, 0);
 		CHECK(cudaMemcpyAsync(vars->units, &vars->tmpObj, sizeof(cuVecU), cudaMemcpyHostToDevice));
 	}
 }

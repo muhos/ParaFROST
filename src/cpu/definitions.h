@@ -74,7 +74,7 @@ namespace pFROST {
 		float _cpuTime;
 	public:
 		float parse, solve, simp;
-		float vo, ve, hse, bce, ere, cot, rot, sot, gc, io;
+		float vo, ve, sub, bce, ere, cot, rot, sot, gc, io;
 		TIMER			() { memset(this, 0, sizeof(*this)); }
 		void start		() { _start = clock(); }
 		void stop		() { _stop = clock(); }

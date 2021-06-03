@@ -175,7 +175,7 @@ void ParaFROST::sigmifying()
 		if (!LCVE()) break;
 		sortOT();
 		if (stop(diff)) { ERE(); break; }
-		HSE(), VE(), BCE();
+		SUB(), VE(), BCE();
 		countAll(), filterPVs();
 		inf.nClauses = inf.n_cls_after, inf.nLiterals = inf.n_lits_after;
 		diff = litsbefore - inf.nLiterals, litsbefore = inf.nLiterals;

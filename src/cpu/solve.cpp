@@ -178,7 +178,7 @@ void ParaFROST::report()
 				PFLOG1(" %s - OT  sorting         : %s%-16.2f  ms%s", CREPORT, CREPORTVAL, timer.sot, CNORMAL);
 				PFLOG1(" %s - OT  reduction       : %s%-16.2f  ms%s", CREPORT, CREPORTVAL, timer.rot, CNORMAL);
 				PFLOG1(" %s - BVE                 : %s%-16.2f  ms%s", CREPORT, CREPORTVAL, timer.ve, CNORMAL);
-				PFLOG1(" %s - HSE                 : %s%-16.2f  ms%s", CREPORT, CREPORTVAL, timer.hse, CNORMAL);
+				PFLOG1(" %s - SUB                 : %s%-16.2f  ms%s", CREPORT, CREPORTVAL, timer.sub, CNORMAL);
 				PFLOG1(" %s - BCE                 : %s%-16.2f  ms%s", CREPORT, CREPORTVAL, timer.bce, CNORMAL);
 				PFLOG1(" %s - ERE                 : %s%-16.2f  ms%s", CREPORT, CREPORTVAL, timer.ere, CNORMAL);
 			}

@@ -23,8 +23,8 @@ using namespace pFROST;
 // simplifier options
 BOOL_OPT opt_ve_en("ve", "enable bounded variable elimination (BVE)", true);
 BOOL_OPT opt_ve_lbound_en("velbound", "skip variables resulting in more literals than original", false);
-BOOL_OPT opt_ve_plus_en("ve+", "enable HSE + BVE", true);
-BOOL_OPT opt_hse_en("hse", "enable hybrid subsumption elimination", true);
+BOOL_OPT opt_ve_plus_en("ve+", "enable SUB + BVE", true);
+BOOL_OPT opt_sub_en("sub", "enable hybrid subsumption elimination", true);
 BOOL_OPT opt_bce_en("bce", "enable blocked clause elimination", false);
 BOOL_OPT opt_ere_en("ere", "enable eager redundancy elimination", true);
 BOOL_OPT opt_all_en("all", "enable all simplifications", false);
@@ -37,13 +37,14 @@ INT_OPT opt_mu_pos("mupos", "set the positive freezing temperature in LCVE", 32,
 INT_OPT opt_mu_neg("muneg", "set the negative freezing temperature in LCVE", 32, INT32R(10, INT32_MAX));
 INT_OPT opt_xor_max_arity("xormaxarity", "maximum XOR fanin size", 10, INT32R(2, INT32_MAX));
 INT_OPT opt_ve_clause_max("veclausemax", "maximum resolvent size (0: no limit)", 100, INT32R(0, INT32_MAX));
-INT_OPT opt_hse_max_occurs("hsemax", "maximum occurrence list size to scan in HSE", 3e3, INT32R(100, INT32_MAX));
+INT_OPT opt_sub_max_occurs("submax", "maximum occurrence list size to scan in SUB", 3e3, INT32R(100, INT32_MAX));
 INT_OPT opt_bce_max_occurs("bcemax", "maximum occurrence list size to scan in BCE", 3e3, INT32R(100, INT32_MAX));
 INT_OPT opt_ere_max_occurs("eremax", "maximum occurrence list size to scan in ERE", 3e3, INT32R(100, INT32_MAX));
 INT_OPT opt_phases("phases", "set the number of phases in to run reductions", 5, INT32R(0, INT32_MAX));
 INT_OPT opt_cnf_free("garbagefreq", "set the frequency of CNF memory shrinkage in SIGmA", 2, INT32R(0, 5));
 
 // solver options
+BOOL_OPT opt_boundsearch_en("boundsearch", "activate search bounds on decisions and/or conflicts", false);
 BOOL_OPT opt_chrono_en("chrono", "enable chronological backtracking", true);
 BOOL_OPT opt_chronoreuse_en("chronoreusetrail", "enable reuse trail when chronological backtracking", false);
 BOOL_OPT opt_bumpreason_en("bumpreason", "bump reason literals via learnt clause", true);
@@ -66,6 +67,7 @@ BOOL_OPT opt_mdmlcv_en("mdmlcv", "use least-constrained variables to make multip
 BOOL_OPT opt_mdmvsidsonly_en("mdmvsidsonly", "enable VSIDS only in MDM (VMFQ disabled)", false);
 BOOL_OPT opt_mdmfusem_en("mdmfusemaster", "enable MDM fusing in master mode (relies on conflicts only)", true);
 BOOL_OPT opt_mdmfuses_en("mdmfuseslave", "enable MDM fusing in slave mode (slave to restarts and conflicts)", false);
+BOOL_OPT opt_mdmassume_en("mdmassume", "choose multiple decisions based on given assumptions (incremental mode)", false);
 BOOL_OPT opt_report_en("report", "allow performance report on stdout", true);
 BOOL_OPT opt_rephase_en("rephase", "enable variable rephasing", true);
 BOOL_OPT opt_reduce_en("reduce", "enable learnt database reduction", true);
@@ -84,8 +86,8 @@ INT_OPT opt_decompose_min("decomposemin", "minimum rounds to decompose", 2, INT3
 INT_OPT opt_decompose_limit("decomposelimit", "decompose round limit", 1e7, INT32R(0, 10));
 INT_OPT opt_decompose_min_eff("decomposemineff", "decompose minimum efficiency", 1e7, INT32R(0, INT32_MAX));
 INT_OPT opt_mdm_vsidspumps("mdmvsidspumps", "set the number of follow-up decision pumps using VSIDS activity", 1, INT32R(0, INT32_MAX));
-INT_OPT opt_mdm_vmfqpumps("mdmvmfqpumps", "set the number of follow-up decision pumps using VMFQ activity", 1, INT32R(0, INT32_MAX));
-INT_OPT opt_mdm_rounds("mdm", "set the number of mdm rounds in a single search", 0, INT32R(0, INT32_MAX));
+INT_OPT opt_mdm_vmtfpumps("mdmvmtfpumps", "set the number of follow-up decision pumps using VMFQ activity", 1, INT32R(0, INT32_MAX));
+INT_OPT opt_mdm_rounds("mdmrounds", "set the number of mdm rounds in a single search", 0, INT32R(0, INT32_MAX));
 INT_OPT opt_mdm_freq("mdmfreq", "MDM frequency based on conflicts", 1e5, INT32R(1, INT32_MAX));
 INT_OPT opt_mdm_div("mdmdiv", "MDM frequency divider", 1, INT32R(0, INT32_MAX));
 INT_OPT opt_mdm_sinc("mdmsinc", "MDM divider increment in slave mode", 5, INT32R(0, INT32_MAX));
@@ -115,7 +117,7 @@ INT_OPT opt_sigma_min("sigmamin", "minimum root variables shrunken to awaken SIG
 INT_OPT opt_sigma_priorbins("sigmapriorbins", "prioritize binaries in watch table after sigmification (1: enable, 2: prioritize learnts)", 1, INT32R(0, 2));
 INT_OPT opt_subsume_priorbins("subsumepriorbins", "prioritize binaries in watch table after subsume (1: enable, 2: prioritize learnts)", 1, INT32R(0, 2));
 INT_OPT opt_subsume_inc("subsumeinc", "forward subsumption increment value based on conflicts", 2e3, INT32R(100, INT32_MAX));
-INT_OPT opt_subsume_min_occs("subsumeminoccurs", "minimum occurrences to subsume or strengthen", 3e3, INT32R(10, INT32_MAX));
+INT_OPT opt_subsume_max_occs("subsumemaxoccurs", "minimum occurrences to subsume or strengthen", 3e3, INT32R(10, INT32_MAX));
 INT_OPT opt_subsume_max_csize("subsumemaxcsize", "maximum subsuming clause size", 1e3, INT32R(2, INT32_MAX));
 INT_OPT opt_subsume_max_eff("subsumemaxeff", "maximum number of clauses to scan in subsume", 1e2, INT32R(0, INT32_MAX));
 INT_OPT opt_subsume_min_eff("subsumemineff", "minimum number of clauses to scan in subsume", 1e6, INT32R(0, INT32_MAX));
@@ -131,10 +133,12 @@ INT_OPT opt_lbd_slow("lbdslow", "initial lbd slow window", 1e5, INT32R(100, INT3
 INT_OPT opt_luby_inc("lubyinc", "luby increment value based on conflicts", 1 << 10, INT32R(1, INT32_MAX));
 INT_OPT opt_luby_max("lubymax", "luby sequence maximum value", 1 << 20, INT32R(1, INT32_MAX));
 INT_OPT opt_learntsub_max("subsumelearntmax", "maximum learnt clauses to subsume", 20, INT32R(0, INT32_MAX));
+INT64_OPT opt_conflictout("conflictout", "set out-of-conflicts limit (must be enabled by \"boundsearch\")", INT64_MAX, INT64R(0, INT64_MAX));
+INT64_OPT opt_decisionout("decisionout", "set out-of-decisions limit (must be enabled by \"boundsearch\")", INT64_MAX, INT64R(0, INT64_MAX));
 DOUBLE_OPT opt_stable_rate("stablerestartrate", "stable restart increase rate", 1.0, FP64R(1, 5));
 DOUBLE_OPT opt_lbd_rate("lbdrate", "slow rate in firing lbd restarts", 1.1, FP64R(1, 10));
 DOUBLE_OPT opt_ternary_perc("ternaryperc", "percentage of maximum hyper clauses to add", 0.2, FP64R(0, 1));
-DOUBLE_OPT opt_map_perc("mapperc", "minimum percentage of variables to map", 0.1, FP64R(0, 1));
+DOUBLE_OPT opt_map_perc("mapperc", "minimum percentage of variables to map", 0.2, FP64R(0, 1));
 DOUBLE_OPT opt_reduce_perc("reduceperc", "percentage of learnt clauses to reduce", 0.75, FP64R(0.1, 1));
 DOUBLE_OPT opt_var_inc("varinc", "VSIDS increment value", 1.0, FP64R(1, 10));
 DOUBLE_OPT opt_var_decay("vardecay", "VSIDS decay value", 0.95, FP64R(0, 1));
@@ -202,7 +206,7 @@ void OPTION::init() {
 	mdmfuses_en = opt_mdmfuses_en;
 	mdm_mcv_en = !opt_mdmlcv_en;
 	mdm_vsids_pumps = opt_mdm_vsidspumps;
-	mdm_vmfq_pumps = opt_mdm_vmfqpumps;
+	mdm_vmtf_pumps = opt_mdm_vmtfpumps;
 	mdm_rounds = opt_mdm_rounds;
 	mdm_freq = opt_mdm_freq;
 	mdm_inc = opt_mdm_minc;
@@ -234,7 +238,7 @@ void OPTION::init() {
 	subsume_en = opt_subsume_en;
 	subsume_inc = opt_subsume_inc;
 	subsume_priorbins = opt_subsume_priorbins;
-	subsume_min_occs = opt_subsume_min_occs;
+	subsume_max_occs = opt_subsume_max_occs;
 	subsume_rel_eff = opt_subsume_rel_eff;
 	subsume_min_eff = opt_subsume_min_eff;
 	subsume_max_eff = opt_subsume_max_eff;
@@ -265,17 +269,17 @@ void OPTION::init() {
 		lcve_min = opt_lcve_min;
 		lits_min = opt_ve_phase_min;
 		shrink_rate = opt_cnf_free;
-		hse_limit = opt_hse_max_occurs;
+		sub_limit = opt_sub_max_occurs;
 		bce_limit = opt_bce_max_occurs;
 		ere_limit = opt_ere_max_occurs;
 		xor_max_arity = opt_xor_max_arity;
 		ve_lbound_en = opt_ve_lbound_en;
 		ve_clause_limit = opt_ve_clause_max;
 		ve_en = opt_ve_en || ve_plus_en;
-		hse_en = opt_hse_en && ve_plus_en;
+		sub_en = opt_sub_en && ve_plus_en;
 		if (all_en) ve_en = 1, ve_plus_en = 1, bce_en = 1, ere_en = 1;
-		if (!phases && (ve_en || hse_en || bce_en)) phases = 1; // at least 1 phase needed
-		if (phases && !(ve_en || hse_en || bce_en)) phases = 0;
+		if (!phases && (ve_en || sub_en || bce_en)) phases = 1; // at least 1 phase needed
+		if (phases && !(ve_en || sub_en || bce_en)) phases = 0;
 		if (phases > 1 && !ve_en) phases = 1;
 	}
 }

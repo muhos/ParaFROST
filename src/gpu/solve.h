@@ -776,7 +776,7 @@ namespace pFROST {
 		bool			LCVE				();
 		void			postVE				();
 		void			VE					();
-		void			HSE					();
+		void			SUB					();
 		void			ERE					();
 		void			BCE					();
 		bool			prop				();

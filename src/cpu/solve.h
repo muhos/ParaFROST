@@ -762,7 +762,7 @@ namespace pFROST {
 		bool			prop				();
 		void			bve					();
 		void			VE					();
-		void			HSE					();
+		void			SUB					();
 		void			ERE					();
 		void			BCE					();
 		void			sortOT				();

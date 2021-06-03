@@ -84,7 +84,7 @@ bool ParaFROST::prop()
 	if (nForced) {
 		PFLREDALL(this, 2, "BCP Reductions");
 		nForced = 0;
-		if (!opts.hse_en) reduceOT();
+		if (!opts.sub_en) reduceOT();
 	}
 	return true;
 }
@@ -175,9 +175,9 @@ void ParaFROST::VE()
 	}
 }
 
-void ParaFROST::HSE()
+void ParaFROST::SUB()
 {
-	if (opts.hse_en || opts.ve_plus_en) {
+	if (opts.sub_en || opts.ve_plus_en) {
 		if (interrupted()) killSolver();
 		PFLOGN2(2, "  Eliminating (self)-subsumptions..");
 		if (opts.profile_simp) timer.pstart();
@@ -186,12 +186,12 @@ void ParaFROST::HSE()
 			assert(v);
 			assert(!sp->vstate[v].state);
 			uint32 p = V2L(v), n = NEG(p);
-			if (ot[p].size() <= opts.hse_limit && ot[n].size() <= opts.hse_limit)
+			if (ot[p].size() <= opts.sub_limit && ot[n].size() <= opts.sub_limit)
 				self_sub_x(p, ot[p], ot[n]);
 		}
-		if (opts.profile_simp) timer.pstop(), timer.hse += timer.pcpuTime();
+		if (opts.profile_simp) timer.pstop(), timer.sub += timer.pcpuTime();
 		PFLDONE(2, 5);
-		PFLREDALL(this, 2, "HSE Reductions");
+		PFLREDALL(this, 2, "SUB Reductions");
 	}
 }
 
