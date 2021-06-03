@@ -332,6 +332,14 @@ NVCCVER=$(echo $NVCCVER|tr -d '\r')
 NVCCVERSHORT=$(echo $NVCCVER | cut -d "V" -f2)
 NVCCVER="nvcc $NVCCVERSHORT"
 
+# try to find GPU family
+extshared=0
+GPUFAMILYLINE=$(nvidia-smi -q | grep -m1 'Product Name')
+if [[ "$GPUFAMILYLINE" == *"RTX"* ]]; then
+  log "detected an RTX GPU family, thus permitting shared memory extension"
+  extshared=1
+fi
+
 srcdir=src/gpu
 builddir=build/gpu
 makefile=$srcdir/Makefile
@@ -363,6 +371,7 @@ fi
 [ $pedantic = 1 ] && CCFLAGS="$CCFLAGS -pedantic"
 [ $logging = 1 ] && NVCCFLAGS="$NVCCFLAGS -DLOGGING"
 [ $statistics = 1 ] && NVCCFLAGS="$NVCCFLAGS -DSTATISTICS"
+[ $extshared = 1 ] && NVCCFLAGS="$NVCCFLAGS -DEXTSHMEM"
 
 NVCCFLAGS="$ARCH$NVCCFLAGS"
 
