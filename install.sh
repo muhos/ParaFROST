@@ -215,6 +215,30 @@ TARGET_SIZE=$(getconf LONG_BIT)
 now=$(date)
 [ -z "$now" ] && error "cannot read the system date"
 
+# generate version header file without compiler verions (cpu/gpu specific)
+vertemplate=templates/version.in
+[ ! -f $vertemplate ] && error "cannot find '$vertemplate' template file"
+versionme () {
+	[ ! -f $2 ] && error "cannot find local '$2' header"
+	line=$(echo $1|tr -d '\n')
+	line=$(echo $line|tr -d '\r')
+	version=$(echo $line| cut -d':' -f 2)
+	[ ! -z "$version" ] && echo "#define VERSION \"$version\"" >> $2
+	echo "#define OSYSTEM \"$HOST_OS\"" >> $2
+	echo "#define DATE \"$now\"" >> $2
+}
+cpubuild=src/cpu/version.h
+gpubuild=src/gpu/version.h
+if [ $icpu = 1 ] || [ $igpu = 1 ]; then 
+	cp $vertemplate $cpubuild; cp $vertemplate $gpubuild
+	logn "generating header 'version.h' from 'version.in'.."
+	cpuversion=0; gpuversion=0
+	[ -f VERSION ] && cpuversion=$(sed -n '1p' < VERSION) && gpuversion=$(sed -n '2p' < VERSION)
+	versionme "$cpuversion" "$cpubuild"
+	versionme "$gpuversion" "$gpubuild"
+	endline; log ""
+fi
+
 #---------------------------
 # start building CPU solver
 #---------------------------
@@ -235,6 +259,10 @@ log "installing ParaFROST-CPU on '$now'"
 log " under operating system '$HOST_OS'"
 log " with a '$compilerVer' compiler"
 log ""
+
+[ ! -f $cpubuild ] && error "cannot find '$cpubuild' generated file"
+echo "#define COMPILER \"$compilerVer\"" >> $cpubuild
+
 logn "creating '$HOST_COMPILER' flags.."
 
 if [ $debug = 0 ] && [ $assert = 0 ]; then 
@@ -263,27 +291,6 @@ log "building with:"
 log ""
 log "'$CCFLAGS'"
 log ""
-
-[ ! -d $srcdir ] && error "cannot find sources directory"
-
-# generate version header file
-buildfile=$srcdir/version.h
-versionsrc=$srcdir/version.in
-[ ! -f $versionsrc ] && error "cannot find '$versionsrc' template file"
-[ -f $buildfile ] && rm $buildfile
-
-cp $versionsrc $buildfile
-
-logn "generating header '$buildfile' from 'version.in'.."
-
-version=unknown
-[ -f VERSION ] && version=$(head -n 1 VERSION)
-[ ! -z "$version" ] && echo "#define VERSION \"$version\"" >> $buildfile
-echo "#define COMPILER \"$compilerVer\"" >> $buildfile
-echo "#define OSYSTEM \"$HOST_OS\"" >> $buildfile
-echo "#define DATE \"$now\"" >> $buildfile
-
-endline
 
 [ ! -f $cputemplate ] && error "cannot find the CPU makefile template"
 
@@ -336,7 +343,7 @@ NVCCVER="nvcc $NVCCVERSHORT"
 extshared=0
 GPUFAMILYLINE=$(nvidia-smi -q | grep -m1 'Product Name')
 if [[ "$GPUFAMILYLINE" == *"RTX"* ]]; then
-  log "detected an RTX GPU family, thus permitting shared memory extension"
+  log "detected an RTX GPU family, thus permitting shared memory extension"; log ""
   extshared=1
 fi
 
@@ -348,6 +355,10 @@ log "installing ParaFROST-GPU on '$now'"
 log " under operating system '$HOST_OS'"
 log " with $compilerVer and $NVCCVER compilers"
 log ""
+
+[ ! -f $gpubuild ] && error "cannot find '$gpubuild' generated file"
+echo "#define COMPILER \"$compilerVer + $NVCCVER\"" >> $gpubuild
+
 log "creating '$NVCC + $HOST_COMPILER' flags.."
 
 if [[ $pedantic = 1 ]]; then log "  turning off 'pedantic' due to incompatibility with Thrust"; pedantic=0; fi
@@ -384,29 +395,6 @@ log "building with:"
 log ""
 log "'$NVCCFLAGS $CCFLAGS'"
 log ""
-
-[ ! -d $srcdir ] && error "cannot find sources directory"
-
-# generate version header file
-buildfile=$srcdir/version.h
-versionsrc=$srcdir/version.in
-[ ! -f $versionsrc ] && error "cannot find '$versionsrc' template file"
-[ -f $buildfile ] && rm $buildfile
-
-cp $versionsrc $buildfile
-
-logn "generating header '$buildfile' from 'version.in'.."
-
-version=unknown
-[ -f VERSION ] && version=$(head -n 1 VERSION)
-version=$(echo $version|tr -d '\n')
-version=$(echo $version|tr -d '\r')
-[ ! -z "$version" ] && echo "#define VERSION \"$version\"" >> $buildfile
-echo "#define COMPILER \"$compilerVer + $NVCCVER\"" >> $buildfile
-echo "#define OSYSTEM \"$HOST_OS\"" >> $buildfile
-echo "#define DATE \"$now\"" >> $buildfile
-
-endline
 
 [ ! -f $gputemplate ] && error "cannot find the GPU makefile template"
 
