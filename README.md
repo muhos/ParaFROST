@@ -20,7 +20,7 @@ To install either the CPU or the GPU solvers, use the `install.sh` script which 
        -c or --cpu           install CPU solver
        -g or --gpu           install GPU solver (if CUDA exists)
        -w or --wall          compile with '-Wall' flag
-       -d or --debug         compile with debugging inf|ormation
+       -d or --debug         compile with debugging information
        -t or --assert        enable only code assertions
        -p or --pedantic      compile with '-pedantic' flag
        -l or --logging       enable logging (needed for verbosity level > 2)
