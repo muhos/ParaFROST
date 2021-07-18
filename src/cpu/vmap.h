@@ -28,10 +28,13 @@ namespace pFROST {
 		uVec1D _mapped;
 		uint32 newVars, firstDL0, mappedFirstDL0;
 		LIT_ST valFirstDL0;
-		inline void			map					(const uint32& old) { assert(old && old <= inf.maxVar); _mapped[old] = ++newVars; }
+		inline void			map					(const uint32& old) { 
+			CHECKVAR(old); 
+			_mapped[old] = ++newVars;
+		}
 	public:
 							~VMAP				() { destroy(); }
-							VMAP					() : sp(NULL), newVars(0), firstDL0(0), mappedFirstDL0(0), valFirstDL0(UNDEFINED) {}
+							VMAP				() : sp(NULL), newVars(0), firstDL0(0), mappedFirstDL0(0), valFirstDL0(UNDEFINED) {}
 		inline uint32*		operator*			() { return _mapped; }
 		inline bool			empty				() const { return !newVars; }
 		inline uint32		size				() const { return newVars + 1; }
@@ -43,7 +46,7 @@ namespace pFROST {
 			CHECKLIT(lit);
 			uint32 oldVar = ABS(lit), newVar = mapped(oldVar);
 			assert(newVar <= newVars);
-			if (newVar && oldVar != firstDL0) {
+			if (newVar && NEQUAL(oldVar, firstDL0)) {
 				assert(UNASSIGNED(sp->value[lit]));
 				assert(!sp->vstate[oldVar].state);
 				return V2DEC(newVar, SIGN(lit));
@@ -51,7 +54,6 @@ namespace pFROST {
 			LIT_ST val = sp->value[lit];
 			if (UNASSIGNED(val)) return 0;
 			assert(val >= 0);
-			assert(FROZEN(sp->vstate[oldVar].state));
 			uint32 newLitDL0 = V2L(mappedFirstDL0);
 			if (valFirstDL0 != val) newLitDL0 = FLIP(newLitDL0);
 			return newLitDL0;
@@ -60,20 +62,19 @@ namespace pFROST {
 			assert(inf.maxVar);
 			assert(_sp != NULL);
 			sp = _sp;
-			uint32 oldVars = inf.maxVar;
-			_mapped.resize(oldVars + 1, 0);
-			for (uint32 old = 1; old <= oldVars; old++) {
+			_mapped.resize(inf.maxVar + 1, 0);
+			forall_variables(old) {
 				if (!sp->vstate[old].state) map(old);
-				else if (FROZEN(sp->vstate[old].state) && !firstDL0) {
+				else if (!firstDL0 && !UNASSIGNED(sp->value[V2L(old)])) {
 					firstDL0 = old, valFirstDL0 = sp->value[V2L(firstDL0)];
 					map(firstDL0), mappedFirstDL0 = newVars;
 				}
 			}
 			assert(newVars <= inf.maxVar);
-			PFLOG2(2, " Mapped %d to %d, first frozen literal \"%d\"", oldVars, newVars,
+			PFLOG2(2, " Mapped %d to %d, first frozen/autartic literal \"%d\"", inf.maxVar, newVars,
 				firstDL0 ? (valFirstDL0 ? firstDL0 : -int(firstDL0)) : 0);
 		}
-		inline void			mapTransitive(uint32& lit) {
+		inline void			mapTransitive		(uint32& lit) {
 			if (lit <= 2) return;
 			CHECKLIT(lit);
 			uint32 v = ABS(lit);
@@ -89,17 +90,16 @@ namespace pFROST {
 		inline void			mapSP				(SP* to) {
 			// map all arrays
 			forall_variables(v) {
-				uint32 mVar = mapped(v);
+				const uint32 mVar = mapped(v);
 				if (mVar) {
-					uint32 p = V2L(v), n = NEG(p);
-					uint32 mpos = V2L(mVar), mneg = NEG(mpos);
+					const uint32 p = V2L(v), n = NEG(p);
+					const uint32 mpos = V2L(mVar), mneg = NEG(mpos);
 					// map 'value'
 					to->value[mpos] = sp->value[p];
 					to->value[mneg] = sp->value[n];
 					// map others
 					to->source[mVar] = sp->source[v];
 					to->level[mVar] = sp->level[v];
-					to->index[mVar] = sp->index[v];
 					to->board[mVar] = sp->board[v];
 					to->pbest[mVar] = sp->pbest[v];
 					to->psaved[mVar] = sp->psaved[v];
@@ -160,12 +160,12 @@ namespace pFROST {
 		}
 		template <class T>
 		inline void			mapShrinkLits		(Vec<T>& lits) {
-			uint32 *s = lits, *end = lits.end(), *d = s;
-			while (s != end) {
-				assert(*s > 1);
-				uint32 mVar = mapped(ABS(*s));
-				if (mVar) *d++ = V2DEC(mVar, SIGN(*s));
-				s++;
+			uint32 *d = lits;
+			forall_vector(uint32, lits, s) {
+				const uint32 srclit = *s;
+				CHECKLIT(srclit);
+				uint32 mVar = mapped(ABS(srclit));
+				if (mVar) *d++ = V2DEC(mVar, SIGN(srclit));
 			}
 			lits.resize(uint32(d - lits));
 			lits.shrinkCap();
@@ -176,7 +176,7 @@ namespace pFROST {
 			assert(!src.deleted());
 			PFLCLAUSE(4, src, " Clause    ");
 			for (int i = 0; i < src.size(); i++) {
-				assert(src[i] > 1);
+				CHECKLIT(src[i]);
 				assert(UNASSIGNED(sp->value[src[i]]));
 				dest[i] = mapLit(src[i]);
 			}
@@ -189,7 +189,7 @@ namespace pFROST {
 			assert(!c.moved());
 			PFLCLAUSE(4, c, " Clause    ");
 			forall_clause(c, i) {
-				assert(*i > 1);
+				CHECKLIT(*i);
 				assert(UNASSIGNED(sp->value[*i]));
 				*i = mapLit(*i);
 			}

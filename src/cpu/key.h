@@ -96,18 +96,6 @@ namespace pFROST {
 			return bumped[a] < bumped[b];
 		}
 	};
-	struct UIP_CMP {
-		const int* level;
-		const uint32* index;
-		UIP_CMP() : level(NULL), index(NULL) {}
-		void init(const int* _l, const uint32* _p) { level = _l, index = _p; }
-		bool operator () (const uint32& a, const uint32& b) const {
-			const int lx = level[a], ly = level[b];
-			if (lx < ly) return true;
-			if (lx > ly) return false;
-			return index[a] <= index[b];
-		}
-	};
 	struct HIST_LCV_CMP {
 		const uVec1D& hist;
 		HIST_LCV_CMP(const uVec1D& _hist) : hist(_hist) {}

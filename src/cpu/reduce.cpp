@@ -16,7 +16,6 @@ You should have received a copy of the GNU General Public License
 along with this program.  If not, see <https://www.gnu.org/licenses/>.
 **********************************************************************************/
 
-//#include <execution>
 #include "solve.h"
 using namespace pFROST;
 
@@ -25,8 +24,9 @@ struct LEARNT_CMP {
 	LEARNT_CMP(const CMM& _cm) : cm(_cm) {}
 	bool operator () (const C_REF& a, const C_REF& b) const {
 		const CLAUSE& x = cm[a], & y = cm[b];
-		if (x.lbd() > y.lbd()) return true;
-		if (x.lbd() < y.lbd()) return false;
+		const int xl = x.lbd(), yl = y.lbd();
+		if (xl > yl) return true;
+		if (xl < yl) return false;
 		return x.size() > y.size();
 	}
 };
@@ -50,16 +50,17 @@ void ParaFROST::reduce()
 {
 	assert(sp->propagated == trail.size());
 	assert(conflict == NOREF);
-	assert(cnfstate == UNSOLVED);
+	assert(UNSOLVED(cnfstate));
 	assert(learnts.size());
 	stats.reduces++;
 	if (!chronoHasRoot()) return;
 	if (canSubsume()) subsume();
-	bool shrunken = shrink();
-	protectReasons();
+	const bool shrunken = shrink();
+	if (learnts.empty()) return;
+	markReasons();
 	reduceLearnts();
 	recycle();
-	unprotectReasons();
+	unmarkReasons();
 	INCREASE_LIMIT(this, reduce, stats.reduces, nbylogn, false);
 	if (shrunken && canMap()) map(); // "recycle" must be called beforehand
 }
@@ -82,8 +83,10 @@ void ParaFROST::reduceLearnts()
 			if (c.usage()) c.warm();
 			else {
 				removeClause(c, r);
+#ifdef STATISTICS
 				if (c.binary()) stats.binary.reduced++;
 				else stats.ternary.reduced++;
+#endif
 			}
 			continue;
 		}
@@ -95,12 +98,12 @@ void ParaFROST::reduceLearnts()
 		assert(c.size() > 2);
 		reduced.push(r);
 	}
-	if (reduced.size()) {
-		C_REF pivot = opts.reduce_perc * reduced.size();
+	const C_REF rsize = reduced.size();
+	if (rsize) {
+		C_REF pivot = opts.reduce_perc * rsize;
 		PFLOGN2(2, " Reducing learnt database up to (%zd clauses)..", pivot);
 		end = reduced.end();
 		C_REF* head = reduced.data();
-		//std::stable_sort(std::execution::par_unseq, reduced.data(), reduced.end(), LEARNT_CMP(cm));
 		std::stable_sort(head, end, LEARNT_CMP(cm));
 		// remove unlucky learnts from database
 		C_REF *tail = reduced + pivot;
@@ -115,7 +118,7 @@ void ParaFROST::reduceLearnts()
 		}
 		limit.keptsize = 0, limit.keptlbd = 0;
 		for (head = tail; head != end; head++) {
-			CLAUSE& c = cm[*head];
+			const CLAUSE& c = cm[*head];
 			if (c.lbd() > limit.keptlbd) limit.keptlbd = c.lbd();
 			if (c.size() > limit.keptsize) limit.keptsize = c.size();
 		}

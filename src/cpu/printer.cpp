@@ -256,7 +256,7 @@ void ParaFROST::printSortedStack(const int& tail)
 	if (vhist.empty()) return;
 	PFLOGN1("  %ssorted(", CMAGENTA);
 	for (int i = 0; i < tail; i++) {
-		const uint32 lit = sp->tmp_stack[i];
+		const uint32 lit = sp->tmpstack[i];
 		PRINT("%d:%-4d", l2i(lit), vhist[lit]);
 	}
 	PRINT(")%s\n", CNORMAL);

@@ -31,7 +31,7 @@ namespace pFROST {
 		unsigned _lbd : 26;
 		uint32 _sig;
 		int _sz;
-		uint32* _lits;
+		uint32 _lits[1];
 	public:
 		SCLAUSE		() :
 			_st(ORIGINAL)
@@ -41,9 +41,7 @@ namespace pFROST {
 			, _lbd(0)
 			, _sig(0)
 			, _sz(0)
-			, _lits(NULL)
 		{}
-		~SCLAUSE	() { clear(true); }
 		SCLAUSE(const CLAUSE& src) { init(src); }
 		SCLAUSE	(const Lits_t& src) { init(src); }
 		inline void		init		(const Lits_t& src) {
@@ -54,7 +52,6 @@ namespace pFROST {
 			_f = 0;
 			_a = 0;
 			_u = 0;
-			_lits = new uint32[_sz];
 			copyLitsFrom(src);
 		}
 		inline void		init		(const CLAUSE& src) {
@@ -70,7 +67,6 @@ namespace pFROST {
 				_u = src.usage();
 			}
 			else { _lbd = 0, _u = 0; }
-			_lits = new uint32[_sz];
 			copyLitsFrom(src);
 		}
 		template <class SRC>
@@ -147,10 +143,6 @@ namespace pFROST {
 				else return false; // Not found
 			}
 		}
-		inline void		clear		(bool _free = false) {
-			if (_free && _lits != NULL) { delete[] _lits; _lits = NULL; }
-			_sz = 0;
-		}
 		inline void		print		() const {
 			printf("(");
 			for (int l = 0; l < _sz; l++) {
@@ -167,7 +159,7 @@ namespace pFROST {
 		}
 	};
 	typedef SCLAUSE* S_REF;
-
+	const size_t hc_scsize = sizeof(SCLAUSE);
 }
 
 #endif

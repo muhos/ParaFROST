@@ -48,40 +48,14 @@ int ParaFROST::where()
 	if (opts.chrono_en && level - jmplevel > opts.chrono_min) {
 		jmplevel = level - 1;
 		stats.backtrack.chrono++;
-		PFLOG2(3, "  forced chronological backtracking to level %d", jmplevel);
-	}
-	else if (opts.chrono_en && opts.chronoreuse_en) {
-		uint32 bestvar = 0, bestpos = 0;
-		if (vsidsEnabled()) {
-			VSIDS_CMP hcmp(activity);
-			for (uint32 i = dlevels[jmplevel + 1]; i < trail.size(); i++) {
-				const uint32 v = ABS(trail[i]);
-				if (bestvar && !hcmp(bestvar, v)) continue;
-				bestvar = v;
-				bestpos = i;
-			}
-		}
-		else {
-			for (uint32 i = dlevels[jmplevel + 1]; i < trail.size(); i++) {
-				const uint32 v = ABS(trail[i]);
-				if (bestvar && bumps[bestvar] >= bumps[v]) continue;
-				bestvar = v;
-				bestpos = i;
-			}
-		}
-		CHECKVAR(bestvar);
-		PFLOG2(4, "  found best variable %d at trail position %d", bestvar, bestpos);
-		int old_jmplevel = jmplevel;
-		while (jmplevel < level - 1 && dlevels[jmplevel + 1] <= bestpos) jmplevel++;
-		if (old_jmplevel == jmplevel) stats.backtrack.nonchrono++;
-		else stats.backtrack.chrono++;
 	}
 	else stats.backtrack.nonchrono++;
 	assert(jmplevel != UNDEFINED);
 	return jmplevel;
 }
 
-C_REF ParaFROST::backjump() {
+C_REF ParaFROST::backjump()
+{
 	assert(trail.size());
 	const int jmplevel = where();
 	backtrack(jmplevel);

@@ -20,7 +20,8 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 #include "dimacs.h"
 using namespace pFROST;
 
-void ParaFROST::markLits(CLAUSE& c) {
+void ParaFROST::markLits(CLAUSE& c) 
+{
 	assert(c.size() > 1);
 	forall_clause(c, k) {
 		assert(UNASSIGNED(l2marker(*k)));
@@ -28,21 +29,24 @@ void ParaFROST::markLits(CLAUSE& c) {
 	}
 }
 
-void ParaFROST::unmarkLits(CLAUSE& c) {
+void ParaFROST::unmarkLits(CLAUSE& c)
+{
 	forall_clause(c, k) {
 		assert(!UNASSIGNED(l2marker(*k)));
 		unmarkLit(*k);
 	}
 }
 
-void ParaFROST::markSubsume(CLAUSE& c) {
+void ParaFROST::markSubsume(CLAUSE& c)
+{
 	assert(keeping(c));
 	forall_clause(c, k) {
 		markSubsume(*k);
 	}
 }
 
-bool ParaFROST::keeping(CLAUSE& c) {
+bool ParaFROST::keeping(CLAUSE& c) 
+{
 	if (c.original()) return true;
 	if (c.keep()) return true;
 	if (c.lbd() > limit.keptlbd) return false;
@@ -50,7 +54,8 @@ bool ParaFROST::keeping(CLAUSE& c) {
 	return true;
 }
 
-void ParaFROST::removeClause(CLAUSE& c, const C_REF& cref) {
+void ParaFROST::removeClause(CLAUSE& c, const C_REF& cref)
+{
 	assert(cm[cref] == c);
 	assert(!c.deleted());
 	assert(c.size() > 1);
@@ -110,7 +115,7 @@ C_REF ParaFROST::newClause(const Lits_t& in_c, const bool& learnt)
 	return r;
 }
 
-void ParaFROST::newHyper2(const bool& learnt)
+void ParaFROST::newHyper2()
 {
 	assert(learntC.size() == 2);
 	stats.binary.resolvents++;
@@ -120,8 +125,8 @@ void ParaFROST::newHyper2(const bool& learnt)
 	delayWatch(first, second, r, 2);
 	delayWatch(second, first, r, 2);
 	sp->learntLBD = 2;
-	newClause(r, c, learnt);
-	if (learnt) c.markHyper();
+	newClause(r, c, true);
+	c.markHyper();
 	learntC.clear();
 }
 

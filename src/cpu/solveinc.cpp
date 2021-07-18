@@ -16,6 +16,7 @@ You should have received a copy of the GNU General Public License
 along with this program.  If not, see <https://www.gnu.org/licenses/>.
 **********************************************************************************/
 
+#include "control.h"
 #include "solve.h" 
 #include "version.h"
 
@@ -28,7 +29,7 @@ ParaFROST::ParaFROST() :
 	, bumped(0)
 	, conflict(NOREF)
 	, ignore(NOREF)
-	, cnfstate(UNSOLVED)
+	, cnfstate(UNSOLVED_M)
 	, intr(false)
 	, stable(false)
 	, probed(false)
@@ -37,11 +38,9 @@ ParaFROST::ParaFROST() :
 	, simpstate(AWAKEN_SUCC)
 {
 	PFNAME("ParaFROST (Parallel Formal Reasoning On Satisfiability)", version());
-	assert(pfrost);
 	getCPUInfo(stats.sysmem);
 	getBuildInfo();
 	initSolver();
-	if (!quiet_en) PFLRULER('-', RULELEN);
 }
 
 void ParaFROST::iallocSpace()
@@ -49,7 +48,6 @@ void ParaFROST::iallocSpace()
 	imarks.clear(true);
 	if (sp->size() == size_t(inf.maxVar) + 1) return; // avoid allocation if 'maxVar' didn't change
 	assert(inf.maxVar);
-	PFLOGN2(2, " Allocating fixed memory for %d variables..", inf.maxVar);
 	assert(inf.orgVars == inf.maxVar);
 	assert(vorg.size() == inf.maxVar + 1);
 	assert(V2L(inf.maxVar + 1) == inf.nDualVars);
@@ -57,10 +55,10 @@ void ParaFROST::iallocSpace()
 	assert(ilevel.size() == ivstate.size());
 	assert(ilevel.size() == inf.maxVar + 1);
 	assert(imarks.empty());
-	inf.nOrgCls = orgs.size();
 	vorg[0] = 0;
 	model.lits[0] = 0;
 	model.init(vorg);
+	PFLOGN2(2, " Allocating fixed memory for %d variables..", inf.maxVar);
 	SP* newSP = new SP(inf.maxVar + 1);
 	newSP->initSaved(opts.polarity);
 	newSP->copyFrom(sp);
@@ -77,11 +75,10 @@ void ParaFROST::iallocSpace()
 
 void ParaFROST::isolve(Lits_t& assumptions)
 {
-	FAULT_DETECTOR;
 	timer.start();
 	iallocSpace();
 	iunassume();
-	assert(cnfstate == UNSOLVED);
+	assert(UNSOLVED(cnfstate));
 	if (BCP()) {
 		PFLOG2(2, " Incremental formula has a contradiction on top level");
 		learnEmpty();
@@ -91,10 +88,10 @@ void ParaFROST::isolve(Lits_t& assumptions)
 		iassume(assumptions);
 		if (verbose == 1) printTable();
 		if (canPreSigmify()) sigmify();
-		if (cnfstate == UNSOLVED) {
+		if (UNSOLVED(cnfstate)) {
 			PFLOG2(2, "-- Incremental CDCL search started..");
 			MDMInit();
-			while (cnfstate == UNSOLVED && !interrupted()) {
+			while (UNSOLVED(cnfstate) && !interrupted()) {
 				PFLDL(this, 3);
 				if (BCP()) analyze();
 				else if (!inf.unassigned) cnfstate = SAT;
@@ -111,5 +108,4 @@ void ParaFROST::isolve(Lits_t& assumptions)
 	}
 	timer.stop(), timer.solve += timer.cpuTime();
 	wrapup();
-	if (!quiet_en) PFLRULER('-', RULELEN);
 }

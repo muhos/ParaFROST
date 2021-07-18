@@ -50,48 +50,9 @@ struct PROBE_HEAP_CMP {
 	}
 };
 
-inline bool ParaFROST::isBinary(const C_REF& r, uint32& first, uint32& second)
-{
-	assert(!DL());
-	CLAUSE& c = cm[r];
-	assert(!c.deleted());
-	first = 0, second = 0;
-	forall_clause(c, k) {
-		const uint32 lit = *k;
-		CHECKLIT(lit);
-		const LIT_ST val = sp->value[lit];
-		if (UNASSIGNED(val)) {
-			if (second) return false; // not binary
-			if (first) second = lit;
-			else first = lit;
-		}
-		else if (val) {
-			// satisfied
-			removeClause(c, r);
-			return false; 
-		}
-	}
-	if (!second) return false; // all falsified except 'first'
-	return true;
-}
-
-void ParaFROST::histBins(BCNF& cnf)
-{
-	forall_cnf(cnf, i) {
-		const C_REF r = *i;
-		if (cm.deleted(r)) continue;
-		uint32 a, b;
-		if (isBinary(r, a, b)) {
-			CHECKLIT(a), CHECKLIT(b);
-			vhist[a]++;
-			vhist[b]++;
-		}
-	}
-}
-
 void ParaFROST::analyzeFailed(const uint32& failed)
 {
-	assert(cnfstate);
+	assert(UNSOLVED(cnfstate));
 	assert(DL() == 1);
 	assert(conflict != NOREF);
 	CHECKLIT(failed);
@@ -101,13 +62,12 @@ void ParaFROST::analyzeFailed(const uint32& failed)
 	if (unassigned(failed)) {
 		const uint32 unit = FLIP(failed);
 		PFLOG2(3, "  found unassigned failed probe %d", l2i(unit));
-		enqueue(unit);
+		enqueueUnit(unit);
 	}
 	if (BCP()) {
 		PFLOG2(2, "  failed probe %d proved a contradiction", l2i(failed));
 		learnEmpty();
 	}
-	assert(!DL());
 }
 
 void ParaFROST::scheduleProbes() 
@@ -118,7 +78,7 @@ void ParaFROST::scheduleProbes()
 	histBins(orgs);
 	histBins(learnts);
 	VSTATE* states = sp->vstate;
-	int count[2] = { 0 , 0 };
+	uint32 count[2] = { 0 , 0 };
 	forall_variables(v) {
 		if (states[v].state) continue;
 		const uint32 p = V2L(v), n = NEG(p);
@@ -135,7 +95,8 @@ void ParaFROST::scheduleProbes()
 	PFLOG2(2, "  scheduled %d (%d prioritized) probes %.2f%%", probes.size(), count[1], percent(probes.size(), maxActive()));
 }
 
-uint32 ParaFROST::nextProbe() {
+uint32 ParaFROST::nextProbe() 
+{
 	while (!probes.empty()) {
 		const uint32 probe = probes.back();
 		CHECKLIT(probe);
@@ -153,10 +114,10 @@ void ParaFROST::FLE()
 	assert(sp->propagated == trail.size());
 	SLEEPING(sleep.probe, opts.probe_sleep_en);
 	SET_BOUNDS(this, probe_limit, probe, probeticks, searchticks, nlogn(maxActive()));
+	VSTATE* states = sp->vstate;
 	ignore = NOREF;
 	int64 old_hypers = stats.binary.resolvents;
-	VSTATE* states = sp->vstate;
-	uint32 probe, currprobed = 0, currfailed = 0;
+	uint32 probe = 0, currprobed = 0, currfailed = 0;
 	for (int round = 1; round <= opts.probe_min; round++) {
 		scheduleProbes();
 		if (probes.size()) {
@@ -170,10 +131,9 @@ void ParaFROST::FLE()
 		memset(vhist, 0, sizeof(uint32) * inf.nDualVars);
 		stats.probe.rounds++;
 		currprobed = currfailed = 0;
-		while (cnfstate
-			&& !interrupted()
-			&& stats.probeticks < probe_limit 
-			&& (probe = nextProbe()))
+		while ((probe = nextProbe())
+			&& stats.probeticks < probe_limit
+			&& cnfstate && !interrupted())
 		{
 			assert(!DL());
 			assert(unassigned(probe));
@@ -237,7 +197,7 @@ void ParaFROST::probe()
 {
 	rootify();
 	assert(conflict == NOREF);
-	assert(cnfstate == UNSOLVED);
+	assert(UNSOLVED(cnfstate));
 	stats.probe.calls++;
 	printStats(1, '-', CVIOLET0);
 	assert(!probed);

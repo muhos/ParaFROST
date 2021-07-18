@@ -17,9 +17,20 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 **********************************************************************************/
 
 #include "simplify.h"
+#include "control.h"
 
 using namespace pFROST;
-using namespace SIGmA;
+
+inline bool	ParaFROST::checkMem(const string& _name, const size_t& size)
+{
+	const size_t sysMemCons = size_t(sysMemUsed()) + size;
+	if (sysMemCons > size_t(stats.sysmem)) { // to catch memout problems before exception does
+		PFLOGW("not enough memory for %s (free: %lld, used: %zd), sigma will terminate",
+			_name.c_str(), stats.sysmem / MBYTE, sysMemCons / MBYTE);
+		return false;
+	}
+	return true;
+}
 
 void ParaFROST::createOT(const bool& reset)
 {
@@ -31,13 +42,13 @@ void ParaFROST::createOT(const bool& reset)
 			ot[NEG(p)].clear();
 		}
 	}
-	for (uint32 i = 0; i < scnf.size(); i++) {
-		const SCLAUSE& c = *scnf[i];
-		if (c.learnt() || c.original()) {
-			assert(c.size());
-			for (int k = 0; k < c.size(); k++) { 
-				CHECKLIT(c[k]);
-				ot[c[k]].push(scnf[i]);
+	forall_vector(S_REF, scnf, i) {
+		S_REF c = *i;
+		if (c->learnt() || c->original()) {
+			assert(c->size());
+			forall_clause((*c), k) { 
+				CHECKLIT(*k);
+				ot[*k].push(*i);
 			}
 		}
 	}
@@ -47,12 +58,13 @@ void ParaFROST::createOT(const bool& reset)
 void ParaFROST::reduceOL(OL& ol)
 {
 	if (ol.empty()) return;
-	int n = 0;
-	for (int i = 0; i < ol.size(); i++) {
-		if (ol[i]->deleted()) continue;
-		ol[n++] = ol[i];
+	S_REF *j = ol;
+	forall_occurs(ol, i) {
+		S_REF c = *i;
+		if (c->deleted()) continue;
+		*j++ = c;
 	}
-	ol.resize(n);
+	ol.resize(int(j - ol));
 }
 
 void ParaFROST::reduceOT()
@@ -74,29 +86,29 @@ void ParaFROST::sortOT()
 		CHECKVAR(v);
 		const uint32 p = V2L(v), n = NEG(p);
 		OL& poss = ot[p], &negs = ot[n];
-		std::sort(poss.data(), poss.data() + poss.size(), CNF_CMP_KEY());
-		std::sort(negs.data(), negs.data() + negs.size(), CNF_CMP_KEY());
+		if (poss.size() > 1) Sort(poss, CNF_CMP_KEY());
+		if (negs.size() > 1) Sort(negs, CNF_CMP_KEY());
 	}
 	if (opts.profile_simp) timer.pstop(), timer.sot += timer.pcpuTime();
 }
 
-void ParaFROST::newSClause(S_REF s)
+void ParaFROST::extract(BCNF& cnf)
 {
-	assert(*s != NULL);
-	assert(s->size() > 1);
-	s->calcSig();
-	rSort(s->data(), s->size());
-	assert(s->isSorted());
-	scnf[inf.nClauses++] = s;
-	inf.nLiterals += s->size();
-}
-
-void ParaFROST::extract(const BCNF& cnf)
-{
-	for (uint32 i = 0; i < cnf.size(); i++) {
-		const CLAUSE& c = cm[cnf[i]];
-		if (c.deleted()) continue;
-		newSClause(new SCLAUSE(c));
+	assert(hc_isize == sizeof(uint32));
+	assert(hc_scsize == sizeof(SCLAUSE));
+	forall_cnf(cnf, i) {
+		const C_REF ref = *i;
+		if (cm.deleted(ref)) continue;
+		const CLAUSE& c = cm[ref];
+		const int size = c.size();
+		const size_t bytes = hc_scsize + (size - 1) * hc_isize;
+		S_REF s = (S_REF) new Byte[bytes];
+		s->init(c);
+		assert(s->size() == size);
+		s->calcSig();
+		rSort(s->data(), size);
+		scnf[inf.nClauses++] = s;
+		inf.nLiterals += size;
 	}
 }
 
@@ -104,7 +116,7 @@ void ParaFROST::sigmify()
 {
 	if (!opts.phases && !(opts.all_en || opts.ere_en)) return;
 	assert(conflict == NOREF);
-	assert(cnfstate == UNSOLVED);
+	assert(UNSOLVED(cnfstate));
 	assert(stats.clauses.original);
 	stats.sigma.calls++;
 	sigmifying();
@@ -120,9 +132,9 @@ void ParaFROST::awaken()
 { 
 	initSimp();
 	PFLOGN2(2, " Allocating memory..");
-	size_t numCls = maxClauses(), numLits = maxLiterals();
-	size_t ot_cap = inf.nDualVars * sizeof(OL) + numLits * sizeof(S_REF);
-	size_t scnf_cap = numCls * sizeof(S_REF) + numLits * sizeof(uint32);
+	const size_t numCls = size_t(maxClauses()), numLits = size_t(maxLiterals());
+	const size_t ot_cap = inf.nDualVars * sizeof(OL) + numLits * sizeof(S_REF);
+	const size_t scnf_cap = numCls * sizeof(S_REF) + numLits * sizeof(uint32);
 	if (!checkMem("ot", ot_cap) || !checkMem("scnf", scnf_cap)) {
 		simpstate = AWAKEN_FAIL; 
 		return;
@@ -149,18 +161,19 @@ void ParaFROST::sigmifying()
 	/********************************/
 	SLEEPING(sleep.sigma, opts.sigma_sleep_en);
 	rootify();
-	assert(cnfstate == UNSOLVED);
-	PFLOGN2(2, " Shrinking CNF before sigmification..");
-	if (sp->simplified < inf.maxFrozen) sp->simplified = inf.maxFrozen;
-	int64 beforeCls = maxClauses(), beforeLits = maxLiterals();
-	shrinkTop(orgs), shrinkTop(learnts);
-	PFLSHRINKALL(this, 2, beforeCls, beforeLits);
-	assert(stats.clauses.original == orgs.size());
-	assert(stats.clauses.learnt == learnts.size());
-	timer.stop(), timer.solve += timer.cpuTime();
+	shrinkTop(false);
+	if (orgs.empty()) {
+		recycleWT();
+		return;
+	}
+	timer.stop();
+	timer.solve += timer.cpuTime();
 	if (!opts.profile_simp) timer.start();
 	awaken();
-	if (simpstate == AWAKEN_FAIL) return;
+	if (simpstate == AWAKEN_FAIL) {
+		recycle();
+		return;
+	}
 	if (interrupted()) killSolver();
 	/********************************/
 	/*      V/C Eliminations        */
@@ -168,7 +181,7 @@ void ParaFROST::sigmifying()
 	assert(!phase && !mu_inc);
 	int64 bmelted = inf.maxMelted, bclauses = inf.nClauses, bliterals = inf.nLiterals;
 	int64 litsbefore = inf.nLiterals, diff = INT64_MAX;
-	while (true) {
+	while (litsbefore) {
 		resizeCNF();
 		createOT();
 		if (!prop()) killSolver();
@@ -185,30 +198,32 @@ void ParaFROST::sigmifying()
 	/********************************/
 	/*          Write Back          */
 	/********************************/
+	// prop. remaining units if formula is empty
+	// where recreating OT is not needed as there
+	// are nothing to add
+	if (!prop()) killSolver(); 
 	assert(sp->propagated == trail.size());
 	if (interrupted()) killSolver();
 	occurs.clear(true), ot.clear(true);
 	countFinal();
 	shrinkSimp();
 	assert(inf.nClauses == scnf.size());
-	if (!inf.unassigned || !inf.nClauses) {
-		cnfstate = SAT;
-		printStats(1, 's', CGREEN);
-		return;
-	}
 	bool success = (bliterals != inf.nLiterals);
 	stats.sigma.all.variables += int64(inf.maxMelted) - bmelted;
 	stats.sigma.all.clauses += bclauses - int64(inf.nClauses);
 	stats.sigma.all.literals += bliterals - int64(inf.nLiterals);
 	last.shrink.removed = stats.shrunken;
 	if (inf.maxFrozen > sp->simplified) stats.units.forced += inf.maxFrozen - sp->simplified;
+	if (!inf.unassigned || !inf.nClauses) { 
+		PFLOG2(2, " Formula is SATISFIABLE by elimination");
+		cnfstate = SAT; 
+		printStats(1, 's', CGREEN); 
+		return;
+	}
 	if (canMap()) map(true); 
 	else newBeginning();
 	rebuildWT(opts.sigma_priorbins);
-	if (BCP()) {
-		PFLOG2(1, " Propagation after sigmify proved a contradiction");
-		learnEmpty();
-	}
+	if (retrail()) PFLOG2(2, " Propagation after sigmify proved a contradiction");
 	UPDATE_SLEEPER(this, sigma, success);
 	printStats(1, 's', CGREEN);
 	if (!opts.profile_simp) timer.stop(), timer.simp += timer.cpuTime();
@@ -216,29 +231,35 @@ void ParaFROST::sigmifying()
 	timer.start();
 }
 
-void ParaFROST::shrinkSimp() {
+void ParaFROST::shrinkSimp() 
+{
 	if (opts.profile_simp) timer.start();
-	uint32 n = 0;
-	for (uint32 i = 0; i < scnf.size(); i++) {
-		S_REF c = scnf[i];
+	S_REF* j = scnf;
+	forall_vector(S_REF, scnf, i) {
+		S_REF c = *i;
 		if (c->deleted()) deleteClause(c);
-		else scnf[n++] = c;
+		else *j++ = c;
 	}
-	scnf.resize(n);
+	scnf.resize(uint32(j - scnf));
 	if (opts.profile_simp) timer.stop(), timer.gc += timer.cpuTime();
 }
 
-void ParaFROST::newBeginning() {
+void ParaFROST::newBeginning() 
+{
 	assert(opts.sigma_en || opts.sigma_live_en);
 	assert(wt.empty());
 	assert(orgs.empty());
 	assert(learnts.empty());
-	cm.init(scnf.size());
+	assert(inf.nClauses == scnf.size());
+	const int64 litsCap = (inf.nLiterals - (inf.nClauses << 1)) * sizeof(uint32);
+	assert(litsCap >= 0);
+	const C_REF bytes = inf.nClauses * sizeof(CLAUSE) + size_t(litsCap);
+	cm.init(bytes);
 	stats.literals.original = stats.literals.learnt = 0;
 	if (opts.aggr_cnf_sort) std::stable_sort(scnf.data(), scnf.data() + scnf.size(), CNF_CMP_KEY());
-	for (S_REF* s = scnf; s != scnf.end(); s++) newClause(**s);
+	forall_vector(S_REF, scnf, s) { newClause(**s); }
 	stats.clauses.original = orgs.size();
 	stats.clauses.learnt = learnts.size();
-	assert(maxClauses() == scnf.size());
+	assert(maxClauses() == int64(scnf.size()));
 	scnf.clear(true);
 }

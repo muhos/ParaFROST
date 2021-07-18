@@ -21,16 +21,13 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 #include "malloc.h"
 #include "definitions.h"
+#include "vstate.h"
 
 namespace pFROST {
 	/*****************************************************/
 	/*  Usage:    Information of search space            */
 	/*  Dependency: none                                 */
 	/*****************************************************/
-	struct VSTATE {
-		Byte state : 3, dlcount : 2, subsume : 1, probe : 1;
-		VSTATE() : state(0), dlcount(0), subsume(0), probe(0) {}
-	};
 	class SP {
 		addr_t		_mem;
 		size_t		_sz, _cap;
@@ -40,14 +37,13 @@ namespace pFROST {
 			return sz * nVecs * sizeof(T);
 		}
 
-		#define forall_space(x) for (uint32 x = 1; x < _sz; x++)
-		#define	breakline(x) if (x > 1 && x < _sz - 2 && x % 10 == 0) { \
-						putc('\n', stdout); PFLOGN0("\t\t"); }
+		#define forall_space(X) for (uint32 X = 1; X < _sz; X++)
+		#define	breakline(X) if (X > 1 && X < _sz - 2 && X % 10 == 0) { \
+						PUTCH('\n'); PFLOGN0("\t\t"); }
 	public:
 		// arrays
 		int* level;
-		uint32* index;
-		uint32* tmp_stack;
+		uint32* tmpstack, *stacktail;
 		uint64* board;
 		C_REF* source;
 		VSTATE* vstate;
@@ -55,19 +51,20 @@ namespace pFROST {
 		LIT_ST* value, * psaved, * ptarget, * pbest;
 		// scalers
 		int learntLBD;
-		uint32 stacktail;
+		int reasonsize, resolventsize;
+		int conflictdepth, conflictsize;
 		uint32 trailpivot;
 		uint32 simplified;
 		uint32 propagated;
 		//================
-		SP() { memset(this, 0, sizeof * this); }
+		SP() { RESETSTRUCT(this); }
 		SP(const uint32& size) 
 		{
-			memset(this, 0, sizeof * this);
+			RESETSTRUCT(this);
 			assert(sizeof(C_REF) == sizeof(uint64));
 			assert(sizeof(VSTATE) == sizeof(Byte));
 			const size_t vec8Bytes = calcBytes<C_REF>(size, 2);
-			const size_t vec4Bytes = calcBytes<uint32>(size, 3);
+			const size_t vec4Bytes = calcBytes<uint32>(size, 2);
 			const size_t vec1Bytes = calcBytes<LIT_ST>(size, 9);
 			_sz = size;
 			_cap = vec1Bytes + vec4Bytes + vec8Bytes;
@@ -80,8 +77,7 @@ namespace pFROST {
 			board = (uint64*)(source + _sz);
 			// 4-byte arrays
 			level = (int*)(_mem + vec8Bytes);
-			index = (uint32*)(level + _sz);
-			tmp_stack = index + _sz;
+			tmpstack = (uint32*)(level + _sz);
 			// 1-byte arrays
 			value = (LIT_ST*)(_mem + vec8Bytes + vec4Bytes);
 			frozen = value + _sz + _sz;
@@ -123,27 +119,27 @@ namespace pFROST {
 		void	printStates	() {
 			PFLOGN1(" States->[");
 			forall_space(v) {
-				fprintf(stdout, "%5d:%d ", v, vstate[v].state);
+				PRINT("%5d:%d ", v, vstate[v].state);
 				breakline(v);
 			}
-			putc(']', stdout), putc('\n', stdout);
+			putc(']', stdout), PUTCH('\n');
 		}
 		void	printValues	() {
 			PFLOGN1(" Values->[");
 			forall_space(v) {
 				uint32 lit = V2L(v);
-				fprintf(stdout, "%5d:%d ", l2i(lit), value[lit]);
+				PRINT("%5d:%d ", l2i(lit), value[lit]);
 				breakline(v);
 			}
-			putc(']', stdout), putc('\n', stdout);
+			putc(']', stdout), PUTCH('\n');
 		}
 		void	printLevels	() {
 			PFLOGN1(" Levels->[");
 			forall_space(v) {
-				fprintf(stdout, "%5d@%d ", v, level[v]);
+				PRINT("%5d@%d ", v, level[v]);
 				breakline(v);
 			}
-			putc(']', stdout), putc('\n', stdout);
+			putc(']', stdout), PUTCH('\n');
 		}
 		void	clearSubsume() { forall_space(v) vstate[v].subsume = 0; }
 		void	destroy		() { if (_mem != NULL) std::free(_mem); }

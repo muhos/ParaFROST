@@ -21,11 +21,11 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 using namespace pFROST;
 
 struct SUBSUME_RANK {
-	size_t operator () (const CSIZE& a) const { return a.size; }
+	uint32 operator () (const CSIZE& a) const { return a.size; }
 };
 
 inline void ParaFROST::strengthen(CLAUSE& c, const uint32& self) {
-	assert(self > 1 && self <= inf.nDualVars);
+	CHECKLIT(self);
 	assert(c.size() > 2);
 	assert(unassigned(self));
 	if (opts.proof_en) proof.shrinkClause(c, self);
@@ -33,8 +33,8 @@ inline void ParaFROST::strengthen(CLAUSE& c, const uint32& self) {
 	forall_clause(c, i) {
 		const uint32 lit = *i;
 		assert(unassigned(lit));
-		if (lit == self) continue;
-		*j++ = *i;
+		if (NEQUAL(lit, self)) 
+			*j++ = *i;
 	}
 	assert(j + 1 == c.end());
 	shrinkClause(c, 1);
@@ -98,8 +98,7 @@ inline CL_ST ParaFROST::subsumeClause(CLAUSE& c, const C_REF& cref)
 			assert(sign == 0 || sign == 1);
 			const uint32 slit = sign ? FLIP(lit) : lit;
 			BOL& others = bot[slit];
-			uint32* bend = others.end();
-			for (uint32* o = others; o != bend; o++) {
+			forall_bol(others, o) {
 				self = 0;
 				const uint32 imp = *o;
 				const LIT_ST marker = l2marker(imp), impSign = SIGN(imp);
@@ -118,8 +117,7 @@ inline CL_ST ParaFROST::subsumeClause(CLAUSE& c, const C_REF& cref)
 			}
 			if (s) break;
 			WOL& wol = wot[slit];
-			C_REF* wend = wol.end();
-			for (C_REF* i = wol; i != wend; i++) {
+			forall_wol(wol, i) {
 				CLAUSE* d = cm.clause(*i);
 				if (d->deleted()) continue;
 				assert(d != &c);
@@ -152,6 +150,7 @@ inline CL_ST ParaFROST::subsumeClause(CLAUSE& c, const C_REF& cref)
 void ParaFROST::schedule2sub(BCNF& src)
 {
 	if (src.empty()) return;
+	const LIT_ST* values = sp->value;
 	forall_cnf(src, i) {
 		const C_REF r = *i;
 		if (cm.deleted(r)) continue;
@@ -165,15 +164,14 @@ void ParaFROST::schedule2sub(BCNF& src)
 		forall_clause(c, k) {
 			const uint32 lit = *k;
 			CHECKLIT(lit);
-			if (!unassigned(lit)) { rooted = true; break; }
+			if (!UNASSIGNED(values[lit])) { rooted = true; break; }
 			else if (markedSubsume(lit)) subsume++;
 			assert(sp->value[lit] == UNDEFINED);
 		}
-		if (rooted) { PFLCLAUSE(4, c, "  skipping rooted clause "); continue; }
-		if (subsume < 2) { PFLCLAUSE(4, c, "  skipping less than %d added literals", subsume); continue; }
+		if (rooted || subsume < 2) continue;
 		if (c.subsume()) stats.subsume.leftovers++;
 		histClause(c);
-		scheduled.push(CSIZE(r, size));
+		scheduled.push(CSIZE(r, (uint32)size));
 	}
 }
 
@@ -185,7 +183,7 @@ bool ParaFROST::subsumeAll()
 	assert(conflict == NOREF);
 	assert(cnfstate != UNSAT);
 	assert(wt.empty());
-	SET_BOUNDS(this, sub_limit, subsume, subsume.checks, propagations.search, 0);
+	SET_BOUNDS(this, sub_limit, subsume, subsume.checks, searchprops, 0);
 	// schedule clauses
 	BCNF shrunken;
 	HIST_LCV_CMP clause_cmp(vhist);
@@ -199,13 +197,13 @@ bool ParaFROST::subsumeAll()
 	scheduled.shrinkCap();
 	radixSort(scheduled.data(), scheduled.end(), SUBSUME_RANK());
 	if (!stats.subsume.leftovers) {
-		for (CSIZE* i = scheduled; i != scheduled.end(); i++) {
+		forall_vector(CSIZE, scheduled, i) {
 			assert(i->ref < cm.size());
 			CLAUSE& c = cm[i->ref];
 			if (c.size() > 2) c.markSubsume();
 		}
 	}
-	PFLOG2(2, " Scheduled %d (%.2f %%) clauses for subsumption", scheduled.size(), percent(scheduled.size(), maxClauses()));
+	PFLOG2(2, " Scheduled %d (%.2f %%) clauses for subsumption", scheduled.size(), percent((double)scheduled.size(), (double)maxClauses()));
 	wot.resize(inf.nDualVars);
 	bot.resize(inf.nDualVars);
 	for (CSIZE* i = scheduled; i != scheduled.end(); i++) {
@@ -239,14 +237,12 @@ bool ParaFROST::subsumeAll()
 		// attach new occurrence
 		if (minsize <= opts.subsume_max_occs) {
 			if (orgbin) {
-				PFLOG2(4, "  watching %d with %d current original binary and total %d histogram", l2i(minlit), minsize, minhist);
 				assert(c.original());
-				uint32 other = c[0] ^ c[1] ^ minlit;
+				const uint32 other = c[0] ^ c[1] ^ minlit;
 				assert(other != minlit);
 				bot[minlit].push(other);
 			}
 			else {
-				PFLOG2(4, "  watching %d with %d current and total %d histogram", l2i(minlit), minsize, minhist);
 				wot[minlit].push(r);
 				Sort(c.data(), c.size(), clause_cmp);
 			}
@@ -255,7 +251,7 @@ bool ParaFROST::subsumeAll()
 ending:
 	PFLOG2(2, " Subsume %lld: removed %lld and strengthened %lld clauses", stats.subsume.calls, subsumed, strengthened);
 	if (scheduled.size() == checked) sp->clearSubsume();
-	for (C_REF* r = shrunken; r != shrunken.end(); r++) markSubsume(cm[*r]);
+	forall_cnf(shrunken, i) { markSubsume(cm[*i]); }
 	shrunken.clear(true), scheduled.clear(true), vhist.clear(true);
 	wot.clear(true), bot.clear(true);
 	stats.subsume.subsumed += subsumed;
@@ -267,17 +263,14 @@ void ParaFROST::subsume()
 {
 	if (!stats.clauses.original && !stats.clauses.learnt) return;
 	rootify();
-	assert(cnfstate == UNSOLVED);
+	assert(UNSOLVED(cnfstate));
 	stats.subsume.calls++;
 	printStats(1, '-', CORANGE0);
 	wt.clear(true);
 	bool success = subsumeAll();
 	rebuildWT(opts.subsume_priorbins);
 	filterOrg();
-	if (BCP()) {
-		PFLOG2(1, " Propagation after subsume proved a contradiction");
-		learnEmpty();
-	}
+	if (retrail()) PFLOG2(2, " Propagation after subsume proved a contradiction");
 	INCREASE_LIMIT(this, subsume, stats.subsume.calls, nlognlogn, true);
 	printStats(success, 'u', CORANGE1);
 }

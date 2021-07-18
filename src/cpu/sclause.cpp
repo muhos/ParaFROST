@@ -25,7 +25,7 @@ void ParaFROST::newClause(SCLAUSE& s)
 	assert(size > 1);
 	assert(!s.deleted());
 	assert(!s.molten());	
-	// NOTE: 's' should be used with 'sp' before any mapping is done
+	// NOTE: 's' should be used before any mapping is done
 	if (stats.sigma.calls > 1 && s.added()) markSubsume(s);
 	C_REF r = cm.alloc(size);
 	CLAUSE& new_c = cm[r];
@@ -39,7 +39,7 @@ void ParaFROST::newClause(SCLAUSE& s)
 	assert(s.status() == ORIGINAL || s.status() == LEARNT);
 	if (s.learnt()) {
 		assert(s.lbd());
-		assert(s.usage() <= USAGET2);
+		assert(s.usage() < USAGET1);
 		assert(!s.added());
 		new_c.markLearnt();
 		int lbd = s.lbd();
@@ -56,9 +56,37 @@ void ParaFROST::newClause(SCLAUSE& s)
 	}
 }
 
-void ParaFROST::markSubsume(SCLAUSE& s) {
+void ParaFROST::markSubsume(SCLAUSE& s) 
+{
 	assert(s.added());
 	forall_clause(s, k) {
 		markSubsume(*k);
+	}
+}
+
+void ParaFROST::removeClause(S_REF c)
+{
+	assert(c);
+	if (!c->deleted()) {
+		c->markDeleted();
+		if (opts.proof_en)
+			proof.deleteClause(*c);
+	}
+}
+
+void ParaFROST::removeClause(SCLAUSE& c)
+{
+	if (!c.deleted()) {
+		c.markDeleted();
+		if (opts.proof_en)
+			proof.deleteClause(c);
+	}
+}
+
+void ParaFROST::deleteClause(S_REF& c)
+{
+	if (c) {
+		delete c;
+		c = NULL;
 	}
 }

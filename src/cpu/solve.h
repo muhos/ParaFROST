@@ -22,19 +22,19 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 #include "model.h"
 #include "proof.h"
 #include "memory.h"
+#include "walk.h"
 #include "sort.h"
-#include "vector.h"
-#include "input.h"
 #include "heap.h"
 #include "queue.h"
 #include "restart.h"
 #include "vmap.h"
-#include "solvertypes.h"
 #include "limit.h"
 #include "statistics.h"
 #include "options.h"
 #include "random.h"
-#include "control.h"
+#include "solvertypes.h"
+#include "simptypes.h"
+#include "dimacs.h"
 
 namespace pFROST {
 	/*****************************************************/
@@ -69,15 +69,16 @@ namespace pFROST {
 		Vec<WOL>		wot;
 		Vec<BOL>		bot;	
 		Vec1D			lbdlevels;
-		uVec1D			vorg, vhist;
 		uVec1D			eligible;
 		uVec1D			probes;
 		uVec1D			dlevels;
 		uVec1D			trail;
+		uVec1D			vorg, vhist;
 		uVec1D			analyzed, minimized;
 		LBDREST			lbdrest;
 		LUBYREST		lubyrest;
 		RANDOM			random;
+		WALK			tracker;
 		uint64			bumped;
 		C_REF			conflict, ignore;
 		size_t			solLineLen;
@@ -89,11 +90,13 @@ namespace pFROST {
 		MODEL			model;
 		PROOF			proof;
 		//============== inline methods ===============
-		inline void		bumpClause			(CLAUSE&);
 		inline int		calcLBD				(CLAUSE&);
+		inline void		bumpClause			(CLAUSE&);
+		inline void		countoccurs			(CLAUSE&);
 		inline bool		subsumeCheck		(CLAUSE*, uint32&);
 		inline CL_ST	subsumeClause		(CLAUSE&, const C_REF&);
 		inline void		removeSubsumed		(CLAUSE&, const C_REF&, CLAUSE*);
+		inline void	    strengthenOTF		(CLAUSE&, const C_REF&, const uint32&);
 		inline void		strengthen			(CLAUSE&, const uint32&);
 		inline LIT_ST	sortClause			(CLAUSE&, const int&, const int&, const bool&);
 		inline void		moveClause			(C_REF&, CMM&);
@@ -101,16 +104,18 @@ namespace pFROST {
 		inline uint32	minReachable		(WL&, DFS*, const DFS&);
 		inline bool		depFreeze			(WL&, const uint32&);
 		inline bool		valid				(WL&);
-		inline void		recycleWL			(const uint32&, const bool&);
+		inline void		recycleWL			(const uint32&);
 		inline bool		findBinary			(uint32, uint32);
 		inline bool		findTernary			(uint32, uint32, uint32);
-		inline void		analyzeLit			(const uint32&, int&);
+		inline void		analyzeLit			(const uint32&, int&, int&);
 		inline uint32	analyzeReason		(const C_REF&, const uint32&);
-		inline void		analyzeReason		(const C_REF&, const uint32&, int&);
+		inline bool		analyzeReason		(const C_REF&, const uint32&, int&);
 		inline bool		isBinary			(const C_REF&, uint32&, uint32&);
+		inline uint32	propAutarkClause	(const bool&, const C_REF&, CLAUSE&, const LIT_ST*, LIT_ST*);
 		inline bool		proplarge			(const uint32&, const bool&);
 		inline bool		propbinary			(const uint32&);
 		inline void		cancelAssign		(const uint32&);
+		inline void		cancelAutark		(const bool&, const uint32&, LIT_ST*);
 		inline void		pumpFrozenHeap		(const uint32&);
 		inline void		pumpFrozenQue		(const uint32&);
 		inline void		bumpVariable		(const uint32&);
@@ -123,26 +128,28 @@ namespace pFROST {
 		inline void		varInvPhase			();
 		inline void		varFlipPhase		();
 		inline void		varBestPhase		();
+		inline void		varWalkPhase		();
 		inline void		varRandPhase		();
 		inline bool		verifyMDM			();
 		inline bool		verifySeen			();
+		inline void		clearMDM			();
+		inline int		calcLBD				();
+		inline void		resetoccurs			();
 		//==============================================
 		inline			~ParaFROST			() { }
 		inline void		interrupt			() { intr = true; }
 		inline void		nointerrupt			() { intr = false; }
 		inline void		incDL				() { dlevels.push(trail.size()); }
-		inline STATS&	getStats			() { return stats; }
 		inline bool		interrupted			() const { return intr; }
 		inline CNF_ST	status				() const { return cnfstate; }
 		inline int		DL					() const { assert(dlevels.size()); return (int)dlevels.size() - 1; }
 		inline int64	maxClauses			() const { return stats.clauses.original + stats.clauses.learnt; }
 		inline int64	maxLiterals			() const { return stats.literals.original + stats.literals.learnt; }
-		inline bool		useTarget			() const { return stable && opts.targetphase_en; }
-		inline bool		vsidsOnly			() const { return stable && opts.vsidsonly_en; }
-		inline bool		vsidsEnabled		() const { return stable && opts.vsids_en; }
+		inline bool		useTarget			() const { return (stable && opts.targetphase_en) || opts.targetonly_en; }
+		inline bool		vsidsOnly			() const { return (stable && opts.vsidsonly_en); }
+		inline bool		vsidsEnabled		() const { return (stable && opts.vsids_en); }
 		inline bool		varsEnough			() const { assert(trail.size() < inf.maxVar); return (inf.maxVar - trail.size()) > last.mdm.unassigned; }
 		inline bool		canPreSigmify		() const { return opts.sigma_en; }
-		inline bool		canMMD				() const { return last.mdm.rounds && varsEnough(); }
 		inline bool		canRephase			() const { return opts.rephase_en && stats.conflicts > limit.rephase; }
 		inline bool		canReduce			() const { return opts.reduce_en && stats.clauses.learnt && stats.conflicts >= limit.reduce; }
 		inline bool		canCollect			() const { return cm.garbage() > (cm.size() * opts.gc_perc); }
@@ -158,7 +165,7 @@ namespace pFROST {
 		}
 		inline bool		canMap				() const {
 			if (DL()) return false;
-			uint32 inactive = maxInactive();
+			const uint32 inactive = maxInactive();
 			assert(inactive <= inf.maxVar);
 			return inactive > (opts.map_perc * inf.maxVar);
 		}
@@ -170,11 +177,26 @@ namespace pFROST {
 			if (sp->simplified >= opts.sigma_min) return true;
 			return ((stats.shrunken - last.shrink.removed) > (opts.sigma_min << 4));
 		}
+		inline bool		runningout			() const { 
+			return interrupted()
+				|| (opts.boundsearch_en 
+					&& (stats.conflicts >= opts.conflict_out
+						|| stats.decisions.single >= opts.decision_out));
+		}
 		inline void		rootify				() {
-			assert(cnfstate);
+			assert(UNSOLVED(cnfstate));
 			assert(sp->propagated == trail.size());
 			backtrack();
 			if (BCP()) learnEmpty();
+		}
+		inline bool		retrail				() {
+			assert(!DL());
+			sp->propagated = 0;
+			if (BCP()) {
+				learnEmpty();
+				return true;
+			}
+			return false;
 		}
 		inline void		markLearnt			() {
 			forall_clause(learntC, k) {
@@ -199,20 +221,18 @@ namespace pFROST {
 			forall_variables(v) { vsids.insert(v); }
 			PFLDONE(2, 5);
 		}
-		inline void		initVars            () {
+		inline void		initVars			() {
 			PFLOGN2(2, " Initializing original variables array with %d variables..", inf.maxVar);
 			vorg.resize(inf.maxVar + 1);
 			vorg[0] = 0;
 			forall_variables(v) { vorg[v] = v; }
 			PFLDONE(2, 5);
 		}
-		inline void		updateQueue			()
-		{
+		inline void		updateQueue			() {
 			const uint32 last = vmtf.last();
 			vmtf.update(last, bumps[last]);
 		}
-		inline void		updateHeap			()
-		{
+		inline void		updateHeap			() {
 			forall_variables(v) {
 				if (!sp->vstate[v].state && !vsids.has(v))
 					vsids.insert(v);
@@ -236,8 +256,7 @@ namespace pFROST {
 		}
 		inline void		clearAnalyzed		() {
 			forall_vector(uint32, analyzed, a) {
-				const uint32 v = *a;
-				sp->frozen[v] = sp->seen[v] = 0;
+				sp->seen[*a] = 0;
 			}
 			analyzed.clear();
 		}
@@ -249,25 +268,31 @@ namespace pFROST {
 			analyzed.clear();
 			learntC.clear();
 		}
+		inline void		clearFrozen			() {
+			assert(sp->stacktail - sp->tmpstack <= inf.maxVar);
+			uint32* start = sp->tmpstack, *tail = sp->stacktail;
+			while (start != tail)
+				sp->frozen[*start++] = 0;
+			assert(verifyFrozen());
+		}
+		inline bool		verifyFrozen		() {
+			for (uint32 v = 0; v <= inf.maxVar; v++) {
+				if (sp->frozen[v]) {
+					PFLOG0("");
+					PFLOGEN("frozen(%d) is not melted", v);
+					printWatched(v);
+					return false;
+				}
+			}
+			return true;
+		}
 		inline void		attachDelayed		() {
 			forall_dwatches(dwatches, d) {
 				wt[FLIP(d->lit)].push(WATCH(d->ref, d->size, d->imp));
 			}
 			dwatches.clear();
 		}
-		inline uint64	scale				(const uint64& increase)
-		{
-			const uint64 factor = logn(stats.clauses.original);
-			assert(factor >= 1);
-			const uint64 dfactor = factor * factor;
-			assert(dfactor >= 1);
-			uint64 scaled = dfactor * increase;
-			assert(increase <= scaled);
-			return scaled;
-		}
-		inline uint64	cacheLines			(const size_t& len, const size_t& unit) {
-			return (len * unit) >> 6; // 64-byte cache line is assumed
-		}
+		inline void		setStatus			(const CNF_ST& state) { cnfstate = state; }
 		inline void		markLit				(const uint32& lit) { CHECKLIT(lit); sp->marks[ABS(lit)] = SIGN(lit); }
 		inline void		unmarkLit			(const uint32& lit) { CHECKLIT(lit); sp->marks[ABS(lit)] = UNDEFINED; }
 		inline void		markProbe			(const uint32& lit) { CHECKLIT(lit); sp->vstate[ABS(lit)].probe = 1; }
@@ -291,6 +316,9 @@ namespace pFROST {
 			LIT_ST val = sp->value[lit];
 			return val && !UNASSIGNED(val);
 		}
+		inline uint64	cacheLines			(const size_t& len, const size_t& unit) {
+			return (len * unit) >> 6; // 64-byte cache line is assumed
+		}
 		inline void		attachClause		(const C_REF& ref, const CLAUSE& c) {
 			assert(ref < NOREF);
 			const int size = c.size();
@@ -299,6 +327,12 @@ namespace pFROST {
 				CHECKLIT(c[i]);
 				wot[c[i]].push(ref);
 			}
+		}
+		inline void		attachBinary		(const C_REF& ref, const CLAUSE& c) {
+			assert(ref < NOREF);
+			assert(c.binary());
+			wot[c[0]].push(ref);
+			wot[c[1]].push(ref);
 		}
 		inline void		attachWatch			(const C_REF& ref, const CLAUSE& c) {
 			assert(ref < NOREF);
@@ -311,6 +345,7 @@ namespace pFROST {
 		}
 		inline void		attachWatch			(const uint32& lit, const uint32& imp, const C_REF& ref, const int& size) {
 			CHECKLIT(lit);
+			CHECKLIT(imp);
 			assert(lit != imp);
 			assert(ref < NOREF);
 			assert(size > 1);
@@ -332,7 +367,8 @@ namespace pFROST {
 			WATCH *j = ws;
 			forall_watches(ws, i) {
 				const WATCH w = *i;
-				if (w.ref != ref) *j++ = w;
+				if (NEQUAL(w.ref, ref))
+					*j++ = w;
 			}
 			assert(j + 1 == ws.end());
 			ws.resize(int(j - ws));
@@ -350,23 +386,23 @@ namespace pFROST {
 			if (!probed) sp->psaved[v] = SIGN(lit);
 			sp->source[v] = src;
 			sp->level[v] = level;
-			sp->index[v] = trail.size();
 			sp->value[lit] = 1;
 			sp->value[FLIP(lit)] = 0;
 			trail.push(lit);
 			assert(inf.unassigned);
 			inf.unassigned--;
 			if (!level) learnUnit(lit, v);
+#ifdef LOGGING
 			PFLNEWLIT(this, 4, src, lit);
-			if (wt.size()) {
-				WL& ws = wt[lit];
-				if (ws.size()) {
-#if _WIN32
-					PreFetchCacheLine(PF_TEMPORAL_LEVEL_1, &ws[0]);
-#else
-					__builtin_prefetch(&ws[0], 0, 1);
 #endif
-				}
+			assert(wt.size());
+			WL& ws = wt[lit];
+			if (ws.size()) {
+#if defined(_WIN32)
+				PreFetchCacheLine(PF_TEMPORAL_LEVEL_1, &ws[0]);
+#else
+				__builtin_prefetch(&ws[0], 0, 1);
+#endif
 			}
 		}
 		inline void		enqueueUnit			(const uint32& lit) {
@@ -381,12 +417,23 @@ namespace pFROST {
 			trail.push(lit);
 			assert(inf.unassigned);
 			inf.unassigned--;
+#ifdef LOGGING
 			PFLNEWLIT(this, 3, NOREF, lit);
+#endif
+			if (wt.size()) {
+				WL& ws = wt[lit];
+				if (ws.size()) {
+#if defined(_WIN32)
+					PreFetchCacheLine(PF_TEMPORAL_LEVEL_1, &ws[0]);
+#else
+					__builtin_prefetch(&ws[0], 0, 1);
+#endif
+				}
+			}
 		}
 		inline void		enqueueImp			(const uint32& lit, const C_REF& src) {
 			CHECKLIT(lit);
-			const int level = forcedLevel(lit, src);
-			enqueue(lit, level, src);
+			enqueue(lit, forcedLevel(lit, src), src);
 		}
 		inline int		forcedLevel			(const uint32& lit, const C_REF& src) {
 			CHECKLIT(lit);
@@ -444,7 +491,9 @@ namespace pFROST {
 			assert(bumped && bumped < UINT64_MAX);
 			vmtf.toFront(v);
 			bumps[v] = ++bumped;
+#ifdef LOGGING
 			PFLOG2(4, " Variable %d moved to queue front & bumped to %lld", v, bumped);
+#endif
 		}
 		inline uint32	prescore			(const uint32& v) {
 			CHECKVAR(v);
@@ -461,7 +510,14 @@ namespace pFROST {
 			sp->vstate[v].state = FROZEN_M;
 			inf.maxFrozen++;
 		}
-		inline void		markSubstituted     (const uint32& v) {
+		inline void		markEliminated		(const uint32& v) {
+			CHECKVAR(v);
+			assert(!sp->vstate[v].state);
+			sp->vstate[v].state = MELTED_M;
+			assert(inf.unassigned);
+			inf.unassigned--;
+		}
+		inline void		markSubstituted		(const uint32& v) {
 			CHECKVAR(v);
 			assert(!sp->vstate[v].state);
 			sp->vstate[v].state = SUBSTITUTED_M;
@@ -469,38 +525,19 @@ namespace pFROST {
 			inf.unassigned--;
 			inf.maxSubstituted++;
 		}
-		inline void		countoccurs			(CLAUSE& c) {
-			forall_clause(c, k) {
-				const uint32 lit = *k;
-				CHECKLIT(lit);
-				if (SIGN(lit)) occurs[ABS(lit)].ns++;
-				else occurs[ABS(lit)].ps++;
-			}
-		}
-		inline void		histClause			(CLAUSE& c) {
-			forall_clause(c, k) {
-				const uint32 lit = *k;
-				CHECKLIT(lit);
-				vhist[lit]++;
-			}
-		}
-		inline void		savePhases			(LIT_ST* to)
-		{
-			forall_variables(v) {
-				to[v] = sp->psaved[v];
-			}
-		}
 		//==============================================
 		bool	keeping				(CLAUSE&);
 		CL_ST	rooted				(CLAUSE&);
+		CL_ST	rootedTop			(CLAUSE&);
 		void	markLits			(CLAUSE&);
 		void	unmarkLits			(CLAUSE&);
 		void	sortClause			(CLAUSE&);
+		void	histClause			(CLAUSE&);
 		void	markSubsume			(CLAUSE&);
 		void	bumpShrunken		(CLAUSE&);
 		int		removeRooted		(CLAUSE&);
 		void	removeClause		(CLAUSE&, const C_REF&);
-		void	hyper2Resolve		(CLAUSE&, const uint32&);
+		uint32	hyper2Resolve		(CLAUSE&, const uint32&);
 		bool	hyper3Resolve		(CLAUSE&, CLAUSE&, const uint32&);
 		bool	analyzeVivify		(CLAUSE&, bool&);
 		bool	learnVivify			(CLAUSE&, const C_REF&, const int&, const bool&);
@@ -509,8 +546,6 @@ namespace pFROST {
 		bool	vivifyClause		(const C_REF&);
 		void	markSubsume			(SCLAUSE&);
 		void	newClause			(SCLAUSE&);
-		void	newHyper2			(const bool&);
-		void	newHyper3			(const bool&);
 		C_REF	newClause			(const Lits_t&, const bool&);
 		void	newClause			(const C_REF&, CLAUSE&, const bool&);
 		bool	toClause			(Lits_t&, Lits_t&, char*&);
@@ -521,16 +556,20 @@ namespace pFROST {
 		void	shrink				(BCNF&);
 		void	shrinkTop			(BCNF&);
 		void	histBins			(BCNF&);
-		void	attachBins			(BCNF&);
-		void	attachNonBins		(BCNF&);
-		void	attachClauses		(BCNF&);
 		void	sortviv				(BCNF&);
 		void	schedule2sub		(BCNF&);
 		void	schedule2viv		(BCNF&, const bool& tier2, const bool& learnt);
 		void	histCNF				(BCNF&, const bool& reset = false);
+		void	histCNFFlat			(BCNF&, const bool& reset = false);
+		void	attachBins			(BCNF&, const bool& hasElim = false);
+		void	attachNonBins		(BCNF&, const bool& hasElim = false);
+		void	attachClauses		(BCNF&, const bool& hasElim = false);
 		bool	substitute			(BCNF&, uint32*);
 		void	attachTernary		(BCNF&, LIT_ST*);
 		void	scheduleTernary		(LIT_ST*);
+		uint32	autarkReasoning		(LIT_ST*);
+		uint32	useAutarky			(LIT_ST*);
+		uint32	propAutarky			(const LIT_ST*, LIT_ST*);
 		void	vivifying			(const CL_ST&);
 		void	ternarying			(const uint64&, const uint64&);
 		void	transiting			(const uint32&, const uint64&, uint64&, uint32&);
@@ -540,8 +579,14 @@ namespace pFROST {
 		uint32	makeAssign			(const uint32&, const bool& tphase = false);
 		bool	minimize			(const uint32&, const int& depth = 0);
 		void	rebuildWT			(const CL_ST& priorbins = 0);
+		void    binarizeWT			(const bool& keeplearnts);
+		void	detachClauses		(const bool& keepbinaries);
 		bool	canELS				(const bool&);
 		void	ELS					(const bool&);
+		void	shrinkTop			(const bool&);
+		void	newHyper3			(const bool&);
+		void	newHyper2			();
+		bool	shrink				();
 		bool	decompose			();
 		void	debinary			();
 		bool	canTernary			();
@@ -556,18 +601,20 @@ namespace pFROST {
 		void	initSolver			();
 		void	killSolver			();
 		void	varOrder			();
-		bool	shrink				();
-		void	protectReasons		();
-		void	unprotectReasons	();
+		void	markReasons		    ();
+		void	unmarkReasons	    ();
 		void	recycleWT			();
 		void	recycle				();
 		void	reduce				();
 		void	reduceLearnts		();
 		void	rephase				();
+		void	autarky				();
+		void	filterAutarky		();
 		void	subsume				();
 		bool	subsumeAll			();
 		void	filterOrg			();
 		void	minimize			();
+		void	minimizebin			();
 		int		reuse				();
 		bool	canRestart			();
 		void	vibrate				();
@@ -583,7 +630,7 @@ namespace pFROST {
 		int		where				();
 		C_REF	backjump			();
 		void	analyze				();
-		void	finduip				();
+		bool	finduip				();
 		bool	chronoAnalyze		();
 		bool	chronoHasRoot		();
 		bool	BCPVivify			();
@@ -591,10 +638,9 @@ namespace pFROST {
 		bool	BCP					();
 		uint32	nextVSIDS			();
 		uint32	nextVMFQ			();
-		void	MDMFuseMaster		();
-		void	MDMFuseSlave		();
 		void	MDMInit				();
 		void	MDM					();
+		bool	canMMD				();
 		void	eligibleVSIDS		();
 		void	eligibleVMFQ		();
 		void	decide				();
@@ -605,7 +651,7 @@ namespace pFROST {
 		void	map					(BCNF&);
 		void	map					(WL&);
 		void	map					(WT&);
-		void	map					(const bool& = false);
+		void	map					(const bool& sigmified = false);
 				ParaFROST			(const string&);
 		//==========================================//
 		//                Simplifier                //
@@ -662,31 +708,38 @@ namespace pFROST {
 		inline void		countAll			() {
 			inf.n_cls_after = 0;
 			inf.n_lits_after = 0;
-			for (uint32 i = 0; i < scnf.size(); i++)
-				if (scnf[i]->original() || scnf[i]->learnt()) {
+			for (uint32 i = 0; i < scnf.size(); i++) {
+				S_REF s = scnf[i];
+				if (s->original() || s->learnt()) {
 					inf.n_cls_after++;
-					inf.n_lits_after += scnf[i]->size();
+					inf.n_lits_after += s->size();
 				}
+			}
 		}
 		inline void		countCls			() {
 			inf.n_cls_after = 0;
-			for (uint32 i = 0; i < scnf.size(); i++)
-				if (scnf[i]->original() || scnf[i]->learnt())
+			for (uint32 i = 0; i < scnf.size(); i++) {
+				S_REF s = scnf[i];
+				if (s->original() || s->learnt())
 					inf.n_cls_after++;
+			}
 		}
 		inline void		countLits			() {
 			inf.n_lits_after = 0;
-			for (uint32 i = 0; i < scnf.size(); i++)
-				if (scnf[i]->original() || scnf[i]->learnt())
-					inf.n_lits_after += scnf[i]->size();
+			for (uint32 i = 0; i < scnf.size(); i++) {
+				S_REF s = scnf[i];
+				if (s->original() || s->learnt())
+					inf.n_lits_after += s->size();
+			}
 		}
 		inline void		evalReds			() {
 			inf.n_cls_after = 0;
 			inf.n_lits_after = 0;
 			for (uint32 i = 0; i < scnf.size(); i++) {
-				if (scnf[i]->original() || scnf[i]->learnt()) {
+				S_REF s = scnf[i];
+				if (s->original() || s->learnt()) {
 					inf.n_cls_after++;
-					inf.n_lits_after += scnf[i]->size();
+					inf.n_lits_after += s->size();
 				}
 			}
 			countMelted();
@@ -708,49 +761,21 @@ namespace pFROST {
 				inf.n_cls_after,
 				inf.n_lits_after, CNORMAL);
 		}
-		inline LIT_ST	litvalue            (const uint32& lit) {
+		inline LIT_ST	litvalue			(const uint32& lit) {
 			CHECKLIT(lit);
 			return sp->value[lit];
-		}
-		inline bool		checkMem			(const string& _name, const size_t& size) {
-			size_t sysMemCons = sysMemUsed() + size;
-			if (sysMemCons > size_t(stats.sysmem)) { // to catch memout problems before exception does
-				PFLOGW("not enough memory for %s (free: %lld, used: %zd), simp. will terminate", _name.c_str(), stats.sysmem / MBYTE, sysMemCons / MBYTE);
-				return false;
-			}
-			return true;
 		}
 		inline bool		stop				(const int64 lr) {
 			return (phase == opts.phases) || (lr <= opts.lits_min && phase > 2);
 		}
-		inline void		histSimp			(const SCNF& cnf, const bool& rst = false) {
-			if (cnf.empty()) return;
-			if (rst) for (uint32 i = 0; i < occurs.size(); i++) occurs[i] = { 0 , 0 };
-			for (uint32 i = 0; i < cnf.size(); i++) histSimp(cnf[i]);
-			assert(occurs[0].ps == 0 && occurs[0].ns == 0);
-		}
-		inline void		histSimp			(const S_REF& c) {
-			if (c->deleted()) return;
-			for (int i = 0; i < c->size(); i++) {
-				CHECKLIT((*c)[i]);
-				if (SIGN((*c)[i])) occurs[ABS((*c)[i])].ns++;
-				else occurs[ABS((*c)[i])].ps++;
-			}
-		}
-		inline void		removeClause		(S_REF c) { 
-			if (c != NULL) {
-				c->markDeleted();
-				if (opts.proof_en) proof.deleteClause(*c);
-			}
-		}
-		inline void		deleteClause		(S_REF& c) {
-			if (c != NULL) {
-				delete c;
-				c = NULL;
-			}
-		}
-		inline void		bumpShrunken		(S_REF);
-		inline void		depFreeze			(const OL&, const uint32&, const uint32&, const uint32&);
+		inline void		histSimp			(S_REF);
+		inline void		bumpShrunken		(SCLAUSE&);
+		inline void		newResolvent		(const Lits_t&);
+		inline void		xresolve			(const uint32&, Lits_t& out_c);
+		inline void		xsubstitute			(const uint32&, Lits_t& out_c);
+		inline bool		propClause			(const LIT_ST*, const uint32&, SCLAUSE&);
+		inline void		depFreeze			(OL&, const uint32&, const uint32&, const uint32&);
+		inline bool		checkMem			(const string&, const size_t&);
 		//===========================================//
 		void			varReorder			();
 		void			newBeginning		();
@@ -768,12 +793,32 @@ namespace pFROST {
 		void			sortOT				();
 		void			reduceOT			();
 		void			reduceOL			(OL&);
-		void			extract				(const BCNF&);
-		void			createOT			(const bool& = true);
-		bool			propClause			(S_REF, const uint32&);
-		void			strengthen			(S_REF, const uint32&);
-		void			newSClause			(S_REF);
-		void			newResolvent		(S_REF);
+		void			extract				(BCNF&);
+		void			createOT			(const bool& reset = true);
+		void			histSimp			(const SCNF& cnf, const bool& reset = false);
+		void			strengthen			(SCLAUSE&, const uint32&);
+		void			removeClause		(SCLAUSE&);
+		void			removeClause		(S_REF);
+		void			deleteClause		(S_REF&);
+		//==========================================//
+		//             Local search                 //
+		//==========================================//
+		inline bool		popUnsat			(const uint32&, const uint32&, Vec<CINFO>&);
+		inline void		saveTrail			(const LIT_ST*, const bool&);
+		inline void		saveAll				(const LIT_ST*);
+		inline uint32	breakValue			(const uint32&);
+		inline void		makeClauses			(const uint32&);
+		inline void		breakClauses		(const uint32&);
+		inline void		walkassign			();
+		uint32			promoteLit			();
+		uint32			ipromoteLit			();
+		void			updateBest			();
+		bool			walkschedule		();
+		void			walkinit			();
+		void			walkstep			();
+		void			walkstop			();
+		void			walking				();
+		void			walk				();
 		//==========================================//
 		//          Incremental Solving             //
 		//==========================================//
@@ -786,12 +831,12 @@ namespace pFROST {
 						ParaFROST			();
 		void			iunassume			();
 		void			iallocSpace			();
-		uint32			iadd				();
+		uint32			iadd			    ();
 		void			idecide				();
-		void			ianalyze            (const uint32&);
-		bool			itoClause           (Lits_t&, Lits_t&);
-		void			iassume             (Lits_t&);
-		void			isolve              (Lits_t&);
+		void			ianalyze			(const uint32&);
+		bool			itoClause			(Lits_t&, Lits_t&);
+		void			iassume				(Lits_t&);
+		void			isolve				(Lits_t&);
 		bool		    ifailed             (const uint32& v);
 		void		    ifreeze             (const uint32& v);
 		void		    iunfreeze           (const uint32& v);

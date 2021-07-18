@@ -20,8 +20,7 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 #define __LIMIT_
 
 #include "datatypes.h"
-#include <cassert>
-#include <cstring>
+#include "scale.h"
 
 namespace pFROST {
 
@@ -35,15 +34,14 @@ namespace pFROST {
 			uint32 decisions, unassigned;
 			int rounds;
 		} mdm;
-		struct { int diff, checked, succeeded; } alluip;
 		struct { uint64 reduces; } sigma, probe;
 		struct { uint64 resolvents; } ternary;
 		struct { uint32 literals; } transitive;
 		struct {
-			double inc, decay;
+			double inc, booster;
 			inline void boost() {
-				assert(decay > 0 && decay <= 1);
-				inc *= (1.0 / decay);
+				assert(booster >= 1);
+				inc *= booster;
 			}
 			inline void scale(const double& val) {
 				assert(val > 0 && val < 1);
@@ -53,7 +51,7 @@ namespace pFROST {
 		} vsids;
 		struct { int64 removed; } shrink;
 
-		LAST() { memset(this, 0, sizeof(*this)); }
+		LAST() { RESETSTRUCT(this); }
 	};
 	struct LIMIT {
 		uint64 mdm;
@@ -66,28 +64,26 @@ namespace pFROST {
 		struct { uint64 conflicts; } restart;
 		int keptsize, keptlbd;
 
-		LIMIT() { memset(this, 0, sizeof(*this)); }
+		LIMIT() { RESETSTRUCT(this); }
 	};
 
 	struct MONITOR { uint32 now, all; };
 
 	struct SLEEP {
-		MONITOR sigma, probe, ternary;
-		SLEEP() { memset(this, 0, sizeof(*this)); }
+		MONITOR sigma, probe, ternary, autarky, debinary;
+		SLEEP() { RESETSTRUCT(this); }
 	};
+
+	#define INIT_LIMIT(SOLVER, RESULT, OPTION_INC, SCALE_INCREASE) \
+	  RESULT = (SCALE_INCREASE) ? relscale(SOLVER->stats.clauses.original, OPTION_INC ) : OPTION_INC; \
 
 	#define INCREASE_LIMIT(SOLVER, OPTION, N, SCALING_FUNC, SCALE_INCREASE) \
 	do { \
 	  uint64 INC = SOLVER->opts.OPTION ## _inc; \
 	  INC *= SCALING_FUNC( N ) + 1; \
-	  const uint64 SCALED = !(SCALE_INCREASE) ? INC : SOLVER->scale( INC ); \
+	  const uint64 SCALED = (SCALE_INCREASE) ? relscale(SOLVER->stats.clauses.original, INC ) : INC; \
 	  SOLVER->limit.OPTION = SOLVER->stats.conflicts + SCALED; \
 	  PFLOG2(2, "  %s limit increased to %lld conflicts by a weight %lld", __func__, SOLVER->limit.OPTION, INC); \
-	} while (0)
-
-	#define INIT_LIMIT(SOLVER, RESULT, OPTION_INC, SCALE_INCREASE) \
-	do { \
-	  RESULT = !(SCALE_INCREASE) ? OPTION_INC : SOLVER->scale( OPTION_INC ); \
 	} while (0)
 
 	#define SET_BOUNDS(SOLVER, RESULT, OPTION, START, REFERENCE, SCALE) \
@@ -96,7 +92,7 @@ namespace pFROST {
 		const uint64 STATREF = SOLVER->stats.REFERENCE; \
 		const uint64 MINIMUM = SOLVER->opts.OPTION ## _min_eff; \
 		const uint64 MAXIMUM = MINIMUM * (SOLVER->opts.OPTION ## _max_eff); \
-		const double RELEFF = (double) (SOLVER->opts.OPTION ## _rel_eff) / 1e3; \
+		const double RELEFF = (double) (SOLVER->opts.OPTION ## _rel_eff) * 1e-3; \
 		uint64 INCREASE = uint64(STATREF * RELEFF) + SCALE; \
 		if (INCREASE < MINIMUM) INCREASE = MINIMUM; \
 		if (INCREASE > MAXIMUM) INCREASE = MAXIMUM; \
@@ -115,7 +111,7 @@ namespace pFROST {
 	  return; \
 	} while (0)
 
-#define UPDATE_SLEEPER(SOLVER, SMONITOR, SUCCESS) \
+	#define UPDATE_SLEEPER(SOLVER, SMONITOR, SUCCESS) \
 	do { \
 	  if (!SOLVER->opts.SMONITOR ## _sleep_en) break; \
 	  MONITOR &monitor = SOLVER->sleep.SMONITOR; \

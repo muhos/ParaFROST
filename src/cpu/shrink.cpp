@@ -19,13 +19,14 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 #include "solve.h"
 using namespace pFROST;
 
-void ParaFROST::bumpShrunken(CLAUSE& c) {
+void ParaFROST::bumpShrunken(CLAUSE& c)
+{
 	assert(c.learnt());
 	assert(c.size() > 1);
 	if (c.keep()) return;
 	if (c.hyper()) return;
 	int old_lbd = c.lbd();
-	int new_lbd = std::min(c.size() - 1, old_lbd);
+	int new_lbd = MIN(c.size() - 1, old_lbd);
 	if (new_lbd >= old_lbd) return;
 	if (new_lbd <= opts.lbd_tier1) c.set_keep(1);
 	else if (old_lbd > opts.lbd_tier2 && new_lbd <= opts.lbd_tier2) c.initTier2();
@@ -33,13 +34,33 @@ void ParaFROST::bumpShrunken(CLAUSE& c) {
 	PFLCLAUSE(4, c, " Bumping shrunken clause with LBD %d ", new_lbd);
 }
 
-CL_ST ParaFROST::rooted(CLAUSE& c) {
+CL_ST ParaFROST::rootedTop(CLAUSE& c)
+{
+	assert(!DL());
 	assert(!c.deleted());
 	CL_ST st = UNDEFINED;
+	const LIT_ST* values = sp->value;
 	forall_clause(c, k) {
 		const uint32 lit = *k;
-		if (!l2dl(lit)) {
-			LIT_ST val = sp->value[lit];
+		CHECKLIT(lit);
+		const LIT_ST val = values[lit];
+		if (val > 0) return 1;
+		if (!val) st = 0;
+	}
+	return st;
+}
+
+CL_ST ParaFROST::rooted(CLAUSE& c)
+{
+	assert(!c.deleted());
+	CL_ST st = UNDEFINED;
+	const int* levels = sp->level;
+	const LIT_ST* values = sp->value;
+	forall_clause(c, k) {
+		const uint32 lit = *k;
+		CHECKLIT(lit);
+		if (!levels[ABS(lit)]) {
+			const LIT_ST val = values[lit];
 			assert(!UNASSIGNED(val));
 			if (val > 0) return 1;
 			if (!val) st = 0;
@@ -50,11 +71,12 @@ CL_ST ParaFROST::rooted(CLAUSE& c) {
 
 int ParaFROST::removeRooted(CLAUSE& c)
 {
+	const int* levels = sp->level;
 	uint32* j = c;
 	forall_clause(c, i) {
 		const uint32 lit = *i;
 		CHECKLIT(lit);
-		if (l2dl(lit)) *j++ = lit;
+		if (levels[ABS(lit)]) *j++ = lit;
 		else assert(!sp->value[lit]);
 	}
 	return int(c.end() - j);
@@ -62,6 +84,7 @@ int ParaFROST::removeRooted(CLAUSE& c)
 
 void ParaFROST::shrinkClause(CLAUSE& c, const int& remLits)
 {
+	assert(remLits >= 0);
 	if (!remLits) return;
 	c.shrink(remLits); // adjusts "pos" also
 	assert(c.size() > 1);
@@ -104,18 +127,49 @@ bool ParaFROST::shrink()
 {
 	if (sp->simplified >= inf.maxFrozen) return false;
 	sp->simplified = inf.maxFrozen;
-	stats.shrink.calls++;
 	PFLOGN2(2, " Shrinking all clauses..");
 	assert(trail.size());
 	assert(conflict == NOREF);
-	assert(cnfstate == UNSOLVED);
+	assert(UNSOLVED(cnfstate));
 	assert(sp->propagated == trail.size());
 	assert(!unassigned(trail.back()));
+#ifdef STATISTICS
+	stats.shrink.calls++;
 	int64 beforeCls = maxClauses(), beforeLits = maxLiterals();
+#endif
 	shrink(orgs);
 	shrink(learnts);
+	assert(orgs.size() == stats.clauses.original);
+	assert(learnts.size() == stats.clauses.learnt);
+#ifdef STATISTICS
 	PFLSHRINKALL(this, 2, beforeCls, beforeLits);
+#else 
+	PFLDONE(2, 5);
+#endif
 	return true;
+}
+
+void ParaFROST::shrinkTop(const bool& conditional)
+{
+	if (conditional && sp->simplified >= inf.maxFrozen) return;
+	assert(UNSOLVED(cnfstate));
+	assert(conflict == NOREF);
+	assert(UNSOLVED(cnfstate));
+	assert(sp->propagated == trail.size());
+	PFLOGN2(2, " Shrinking all clauses on top level..");
+	if (sp->simplified < inf.maxFrozen) sp->simplified = inf.maxFrozen;
+#ifdef STATISTICS
+	stats.shrink.calls++;
+	int64 beforeCls = maxClauses(), beforeLits = maxLiterals();
+#endif
+	shrinkTop(orgs), shrinkTop(learnts);
+	assert(orgs.size() == stats.clauses.original);
+	assert(learnts.size() == stats.clauses.learnt);
+#ifdef STATISTICS
+	PFLSHRINKALL(this, 2, beforeCls, beforeLits);
+#else 
+	PFLDONE(2, 5);
+#endif
 }
 
 void ParaFROST::shrink(BCNF& cnf)
@@ -142,13 +196,14 @@ void ParaFROST::shrink(BCNF& cnf)
 void ParaFROST::shrinkTop(BCNF& cnf)
 {
 	if (cnf.empty()) return;
+	assert(!DL());
 	C_REF* j = cnf;
 	forall_cnf(cnf, i) {
 		const C_REF r = *i;
 		if (cm.deleted(r)) continue;
 		CLAUSE& c = cm[r];
 		assert(!c.moved());
-		CL_ST st = rooted(c);
+		CL_ST st = rootedTop(c);
 		if (st > 0) removeClause(c, r);
 		else if (!st) {
 			shrinkClause(c, removeRooted(c));

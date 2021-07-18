@@ -19,7 +19,10 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 #ifndef __PROOF_
 #define __PROOF_
 
-#include "solvertypes.h"
+#include "vector.h"
+#include "definitions.h"
+#include "clause.h"
+#include "simptypes.h"
 #include "logging.h"
 #include "space.h"
 

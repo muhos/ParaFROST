@@ -34,13 +34,14 @@ inline void	ParaFROST::moveWatches(WL& ws, CMM& new_cm)
 	forall_watches(ws, w) {
 		moveClause(w->ref, new_cm);
 	}
+	ws.shrinkCap();
 }
 
-inline void	ParaFROST::recycleWL(const uint32& lit, const bool& priorbins)
+inline void	ParaFROST::recycleWL(const uint32& lit)
 {
 	CHECKLIT(lit);
-	WL& ws = wt[lit], hypers, saved;
-	if (ws.empty()) { ws.clear(true); return; }
+	WL& ws = wt[lit], hypers;
+	if (ws.empty()) return;
 	const uint32 flit = FLIP(lit);
 	WATCH *j = ws;
 	forall_watches(ws, i) {
@@ -55,50 +56,44 @@ inline void	ParaFROST::recycleWL(const uint32& lit, const bool& priorbins)
 			if (c.hyper()) hypers.push(w);
 			else *j++ = w;
 		}
-		else if (c.original()) {
-			if (priorbins) saved.push(w);
-			else *j++ = w;
-		}
+		else if (c.original()) *j++ = w;
 	}
 	ws.resize(int(j - ws));
 	forall_watches(hypers, i) ws.push(*i);
-	if (priorbins) {
-		forall_watches(saved, i) ws.push(*i);
-		saved.clear(true);
-	}
-	ws.shrinkCap();
 	hypers.clear(true);
 }
 
-void ParaFROST::protectReasons() 
+void ParaFROST::markReasons() 
 {
-	VSTATE* states = sp->vstate;
-	C_REF* sources = sp->source;
+	const VSTATE* states = sp->vstate;
+	const C_REF* sources = sp->source;
 	forall_vector(uint32, trail, t) {
 		const uint32 lit = *t, v = ABS(lit);
 		if (states[v].state) continue;
 		assert(!unassigned(lit));
 		assert(sp->level[v]);
 		const C_REF r = sources[v];
-		if (!REASON(r)) continue;
-		assert(!cm[r].reason());
-		cm[r].markReason();
+		if (REASON(r)) {
+			assert(!cm[r].reason());
+			cm[r].markReason();
+		}
 	}
 }
 
-void ParaFROST::unprotectReasons() 
+void ParaFROST::unmarkReasons() 
 {
-	VSTATE* states = sp->vstate;
-	C_REF* sources = sp->source;
+	const VSTATE* states = sp->vstate;
+	const C_REF* sources = sp->source;
 	forall_vector(uint32, trail, t) {
 		const uint32 lit = *t, v = ABS(lit);
 		if (states[v].state) continue;
 		assert(!unassigned(lit));
 		assert(sp->level[v]);
 		const C_REF r = sources[v];
-		if (!REASON(r)) continue;
-		assert(cm[r].reason());
-		cm[r].initReason();
+		if (REASON(r)) {
+			assert(cm[r].reason());
+			cm[r].initReason();
+		}
 	}
 }
 
@@ -106,7 +101,7 @@ void ParaFROST::recycleWT()
 {
 	forall_variables(v) {
 		uint32 p = V2L(v), n = NEG(p);
-		recycleWL(p, false), recycleWL(n, false);
+		recycleWL(p), recycleWL(n);
 	}
 	forall_cnf(learnts, i) {
 		const C_REF r = *i;
@@ -131,15 +126,17 @@ void ParaFROST::recycle(CMM& new_cm)
 	}
 	C_REF* sources = sp->source;
 	int* levels = sp->level;
-	uint32* tend = trail.end();
-	for (uint32* t = trail; t != tend; t++) {
+	forall_vector(uint32, trail, t) {
 		const uint32 lit = *t, v = ABS(lit);
 		C_REF& r = sources[v];
-		if (r == NOREF) continue;
-		if (!levels[v]) { r = NOREF; continue; }
-		assert(r < cm.size());
-		if (cm.deleted(r)) r = NOREF;
-		else moveClause(r, new_cm);
+		if (REASON(r)) {
+			if (levels[v]) {
+				assert(r < cm.size());
+				if (cm.deleted(r)) r = NOREF;
+				else moveClause(r, new_cm);
+			}
+			else r = NOREF;
+		}
 	}
 	filter(orgs, new_cm);
 	filter(learnts, new_cm);
@@ -150,12 +147,14 @@ void ParaFROST::recycle()
 {
 	assert(sp->propagated == trail.size());
 	assert(conflict == NOREF);
-	assert(cnfstate == UNSOLVED);
+	assert(UNSOLVED(cnfstate));
 	shrink();
 	if (canCollect()) {
-		stats.recycle.hard++;
 		PFLOGN2(2, " Recycling garbage..");
-		CMM new_cm(cm.size() - cm.garbage());
+		stats.recycle.hard++;
+		assert(cm.size() >= cm.garbage());
+		const size_t bytes = cm.size() - cm.garbage();
+		CMM new_cm(bytes);
 		recycle(new_cm);
 		PFLGCMEM(2, cm, new_cm);
 		new_cm.migrateTo(cm);

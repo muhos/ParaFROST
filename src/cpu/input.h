@@ -39,7 +39,7 @@ namespace pFROST {
 		struct ARG_CMP {
 			bool operator()(const ARG* x, const ARG* y) {
 				int type_t = strcmp(x->type, y->type);
-				return type_t < 0 || (type_t == 0 && (strcmp(x->arg, y->arg) < 0));
+				return type_t < 0 || (type_t == 0 && strcmp(x->arg, y->arg) < 0);
 			}
 		};
 		ARG() { arg = ""; text = ""; type = ""; parsed = false; }
@@ -116,19 +116,20 @@ namespace pFROST {
 
 		virtual void help(bool verbose = false) {
 			PFLOGN1("  %s--%-20s = %-8s [", CHELP, arg, type);
-			if (r.h == INT32_MIN) fprintf(stdout, "%-8s", "-I32");
-			else fprintf(stdout, "%-8d", r.h);
-			fprintf(stdout, " .. ");
-			if (r.t == INT32_MAX) fprintf(stdout, "%8s", "+I32");
-			else fprintf(stdout, "%8d", r.t);
-			fprintf(stdout, "]%s (%sdefault: %s%10d%s)\n", CNORMAL, CARGDEFAULT, CARGVALUE, val, CNORMAL);
+			if (r.h == INT32_MIN) { PRINT("%-8s", "-I32"); }
+			else { PRINT("%-8d", r.h); }
+			PRINT(" .. ");
+			if (r.t == INT32_MAX) { PRINT("%8s", "+I32"); }
+			else { PRINT("%8d", r.t); }
+			if (val == INT32_MAX) { PRINT("]%s (%sdefault: %s%10s%s)\n", CNORMAL, CARGDEFAULT, CARGVALUE, "+I32", CNORMAL); }
+			else { PRINT("]%s (%sdefault: %s%10d%s)\n", CNORMAL, CARGDEFAULT, CARGVALUE, val, CNORMAL); }
 			if (verbose) {
 				PFLOG1("   %s", text);
 				PFLOG0("");
 			}
 		}
 		virtual void printArgument() { 
-			fprintf(stdout, " %s%s%s<%d>%s", CARGDEFAULT, arg, CARGVALUE, val, CNORMAL);
+			PRINT(" %s%s%s<%d>%s", CARGDEFAULT, arg, CARGVALUE, val, CNORMAL);
 		}
 	};
 
@@ -142,9 +143,6 @@ namespace pFROST {
 
 		INT64_OPT(arg_t a, arg_t x, int64 val = 0LL, INT64R r = INT64R(INT64_MIN, INT64_MAX))
 			: ARG(a, x, "<int64>"), r(r), val(val) {}
-
-		INT64_OPT(arg_t a, arg_t x, double val = 0LL, INT64R r = INT64R(INT64_MIN, INT64_MAX))
-			: ARG(a, x, "<int64>"), r(r), val(int64(val)) {}
 
 		operator int64 (void) const { return val; }
 		operator int64& (void) { return val; }
@@ -172,19 +170,20 @@ namespace pFROST {
 
 		virtual void help(bool verbose = false) {
 			PFLOGN1("  %s--%-20s = %-8s [", CHELP, arg, type);
-			if (r.h == INT64_MIN) fprintf(stdout, "%-8s", "-I64");
-			else fprintf(stdout, "%8lld", r.h);
-			fprintf(stdout, " .. ");
-			if (r.t == INT64_MAX) fprintf(stdout, "%8s", "+I64");
-			else fprintf(stdout, "%8lld", r.t);
-			fprintf(stdout, "]%s (%sdefault: %s%10lld%s)\n", CNORMAL, CARGDEFAULT, CARGVALUE, val, CNORMAL);
+			if (r.h == INT64_MIN) { PRINT("%-8s", "-I64"); }
+			else { PRINT("%-8lld", r.h); }
+			PRINT(" .. ");
+			if (r.t == INT64_MAX) { PRINT("%8s", "+I64"); }
+			else { PRINT("%8lld", r.t); }
+			if (val == INT64_MAX) { PRINT("]%s (%sdefault: %s%10s%s)\n", CNORMAL, CARGDEFAULT, CARGVALUE, "+I64", CNORMAL); }
+			else { PRINT("]%s (%sdefault: %s%10lld%s)\n", CNORMAL, CARGDEFAULT, CARGVALUE, val, CNORMAL); }
 			if (verbose) {
 				PFLOG1("   %s", text);
 				PFLOG0("");
 			}
 		}
 		virtual void printArgument() {
-			fprintf(stdout, " %s%s%s<%lld>%s", CARGDEFAULT, arg, CARGVALUE, val, CNORMAL);
+			PRINT(" %s%s%s<%lld>%s", CARGDEFAULT, arg, CARGVALUE, val, CNORMAL);
 		}
 	};
 
@@ -220,12 +219,12 @@ namespace pFROST {
 
 		virtual void help(bool verbose = false) {
 			PFLOGN1("  %s--%-20s = %-8s [", CHELP, arg, type);
-			if (r.h == -INFINITY) fprintf(stdout, "%-8s", "-inf");
-			else fprintf(stdout, "%-8.2f", r.h);
-			fprintf(stdout, " .. ");
-			if (r.t == INFINITY) fprintf(stdout, "%8s", "inf");
-			else fprintf(stdout, "%8.2f", r.t);
-			fprintf(stdout, "]%s (%sdefault: %s%10.2f%s)\n", CNORMAL, CARGDEFAULT, CARGVALUE, val, CNORMAL);
+			if (r.h == -INFINITY) { PRINT("%-8s", "-inf"); }
+			else { PRINT("%-8.2f", r.h); }
+			PRINT(" .. ");
+			if (r.t == INFINITY) { PRINT("%8s", "inf"); }
+			else { PRINT("%8.2f", r.t); }
+			PRINT("]%s (%sdefault: %s%10.2e%s)\n", CNORMAL, CARGDEFAULT, CARGVALUE, val, CNORMAL);
 			if (verbose) {
 				PFLOG1("   %s", text);
 				PFLOG0("");
@@ -233,7 +232,7 @@ namespace pFROST {
 		}
 
 		virtual void printArgument() { 
-			fprintf(stdout, " %s%s%s<%.2f>%s", CARGDEFAULT, arg, CARGVALUE, val, CNORMAL);
+			PRINT(" %s%s%s<%.2f>%s", CARGDEFAULT, arg, CARGVALUE, val, CNORMAL);
 		}
 	};
 
@@ -269,7 +268,7 @@ namespace pFROST {
 		}
 
 		virtual void printArgument() { 
-			fprintf(stdout, " %s%s%s<%s>%s", CARGDEFAULT, arg, CARGVALUE, val, CNORMAL);
+			PRINT(" %s%s%s<%s>%s", CARGDEFAULT, arg, CARGVALUE, val, CNORMAL);
 		}
 	};
 
@@ -301,9 +300,13 @@ namespace pFROST {
 
 		virtual void help(bool verbose = false) {
 			PFLOGN1("  %s-%-20s -no-%-20s%s", CHELP, arg, arg, CNORMAL);
-			fprintf(stdout, "                 ");
-			if (val) fprintf(stdout, "(%sdefault: %s%3s%s)\n", CARGDEFAULT, CARGON, "on", CNORMAL);
-			else fprintf(stdout, "(%sdefault: %s%3s%s)\n", CARGDEFAULT, CARGOFF, "off", CNORMAL);
+			PRINT("                 ");
+			if (val) { 
+				PRINT("(%sdefault: %s%3s%s)\n", CARGDEFAULT, CARGON, "on", CNORMAL);
+			}
+			else {
+				PRINT("(%sdefault: %s%3s%s)\n", CARGDEFAULT, CARGOFF, "off", CNORMAL);
+			}
 			if (verbose) {
 				PFLOG1("   %s", text);
 				PFLOG0("");
@@ -311,9 +314,9 @@ namespace pFROST {
 		}
 
 		virtual void printArgument() { 
-			fprintf(stdout, " %s%s:", CARGDEFAULT, arg);
-			if (val) fprintf(stdout, "%son ", CARGON);
-			else fprintf(stdout, "%soff ", CARGOFF);
+			PRINT(" %s%s:", CARGDEFAULT, arg);
+			if (val) { PRINT("%son ", CARGON); }
+			else { PRINT("%soff ", CARGOFF); }
 			SETCOLOR(CNORMAL, stdout);
 		}
 	};

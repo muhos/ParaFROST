@@ -1,4 +1,4 @@
-/***********************************************************************[malloc.h]
+/***********************************************************************[memory.h]
 Copyright(c) 2020, Muhammad Osama - Anton Wijs,
 Technische Universiteit Eindhoven (TU/e).
 
@@ -119,56 +119,62 @@ namespace pFROST {
         }
     };
 
+
     /*****************************************************/
-	/*  Usage: memory manager for CNF clauses            */
-	/*  Dependency:  CLAUSE, SMM                         */
-	/*****************************************************/
-	typedef SMM<Byte, C_REF> CTYPE;
-	class CMM : public CTYPE
-	{
-		Vec<bool, C_REF> stencil;
-	public:
-								CMM				() { assert(CTYPE::bucket() == 1); }
-		explicit				CMM				(const C_REF& init_cap) : CTYPE(init_cap), stencil(init_cap, 0) { assert(CTYPE::bucket() == 1); }
-		inline void				init			(const C_REF& init_cap) { CTYPE::init(init_cap * sizeof(CLAUSE)), stencil.resize(init_cap, 0); }
-		inline		 CLAUSE&	operator[]		(const C_REF& r) { return (CLAUSE&)CTYPE::operator[](r); }
-		inline const CLAUSE&	operator[]		(const C_REF& r) const { return (CLAUSE&)CTYPE::operator[](r); }
-		inline		 CLAUSE*	clause			(const C_REF& r) { return (CLAUSE*)address(r); }
-		inline const CLAUSE*	clause			(const C_REF& r) const { return (CLAUSE*)address(r); }
-		inline bool				deleted			(const C_REF& r) const { assert(check(r)); return stencil[r]; }
-		inline void				collectClause	(const C_REF& r, const int& size) { CTYPE::collect(bytes(size)); assert(check(r)); stencil[r] = true; }
-		inline void				collectLiterals	(const int& size) { CTYPE::collect(size * sizeof(uint32)); }
-		inline void				migrateTo		(CMM& dest) { 
-			CTYPE::migrateTo(dest);
-			stencil.migrateTo(dest.stencil);
-		}
-		template <class SRC>
-		inline C_REF			alloc			(const SRC& src) {
-			assert(src.size() > 1);
-			size_t cBytes = bytes(src.size());
-			C_REF r = CTYPE::alloc(cBytes);
-			new (clause(r)) CLAUSE(src);
-			assert(clause(r)->capacity() == cBytes);
-			assert(src.size() == clause(r)->size());
-			stencil.expand(r + 1, 0);
-			return r;
-		}
-		inline C_REF			alloc			(const int& size) {
-			assert(size > 1);
-			size_t cBytes = bytes(size);
-			C_REF r = CTYPE::alloc(cBytes);
-			new (clause(r)) CLAUSE(size);
-			assert(clause(r)->capacity() == cBytes);
-			assert(size == clause(r)->size());
-			stencil.expand(r + 1, 0);
-			return r;
-		}
-		inline size_t			bytes			(const int& size) {
-			assert(size > 1); 
-			return (sizeof(CLAUSE) + (size_t(size) - 2) * sizeof(uint32));
-		}
-		inline void				destroy			() { dealloc(), stencil.clear(true); }
-	};
+    /*  Usage: memory manager for CNF clauses            */
+    /*  Dependency:  CLAUSE, SMM                         */
+    /*****************************************************/
+    typedef SMM<Byte, C_REF> CTYPE;
+    class CMM : public CTYPE
+    {
+        Vec<bool, C_REF> stencil;
+    public:
+        CMM() { 
+            assert(CTYPE::bucket() == 1);
+            assert(hc_isize == sizeof(uint32));
+            assert(hc_csize == sizeof(CLAUSE)); 
+        }
+        explicit				CMM             (const C_REF& init_cap) : CTYPE(init_cap), stencil(init_cap, 0) { assert(CTYPE::bucket() == 1); }
+        inline void				init            (const C_REF& init_cap) { CTYPE::init(init_cap), stencil.resize(init_cap, 0); }
+        inline		 CLAUSE&    operator[]		(const C_REF& r) { return (CLAUSE&)CTYPE::operator[](r); }
+        inline const CLAUSE&    operator[]		(const C_REF& r) const { return (CLAUSE&)CTYPE::operator[](r); }
+        inline		 CLAUSE*    clause          (const C_REF& r) { return (CLAUSE*)address(r); }
+        inline const CLAUSE*    clause          (const C_REF& r) const { return (CLAUSE*)address(r); }
+        inline bool				deleted         (const C_REF& r) const { assert(check(r)); return stencil[r]; }
+        inline void				collectClause   (const C_REF& r, const int& size) { CTYPE::collect(bytes(size)); assert(check(r)); stencil[r] = true; }
+        inline void				collectLiterals (const int& size) { CTYPE::collect(size * hc_isize); }
+        inline void				migrateTo       (CMM& dest) {
+            CTYPE::migrateTo(dest);
+            stencil.migrateTo(dest.stencil);
+        }
+        template <class SRC>
+        inline C_REF			alloc           (const SRC& src) {
+            assert(src.size() > 1);
+            size_t cBytes = bytes(src.size());
+            C_REF r = CTYPE::alloc(cBytes);
+            new (clause(r)) CLAUSE(src);
+            assert(clause(r)->capacity() == cBytes);
+            assert(src.size() == clause(r)->size());
+            stencil.expand(r + 1, 0);
+            return r;
+        }
+        inline C_REF			alloc           (const int& size) {
+            assert(size > 1);
+            size_t cBytes = bytes(size);
+            C_REF r = CTYPE::alloc(cBytes);
+            new (clause(r)) CLAUSE(size);
+            assert(clause(r)->capacity() == cBytes);
+            assert(size == clause(r)->size());
+            stencil.expand(r + 1, 0);
+            return r;
+        }
+        inline size_t			bytes           (const int& size) {
+            assert(size > 1);
+            return (hc_csize + (size_t(size) - 2) * hc_isize);
+        }
+        inline void				destroy         () { dealloc(), stencil.clear(true); }
+    };
+
 }
 
 #endif

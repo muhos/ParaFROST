@@ -160,7 +160,7 @@ void MODEL::verify(const string& path) {
 	ifstream inputFile;
 	inputFile.open(path, ifstream::in);
 	if (!inputFile.is_open()) PFLOGE("cannot open input file to verify model");
-	char* buffer = new char[fsz + 1], * str = buffer;
+	char* buffer = pfcalloc<char>(fsz + 1), * str = buffer;
 	inputFile.read(buffer, fsz);
 	buffer[fsz] = '\0';
 #endif

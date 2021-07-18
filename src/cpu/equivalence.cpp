@@ -1,4 +1,4 @@
-/***********************************************************************[equivalence.cpp]
+/***********************************************************************[els.cpp]
 Copyright(c) 2020, Muhammad Osama - Anton Wijs,
 Technische Universiteit Eindhoven (TU/e).
 
@@ -169,7 +169,7 @@ bool ParaFROST::decompose()
 			learnEmpty();
 		}
 		if (cnfstate) {
-			assert(cnfstate == UNSOLVED);
+			assert(UNSOLVED(cnfstate));
 			forall_variables(v) {
 				if (sp->vstate[v].state) continue;
 				const uint32 p = V2L(v);
@@ -195,7 +195,7 @@ bool ParaFROST::decompose()
 
 bool ParaFROST::substitute(BCNF& cnf, uint32* smallests)
 {
-	assert(cnfstate == UNSOLVED);
+	assert(UNSOLVED(cnfstate));
 	assert(learntC.empty());
 	bool binaries = false;
 	uint32 units = 0;

@@ -21,7 +21,6 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 #include "space.h"
 #include "watch.h"
-#include "sclause.h"
 
 namespace pFROST {
 	
@@ -30,15 +29,12 @@ namespace pFROST {
 	typedef Vec<WL> WT;
 	typedef Vec<uint32, int> BOL;
 	typedef Vec<C_REF, int> WOL;
-	typedef Vec<S_REF, int> OL;
-	typedef Vec<OL> OT;
-	typedef Vec<S_REF, size_t> SCNF;
 	
 	struct CSIZE {
 		C_REF ref;
-		size_t size;
+		uint32 size;
 		CSIZE() {}
-		CSIZE(const C_REF& _r, const int& _s) : ref(_r), size(_s) {}
+		CSIZE(const C_REF& _r, const uint32& _s) : ref(_r), size(_s) {}
 	};
 
 	struct DFS {
@@ -46,8 +42,11 @@ namespace pFROST {
 		DFS() : idx(0), min(0) { }
 	};
 
-	#define forall_occurs(LIST, PTR) \
-		for (S_REF* PTR = LIST, *END = LIST.end(); PTR != END; PTR++)
+	#define forall_bol(BLIST, PTR) \
+		for (uint32* PTR = BLIST, *END = BLIST.end(); PTR != END; PTR++)
+
+	#define forall_wol(WLIST, PTR) \
+		for (C_REF* PTR = WLIST, *END = WLIST.end(); PTR != END; PTR++)
 }
 
 #endif

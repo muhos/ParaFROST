@@ -19,17 +19,22 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 #include "solve.h"
 using namespace pFROST;
 
-#define VIVIFYORG 1
-#define VIVIFYTIER1 2
-#define VIVIFYTIER2 4
-#define ISVIVIFYORG(x) ((x) & VIVIFYORG)
-#define ISVIVIFYTIER1(x) ((x) & VIVIFYTIER1)
-#define ISVIVIFYTIER2(x) ((x) & VIVIFYTIER2)
+// In clauses scheduling, binary clauses are also considered
+// for histogram but ignored in the actual vivification
+// this gives proper indication of what literals are more
+// important to vivify
+
+#define VIVIFYORG			1
+#define VIVIFYTIER1			2
+#define VIVIFYTIER2			4
+#define ISVIVIFYORG(x)		((x) & VIVIFYORG)
+#define ISVIVIFYTIER1(x)	((x) & VIVIFYTIER1)
+#define ISVIVIFYTIER2(x)	((x) & VIVIFYTIER2)
 
 struct VIVIFY_WORSE_CMP {
 	CMM& cm;
-	HIST_MCV_CMP& clauseKey;
-	VIVIFY_WORSE_CMP(CMM& _cm, HIST_MCV_CMP& _ck) :
+	const HIST_MCV_CMP& clauseKey;
+	VIVIFY_WORSE_CMP(CMM& _cm, const HIST_MCV_CMP& _ck) :
 		cm(_cm), clauseKey(_ck) {}
 	inline bool operator() (const C_REF& r1, const C_REF& r2) {
 		CLAUSE& c = cm[r1];
@@ -66,7 +71,7 @@ bool ParaFROST::analyzeVivify(CLAUSE& cand, bool& original)
 	assert(conflict < NOREF);
 	assert(DL());
 	CLAUSE& conf = cm[conflict];
-	bool isOrgConflict = conf.original();
+	bool conflictoriginality = conf.original();
 	int* levels = sp->level;
 	C_REF* sources = sp->source;
 	LIT_ST* values = sp->value, *seen = sp->seen;
@@ -84,7 +89,8 @@ bool ParaFROST::analyzeVivify(CLAUSE& cand, bool& original)
 	}
 	markLits(cand);
 	bool candsubsumed = false;
-	if (cand.learnt() || isOrgConflict) {
+	const bool candlearnt = cand.learnt();
+	if (candlearnt || conflictoriginality) {
 		candsubsumed = true;
 		forall_clause(conf, k) {
 			const uint32 lit = *k;
@@ -106,7 +112,7 @@ bool ParaFROST::analyzeVivify(CLAUSE& cand, bool& original)
 		if (REASON(src)) {
 			CLAUSE& reason = cm[src];
 			PFLCLAUSE(4, reason, "  analyzing %d reason", l2i(lit));
-			if (reason.learnt()) isOrgConflict = false;
+			if (reason.learnt()) conflictoriginality = false;
 			if (reason.binary()) {
 				const uint32 other = reason[0] ^ reason[1] ^ lit;
 				assert(other != lit);
@@ -114,7 +120,7 @@ bool ParaFROST::analyzeVivify(CLAUSE& cand, bool& original)
 				const uint32 other_v = ABS(other);
 				CHECKVAR(other_v);
 				assert(levels[other_v]);
-				if (cand.learnt() || reason.original()) {
+				if (candlearnt || reason.original()) {
 					if (subsumed(lit) && subsumed(other)) {
 						candsubsumed = true;
 						break;
@@ -142,7 +148,7 @@ bool ParaFROST::analyzeVivify(CLAUSE& cand, bool& original)
 						}
 					}
 				}
-				if (candsubsumed && (cand.learnt() || reason.original()))
+				if (candsubsumed && (candlearnt || reason.original()))
 					break;
 				candsubsumed = false;
 			}
@@ -153,7 +159,7 @@ bool ParaFROST::analyzeVivify(CLAUSE& cand, bool& original)
 		}
 	}
 	unmarkLits(cand);
-	original = isOrgConflict;
+	original = conflictoriginality;
 	return candsubsumed;
 }
 
@@ -169,13 +175,16 @@ bool ParaFROST::learnVivify(CLAUSE& cand, const C_REF& cref, const int& nonFalse
 	if (learntsize == 1) {
 		PFLOG2(4, "  candidate is strengthened by a unit");
 		backtrack();
-		enqueue(learntC[0]);
+		enqueueUnit(learntC[0]);
 		removeClause(cand, cref);
-		if (BCP()) {
+		ignore = NOREF;
+		if (BCPVivify()) {
 			PFLOG2(2, "  propagating vivified unit proved a contradiction");
 			learnEmpty();
 		}
+#ifdef STATISTICS
 		stats.vivify.strengthened++;
+#endif
 		success = true;
 	}
 	else if (learntsize < nonFalse) {
@@ -185,14 +194,18 @@ bool ParaFROST::learnVivify(CLAUSE& cand, const C_REF& cref, const int& nonFalse
 		removeClause(cand, cref);
 		sp->learntLBD = learntsize - 1;
 		newClause(learntC, cand.learnt());
+#ifdef STATISTICS
 		stats.vivify.strengthened++;
+#endif
 		success = true;
 	}
 	else if (original && cand.original()) {
 		assert(learntsize == nonFalse);
 		PFLOG2(4, "  candidate is subsumed");
 		removeClause(cand, cref);
+#ifdef STATISTICS
 		stats.vivify.subsumed++;
+#endif
 		success = true;
 	}
 	else {
@@ -204,12 +217,12 @@ bool ParaFROST::learnVivify(CLAUSE& cand, const C_REF& cref, const int& nonFalse
 
 bool ParaFROST::vivifyClause(const C_REF& cref)
 {
-	assert(cnfstate);
+	assert(UNSOLVED(cnfstate));
 	CLAUSE* candptr = cm.clause(cref);
 	assert(!candptr->deleted());
 	CLAUSE& candref = *candptr;
 	PFLCLAUSE(4, candref, "  trying to vivify candidate");
-	uint32* clause = sp->tmp_stack;
+	uint32* clause = sp->tmpstack;
 	int tail = 0;
 	LIT_ST* values = sp->value;
 	forall_clause(candref, k) {
@@ -273,7 +286,9 @@ bool ParaFROST::vivifyClause(const C_REF& cref)
 			const uint32 decision = trail[pivot];
 			if (decision == flit) {
 				PFLOG2(4, "  reusing decision %d@%d", l2i(flit), level);
+#ifdef STATISTICS
 				stats.vivify.reused++;
+#endif
 				assert(isFalse(lit));
 				continue;
 			}
@@ -283,7 +298,9 @@ bool ParaFROST::vivifyClause(const C_REF& cref)
 		const LIT_ST val = values[lit];
 		assert(UNASSIGNED(val) || l2dl(lit) <= level);
 		if (UNASSIGNED(val)) {
+#ifdef STATISTICS
 			stats.vivify.assumed++;
+#endif
 			enqueueDecision(flit);
 			ignore = cref;
 			bool hasConflict = false;
@@ -300,7 +317,9 @@ bool ParaFROST::vivifyClause(const C_REF& cref)
 				if (analyzeVivify(_candref, original)) {
 					PFLOG2(4, "  candidate is subsumed by conflict/reason");
 					removeClause(_candref, cref);
+#ifdef STATISTICS
 					stats.vivify.subsumed++;
+#endif
 					success = true;
 				}
 				else 
@@ -315,7 +334,9 @@ bool ParaFROST::vivifyClause(const C_REF& cref)
 			assert(analyzed.empty());
 			PFLOG2(4, "  candidate is a learnt implication already satisfied by %d", l2i(lit));
 			removeClause(*candptr, cref);
+#ifdef STATISTICS
 			stats.vivify.implied++;
+#endif
 			success = true;
 			break;
 		}
@@ -332,9 +353,10 @@ void ParaFROST::schedule2viv(BCNF& schedule, const bool& tier2, const bool& lear
 	if (learnt) {
 		PFLOGN2(2, "  shrinking learnts before vivification..");
 		PFLEARNTINF(this, beforeCls, beforeLits);
-		shrink(learnts);
+		shrinkTop(learnts);
 		PFLSHRINKLEARNT(this, 2, beforeCls, beforeLits);
-		for (CL_ST priority = 0; priority < 2; priority++) {
+		for (CL_ST p = 0; p < 2; p++) {
+			const bool priority = p;
 			forall_cnf(learnts, i) {
 				const C_REF ref = *i;
 				if (cm.deleted(ref)) continue;
@@ -354,9 +376,10 @@ void ParaFROST::schedule2viv(BCNF& schedule, const bool& tier2, const bool& lear
 		assert(!tier2);
 		PFLOGN2(2, "  shrinking originals before vivification..");
 		PFORGINF(this, beforeCls, beforeLits);
-		shrink(orgs);
+		shrinkTop(orgs);
 		PFLSHRINKORG(this, 2, beforeCls, beforeLits);
-		for (CL_ST priority = 0; priority < 2; priority++) {
+		for (CL_ST p = 0; p < 2; p++) {
+			const bool priority = p;
 			forall_cnf(orgs, i) {
 				const C_REF ref = *i;
 				if (cm.deleted(ref)) continue;
@@ -386,6 +409,7 @@ void ParaFROST::schedule2viv(BCNF& schedule, const bool& tier2, const bool& lear
 
 void ParaFROST::vivifying(const CL_ST& type)
 {
+	assert(!DL());
 	assert(sp->propagated == trail.size());
 	const bool tier2 = ISVIVIFYTIER2(type);
 	const bool learnt = tier2 || ISVIVIFYTIER1(type);
@@ -396,10 +420,6 @@ void ParaFROST::vivifying(const CL_ST& type)
 	schedule2viv(schedule, tier2, learnt);
 	sortviv(schedule);
 	rebuildWT(opts.vivify_priorbins);
-	if (BCP()) {
-		PFLOG2(2, "  propagation before vivify proved a contradiction");
-		learnEmpty();
-	}
 	const uint32 scheduled = schedule.size();
 	SET_BOUNDS(this, limit, vivify, probeticks, searchticks, nlogn(scheduled));
 	if (tier2) {
@@ -410,8 +430,8 @@ void ParaFROST::vivifying(const CL_ST& type)
 	uint32 vivified = 0, candidates = 0;
 	while (!schedule.empty()
 		&& cnfstate
-		&& !interrupted()
-		&& stats.probeticks <= limit)
+		&& stats.probeticks <= limit
+		&& !interrupted())
 	{
 		const C_REF ref = schedule.back();
 		schedule.pop();
@@ -441,14 +461,6 @@ void ParaFROST::vivify()
 		vivifying(VIVIFYTIER1);
 		const bool enough = (stats.clauses.original >> 3) < stats.clauses.learnt;
 		if (cnfstate && enough) vivifying(VIVIFYORG);
-		if (cnfstate) {
-			assert(!DL());
-			sp->propagated = 0;
-			if (BCP()) {
-				PFLOG2(2, "  propagation after vivify proved a contradiction");
-				learnEmpty();
-			}
-		}
 	}
 	printStats(1, 'v', CVIOLET5);
 }

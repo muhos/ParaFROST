@@ -73,6 +73,11 @@ uint32 ParaFROST::iadd()
 	return v;
 }
 
+#if defined(__linux__) || defined(__CYGWIN__)
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wunused-variable"
+#endif
+
 bool ParaFROST::itoClause(Lits_t& c, Lits_t& org)
 {
 	if (org.empty()) {
@@ -100,7 +105,7 @@ bool ParaFROST::itoClause(Lits_t& c, Lits_t& org)
 			uint32 mvar = ABS(mlit);
 			mlit = V2DEC(mvar, sign);
 			PFPRINT(3, 5, "%d  ", SIGN(mlit) ? -int(mvar) : int(mvar));
-			LIT_ST val = ivalue[mlit];
+			LIT_ST val = sp->value[mlit];
 			if (UNASSIGNED(val))
 				c.push(mlit);
 			else if (val) 
@@ -128,7 +133,7 @@ bool ParaFROST::itoClause(Lits_t& c, Lits_t& org)
 		else if (newsize == 1) {
 			const uint32 unit = *c;
 			CHECKLIT(unit);
-			LIT_ST val = ivalue[unit];
+			LIT_ST val = sp->value[unit];
 			if (UNASSIGNED(val)) enqueueUnit(unit), formula.units++;
 			else if (!val) {
 				PFLOG2(2, "  unit clause(%d) is conflicting.", l2i(unit));
@@ -153,3 +158,7 @@ bool ParaFROST::itoClause(Lits_t& c, Lits_t& org)
 	c.clear(), org.clear();
 	return true;
 }
+
+#if defined(__linux__) || defined(__CYGWIN__)
+#pragma GCC diagnostic pop
+#endif
