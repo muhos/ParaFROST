@@ -66,16 +66,16 @@ while [ $# -gt 0 ]
 do
   case $1 in
 
-    -h|--help) usage;;
+   	-h|--help) usage;;
 	-n|--less) noverb=1;;
 	-q|--quiet) quiet=1;;	
 	
 	-w|--wall) wall=1;;
-    -d|--debug) debug=1;;
-    -t|--assert) assert=1;;
-	-n|--nopedantic) pedantic=0;;
+   	-d|--debug) debug=1;;
+   	-t|--assert) assert=1;;
+	-p|--pedantic) pedantic=1;;
 	
-    -l|--logging) logging=1;;
+    	-l|--logging) logging=1;;
 	-s|--statistics) statistics=1;;
 
 	-c|--cpu) icpu=1;;
