@@ -38,7 +38,7 @@ int main(int argc, char **argv)
 		else if (!verbose) quiet_en = true;
 		if (!quiet_en && verbose) {
 			PFNAME("ParaFROST (Parallel Formal Reasoning On Satisfiability)", version());
-			PFAUTHORS("Muhammad Osama and Anton Wijs");
+			PFAUTHORS("Muhammad Osama Mahmoud");
 			PFRIGHTS("Technische Universiteit Eindhoven (TU/e)");
 			PFLRULER('-', RULELEN);
 			PFLOGN0(" Embedded options: ");
