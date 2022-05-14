@@ -28,7 +28,7 @@ namespace pFROST {
     void printUsage(int argc, char** argv, bool verbose)
     {
         PFNAME("ParaFROST (Parallel Formal Reasoning On Satisfiability)", version());
-        PFAUTHORS("Muhammad Osama and Anton Wijs");
+        PFAUTHORS("Muhammad Osama Mahmoud");
         PFRIGHTS("Technische Universiteit Eindhoven (TU/e)");
         PFLRULER('-', RULELEN);
         getBuildInfo();
