@@ -57,7 +57,7 @@ namespace pFROST {
 	struct LCV_CMP {
 		const uint32* scores;
 		LCV_CMP(const uint32* _scores) : scores(_scores) {}
-		bool operator () (const uint32& a, const uint32& b) const {
+		inline bool operator () (const uint32& a, const uint32& b) const {
 			const uint32 x = scores[a], y = scores[b];
 			if (x < y) return true;
 			if (x > y) return false;
@@ -67,7 +67,7 @@ namespace pFROST {
 	struct MCV_CMP {
 		const uint32* scores;
 		MCV_CMP(const uint32* _scores) : scores(_scores) {}
-		bool operator () (const uint32& a, const uint32& b) const {
+		inline bool operator () (const uint32& a, const uint32& b) const {
 			const uint32 x = scores[a], y = scores[b];
 			if (x > y) return true;
 			if (x < y) return false;
@@ -82,7 +82,7 @@ namespace pFROST {
 	struct VSIDS_CMP {
 		const Vec<double>& act;
 		VSIDS_CMP(const Vec<double>& _act) : act(_act) {}
-		bool operator () (const uint32& a, const uint32& b) const {
+		inline bool operator () (const uint32& a, const uint32& b) const {
 			const double xact = act[a], yact = act[b];
 			if (xact < yact) return true;
 			if (xact > yact) return false;
@@ -92,14 +92,14 @@ namespace pFROST {
 	struct QUEUE_CMP {
 		const Vec<uint64>& bumped;
 		QUEUE_CMP(const Vec<uint64>& _bumped) : bumped(_bumped) {}
-		bool operator () (const uint32& a, const uint32& b) const {
+		inline bool operator () (const uint32& a, const uint32& b) const {
 			return bumped[a] < bumped[b];
 		}
 	};
 	struct HIST_LCV_CMP {
 		const uVec1D& hist;
 		HIST_LCV_CMP(const uVec1D& _hist) : hist(_hist) {}
-		bool operator () (const uint32& a, const uint32& b) const {
+		inline bool operator () (const uint32& a, const uint32& b) const {
 			const uint32 xh = hist[a], yh = hist[b];
 			if (xh < yh) return true;
 			if (xh > yh) return false;
@@ -109,7 +109,7 @@ namespace pFROST {
 	struct HIST_MCV_CMP {
 		const uVec1D& hist;
 		HIST_MCV_CMP(const uVec1D& _hist) : hist(_hist) {}
-		bool operator () (const uint32& a, const uint32& b) const {
+		inline bool operator () (const uint32& a, const uint32& b) const {
 			const uint32 xh = hist[a], yh = hist[b];
 			if (xh > yh) return true;
 			if (xh < yh) return false;
@@ -121,7 +121,7 @@ namespace pFROST {
 		const uint32* scores;
 		KEY_CMP_ACTIVITY(Vec<double>& _acts, const uint32* _scores) :
 			acts(_acts), scores(_scores) {}
-		bool operator()(const uint32& a, const uint32& b) const {
+		inline bool operator()(const uint32& a, const uint32& b) const {
 			const double dx = acts[a], dy = acts[b];
 			if (dx > dy) return true;
 			if (dx < dy) return false;
@@ -134,8 +134,52 @@ namespace pFROST {
 	struct KEY_CMP_BUMP {
 		const Vec<uint64>& bumped;
 		KEY_CMP_BUMP(const Vec<uint64>& _bumped) : bumped(_bumped) {}
-		bool operator()(const uint32& x, const uint32& y) const {
+		inline bool operator()(const uint32& x, const uint32& y) const {
 			return bumped[x] > bumped[y];
+		}
+	};
+	//=================================//
+	//  Custom Stable Sort Comparators //
+	//=================================//
+	struct STABLE_LCV {
+		const uint32* scores;
+		STABLE_LCV(const uint32* _scores) : scores(_scores) {}
+		inline bool operator () (const uint32* a, const uint32* b) const {
+			return scores[*a] <= scores[*b];
+		}
+	};
+	struct STABLE_MCV {
+		const uint32* scores;
+		STABLE_MCV(const uint32* _scores) : scores(_scores) {}
+		inline bool operator () (const uint32* a, const uint32* b) const {
+			return scores[*a] >= scores[*b];
+		}
+	};
+	struct STABLE_QUEUE {
+		const Vec<uint64>& bumped;
+		STABLE_QUEUE(const Vec<uint64>& _bumped) : bumped(_bumped) {}
+		inline bool operator () (const uint32* a, const uint32* b) const {
+			return bumped[*a] <= bumped[*b];
+		}
+	};
+	struct STABLE_ACTIVITY {
+		const Vec<double>& acts;
+		const uint32* scores;
+		STABLE_ACTIVITY(Vec<double>& _acts, const uint32* _scores) :
+			acts(_acts), scores(_scores) {}
+		inline bool operator()(const uint32* a, const uint32* b) const {
+			const uint32 sa = *a, sb = *b;
+			const double dx = acts[sa], dy = acts[sb];
+			if (dx > dy) return true;
+			if (dx < dy) return false;
+			return scores[sa] >= scores[sb];
+		}
+	};
+	struct STABLE_BUMP {
+		const Vec<uint64>& bumped;
+		STABLE_BUMP(const Vec<uint64>& _bumped) : bumped(_bumped) {}
+		inline bool operator()(const uint32* a, const uint32* b) const {
+			return bumped[*a] >= bumped[*b];
 		}
 	};
 	//============================//
@@ -144,14 +188,14 @@ namespace pFROST {
 	struct QUEUE_RANK {
 		const Vec<uint64>& bumped;
 		QUEUE_RANK(const Vec<uint64>& _bumped) : bumped(_bumped) {}
-		uint64 operator () (const uint32& a) const {
+		inline uint64 operator () (const uint32& a) const {
 			return bumped[a];
 		}
 	};
 	struct KEY_RANK_BUMP {
 		const Vec<uint64>& bumped;
 		KEY_RANK_BUMP(const Vec<uint64>& _bumped) : bumped(_bumped) {}
-		uint64 operator()(const uint32& x) const {
+		inline uint64 operator()(const uint32& x) const {
 			uint64 b = bumped[x];
 			return ~b;
 		}
@@ -159,14 +203,14 @@ namespace pFROST {
 	struct LCV_RANK {
 		const uint32* scores;
 		LCV_RANK(const uint32* _scores) : scores(_scores) {}
-		uint32 operator () (const uint32& a) const {
+		inline uint32 operator () (const uint32& a) const {
 			return scores[a];
 		}
 	};
 	struct MCV_RANK {
 		const uint32* scores;
 		MCV_RANK(const uint32* _scores) : scores(_scores) {}
-		uint32 operator () (const uint32& a) const {
+		inline uint32 operator () (const uint32& a) const {
 			return ~scores[a];
 		}
 	};

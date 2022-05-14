@@ -74,25 +74,25 @@ namespace pFROST {
 		SLEEP() { RESETSTRUCT(this); }
 	};
 
-	#define INIT_LIMIT(SOLVER, RESULT, OPTION_INC, SCALE_INCREASE) \
-	  RESULT = (SCALE_INCREASE) ? relscale(SOLVER->stats.clauses.original, OPTION_INC ) : OPTION_INC; \
+	#define INIT_LIMIT(RESULT, OPTION_INC, SCALE_INCREASE) \
+	  RESULT = (SCALE_INCREASE) ? relscale(stats.clauses.original, OPTION_INC ) : OPTION_INC; \
 
-	#define INCREASE_LIMIT(SOLVER, OPTION, N, SCALING_FUNC, SCALE_INCREASE) \
+	#define INCREASE_LIMIT(OPTION, N, SCALING_FUNC, SCALE_INCREASE) \
 	do { \
-	  uint64 INC = SOLVER->opts.OPTION ## _inc; \
+	  uint64 INC = opts.OPTION ## _inc; \
 	  INC *= SCALING_FUNC( N ) + 1; \
-	  const uint64 SCALED = (SCALE_INCREASE) ? relscale(SOLVER->stats.clauses.original, INC ) : INC; \
-	  SOLVER->limit.OPTION = SOLVER->stats.conflicts + SCALED; \
-	  PFLOG2(2, "  %s limit increased to %lld conflicts by a weight %lld", __func__, SOLVER->limit.OPTION, INC); \
+	  const uint64 SCALED = (SCALE_INCREASE) ? relscale(stats.clauses.original, INC ) : INC; \
+	  limit.OPTION = stats.conflicts + SCALED; \
+	  PFLOG2(2, "  %s limit increased to %lld conflicts by a weight %lld", __func__, limit.OPTION, INC); \
 	} while (0)
 
-	#define SET_BOUNDS(SOLVER, RESULT, OPTION, START, REFERENCE, SCALE) \
-	uint64 RESULT = SOLVER->stats.START; \
+	#define SET_BOUNDS(RESULT, OPTION, START, REFERENCE, SCALE) \
+	uint64 RESULT = stats.START; \
 	do { \
-		const uint64 STATREF = SOLVER->stats.REFERENCE; \
-		const uint64 MINIMUM = SOLVER->opts.OPTION ## _min_eff; \
-		const uint64 MAXIMUM = MINIMUM * (SOLVER->opts.OPTION ## _max_eff); \
-		const double RELEFF = (double) (SOLVER->opts.OPTION ## _rel_eff) * 1e-3; \
+		const uint64 STATREF = stats.REFERENCE; \
+		const uint64 MINIMUM = opts.OPTION ## _min_eff; \
+		const uint64 MAXIMUM = MINIMUM * (opts.OPTION ## _max_eff); \
+		const double RELEFF = (double) (opts.OPTION ## _rel_eff) * 1e-3; \
 		uint64 INCREASE = uint64(STATREF * RELEFF) + SCALE; \
 		if (INCREASE < MINIMUM) INCREASE = MINIMUM; \
 		if (INCREASE > MAXIMUM) INCREASE = MAXIMUM; \
@@ -111,11 +111,11 @@ namespace pFROST {
 	  return; \
 	} while (0)
 
-	#define UPDATE_SLEEPER(SOLVER, SMONITOR, SUCCESS) \
+	#define UPDATE_SLEEPER(SMONITOR, SUCCESS) \
 	do { \
-	  if (!SOLVER->opts.SMONITOR ## _sleep_en) break; \
-	  MONITOR &monitor = SOLVER->sleep.SMONITOR; \
-	  const uint32 PERIOD = SOLVER->opts.nap; \
+	  if (!opts.SMONITOR ## _sleep_en) break; \
+	  MONITOR &monitor = sleep.SMONITOR; \
+	  const uint32 PERIOD = opts.nap; \
 	  assert (monitor.all <= monitor.now); \
 	  if (SUCCESS) { \
 		if (monitor.now) { \

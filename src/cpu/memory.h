@@ -127,8 +127,10 @@ namespace pFROST {
     typedef SMM<Byte, C_REF> CTYPE;
     class CMM : public CTYPE
     {
-        Vec<bool, C_REF> stencil;
     public:
+
+        Vec<bool, C_REF> stencil;
+
         CMM() { 
             assert(CTYPE::bucket() == 1);
             assert(hc_isize == sizeof(uint32));

@@ -66,6 +66,7 @@ namespace pFROST {
 								HEAP		() {}
 								~HEAP		() { destroy(); }
 		__forceinline uint32*	data		() { return heap; }
+		__forceinline uint32*	end			() { return heap.end(); }
 		__forceinline uint32	top			() { assert(!empty()); return *heap; }
 		__forceinline uint32	size		() const { return heap.size(); }
 		__forceinline bool		empty		() const { return !heap.size(); }

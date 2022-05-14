@@ -138,5 +138,5 @@ void ParaFROST::rephase()
 	}
 	assert(last.rephase.type);
 	last.rephase.conflicts = stats.conflicts;
-	INCREASE_LIMIT(this, rephase, stats.rephase.all, nlognlogn, false);
+	INCREASE_LIMIT(rephase, stats.rephase.all, nlognlogn, false);
 }

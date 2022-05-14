@@ -63,7 +63,7 @@ namespace pFROST {
 		int		minimize_lbd;
 		int		luby_inc, luby_max;
 		int		lbd_tier2, lbd_tier1, lbd_fast, lbd_slow;
-		int		mdm_rounds, mdm_delay, mdm_inc, mdm_vsids_pumps, mdm_vmtf_pumps;
+		int		mdm_rounds, mdm_inc, mdm_vsids_pumps, mdm_vmtf_pumps;
 		int		subsume_priorbins, subsume_inc, subsume_max_occs, subsume_min_eff, subsume_max_eff, subsume_rel_eff, subsume_max_csize;
 		int		probe_inc, probe_min, probe_min_eff, probe_max_eff, probe_rel_eff;
 		int		ternary_priorbins, ternary_min_eff, ternary_max_eff, ternary_rel_eff;
@@ -91,7 +91,7 @@ namespace pFROST {
 		bool	vsids_en, vsidsonly_en;
 		bool	probe_en, probehbr_en, probe_sleep_en;
 		bool	model_en, modelprint_en, modelverify_en;
-		bool	mdm_walk_en, mdm_mcv_en, mdmassume_en, mdmvsidsonly_en;
+		bool	mdm_walk_en, mdm_mcv_en, mdmassume_en;
 		//==========================================//
 		//             Simplifier options           //
 		//==========================================//

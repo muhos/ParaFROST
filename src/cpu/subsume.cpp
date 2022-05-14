@@ -17,6 +17,7 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 **********************************************************************************/
 
 #include "solve.h"
+#include "histogram.h"
 
 using namespace pFROST;
 
@@ -151,6 +152,7 @@ void ParaFROST::schedule2sub(BCNF& src)
 {
 	if (src.empty()) return;
 	const LIT_ST* values = sp->value;
+	uint32* hist = vhist.data();
 	forall_cnf(src, i) {
 		const C_REF r = *i;
 		if (cm.deleted(r)) continue;
@@ -170,7 +172,7 @@ void ParaFROST::schedule2sub(BCNF& src)
 		}
 		if (rooted || subsume < 2) continue;
 		if (c.subsume()) stats.subsume.leftovers++;
-		histClause(c);
+		hist_clause(c, hist);
 		scheduled.push(CSIZE(r, (uint32)size));
 	}
 }
@@ -183,7 +185,7 @@ bool ParaFROST::subsumeAll()
 	assert(conflict == NOREF);
 	assert(cnfstate != UNSAT);
 	assert(wt.empty());
-	SET_BOUNDS(this, sub_limit, subsume, subsume.checks, searchprops, 0);
+	SET_BOUNDS(sub_limit, subsume, subsume.checks, searchprops, 0);
 	// schedule clauses
 	BCNF shrunken;
 	HIST_LCV_CMP clause_cmp(vhist);
@@ -271,7 +273,7 @@ void ParaFROST::subsume()
 	rebuildWT(opts.subsume_priorbins);
 	filterOrg();
 	if (retrail()) PFLOG2(2, " Propagation after subsume proved a contradiction");
-	INCREASE_LIMIT(this, subsume, stats.subsume.calls, nlognlogn, true);
+	INCREASE_LIMIT(subsume, stats.subsume.calls, nlognlogn, true);
 	printStats(success, 'u', CORANGE1);
 }
 

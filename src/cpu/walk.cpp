@@ -317,7 +317,7 @@ void ParaFROST::walkstep()
 
 void ParaFROST::walking()
 {
-	SET_BOUNDS(this, walk_limit, walk, walk.checks, searchticks, 2 * maxClauses());
+	SET_BOUNDS(walk_limit, walk, walk.checks, searchticks, 2 * maxClauses());
 	tracker.limit = walk_limit;
 	while (tracker.minimum
 		&& tracker.limit > stats.walk.checks

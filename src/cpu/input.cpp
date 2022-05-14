@@ -23,7 +23,6 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 namespace pFROST {
 
-    size_t  RADIXBUFFER[RADIXWIDTH]; // defined here since we don't have 'pfsort.cpp'
     Vec<ARG*, int> options; // container for all options available
 
     void printUsage(int argc, char** argv, bool verbose)

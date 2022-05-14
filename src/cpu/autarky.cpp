@@ -167,7 +167,7 @@ void ParaFROST::autarky()
 	attachNonBins(orgs, true);
 	attachNonBins(learnts, true);
 	if (retrail()) PFLOG2(2, " Propagation after autarky proved a contradiction");
-	UPDATE_SLEEPER(this, autarky, eliminated);
+	UPDATE_SLEEPER(autarky, eliminated);
 	printStats(eliminated, 'k', CCYAN);
 }
 

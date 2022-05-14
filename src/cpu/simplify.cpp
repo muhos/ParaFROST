@@ -120,7 +120,7 @@ void ParaFROST::sigmify()
 	assert(stats.clauses.original);
 	stats.sigma.calls++;
 	sigmifying();
-	INCREASE_LIMIT(this, sigma, stats.sigma.calls, nlognlogn, true);
+	INCREASE_LIMIT(sigma, stats.sigma.calls, nlognlogn, true);
 	last.sigma.reduces = stats.reduces + 1;
 	if (opts.phases > 2) {
 		opts.phases--;
@@ -224,7 +224,7 @@ void ParaFROST::sigmifying()
 	else newBeginning();
 	rebuildWT(opts.sigma_priorbins);
 	if (retrail()) PFLOG2(2, " Propagation after sigmify proved a contradiction");
-	UPDATE_SLEEPER(this, sigma, success);
+	UPDATE_SLEEPER(sigma, success);
 	printStats(1, 's', CGREEN);
 	if (!opts.profile_simp) timer.stop(), timer.simp += timer.cpuTime();
 	if (!opts.solve_en) killSolver();

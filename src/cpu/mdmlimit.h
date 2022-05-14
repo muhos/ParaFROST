@@ -1,5 +1,5 @@
-/***********************************************************************[version.h]
-Copyright(c) 2020, Muhammad Osama - Anton Wijs,
+/***********************************************************************[mdmlimit.hpp]
+Copyright(c) 2022, Muhammad Osama - Anton Wijs,
 Technische Universiteit Eindhoven (TU/e).
 
 This program is free software: you can redistribute it and/or modify
@@ -16,12 +16,21 @@ You should have received a copy of the GNU General Public License
 along with this program.  If not, see <https://www.gnu.org/licenses/>.
 **********************************************************************************/
 
-namespace pFROST {
+#ifndef __MDM_LIMIT_
+#define __MDM_LIMIT_
 
-	const char* version();
-	const char* compiler();
-	const char* compilemode();
-	const char* osystem();
-	const char* date();
+namespace SeqFROST {
+
+	#define mdm_update \
+	{ \
+		last.mdm.decisions = trail.size() - sp->propagated; \
+		last.mdm.unassigned = inf.maxVar - last.mdm.decisions; \
+		last.mdm.rounds--; \
+		stats.decisions.multiple += last.mdm.decisions; \
+		PFLOG2(2, " MDM %d: %d decisions are elected (%.2f%%)", \
+			stats.mdm.calls, last.mdm.decisions, percent(last.mdm.decisions, maxActive())); \
+	}
 
 }
+
+#endif

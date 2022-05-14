@@ -92,7 +92,6 @@ namespace pFROST {
 		//============== inline methods ===============
 		inline int		calcLBD				(CLAUSE&);
 		inline void		bumpClause			(CLAUSE&);
-		inline void		countoccurs			(CLAUSE&);
 		inline bool		subsumeCheck		(CLAUSE*, uint32&);
 		inline CL_ST	subsumeClause		(CLAUSE&, const C_REF&);
 		inline void		removeSubsumed		(CLAUSE&, const C_REF&, CLAUSE*);
@@ -102,8 +101,9 @@ namespace pFROST {
 		inline void		moveClause			(C_REF&, CMM&);
 		inline void		moveWatches			(WL&, CMM&);
 		inline uint32	minReachable		(WL&, DFS*, const DFS&);
-		inline bool		depFreeze			(WL&, const uint32&);
-		inline bool		valid				(WL&);
+		inline bool		depFreeze			(const uint32& cand, const LIT_ST* values, LIT_ST* frozen, uint32*& stack, WL& ws);
+		inline void		MDMAssume			(const LIT_ST* values, LIT_ST* frozen, uint32*& tail);
+		inline bool		valid				(const LIT_ST* values, WL& ws);
 		inline void		recycleWL			(const uint32&);
 		inline bool		findBinary			(uint32, uint32);
 		inline bool		findTernary			(uint32, uint32, uint32);
@@ -132,7 +132,6 @@ namespace pFROST {
 		inline void		varRandPhase		();
 		inline bool		verifyMDM			();
 		inline bool		verifySeen			();
-		inline void		clearMDM			();
 		inline int		calcLBD				();
 		inline void		resetoccurs			();
 		//==============================================
@@ -148,7 +147,6 @@ namespace pFROST {
 		inline bool		useTarget			() const { return (stable && opts.targetphase_en) || opts.targetonly_en; }
 		inline bool		vsidsOnly			() const { return (stable && opts.vsidsonly_en); }
 		inline bool		vsidsEnabled		() const { return (stable && opts.vsids_en); }
-		inline bool		varsEnough			() const { assert(trail.size() < inf.maxVar); return (inf.maxVar - trail.size()) > last.mdm.unassigned; }
 		inline bool		canPreSigmify		() const { return opts.sigma_en; }
 		inline bool		canRephase			() const { return opts.rephase_en && stats.conflicts > limit.rephase; }
 		inline bool		canReduce			() const { return opts.reduce_en && stats.clauses.learnt && stats.conflicts >= limit.reduce; }
@@ -176,6 +174,18 @@ namespace pFROST {
 			if (limit.sigma > stats.conflicts) return false;
 			if (sp->simplified >= opts.sigma_min) return true;
 			return ((stats.shrunken - last.shrink.removed) > (opts.sigma_min << 4));
+		}
+		inline bool		canMMD				() 
+		{
+			if (!opts.mdm_rounds) return false;
+			assert(trail.size() <= inf.maxVar); 
+			const bool enough = (inf.maxVar - trail.size()) > last.mdm.unassigned;
+			const bool rounds = last.mdm.rounds;
+			if (enough && !rounds && stats.conflicts >= limit.mdm) {
+				last.mdm.rounds = opts.mdm_rounds;
+				INCREASE_LIMIT(mdm, stats.mdm.calls, nlogn, true);
+			}
+			return enough && rounds;
 		}
 		inline bool		runningout			() const { 
 			return interrupted()
@@ -270,10 +280,22 @@ namespace pFROST {
 		}
 		inline void		clearFrozen			() {
 			assert(sp->stacktail - sp->tmpstack <= inf.maxVar);
-			uint32* start = sp->tmpstack, *tail = sp->stacktail;
-			while (start != tail)
-				sp->frozen[*start++] = 0;
+			LIT_ST* frozen = sp->frozen;
+			for (uint32* i = sp->tmpstack, *end = sp->stacktail; end != i; ++i)
+				frozen[*i] = 0;
+
 			assert(verifyFrozen());
+		}
+		inline void		clearMDM			() {
+			assert(verifyMDM());
+			LIT_ST* seen = sp->seen;
+			for (uint32* i = trail + sp->propagated, *end = trail.end(); i != end; ++i)
+				seen[ABS(*i)] = 0;
+
+			assert(verifySeen());
+			assert((sp->stacktail - sp->tmpstack) <= (inf.maxVar - last.mdm.decisions));
+
+			clearFrozen();
 		}
 		inline bool		verifyFrozen		() {
 			for (uint32 v = 0; v <= inf.maxVar; v++) {
@@ -532,7 +554,6 @@ namespace pFROST {
 		void	markLits			(CLAUSE&);
 		void	unmarkLits			(CLAUSE&);
 		void	sortClause			(CLAUSE&);
-		void	histClause			(CLAUSE&);
 		void	markSubsume			(CLAUSE&);
 		void	bumpShrunken		(CLAUSE&);
 		int		removeRooted		(CLAUSE&);
@@ -559,8 +580,7 @@ namespace pFROST {
 		void	sortviv				(BCNF&);
 		void	schedule2sub		(BCNF&);
 		void	schedule2viv		(BCNF&, const bool& tier2, const bool& learnt);
-		void	histCNF				(BCNF&, const bool& reset = false);
-		void	histCNFFlat			(BCNF&, const bool& reset = false);
+		void	histCNF				(BCNF& cnf, const bool& reset = false);
 		void	attachBins			(BCNF&, const bool& hasElim = false);
 		void	attachNonBins		(BCNF&, const bool& hasElim = false);
 		void	attachClauses		(BCNF&, const bool& hasElim = false);
@@ -600,7 +620,6 @@ namespace pFROST {
 		void	initLimits			();
 		void	initSolver			();
 		void	killSolver			();
-		void	varOrder			();
 		void	markReasons		    ();
 		void	unmarkReasons	    ();
 		void	recycleWT			();
@@ -640,9 +659,6 @@ namespace pFROST {
 		uint32	nextVMFQ			();
 		void	MDMInit				();
 		void	MDM					();
-		bool	canMMD				();
-		void	eligibleVSIDS		();
-		void	eligibleVMFQ		();
 		void	decide				();
 		void	report				();
 		void	wrapup				();
@@ -768,7 +784,6 @@ namespace pFROST {
 		inline bool		stop				(const int64 lr) {
 			return (phase == opts.phases) || (lr <= opts.lits_min && phase > 2);
 		}
-		inline void		histSimp			(S_REF);
 		inline void		bumpShrunken		(SCLAUSE&);
 		inline void		newResolvent		(const Lits_t&);
 		inline void		xresolve			(const uint32&, Lits_t& out_c);
@@ -795,7 +810,7 @@ namespace pFROST {
 		void			reduceOL			(OL&);
 		void			extract				(BCNF&);
 		void			createOT			(const bool& reset = true);
-		void			histSimp			(const SCNF& cnf, const bool& reset = false);
+		void			histSimp			(SCNF& cnf, const bool& reset = false);
 		void			strengthen			(SCLAUSE&, const uint32&);
 		void			removeClause		(SCLAUSE&);
 		void			removeClause		(S_REF);

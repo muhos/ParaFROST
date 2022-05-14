@@ -1,5 +1,5 @@
 [![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](https://www.gnu.org/licenses/gpl-3.0)
-[![Build Status](https://travis-ci.com/muhos/ParaFROST.svg?token=YXUywHfBSpqMqyUKnyT4&branch=master)](https://travis-ci.com/muhos/ParaFROST)
+[![Build Status](https://app.travis-ci.com/muhos/ParaFROST.svg?branch=master)](https://app.travis-ci.com/muhos/ParaFROST)
 # ParaFROST
 ParaFROST stands for Parallel Formal Reasoning On SaTisfiability. 
 It is a parallel SAT solver with GPU-accelerated inprocessing capable of harnessing NVIDIA CUDA-enabled GPUs in applying modern inprocessing tecnhiques in parallel. 

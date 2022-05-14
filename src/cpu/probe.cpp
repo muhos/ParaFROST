@@ -113,7 +113,7 @@ void ParaFROST::FLE()
 	assert(!DL());
 	assert(sp->propagated == trail.size());
 	SLEEPING(sleep.probe, opts.probe_sleep_en);
-	SET_BOUNDS(this, probe_limit, probe, probeticks, searchticks, nlogn(maxActive()));
+	SET_BOUNDS(probe_limit, probe, probeticks, searchticks, nlogn(maxActive()));
 	VSTATE* states = sp->vstate;
 	ignore = NOREF;
 	int64 old_hypers = stats.binary.resolvents;
@@ -189,7 +189,7 @@ void ParaFROST::FLE()
 	probes.clear(true);
 	int64 hypers = stats.binary.resolvents - old_hypers;
 	const bool success = currfailed || hypers;
-	UPDATE_SLEEPER(this, probe, success);
+	UPDATE_SLEEPER(probe, success);
 	printStats(success, 'f', CVIOLET4);
 }
 
@@ -216,6 +216,6 @@ void ParaFROST::probe()
 	assert(removed >= 0);
 	if (removed) PFLOG2(2, " Probe call %lld removed %d variables %.2f%%", stats.probe.calls, removed, percent(removed, before));
 	else PFLOG2(2, " Probe %lld: did not remove any variables", stats.probe.calls);
-	INCREASE_LIMIT(this, probe, stats.probe.calls, nlogn, true);
+	INCREASE_LIMIT(probe, stats.probe.calls, nlogn, true);
 	last.probe.reduces = stats.reduces + 1;
 }

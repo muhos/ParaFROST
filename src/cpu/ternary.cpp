@@ -242,7 +242,7 @@ void ParaFROST::ternary()
     scheduleTernary(use);
     uint32 scheduled = vschedule.size();
     if (scheduled) {
-        SET_BOUNDS(this, checks_limit, ternary, ternary.checks, searchticks, 2 * numClauses + nlogn(scheduled));
+        SET_BOUNDS(checks_limit, ternary, ternary.checks, searchticks, 2 * numClauses + nlogn(scheduled));
         ternarying(resolvents_limit, checks_limit);
     }
     free(use);
@@ -254,7 +254,7 @@ void ParaFROST::ternary()
     PFLOG2(2, " Ternary %lld: added %lld resolvents %.2f%% and subsumed %lld clauses %.2f%%",
         stats.ternary.calls, last.ternary.resolvents, percent((double)last.ternary.resolvents, (double)numClauses),
         subsumed, percent(subsumed, numClauses));
-    UPDATE_SLEEPER(this, ternary, last.ternary.resolvents);
+    UPDATE_SLEEPER(ternary, last.ternary.resolvents);
     printStats(last.ternary.resolvents, 'h', CVIOLET1);
     last.ternary.resolvents = 0;
 }

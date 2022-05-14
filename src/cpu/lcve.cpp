@@ -16,7 +16,9 @@ You should have received a copy of the GNU General Public License
 along with this program.  If not, see <https://www.gnu.org/licenses/>.
 **********************************************************************************/
 
+#include "sort.h"
 #include "simplify.h"
+#include "histogram.h"
 
 using namespace pFROST;
 
@@ -28,10 +30,7 @@ void ParaFROST::varReorder()
 	occurs.resize(inf.maxVar + 1);
 	assert(!scnf.empty());
 	histSimp(scnf, true);
-	uint32* scores = sp->tmpstack;
-	forall_variables(v) {
-		eligible[v - 1] = v, scores[v] = prescore(v);
-	}
+	write_scores(vars, scores, occs);
 	rSort(eligible, LCV_CMP(scores), LCV_RANK(scores));
 	if (opts.profile_simp) timer.pstop(), timer.vo += timer.pcpuTime();
 	PFLDONE(2, 5);

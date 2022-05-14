@@ -17,6 +17,7 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 **********************************************************************************/
 
 #include "solve.h"
+#include "histogram.h"
 using namespace pFROST;
 
 // In clauses scheduling, binary clauses are also considered
@@ -350,6 +351,7 @@ void ParaFROST::schedule2viv(BCNF& schedule, const bool& tier2, const bool& lear
 	if (tier2) { lowlbd = opts.lbd_tier1 + 1; highlbd = opts.lbd_tier2; }
 	else if (learnt) highlbd = opts.lbd_tier1;
 	uint32 prioritized = 0;
+	uint32* hist = vhist.data();
 	if (learnt) {
 		PFLOGN2(2, "  shrinking learnts before vivification..");
 		PFLEARNTINF(this, beforeCls, beforeLits);
@@ -367,7 +369,7 @@ void ParaFROST::schedule2viv(BCNF& schedule, const bool& tier2, const bool& lear
 				if (c.vivify() != priority) continue;
 				assert(c.learnt());
 				if (priority) prioritized++;
-				histClause(c);
+				hist_clause(c, hist);
 				schedule.push(ref);
 			}
 		}
@@ -387,7 +389,7 @@ void ParaFROST::schedule2viv(BCNF& schedule, const bool& tier2, const bool& lear
 				if (c.vivify() != priority) continue;
 				if (priority) prioritized++;
 				assert(c.original());
-				histClause(c);
+				hist_clause(c, hist);
 				schedule.push(ref);
 			}
 		}
@@ -421,7 +423,7 @@ void ParaFROST::vivifying(const CL_ST& type)
 	sortviv(schedule);
 	rebuildWT(opts.vivify_priorbins);
 	const uint32 scheduled = schedule.size();
-	SET_BOUNDS(this, limit, vivify, probeticks, searchticks, nlogn(scheduled));
+	SET_BOUNDS(limit, vivify, probeticks, searchticks, nlogn(scheduled));
 	if (tier2) {
 		const uint64 extra = (limit - stats.probeticks) << 1;
 		limit += extra;

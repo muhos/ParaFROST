@@ -112,7 +112,7 @@ void ParaFROST::transitive()
 	assert(!DL());
 	assert(sp->propagated == trail.size());
 	sortWT();
-	SET_BOUNDS(this, limit, transitive, transitiveticks, searchticks, 0);
+	SET_BOUNDS(limit, transitive, transitiveticks, searchticks, 0);
 	assert(last.transitive.literals < inf.nDualVars);
 	uint32 tried = 0, units = 0;
 	uint64 removed = 0;

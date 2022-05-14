@@ -105,13 +105,13 @@ void ParaFROST::initLimits()
 		last.vsids.booster = 1.0 / opts.var_decay;
 	}
 	last.transitive.literals = 2;
-	INIT_LIMIT(this, limit.reduce, opts.reduce_inc, false);
-	INIT_LIMIT(this, limit.rephase, opts.rephase_inc, false);
-	INIT_LIMIT(this, limit.mode.conflicts, opts.mode_inc, false);
-	INIT_LIMIT(this, limit.mdm, opts.mdm_inc, true);
-	INIT_LIMIT(this, limit.probe, opts.probe_inc, true);
-	INIT_LIMIT(this, limit.sigma, opts.sigma_inc, true);
-	INIT_LIMIT(this, limit.subsume, opts.subsume_inc, true);
+	INIT_LIMIT(limit.reduce, opts.reduce_inc, false);
+	INIT_LIMIT(limit.rephase, opts.rephase_inc, false);
+	INIT_LIMIT(limit.mode.conflicts, opts.mode_inc, false);
+	INIT_LIMIT(limit.mdm, opts.mdm_inc, true);
+	INIT_LIMIT(limit.probe, opts.probe_inc, true);
+	INIT_LIMIT(limit.sigma, opts.sigma_inc, true);
+	INIT_LIMIT(limit.subsume, opts.subsume_inc, true);
 	lbdrest.init(opts.lbd_rate, opts.lbd_fast, opts.lbd_slow);
 	lbdrest.reset();
 	stable = opts.stable_en && opts.vsidsonly_en;

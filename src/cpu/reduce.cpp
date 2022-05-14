@@ -61,7 +61,7 @@ void ParaFROST::reduce()
 	reduceLearnts();
 	recycle();
 	unmarkReasons();
-	INCREASE_LIMIT(this, reduce, stats.reduces, nbylogn, false);
+	INCREASE_LIMIT(reduce, stats.reduces, nbylogn, false);
 	if (shrunken && canMap()) map(); // "recycle" must be called beforehand
 }
 

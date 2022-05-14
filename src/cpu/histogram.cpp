@@ -17,6 +17,7 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 **********************************************************************************/
 
 #include "solve.h" 
+#include "histogram.h"
 
 using namespace pFROST;
 
@@ -45,44 +46,6 @@ inline bool ParaFROST::isBinary(const C_REF& r, uint32& first, uint32& second)
 	return true;
 }
 
-inline void	ParaFROST::resetoccurs()
-{
-	forall_vector(OCCUR, occurs, o) {
-		o->ps = o->ns = 0;
-	}
-}
-
-inline void	ParaFROST::countoccurs(CLAUSE& c)
-{
-	assert(!c.deleted());
-	forall_clause(c, k) {
-		const uint32 lit = *k;
-		CHECKLIT(lit);
-		if (SIGN(lit)) occurs[ABS(lit)].ns++;
-		else occurs[ABS(lit)].ps++;
-	}
-}
-
-inline void	ParaFROST::histSimp(S_REF sref) {
-	assert(!sref->deleted());
-	SCLAUSE& c = *sref;
-	forall_clause(c, k) {
-		const uint32 lit = *k;
-		CHECKLIT(lit);
-		if (SIGN(lit)) occurs[ABS(lit)].ns++;
-		else occurs[ABS(lit)].ps++;
-	}
-}
-
-void ParaFROST::histClause(CLAUSE& c)
-{
-	assert(!c.deleted());
-	forall_clause(c, k) {
-		CHECKLIT(*k);
-		vhist[*k]++;
-	}
-}
-
 void ParaFROST::histBins(BCNF& cnf)
 {
 	forall_cnf(cnf, i) {
@@ -97,37 +60,37 @@ void ParaFROST::histBins(BCNF& cnf)
 	}
 }
 
-void ParaFROST::histCNF(BCNF& cnf, const bool& reset) {
+void ParaFROST::histCNF(BCNF& cnf, const bool& reset) 
+{
 	if (cnf.empty()) return;
-	if (reset) resetoccurs();
+
+	OCCUR* occs = occurs.data();
+
+	const bool* deleted = cm.stencil.data();
+
+	if (reset) 
+		memset(occs, 0, occurs.size() * sizeof(OCCUR));
+
 	forall_cnf(cnf, i) {
 		const C_REF ref = *i;
-		if (cm.deleted(ref)) continue;
-		countoccurs(cm[*i]);
+		if (deleted[ref]) continue;
+		CLAUSE& c = cm[ref];
+		count_occurs(c, occs);
 	}
 }
 
-void ParaFROST::histCNFFlat(BCNF& cnf, const bool& reset) {
+void ParaFROST::histSimp(SCNF& cnf, const bool& reset) 
+{
 	if (cnf.empty()) return;
-	if (reset) {
-		forall_vector(uint32, vhist, h) { 
-			*h = 0;
-		}
-	}
-	forall_cnf(cnf, i) {
-		const C_REF ref = *i;
-		if (cm.deleted(ref)) continue;
-		histClause(cm[*i]);
-	}
-}
 
-void ParaFROST::histSimp(const SCNF& cnf, const bool& reset) {
-	if (cnf.empty()) return;
-	if (reset) resetoccurs();
-	for (uint32 i = 0; i < cnf.size(); i++) {
-		S_REF c = cnf[i];
-		assert(c);
-		if (c->deleted()) continue;
-		histSimp(c);
+	OCCUR* occs = occurs.data();
+
+	if (reset) 
+		memset(occs, 0, occurs.size() * sizeof(OCCUR));
+
+	forall_vector(S_REF, scnf, i) {
+		SCLAUSE& c = **i;
+		if (c.deleted()) continue;
+		count_occurs(c, occs);
 	}
 }
