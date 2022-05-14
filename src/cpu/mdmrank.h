@@ -89,7 +89,7 @@ namespace SeqFROST {
 			freevar = QUEUETYPE.previous(freevar); \
 		} \
 		assert(eligible.size() >= 1); \
-		rSort(eligible, KEY_CMP_BUMP(bumps), KEY_RANK_BUMP(bumps)); \
+		wolfsort(eligible.data(), eligible.size(), STABLE_BUMP(bumps)); \
 		PFLDONE(2, 5); \
 		if (verbose >= 3) { \
 			PFLOG0("  eligible " #QUEUETYPE " decisions:"); \
