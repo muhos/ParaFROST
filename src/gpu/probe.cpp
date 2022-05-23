@@ -52,7 +52,7 @@ struct PROBE_HEAP_CMP {
 
 void ParaFROST::analyzeFailed(const uint32& failed)
 {
-	assert(cnfstate);
+	assert(UNSOLVED(cnfstate));
 	assert(DL() == 1);
 	assert(conflict != NOREF);
 	CHECKLIT(failed);
@@ -62,13 +62,12 @@ void ParaFROST::analyzeFailed(const uint32& failed)
 	if (unassigned(failed)) {
 		const uint32 unit = FLIP(failed);
 		PFLOG2(3, "  found unassigned failed probe %d", l2i(unit));
-		enqueue(unit);
+		enqueueUnit(unit);
 	}
 	if (BCP()) {
 		PFLOG2(2, "  failed probe %d proved a contradiction", l2i(failed));
 		learnEmpty();
 	}
-	assert(!DL());
 }
 
 void ParaFROST::scheduleProbes() 
@@ -79,7 +78,7 @@ void ParaFROST::scheduleProbes()
 	histBins(orgs);
 	histBins(learnts);
 	VSTATE* states = sp->vstate;
-	int count[2] = { 0 , 0 };
+	uint32 count[2] = { 0 , 0 };
 	forall_variables(v) {
 		if (states[v].state) continue;
 		const uint32 p = V2L(v), n = NEG(p);
@@ -96,7 +95,8 @@ void ParaFROST::scheduleProbes()
 	PFLOG2(2, "  scheduled %d (%d prioritized) probes %.2f%%", probes.size(), count[1], percent(probes.size(), maxActive()));
 }
 
-uint32 ParaFROST::nextProbe() {
+uint32 ParaFROST::nextProbe() 
+{
 	while (!probes.empty()) {
 		const uint32 probe = probes.back();
 		CHECKLIT(probe);
@@ -197,7 +197,7 @@ void ParaFROST::probe()
 {
 	rootify();
 	assert(conflict == NOREF);
-	assert(cnfstate == UNSOLVED);
+	assert(UNSOLVED(cnfstate));
 	stats.probe.calls++;
 	printStats(1, '-', CVIOLET0);
 	assert(!probed);

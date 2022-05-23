@@ -56,7 +56,7 @@ bool ParaFROST::propFailed()
 			const uint32 unit = *u;
 			CHECKLIT(unit);
 			const LIT_ST val = values[unit];
-			if (UNASSIGNED(val)) enqueueUnit(unit);
+			if (UNASSIGNED(val)) enqueueDevUnit(unit);
 			else if (!val) return false; // early conflict detection
 		}
 		if (trail.size() == sp->propagated) vars->nUnits = nForced = 0; // duplicate units
@@ -126,7 +126,11 @@ bool ParaFROST::prop()
 				}
 			}
 		}
-		forall_occurs(ol, i) { cnf[*i].markDeleted(); }
+		forall_occurs(ol, i) { 
+			SCLAUSE& c = cnf[*i];
+			assert(c.size());
+			c.markDeleted();
+		}
 		ol.clear(true), f_ol.clear(true);
 	}
 	cleanProped();
@@ -154,8 +158,7 @@ inline bool ParaFROST::propClause(const LIT_ST* values, const uint32& lit, SCLAU
 	return false;
 }
 
-inline bool ParaFROST::enqueueCached(const cudaStream_t& stream) 
-{
+inline bool ParaFROST::enqueueCached(const cudaStream_t& stream) {
 	if (vars->nUnits) {
 		nForced = sp->propagated;
 		sync(stream); // sync units copy
@@ -166,7 +169,7 @@ inline bool ParaFROST::enqueueCached(const cudaStream_t& stream)
 			const uint32 unit = *u;
 			CHECKLIT(unit);
 			const LIT_ST val = values[unit];
-			if (UNASSIGNED(val)) enqueueUnit(unit);
+			if (UNASSIGNED(val)) enqueueDevUnit(unit);
 			else if (!val) return false; // early conflict detection
 		}
 		if (trail.size() == sp->propagated) vars->nUnits = nForced = 0; // duplicate units
@@ -181,9 +184,9 @@ inline void	ParaFROST::cleanProped() {
 		PFLDONE(2, 5);
 		nForced = sp->propagated - nForced;
 		PFLREDALL(this, 2, "BCP Reductions");
-		nForced = 0, vars->tmpObj.clear();
-		assert(vars->tmpObj.data() == cumm.unitsdPtr());
+		nForced = 0, vars->tmpUnits.clear();
+		assert(vars->tmpUnits.data() == cumm.unitsdPtr());
 		if (!opts.sub_en) reduceOTAsync(cnf, ot, 0);
-		CHECK(cudaMemcpyAsync(vars->units, &vars->tmpObj, sizeof(cuVecU), cudaMemcpyHostToDevice));
+		CHECK(cudaMemcpyAsync(vars->units, &vars->tmpUnits, sizeof(cuVecU), cudaMemcpyHostToDevice));
 	}
 }

@@ -83,7 +83,6 @@ void ParaFROST::transiting(const uint32& src, const uint64& limit, uint64& remov
 				}
 			}
 		}
-		stats.propagations.transitive += propagated;
 		forall_vector(uint32, marked, i) { unmarkLit(*i); }
 		marked.clear();
 		if (transitive) {
@@ -97,7 +96,7 @@ void ParaFROST::transiting(const uint32& src, const uint64& limit, uint64& remov
 	if (failed) {
 		units++;
 		PFLOG2(4, "  found failed literal %d during transitive reduction", l2i(src));
-		enqueue(FLIP(src));
+		enqueueUnit(FLIP(src));
 		if (BCP()) {
 			PFLOG2(2, " Propagation within transitive reduction proved a contradiction");
 			learnEmpty();

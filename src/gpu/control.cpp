@@ -240,8 +240,9 @@ namespace pFROST {
 		_penalty = 300 * MBYTE;
 #endif
 		_free = devProp.totalGlobalMem;
+		size_t _shared_penalty = 512; // enough for the kernel launch
 		maxGPUThreads = devProp.multiProcessorCount * devProp.maxThreadsPerMultiProcessor;
-		maxGPUSharedMem = devProp.sharedMemPerBlock;
+		maxGPUSharedMem = devProp.sharedMemPerBlock - _shared_penalty;
 		if (!quiet_en) {
 			PFLOG1(" Available GPU: %d x %s%s @ %.2fGHz%s (compute cap: %d.%d)", devCount, CREPORTVAL, devProp.name, ratio((double)devProp.clockRate, 1e6), CNORMAL, devProp.major, devProp.minor);
 			PFLOG1(" Available GPU Multiprocessors: %d MPs (%d cores/MP)", devProp.multiProcessorCount, SM2Cores(devProp.major, devProp.minor));

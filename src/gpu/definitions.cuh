@@ -32,52 +32,54 @@ namespace pFROST {
 	extern uint32 maxGPUThreads;
 	extern size_t maxGPUSharedMem;
 
-	namespace SIGmA {
+	#if !defined(_PFROST_H_)
+	#define _PFROST_H_ inline __host__
+	#endif
 
-		#if !defined(_PFROST_H_)
-		#define _PFROST_H_ inline __host__
-		#endif
-		#if !defined(_PFROST_D_)
-		#define _PFROST_D_ __forceinline__ __device__
-		#endif
-		#if !defined(_PFROST_H_D_)
-		#define _PFROST_H_D_ inline __host__ __device__
-		#endif
-		#if defined(DEBUG) || defined(_DEBUG) 
-		#define LOGERR(MESSAGE)	\
-				do { \
-					cudaError_t ERR = cudaGetLastError(); \
-					if (cudaSuccess != ERR) { \
-						PFLOGEN("%s(%i): %s due to (%d) %s", __FILE__, __LINE__, MESSAGE, static_cast<int>(ERR), cudaGetErrorString(ERR)); \
-						cudaDeviceReset(); \
-						exit(1); \
-					} \
+	#if !defined(_PFROST_D_)
+	#define _PFROST_D_ __device__
+	#endif
+
+	#if !defined(_PFROST_IN_D_)
+	#define _PFROST_IN_D_ inline __device__
+	#endif
+
+	#if !defined(_PFROST_H_D_)
+	#define _PFROST_H_D_ inline __host__ __device__
+	#endif
+
+	#if	defined(_DEBUG) || defined(DEBUG) || !defined(NDEBUG)
+	#define LOGERR(MESSAGE)	\
+		do { \
+				cudaError_t ERR = cudaGetLastError(); \
+				if (cudaSuccess != ERR) { \
+					PFLOGEN("%s(%i): %s due to (%d) %s", __FILE__, __LINE__, MESSAGE, static_cast<int>(ERR), cudaGetErrorString(ERR)); \
+					cudaDeviceReset(); \
+					exit(1); \
 				} \
-				while(0)
-		#else
-		#define LOGERR(MESSAGE)	do { } while(0)
-		#endif
+		} while(0)
+	#else
+	#define LOGERR(MESSAGE)	do { } while(0)
+	#endif
 
-		__forceinline__ void	CHECK(cudaError_t returncode)
-		{
-#if defined(DEBUG) || defined(_DEBUG)
-			if (returncode != cudaSuccess) {
-				PFLOGEN("CUDA runtime failure due to %s", cudaGetErrorString(returncode));
-				cudaDeviceReset();
-				exit(1);
-			}
-#endif
+	__forceinline__ void	CHECK(cudaError_t returncode)
+	{
+	#if	defined(_DEBUG) || defined(DEBUG) || !defined(NDEBUG)
+		if (returncode != cudaSuccess) {
+			PFLOGEN("CUDA runtime failure due to %s", cudaGetErrorString(returncode));
+			cudaDeviceReset();
+			exit(1);
 		}
+	#endif
+	}
 
-		__forceinline__ void	sync(const cudaStream_t& stream = 0) {
-			CHECK(cudaStreamSynchronize(stream));
-		}
+	__forceinline__ void	sync(const cudaStream_t& stream = 0) 
+	{
+		CHECK(cudaStreamSynchronize(stream));
+	}
 
-		__forceinline__ void	syncAll() {
-			CHECK(cudaDeviceSynchronize());
-		}
+	#define syncAll() CHECK(cudaDeviceSynchronize());
 
-	}	
 }
 
 #endif

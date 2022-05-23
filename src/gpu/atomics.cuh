@@ -25,33 +25,17 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 namespace pFROST {
 
-    namespace SIGmA {
-
-        _PFROST_D_ uint32 atomicAggInc(uint32* counter) {
-            uint32 mask = __activemask(), total = __popc(mask), laneMask;
-            laneMask_lt(laneMask);
-            uint32 prefix = __popc(mask & laneMask);
-            int lowest_lane = __ffs(mask) - 1;
-            uint32 warpRes = 0;
-            if (prefix == 0) warpRes = atomicAdd(counter, total);
-            warpRes = __shfl_sync(mask, warpRes, lowest_lane);
-            uint32 teread_offset = prefix + warpRes;
-            return teread_offset;
-        }
-
-        _PFROST_D_ int atomicAggInc(int* counter) {
-            uint32 mask = __activemask(), total = __popc(mask), laneMask;
-            laneMask_lt(laneMask);
-            uint32 prefix = __popc(mask & laneMask);
-            int lowest_lane = __ffs(mask) - 1;
-            int warpRes = 0;
-            if (prefix == 0) warpRes = atomicAdd(counter, total);
-            warpRes = __shfl_sync(mask, warpRes, lowest_lane);
-            int teread_offset = prefix + warpRes;
-            return teread_offset;
-        }
-
-    }
+	template<class T>
+	_PFROST_D_ T atomicAggInc(T* counter) {
+		const uint32 mask = __activemask(), total = __popc(mask);
+		uint32 laneMask;
+		laneMask_lt(laneMask);
+		const T prefix = (T)__popc(mask & laneMask);
+		const int lowest_lane = __ffs(mask) - 1;
+		T warpRes = prefix ? 0 : atomicAdd(counter, total);
+		warpRes = __shfl_sync(mask, warpRes, lowest_lane);
+		return (prefix + warpRes);
+	}
 
 }
 

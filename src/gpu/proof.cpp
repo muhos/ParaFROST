@@ -19,29 +19,19 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 #include "proof.h"
 #include "sort.h"
 
-#ifdef _WIN32
-	#define writebyte putc
-#else
-	#define writebyte putc_unlocked
-#endif
-
-#define BYTEMAX			 128
-#define IBYTEMAX		-128
-#define BYTEMASK		 127
-#define L2B(x)			(((x) & BYTEMASK) | BYTEMAX)
-#define ISLARGE(x)		((x) & IBYTEMAX)
-
 using namespace pFROST;
 
-PROOF::PROOF() : 
+PROOF::PROOF() :
 	proofFile(NULL)
 	, sp(NULL)
 	, vars(NULL)
 	, added(0)
+	, bytesWritten(0)
 	, nonbinary_en(false)
-	{}
+{}
 
-PROOF::~PROOF() { 
+PROOF::~PROOF() 
+{ 
 	clause.clear(true);
 	tmpclause.clear(true);
 	close();
@@ -79,7 +69,7 @@ void PROOF::init(SP* _sp, uint32* vorg)
 	vars = vorg;
 }
 
-inline bool PROOF::checkFile()
+bool PROOF::checkFile()
 {
 	if (proofFile == NULL) {
 		PFLOGEN("proof file is not opened or cannot be accessed");
@@ -87,8 +77,6 @@ inline bool PROOF::checkFile()
 	}
 	return true;
 }
-
-inline void PROOF::write(const Byte& byte) { writebyte(byte, proofFile); }
 
 inline void PROOF::write(const uint32* lits, const int& len)
 {
@@ -121,14 +109,11 @@ inline void PROOF::binary(const uint32* lits, const int& len)
 		CHECKLIT(lit);
 		uint32 r = V2DEC(vars[ABS(lit)], SIGN(lit));
 		assert(r > 1 && r < NOVAR);
-		Byte b;
 		while (ISLARGE(r)) {
-			b = L2B(r);
-			write(b);
+			write(L2B(r));
 			r >>= 7;
 		}
-		b = r;
-		write(b);
+		write(r);
 	}
 	write(0);
 }
@@ -186,6 +171,8 @@ void PROOF::addClause(CLAUSE& c) { addline(c, c.size()); }
 void PROOF::deleteClause(Lits_t& c) { delline(c, c.size()); }
 
 void PROOF::deleteClause(CLAUSE& c) { delline(c, c.size()); }
+
+void PROOF::deleteClause(uint32* c, const int& size) { delline(c, size); }
 
 void PROOF::shrinkClause(CLAUSE& c, const uint32& me)
 {

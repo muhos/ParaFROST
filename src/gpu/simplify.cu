@@ -19,9 +19,8 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 #include "solve.h"
 
 using namespace pFROST;
-using namespace SIGmA;
 
-inline void	ParaFROST::cleanManaged()
+inline void	ParaFROST::cleanManaged() 
 {
 	if (vars != NULL) delete vars;
 	cumm.freeVars(), cumm.freeCNF(), cumm.freeOT();
@@ -48,7 +47,8 @@ inline bool	ParaFROST::reallocCNF()
 inline bool	ParaFROST::reallocOT(const cudaStream_t& stream)
 {
 	assert(inf.nLiterals);
-	calcOccurs(inf.nLiterals);
+	if (!flattenCNF(inf.nLiterals)) { simpstate = OTALLOC_FAIL; return false; }
+	histSimp(inf.nLiterals);
 	if (!cumm.resizeOTAsync(ot, inf.nLiterals, stream)) { simpstate = OTALLOC_FAIL; return false; }
 	return true;
 }
@@ -59,74 +59,23 @@ inline void	ParaFROST::initSimplifier()
 	cumm.freeFixed();
 	tca.destroy();
 	simpstate = AWAKEN_SUCC;
-	dataoff = csoff = 0;
 	phase = mu_inc = 0;
 	ereCls = nForced = 0;
-	compacted = false;
+	dataoff = csoff = 0;
+	flattened = compacted = false;
 	assert(hcnf == NULL);
 	if (stats.sigma.calls > 1) {
-		// memory must be cleaned before this inquiry
 		size_t free = 0, tot = 0;
 		CHECK(cudaMemGetInfo(&free, &tot));
 		cumm.reset(free);
 	}
 }
 
-void ParaFROST::awaken()
-{
-	assert(conflict == NOREF);
-	assert(cnfstate == UNSOLVED);
-	assert(sp->propagated == trail.size());
-	initSimplifier();
-	// alloc simplifier memory 
-	size_t numCls = maxClauses(), numLits = maxLiterals();
-	if (opts.phases) {
-		size_t maxAddedCls = opts.ve_en ? stats.clauses.original : 0;
-		size_t maxAddedLits = opts.ve_en ? size_t(stats.literals.original * opts.lits_mul) : 0;
-		PFLOG2(2, " Maximum added clauses/literals = %zd/%zd", maxAddedCls, maxAddedLits);
-		numCls += maxAddedCls, numLits += maxAddedLits;
-	}
-	assert(inf.nDualVars);
-	if (!cumm.allocHist(cuhist) ||
-		!cumm.allocAux(numCls) ||
-		!cumm.allocVars(vars, numLits) ||
-		!cumm.resizeCNF(cnf, numCls, numLits)) { simpstate = CNFALLOC_FAIL; return; }
-	printStats(1, '-', CGREEN0), inf.nClauses = inf.nLiterals = 0;
-	wt.clear(true);
-	if (unified_access) {
-		PFLOGN2(2, " Extracting clauses directly to device..");
-		if (profile_gpu) cutimer->start();
-		extract(cnf, orgs), orgs.clear(true);
-		extract(cnf, learnts), learnts.clear(true);
-		cm.destroy();
-		assert(inf.nClauses == cnf->size());
-		if (profile_gpu) cutimer->stop(), cutimer->io += cutimer->gpuTime();
-	}
-	else {
-		PFLOGN2(2, " Extracting clauses heterogeneously to device..");
-		if (profile_gpu) cutimer->start(streams[0]);
-		cumm.createMirror(hcnf, maxClauses(), maxLiterals());
-		extract(hcnf, orgs), reflectCNF(streams[0], streams[1]), orgs.clear(true);
-		extract(hcnf, learnts), reflectCNF(streams[0], streams[1]), learnts.clear(true);
-		cm.destroy();
-		sync(streams[0]), sync(streams[1]);
-		cumm.resizeCNFAsync(cnf, hcnf->data().size, hcnf->size());
-		assert(hcnf->data().size == dataoff);
-		assert(inf.nClauses == hcnf->size() && hcnf->size() == csoff);
-		if (profile_gpu) cutimer->stop(streams[0]), cutimer->io += cutimer->gpuTime();
-	}
-	PFLENDING(2, 5, "(%d clauses extracted)", inf.nClauses);
-	sync(); // sync device CNF resize
-	prepareCNFAsync(cnf, streams[0]);
-	assert(vorg.size() == inf.maxVar + 1);
-	cuhist.fetchVars(vorg, streams[1]);
-}
-
 void ParaFROST::sigmify()
 {
 	if (alldisabled()) return;
 	assert(conflict == NOREF);
-	assert(cnfstate == UNSOLVED);
+	assert(UNSOLVED(cnfstate));
 	assert(stats.clauses.original);
 	stats.sigma.calls++;
 	sigmifying();
@@ -138,21 +87,76 @@ void ParaFROST::sigmify()
 	}
 }
 
+void ParaFROST::awaken()
+{
+	assert(conflict == NOREF);
+	assert(UNSOLVED(cnfstate));
+	assert(sp->propagated == trail.size());
+	initSimplifier();
+	// overapproximate the size of new formula and saved witnesses
+	size_t numCls = maxClauses(), numLits = maxLiterals();
+	size_t savedLits = inf.nDualVars + numCls + numLits;
+	if (opts.phases) {
+		size_t maxAddedCls = opts.ve_en ? stats.clauses.original : 0;
+		size_t maxAddedLits = opts.ve_en ? size_t(stats.literals.original * opts.lits_mul) : 0;
+		PFLOG2(2, " Maximum added clauses/literals = %zd/%zd", maxAddedCls, maxAddedLits);
+		numCls += maxAddedCls, numLits += maxAddedLits;
+	}
+	assert(inf.nDualVars);
+	if (!cumm.allocHist(cuhist, opts.proof_en) ||
+		!cumm.allocAux(numCls) ||
+		!cumm.allocVars(vars, savedLits) ||
+		!cumm.resizeCNF(cnf, numCls, numLits)) { simpstate = CNFALLOC_FAIL; return; }
+	printStats(1, '-', CGREEN0);
+	inf.nClauses = inf.nLiterals = 0;
+	wt.clear(true);
+	if (gopts.unified_access) {
+		PFLOGN2(2, " Extracting clauses directly to device..");
+		if (gopts.profile_gpu) cutimer->start();
+		extract(cnf, orgs), orgs.clear(true);
+		extract(cnf, learnts), learnts.clear(true);
+		cm.destroy();
+		assert(inf.nClauses == cnf->size());
+		if (gopts.profile_gpu) cutimer->stop(), cutimer->io += cutimer->gpuTime();
+	}
+	else {
+		PFLOGN2(2, " Extracting clauses heterogeneously to device..");
+		if (gopts.profile_gpu) cutimer->start(streams[0]);
+		cumm.createMirror(hcnf, maxClauses(), maxLiterals());
+		extract(hcnf, orgs), reflectCNF(streams[0], streams[1]), orgs.clear(true);
+		extract(hcnf, learnts), reflectCNF(streams[0], streams[1]), learnts.clear(true);
+		cm.destroy();
+		sync(streams[0]), sync(streams[1]);
+		cumm.resizeCNFAsync(cnf, hcnf->data().size, hcnf->size());
+		assert(hcnf->data().size == dataoff);
+		assert(inf.nClauses == hcnf->size() && hcnf->size() == csoff);
+		if (gopts.profile_gpu) cutimer->stop(streams[0]), cutimer->io += cutimer->gpuTime();
+	}
+	PFLENDING(2, 5, "(%d clauses extracted)", inf.nClauses);
+	vars->varcore = opts.ve_fun_en ? vars->eligible : NULL;
+	sync(); // sync device CNF resize
+	initDevVorg(cuhist); // load device pointers to constant memory
+	prepareCNFAsync(cnf, streams[0]);
+	if (opts.proof_en) 
+		cuMemSetAsync(cuhist.d_lbyte, 0, inf.nDualVars);
+	assert(vorg.size() == inf.maxVar + 1);
+	cuhist.fetchVars(vorg, streams[1]);
+	if (opts.proof_en) {
+		const uint32 *literals = flattenCNF(inf.nLiterals);
+		uint32 proofcap = cuproof.count(literals, inf.nLiterals);
+		proofcap *= 1.5;
+		if (!cuproof.alloc(proofcap)) { simpstate = AWAKEN_FAIL; return; }
+	}
+}
+
 void ParaFROST::sigmifying()
 {
 	/********************************/
-	/*		Getting ready...        */
+	/*         awaken sigma         */
 	/********************************/
 	SLEEPING(sleep.sigma, opts.sigma_sleep_en);
 	rootify();
-	assert(cnfstate == UNSOLVED);
-	PFLOGN2(2, " Shrinking CNF before sigmification..");
-	if (sp->simplified < inf.maxFrozen) sp->simplified = inf.maxFrozen;
-	int64 clsbefore = maxClauses(), litsbefore = maxLiterals();
-	shrinkTop(orgs), shrinkTop(learnts);
-	PFLSHRINKALL(this, 2, clsbefore, litsbefore);
-	assert(stats.clauses.original == orgs.size());
-	assert(stats.clauses.learnt == learnts.size());
+	shrinkTop(false);
 	if (orgs.empty()) {
 		recycleWT();
 		return;
@@ -171,8 +175,8 @@ void ParaFROST::sigmifying()
 	assert(!phase && !mu_inc);
 	const int64 bmelted = inf.maxMelted, bclauses = inf.nClauses, bliterals = inf.nLiterals;
 	int64 cdiff = INT64_MAX, ldiff = INT64_MAX;
-	clsbefore = inf.nClauses, litsbefore = inf.nLiterals; 
-	while (!interrupted()) {
+	int64 clsbefore = inf.nClauses, litsbefore = inf.nLiterals;
+	while (!simpstate && !interrupted()) {
 		if (!reallocOT(streams[0])) break;
 		sync(streams[0]);
 		reallocCNF();
@@ -180,15 +184,9 @@ void ParaFROST::sigmifying()
 		if (!prop()) killSolver();
 		if (!LCVE()) break;
 		sortOTAsync(cnf, ot, vars, streams);
-		if (simpstate == CNFALLOC_FAIL) {
-			SUB();
-			cacheNumUnits(streams[3]);
-			cacheUnits(streams[3]);
-			ERE();
-			break;
-		}
 		if (stop(cdiff, ldiff)) { ERE(); break; }
 		SUB(), VE(), BCE();
+		cuproof.cacheProof(streams[4]);
 		countAll();
 		cacheNumUnits(streams[3]);
 		inf.nClauses = inf.n_cls_after, inf.nLiterals = inf.n_lits_after;
@@ -197,6 +195,8 @@ void ParaFROST::sigmifying()
 		cacheUnits(streams[3]);
 		phase++, mu_inc++;
 		mu_inc += phase == opts.phases;
+		cuproof.writeProof(streams[4]);
+		flattened = false;
 	}
 	/********************************/
 	/*          Write Back          */
@@ -206,16 +206,15 @@ void ParaFROST::sigmifying()
 	cacheCNF(streams[0], streams[1]);
 	if (!propFailed()) killSolver(); // prop any pending units via host memory if 'realloc' failed
 	bool success = (bliterals != inf.nLiterals);
-	stats.sigma.all.variables += int64(inf.maxMelted) - bmelted;
 	stats.sigma.all.clauses += bclauses - int64(inf.nClauses);
 	stats.sigma.all.literals += bliterals - int64(inf.nLiterals);
+	stats.sigma.all.variables += int64(inf.maxMelted) - bmelted;
 	last.shrink.removed = stats.shrunken;
 	if (ereCls > inf.nClauses) stats.sigma.ere.removed += ereCls - inf.nClauses;
 	if (inf.maxFrozen > sp->simplified) stats.units.forced += inf.maxFrozen - sp->simplified;
-	if (!inf.unassigned || !inf.nClauses) { cnfstate = SAT; printStats(1, 'p'); return; }
+	if (!inf.unassigned || !inf.nClauses) { cnfstate = SAT; printStats(1, 's', CGREEN); return; }
 	if (canMap()) map(true);
 	else newBeginning();
-	wt.resize(inf.nDualVars);
 	rebuildWT(opts.sigma_priorbins);
 	if (BCP()) {
 		PFLOG2(1, " Propagation after sigmify proved a contradiction");
@@ -237,6 +236,8 @@ void ParaFROST::masterFree()
 	cleanManaged();
 	destroyStreams();
 	cumm.breakMirror(), hcnf = NULL;
+	if (opts.proof_en) 
+		cuproof.destroy();
 }
 
 void ParaFROST::slavesFree()
@@ -246,29 +247,18 @@ void ParaFROST::slavesFree()
 
 void ParaFROST::optSimp()
 {
-	PFLOGN2(2, " Initializing simplifier limits..");
-	if (opts.phases > 1 && formula.size > 700 * MBYTE &&
-		(formula.c2v > 4 || formula.maxClauseSize > 10000)) {
-		if (formula.size > GBYTE) 
-			opts.phases = 1, opts.ve_clause_limit = 50;
-		else 
-			opts.phases = 2, opts.ve_clause_limit = 20;
-	}
-	culimit.limits[0] = opts.sub_limit;
-	culimit.limits[1] = opts.bce_limit;
-	culimit.limits[2] = opts.ere_limit;
-	culimit.limits[3] = opts.xor_max_arity;
-	culimit.limits[4] = opts.ve_clause_limit;
-	culimit.limits[5] = opts.ve_lbound_en;
-	if (opts.ngpus > devCount) opts.ngpus = devCount;
-	if (profile_gpu = opts.profile_simp) cutimer = new cuTIMER;
-	initConstants(culimit);
+	PFLOGN2(2, " Initializing device options..");
+	gopts.init();
+	assert(SH_MAX_BVE_OUT1 >= opts.xor_max_arity);
+	cuopt.options[0] = opts.sub_limit;
+	cuopt.options[1] = opts.bce_limit;
+	cuopt.options[2] = opts.ere_limit;
+	cuopt.options[3] = opts.xor_max_arity;
+	cuopt.options[4] = opts.ve_clause_limit;
+	cuopt.options[5] = opts.ve_lbound_en;
+	cuopt.options[6] = opts.proof_en;
+	cutimer = new cuTIMER;
+	initDevOpts(cuopt);
 	PFLDONE(2, 5);
-#ifdef _DEBUG
-	if (opts.ere_en) {
-		PFLOGN2(2, " Disabling ERE in debug mode..");
-		opts.ere_en = false;
-		PFLDONE(2, 5);
-	}
-#endif
+	initSharedMem();
 }

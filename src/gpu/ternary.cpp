@@ -26,7 +26,7 @@ inline bool SCORS_CMP::operator () (const uint32& a, const uint32& b) const {
     return a > b;
 }
 
-inline bool ParaFROST::findBinary(uint32 first, uint32 second)
+inline bool ParaFROST::findBinary(uint32 first, uint32 second) 
 {
     assert(wot.size());
     assert(active(first));
@@ -37,7 +37,7 @@ inline bool ParaFROST::findBinary(uint32 first, uint32 second)
     CHECKLIT(first);
     WOL& list = wot[first];
     stats.ternary.checks += cacheLines(list.size(), sizeof(WATCH)) + 1;
-    forall_cnf(list, i) {
+    forall_wol(list, i) {
         const CLAUSE& c = cm[*i];
         if (!c.binary()) continue;
         const uint32 other = c[0] ^ c[1] ^ first;
@@ -46,7 +46,7 @@ inline bool ParaFROST::findBinary(uint32 first, uint32 second)
     return false;
 }
 
-inline bool ParaFROST::findTernary(uint32 first, uint32 second, uint32 third) 
+inline bool ParaFROST::findTernary(uint32 first, uint32 second, uint32 third)
 {
     assert(wot.size());
     assert(active(first));
@@ -59,7 +59,7 @@ inline bool ParaFROST::findTernary(uint32 first, uint32 second, uint32 third)
     CHECKLIT(first);
     WOL& list = wot[first];
     stats.ternary.checks += cacheLines(list.size(), sizeof(WATCH)) + 1;
-    forall_cnf(list, i) {
+    forall_wol(list, i) {
         const CLAUSE& c = cm[*i];
         if (c.binary()) {
             const uint32 other = c[0] ^ c[1] ^ first;
@@ -104,21 +104,26 @@ bool ParaFROST::hyper3Resolve(CLAUSE& pos, CLAUSE& neg, const uint32& p)
     }
     assert(learntC.size() == 2);
     const uint32 n = NEG(p);
+    const uint32 first = learntC[0], second = learntC[1];
+    uint32 third = 0;
     forall_clause(neg, k) {
         const uint32 lit = *k;
         assert(unassigned(lit));
         if (NEQUAL(lit, n)) { 
-            const uint32 mask1 = NEQUAL(lit, learntC[0]);
+            const uint32 mask1 = NEQUAL(lit, first);
             if (mask1 == NEG_SIGN) return false;
-            const uint32 mask2 = NEQUAL(lit, learntC[1]);
+            const uint32 mask2 = NEQUAL(lit, second);
             if (mask2 == NEG_SIGN) return false;
-            if (mask1 && mask2) learntC.push(lit); // unique
+            if (mask1 && mask2) { // unique
+                third = lit;
+                learntC.push(lit); 
+            }
         }
     }
     const int size = learntC.size();
     if (size > 3) return false;
-    if (size == 3 && findTernary(learntC[0], learntC[1], learntC[2])) return false;
-    if (size == 2 && findBinary(learntC[0], learntC[1])) return false;
+    if (size == 3 && findTernary(first, second, third)) return false;
+    if (size == 2 && findBinary(first, second)) return false;
     return true;
 }
 
@@ -186,17 +191,17 @@ void ParaFROST::attachTernary(BCNF& cnf, LIT_ST* use)
         const C_REF ref = *i;
         if (cm.deleted(ref)) continue;
         CLAUSE& c = cm[ref];
-        if (c.binary() && 
+        const int size = c.size();
+        if (size <= 3 &&
             UNASSIGNED(value[c[0]]) &&
             UNASSIGNED(value[c[1]])) {
-            attachClause(ref, c);
-        }
-        else if (c.size() == 3 && 
-            UNASSIGNED(value[c[0]]) &&
-            UNASSIGNED(value[c[1]]) &&
-            UNASSIGNED(value[c[2]])) {
-            attachClause(ref, c);
-            use[c[0]] = use[c[1]] = use[c[2]] = 1;
+            if (size == 2)
+                attachBinary(ref, c);
+            else if (UNASSIGNED(value[c[2]])) {
+                assert(size > 1);
+                attachClause(ref, c);
+                use[c[0]] = use[c[1]] = use[c[2]] = 1;
+            }
         }
     }
 }
@@ -244,13 +249,10 @@ void ParaFROST::ternary()
     wot.clear(true);
     vschedule.destroy();
     rebuildWT(opts.ternary_priorbins);
-    if (BCP()) {
-        PFLOG2(2, " Propagation after ternary proved a contradiction");
-        learnEmpty();
-    }
+    if (retrail()) PFLOG2(2, " Propagation after ternary proved a contradiction");
     const int64 subsumed = numClauses + last.ternary.resolvents - maxClauses();
     PFLOG2(2, " Ternary %lld: added %lld resolvents %.2f%% and subsumed %lld clauses %.2f%%",
-        stats.ternary.calls, last.ternary.resolvents, percent(last.ternary.resolvents, numClauses),
+        stats.ternary.calls, last.ternary.resolvents, percent((double)last.ternary.resolvents, (double)numClauses),
         subsumed, percent(subsumed, numClauses));
     UPDATE_SLEEPER(this, ternary, last.ternary.resolvents);
     printStats(last.ternary.resolvents, 'h', CVIOLET1);

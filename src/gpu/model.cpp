@@ -179,7 +179,7 @@ void MODEL::verify(const string& path) {
 		CREPORTVAL, path.c_str(), CNORMAL, CREPORTVAL, fsz / KBYTE, CNORMAL);
 	TIMER timer;
 	timer.start();
-#ifdef __linux__
+#if defined(__linux__) || defined(__CYGWIN__)
 	int fd = open(path.c_str(), O_RDONLY, 0);
 	if (fd == -1) PFLOGE("cannot open input file");
 	void* buffer = mmap(NULL, fsz, PROT_READ, MAP_PRIVATE, fd, 0);
@@ -188,7 +188,7 @@ void MODEL::verify(const string& path) {
 	ifstream inputFile;
 	inputFile.open(path, ifstream::in);
 	if (!inputFile.is_open()) PFLOGE("cannot open input file to verify model");
-	char* buffer = new char[fsz + 1], * str = buffer;
+	char* buffer = pfcalloc<char>(fsz + 1), * str = buffer;
 	inputFile.read(buffer, fsz);
 	buffer[fsz] = '\0';
 #endif
@@ -217,7 +217,7 @@ void MODEL::verify(const string& path) {
 		}
 		else if (!verify(str)) { verified = false; break; }
 	}
-#ifdef __linux__
+#if defined(__linux__) || defined(__CYGWIN__)
 	if (munmap(buffer, fsz) != 0) PFLOGE("cannot clean input file %s mapping", path.c_str());
 	close(fd);
 #else

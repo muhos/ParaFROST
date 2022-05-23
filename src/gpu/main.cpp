@@ -16,19 +16,21 @@ You should have received a copy of the GNU General Public License
 along with this program.  If not, see <https://www.gnu.org/licenses/>.
 **********************************************************************************/
 
+#include "control.h"
 #include "solve.h"
 #include "version.h"
 
 using namespace pFROST;
 
 bool quiet_en = false;
-int verbose = -1;
+int  verbose  = -1;
 
 int main(int argc, char **argv)
 {             
 	BOOL_OPT opt_quiet_en("quiet", "enable quiet mode, same as verbose=0", false);
 	INT_OPT opt_verbose("verbose", "set the verbosity", 1, INT32R(0, 4));
 	INT_OPT opt_timeout("timeout", "set the timeout in seconds", 0, INT32R(0, INT32_MAX));
+	INT_OPT opt_memoryout("memoryout", "set out-of-memory limit in gigabytes", 0, INT32R(0, 256));
 	OPTION_VEC& options = ARG::opts();
 	if (argc == 1) PFLOGE("no input file specified");
 	try {
@@ -38,23 +40,26 @@ int main(int argc, char **argv)
 		else if (!verbose) quiet_en = true;
 		if (!quiet_en && verbose) {
 			PFNAME("ParaFROST (Parallel Formal Reasoning On Satisfiability)", version());
-			PFAUTHORS("Muhammad Osama Mahmoud");
+			PFAUTHORS("Muhammad Osama and Anton Wijs");
 			PFRIGHTS("Technische Universiteit Eindhoven (TU/e)");
 			PFLRULER('-', RULELEN);
-			PFLOGN0(" Embedded options: ");
-			for (int i = 0, j = 0; i < options.size(); i++) {
-				if (options[i]->isParsed()) {
-					options[i]->printArgument();
-					if (++j % 4 == 0) { putc('\n', stdout); PFLOGN0("\t\t      "); }
+			if (argc > 2) {
+				PFLOGN0(" Embedded options: ");
+				for (int i = 0, j = 0; i < options.size(); i++) {
+					if (options[i]->isParsed()) {
+						options[i]->printArgument();
+						if (++j % 4 == 0) { PUTCH('\n'); PFLOGN0("\t\t      "); }
+					}
 				}
+				PUTCH('\n'); PFLRULER('-', RULELEN);
 			}
-			putc('\n', stdout); PFLRULER('-', RULELEN);
 		}
 		signal_handler(handler_terminate);
 		string formula = argv[1];
 		ParaFROST* pFrost = new ParaFROST(formula);
 		pfrost = pFrost;
 		if (opt_timeout > 0) set_timeout(opt_timeout);
+		if (opt_memoryout > 0) set_memoryout(opt_memoryout);
 		signal_handler(handler_mercy_interrupt, handler_mercy_timeout);
 		pFrost->solve();
 		if (!quiet_en) PFLOG0("");
@@ -63,11 +68,17 @@ int main(int argc, char **argv)
 		delete pFrost;
 		PFLDONE(1, 5);
 		if (!quiet_en) PFLRULER('-', RULELEN);
-		return 0;
+		return EXIT_SUCCESS;
+	}
+	catch (std::bad_alloc&) {
+		PRINT("%s%s%s", CYELLOW, "ARE YOU SERIOUS NOW?\n", CNORMAL);
+		PFLOGS("UNKNOWN");
+		return EXIT_FAILURE;
 	}
 	catch (MEMOUTEXCEPTION&) {
-		PFLOGEN("Memoryout");
+		syncAll();
+		PRINT("%s%s%s", CYELLOW, "MEMORY OUT\n", CNORMAL);
 		PFLOGS("UNKNOWN");
-		return 0;
+		return EXIT_FAILURE;
 	}
 }

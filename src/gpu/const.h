@@ -21,10 +21,6 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 #include "datatypes.h"
 
-#if __linux__
-#pragma GCC diagnostic ignored "-Wreorder"
-#endif
-
 extern bool quiet_en;
 extern int verbose;
 
@@ -39,23 +35,29 @@ namespace pFROST {
 	#define GNOREF			UINT64_MAX
 	#define NOVAR			UINT32_MAX
 	#define INIT_CAP		32
-	#define UNSOLVED		-1
 	#define UNDEFINED		-1
-	#define UNSAT			0
-	#define SAT				1
 	#define ORGPHASE		1
 	#define INVPHASE		2
 	#define FLIPPHASE		3
 	#define BESTPHASE		4
 	#define RANDPHASE		5
-	#define AWAKEN_SUCC		0
-	#define AWAKEN_FAIL		1
+	#define WALKPHASE		6
+	#define UNSAT			0
+	#define SAT				1
+	#define UNSOLVED_M		2
+	#define PROOF_ADDED	    97  // 'a'
+	#define PROOF_DELETED	100 // 'd'
+	#define UNSOLVED(x)		((x) & UNSOLVED_M)
+	#define RESETSTATE(x)	(x = UNSOLVED_M)
 	//======== DANGER ZONE =========
 	#define NEG_SIGN		0x00000001
 	#define HASH_MASK		0x0000001F
 	#define MAX_DLC			0x00000003
-	#define MAX_LBD			0x08000000UL
-	#define MAX_LBD_M		0x07FFFFFFUL
+	#define MAX_LBD			0x04000000UL
+	#define MAX_LBD_M		0x03FFFFFFUL
+	#define BYTEMAX			0x00000080UL
+	#define BYTEMASK		0x0000007FUL
+	#define IBYTEMAX		0xFFFFFF80UL
 	#define NOVAL_MASK		(LIT_ST)-2
 	#define VAL_MASK		(LIT_ST) 1
 	#define MELTED_M		(LIT_ST)0x01
@@ -77,6 +79,8 @@ namespace pFROST {
 	#define SIGN(x)			(LIT_ST)((x) & NEG_SIGN)
 	#define NEG(x)			((x) | NEG_SIGN)
 	#define V2DEC(x,s)		(V2L(x) | (s))
+	#define ISLARGE(x)		((x) & IBYTEMAX)
+	#define L2B(x)			(((x) & BYTEMASK) | BYTEMAX)
 	#define FLIP(x)			((x) ^ NEG_SIGN)
 	#define HASH(x)			((x) & HASH_MASK)
 	#define MAPHASH(x)		(1UL << HASH(x))
@@ -91,7 +95,8 @@ namespace pFROST {
 	#define REASON(x)		((x) ^ NOREF)
 	#define DECISION(x)		(!REASON(x))
 	#define NEQUAL(x,y)		((x) ^ (y))
-    #define MIN(x,y)        ((x) < (y) ? (x) : (y))
+	#define MIN(x,y)		((x) < (y) ? (x) : (y))
+	#define MAX(x,y)		((x) > (y) ? (x) : (y))
 	//==============================
 	
 }

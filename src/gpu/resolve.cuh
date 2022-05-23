@@ -16,30 +16,37 @@ You should have received a copy of the GNU General Public License
 along with this program.  If not, see <https://www.gnu.org/licenses/>.
 **********************************************************************************/
 
-#ifndef __SIGMA_RESOLVE_
-#define __SIGMA_RESOLVE_
+#ifndef __GPU_RESOLVE_
+#define __GPU_RESOLVE_
 
-#include "device.cuh"
+#include "elimination.cuh"
 
 namespace pFROST {
 
-	namespace SIGmA {
+	#define RES_DBG 0
 
-		_PFROST_D_ bool resolve(const uint32& x, const uint32& nOrgCls, CNF& cnf, OL& poss, OL& negs, uint32& nAddedCls, uint32& nAddedLits)
-		{
-			assert(x);
-			assert(checkMolten(cnf, poss, negs));
-			// check resolvability
-			nAddedCls = 0, nAddedLits = 0;
-			if (countResolvents(x, nOrgCls, cnf, poss, negs, nAddedCls, nAddedLits)) return false;
-#if VE_DBG
-			printf("c  Resolving(%d) ==> added = %d, deleted = %d\n", x, nAddedCls, poss.size() + negs.size());
-			pClauseSet(cnf, poss, negs);
+	_PFROST_D_ bool resolve(
+		const uint32& x, 
+		const uint32& nOrgCls, 
+		CNF& cnf,
+		OL& poss, 
+		OL& negs, 
+		uint32& nElements,
+		uint32& nAddedCls,
+		uint32& nAddedLits)
+	{
+		assert(x);
+		assert(checkMolten(cnf, poss, negs));
+		// check resolvability
+		nElements = 0, nAddedCls = 0, nAddedLits = 0;
+		if (countResolvents(x, nOrgCls, cnf, poss, negs, nElements, nAddedCls, nAddedLits)) return false;
+#if RES_DBG
+		printf("c  Resolving(%d) ==> added = %d, deleted = %d\n", x, nAddedCls, poss.size() + negs.size());
+		pClauseSet(cnf, poss, negs);
 #endif		
-			return true; 
-		}
+		return true;
+	}
 
-	} // sigma namespace
 } // parafrost namespace
 
 

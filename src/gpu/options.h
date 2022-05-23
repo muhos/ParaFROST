@@ -26,6 +26,9 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 namespace pFROST {
 
 	struct OPTION {
+		OPTION();
+		~OPTION();
+		void init();
 		//==========================================//
 		//             Solver options               //
 		//==========================================//
@@ -43,6 +46,7 @@ namespace pFROST {
 		double	lbd_rate;
 		double	gc_perc;
 		double	map_perc;
+		double	aggrmin_perc;
 		double	reduce_perc;
 		double	ternary_perc;
 		//------------------------------------------//
@@ -59,37 +63,39 @@ namespace pFROST {
 		int		decompose_min_eff;
 		int		sigma_priorbins;
 		int		minimize_depth;
-		int		bumpreason_depth;
+		int		minimize_min;
+		int		minimize_lbd;
 		int		luby_inc, luby_max;
 		int		lbd_tier2, lbd_tier1, lbd_fast, lbd_slow;
-		int		mdm_rounds,	mdm_freq, mdm_div, mdm_inc, mdm_sinc, mdm_vsids_pumps, mdm_vmtf_pumps;
+		int		mdm_rounds, mdm_delay, mdm_inc, mdm_vsids_pumps, mdm_vmtf_pumps;
 		int		subsume_priorbins, subsume_inc, subsume_max_occs, subsume_min_eff, subsume_max_eff, subsume_rel_eff, subsume_max_csize;
 		int		probe_inc, probe_min, probe_min_eff, probe_max_eff, probe_rel_eff;
 		int		ternary_priorbins, ternary_min_eff, ternary_max_eff, ternary_rel_eff;
 		int		transitive_min_eff, transitive_max_eff, transitive_rel_eff;
 		int		vivify_priorbins, vivify_min_eff, vivify_max_eff, vivify_rel_eff;
+		int		walk_priorbins, walk_min_eff, walk_max_eff, walk_rel_eff;
 		//------------------------------------------//
-		bool	proof_en;
 		bool	report_en;
 		bool	chrono_en;
 		bool	stable_en;
 		bool	reduce_en;
 		bool	vivify_en;
 		bool	subsume_en;
-		bool	parseonly_en;
-		bool	reusetrail_en;
+		bool	rephase_en;
 		bool	bumpreason_en;
 		bool	boundsearch_en;
-		bool	chronoreuse_en;
 		bool	debinary_en;
 		bool	decompose_en;
 		bool	transitive_en;
-		bool	targetphase_en, rephase_en;
+		bool	targetonly_en, targetphase_en;
 		bool	ternary_en, ternary_sleep_en;
+		bool	autarky_en, autarky_sleep_en;
+		bool	proof_en, proof_nonbinary_en;
+		bool	parseonly_en, parseincr_en;
+		bool	vsids_en, vsidsonly_en;
 		bool	probe_en, probehbr_en, probe_sleep_en;
-		bool	vsids_en, mdmvsidsonly_en, vsidsonly_en;
 		bool	model_en, modelprint_en, modelverify_en;
-		bool	mdmfusem_en, mdmfuses_en, mdm_mcv_en, mdmassume_en;
+		bool	mdm_walk_en, mdm_mcv_en, mdmassume_en, mdmvsidsonly_en;
 		//==========================================//
 		//             Simplifier options           //
 		//==========================================//
@@ -99,26 +105,23 @@ namespace pFROST {
 		bool	all_en;
 		bool	solve_en;
 		bool	aggr_cnf_sort;
-		bool	profile_simp;
-		bool	ve_en, ve_plus_en, ve_lbound_en;
+		bool	ve_en, ve_plus_en, ve_fun_en, ve_lbound_en;
 		bool	sigma_en, sigma_live_en, sigma_sleep_en;
 		//------------------------------------------//
+		int		nstreams;
 		int		phases;
 		int		shrink_rate;
 		int		xor_max_arity;
 		int		ve_clause_limit;
+		int		lcve_clause_limit;
 		int		sub_limit, bce_limit, ere_limit;
-		int		ngpus, nstreams;
 		//------------------------------------------//
-		uint32	lcve_min;
+		uint32	lcve_min, lcve_max;
 		uint32	lits_min;
 		uint32	mu_pos, mu_neg;
 		//------------------------------------------//
 		double lits_mul;
 		//------------------------------------------//
-		OPTION();
-		~OPTION();
-		void init();
 	};
 
 }

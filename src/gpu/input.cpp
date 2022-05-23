@@ -18,16 +18,20 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 #include "sort.h"
 #include "input.h"
+#include "control.h"
 #include "version.h"
 
 namespace pFROST {
 
+    size_t  RADIXBUFFER[RADIXWIDTH]; // defined here since we don't have 'pfsort.cpp'
+
     void printUsage(int argc, char** argv, bool verbose)
     {
         PFNAME("ParaFROST (Parallel Formal Reasoning On Satisfiability)", version());
-        PFAUTHORS("Muhammad Osama Mahmoud");
+        PFAUTHORS("Muhammad Osama and Anton Wijs");
         PFRIGHTS("Technische Universiteit Eindhoven (TU/e)");
         PFLRULER('-', RULELEN);
+        getBuildInfo();
         PFLOG0("");
         PFLOG1(" %sUsage: parafrost [<option> ...][<infile>.<cnf>][<option> ...]%s", CLGREEN, CNORMAL);
         PFLOG0("");
@@ -51,31 +55,42 @@ namespace pFROST {
 
     void parseArguments(int& argc, char** argv)
     {
-        OPTION_VEC& options = ARG::opts();
-        int i, j;
-        for (i = j = 1; i < argc; i++) {
-            if (strlen(argv[i]) == 2 && eqn(argv[i], "-h"))
+        const char* arg = argv[1];
+        int dashes = (arg[0] == '-') + (arg[1] == '-');
+        if ((dashes & 1) && arg[1] == 'h')
+            printUsage(argc, argv);
+        else if ((dashes & 2) && hasstr(arg, "help")) {
+            if (hasstr(arg, "more"))
+                printUsage(argc, argv, true);
+            else
                 printUsage(argc, argv);
-            char* arg = argv[i];
-            if (eq(arg, "--") && eq(arg, "help")) {
-                if (*arg == '\0')
+        }
+        OPTION_VEC& options = ARG::opts();
+        for (int i = 2; i < argc; i++) {
+            const size_t arglen = strlen(argv[i]);
+            if (arglen == 1)
+                PFLOGE("unknown input \"%s\". Use '-h or --help' for help.", argv[i]);
+            else if (arglen > 1) {
+                const char* arg = argv[i];
+                int dashes = (arg[0] == '-') + (arg[1] == '-');
+                if (!dashes)
+                    PFLOGE("unknown input \"%s\". Use '-h or --help' for help.", argv[i]);
+                else if ((dashes & 1) && arg[1] == 'h')
                     printUsage(argc, argv);
-                else if (eq(arg, "more"))
-                    printUsage(argc, argv, true);
-            }
-            else {
-                int k = 0;
-                bool parsed = false;
-                while (k < options.size() && !(parsed = options[k++]->parse(argv[i])));
-                if (!parsed) {
-                    if (eqn(argv[i], "--") || eqn(argv[i], "-"))
-                        PFLOGE("unknown input \"%s\". Use '-h or --help' for help.", argv[i]);
+                if ((dashes & 2) && hasstr(arg, "help")) {
+                    if (hasstr(arg, "more"))
+                        printUsage(argc, argv, true);
                     else
-                        argv[j++] = argv[i];
+                        printUsage(argc, argv);
+                }
+                else {
+                    int k = 0;
+                    bool parsed = false;
+                    while (k < options.size() && !(parsed = options[k++]->parse(argv[i])));
+                    if (!parsed)  PFLOGE("unknown input \"%s\". Use '-h or --help' for help.", argv[i]);
                 }
             }
         }
-        argc -= (i - j);
     }
 
 }

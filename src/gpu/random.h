@@ -24,31 +24,27 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 namespace pFROST {
 
-    // Cadical-style random generator
     class RANDOM {
-        uint64 state;
+        uint32 _seed_;
 
     public:
-                       RANDOM          () : state(0) {};
-                       RANDOM          (const uint64& seed) : state(seed) {}
-        inline void    init            (const uint64& seed) { state = seed; }
-        inline uint64  seed            () const { return state; }
-        inline uint64  next64          () {
-            state *= 6364136223846793005ul;
-            state += 1442695040888963407ul;
-            assert(state);
-            return state;
+                      RANDOM          () : _seed_(1) {}
+                      RANDOM          (const uint32& seed) : _seed_(seed) { assert(_seed_); }
+        inline void   init            (const uint32& seed) { _seed_ = seed; assert(_seed_); }
+        inline uint32 seed            () const { return _seed_; }
+        inline uint32 irand           () {
+            _seed_ ^= _seed_ << 13;
+            _seed_ ^= _seed_ >> 17;
+            _seed_ ^= _seed_ << 5;
+            return _seed_;
         }
-        inline uint32  next32          () {
-            return next64() >> 32;
+        inline double drand           () {
+            return irand() * 2.328306e-10;
         }
-        inline bool    genbool          () {
-            const uint32 next = next32();
-            const double fraction = next / 4294967296.0;
+        inline bool   brand           () {
+            const double fraction = drand();
             assert(fraction >= 0 && fraction < 1);
-            const uint32 value = uint32(2 * fraction);
-            assert(value < 2);
-            return value;
+            return uint32(2 * fraction);
         }
     };
 

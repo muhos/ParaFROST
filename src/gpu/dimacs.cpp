@@ -18,6 +18,7 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 #include "solve.h"
 #include "dimacs.h"
+#include "control.h"
 
 using namespace pFROST;
 
@@ -30,7 +31,7 @@ bool ParaFROST::parser()
 	PFLOG2(1, " Parsing CNF file \"%s%s%s\" (size: %s%lld MB%s)",
 		CREPORTVAL, formula.path.c_str(), CNORMAL, CREPORTVAL, ratio(fsz, uint64(MBYTE)), CNORMAL);
 	timer.start();
-#ifdef __linux__
+#if defined(__linux__) || defined(__CYGWIN__)
 	int fd = open(formula.path.c_str(), O_RDONLY, 0);
 	if (fd == -1) PFLOGE("cannot open input file");
 	void* buffer = mmap(NULL, fsz, PROT_READ, MAP_PRIVATE, fd, 0);
@@ -39,7 +40,7 @@ bool ParaFROST::parser()
 	ifstream inputFile;
 	inputFile.open(formula.path, ifstream::in);
 	if (!inputFile.is_open()) PFLOGE("cannot open input file");
-	char* buffer = new char[fsz + 1], * str = buffer;
+	char* buffer = pfcalloc<char>(fsz + 1), * str = buffer;
 	inputFile.read(buffer, fsz);
 	buffer[fsz] = '\0';
 #endif
@@ -56,27 +57,31 @@ bool ParaFROST::parser()
 			if (!eq(str, "p cnf")) PFLOGE("header has wrong format");
 			uint32 sign = 0;
 			inf.orgVars = toInteger(str, sign);
-			inf.unassigned = inf.maxVar = inf.orgVars;
+			if (!opts.parseincr_en) {
+				inf.unassigned = inf.maxVar = inf.orgVars;
+				inf.nDualVars = V2L(inf.orgVars + 1);
+			}
 			if (sign) PFLOGE("number of variables in header is negative");
 			if (inf.orgVars == 0) PFLOGE("zero number of variables in header");
 			if (inf.orgVars >= INT_MAX - 1) PFLOGE("number of variables not supported");
-			inf.nDualVars = V2L(inf.orgVars + 1);
 			inf.nOrgCls = toInteger(str, sign);
 			if (sign) PFLOGE("number of clauses in header is negative");
 			if (inf.nOrgCls == 0) PFLOGE("zero number of clauses in header");
 			PFLOG2(1, " Found header %s%d %d%s", CREPORTVAL, inf.orgVars, inf.nOrgCls, CNORMAL);
 			assert(orgs.empty());
-			allocSolver();
-			initQueue();
-			initHeap();
-			initVars();
-			assert(vorg.size() == inf.maxVar + 1);
-			model.init(vorg);
-			if (opts.proof_en)
-				proof.init(sp, vorg);
+			if (!opts.parseincr_en) {
+				allocSolver();
+				initQueue();
+				initHeap();
+				initVars();
+				assert(vorg.size() == inf.maxVar + 1);
+				model.init(vorg);
+				if (opts.proof_en) 
+					proof.init(sp, vorg);
+			}
 		}
 		else if (!toClause(in_c, org, str)) return false;
-		/*else {
+		else if (opts.parseincr_en) {
 			incremental = true;
 			uint32 v = 0, s = 0;
 			while ((v = toInteger(str, s)) != 0) {
@@ -84,9 +89,9 @@ bool ParaFROST::parser()
 				org.push(V2DEC(v, s));
 			}
 			if (!itoClause(in_c, org)) return false;
-		}*/
+		}
 	}
-#ifdef __linux__
+#if defined(__linux__) || defined(__CYGWIN__)
 	if (munmap(buffer, fsz) != 0) PFLOGE("cannot clean input file %s mapping", formula.path.c_str());
 	close(fd);
 #else

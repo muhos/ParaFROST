@@ -24,7 +24,7 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 #include "const.h"
 #include "color.h"
 
-#define RULELEN     90
+#define RULELEN     92
 #define PREFIX      "c "
 #define UNDERLINE	"\u001b[4m"
 
@@ -39,13 +39,6 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 inline void REPCH(const char& ch, const size_t& size, const size_t& off = 0) {
     for (size_t i = off; i < size; i++) PUTCH(ch);
 }
-
-#define PFLRULER(CH, TIMES) \
-  do { \
-     PUTCH(PREFIX[0]); \
-     REPCH(CH, TIMES);      \
-     PUTCH('\n'); \
-  } while (0)
 
 #define PFLOGS(RESULT) \
     do { \
@@ -77,8 +70,15 @@ inline void REPCH(const char& ch, const size_t& size, const size_t& off = 0) {
      SETCOLOR(CWARNING, stderr); \
      fprintf(stderr, "WARNING - ");\
      fprintf(stderr, FORMAT, ## __VA_ARGS__);\
-     PUTCH('\n'); \
+     putc('\n', stderr); \
      SETCOLOR(CNORMAL, stderr); \
+  } while (0)
+
+#define PFLRULER(CH, TIMES) \
+  do { \
+     PUTCH(PREFIX[0]); \
+     REPCH(CH, TIMES);      \
+     PUTCH('\n'); \
   } while (0)
 
 #define PFNAME(NAME, VER) \

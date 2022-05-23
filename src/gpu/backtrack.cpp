@@ -19,9 +19,8 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 #include "solve.h"
 using namespace pFROST;
 
-inline void ParaFROST::savePhases() 
+inline void ParaFROST::savePhases()
 {
-
 	const LIT_ST reset = (last.rephase.type && stats.conflicts > last.rephase.conflicts);
 	if (!probed) {
 		if (reset) last.rephase.target = 0;
@@ -38,8 +37,7 @@ inline void ParaFROST::savePhases()
 	if (reset) last.rephase.type = 0;
 }
 
-inline void	ParaFROST::cancelAssign(const uint32& lit) 
-{
+inline void	ParaFROST::cancelAssign(const uint32& lit) {
 	CHECKLIT(lit);
 	assert(inf.unassigned < inf.maxVar);
 	sp->value[lit] = UNDEFINED;
@@ -51,33 +49,34 @@ inline void	ParaFROST::cancelAssign(const uint32& lit)
 void ParaFROST::backtrack(const int& jmplevel)
 {
 	if (DL() == jmplevel) return;
-	const int pivot = jmplevel + 1;
+	const uint32 pivot = jmplevel + 1;
 	PFLOG2(3, " Backtracking to level %d, at trail index %d", jmplevel, dlevels[pivot]);
 	savePhases();
 	const uint32 from = dlevels[pivot];
-	uint32 i = from, j = from;
+	uint32* i = trail + from, *j = i, *end = trail.end();
 	if (stable) {
-		while (i < trail.size()) {
-			const uint32 lit = trail[i++], v = ABS(lit);
+		while (i != end) {
+			const uint32 lit = *i++, v = ABS(lit);
 			if (sp->level[v] > jmplevel) {
 				cancelAssign(lit);
 				if (!vsids.has(v)) vsids.insert(v);
 			}
-			else trail[j++] = lit;
+			else *j++ = lit;
 		}
 	}
 	else {
-		while (i < trail.size()) {
-			const uint32 lit = trail[i++], v = ABS(lit);
+		while (i != end) {
+			const uint32 lit = *i++, v = ABS(lit);
 			if (sp->level[v] > jmplevel) {
 				cancelAssign(lit);
 				if (vmtf.bumped() < bumps[v]) vmtf.update(v, bumps[v]);
 			}
-			else trail[j++] = lit;
+			else *j++ = lit;
 		}
 	}
-	PFLOG2(3, "  %d literals kept (%d are saved) and %d are cancelled", j, j - from, trail.size() - j);
-	trail.resize(j);
+	const uint32 remained = uint32(j - trail);
+	PFLOG2(3, "  %d literals kept (%d are saved) and %zd are cancelled", remained, remained - from, end - j);
+	trail.resize(remained);
 	if (sp->propagated > from) sp->propagated = from;
 	dlevels.resize(pivot);
 	assert(DL() == jmplevel);

@@ -39,8 +39,6 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 #define CGREEN1		"\x1B[38;5;77m"
 #define CGREEN2		"\x1B[38;5;76m"
 #define CGREEN3		"\x1B[38;5;40m"
-#define CORANGE0	"\x1B[38;5;203m"
-#define CORANGE1	"\x1B[38;5;202m"
 #define CVIOLET0	"\x1B[38;5;168m"
 #define CVIOLET1	"\x1B[38;5;170m"
 #define CVIOLET2	"\x1B[38;5;165m"

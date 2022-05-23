@@ -36,13 +36,18 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 #include "datatypes.h"
 #include "const.h"
 
-#ifdef __linux__ 
+#if defined(__linux__)
 #include <sys/resource.h>
 #include <sys/mman.h>
 #include <sys/sysinfo.h>
 #include <unistd.h>
 #include <cpuid.h>
-#elif _WIN32
+#elif defined(__CYGWIN__)
+#include </usr/include/sys/resource.h>
+#include </usr/include/sys/mman.h>
+#include </usr/include/sys/sysinfo.h>
+#include </usr/include/sys/unistd.h>
+#elif defined(_WIN32)
 #define NOMINMAX
 #include <windows.h>
 #include <psapi.h>
@@ -59,7 +64,7 @@ using std::ifstream;
 
 namespace pFROST {
 
-    #define RESETSTRUCT(MEMPTR) \
+	#define RESETSTRUCT(MEMPTR) \
 	{ \
 		assert(MEMPTR); \
 		memset(MEMPTR, 0, sizeof(*MEMPTR)); \
@@ -149,16 +154,21 @@ namespace pFROST {
 		}
 		return true;
 	}
-	inline uint64	linear			(uint64 n) { return n; }
-	inline uint64	quadratic		(uint64 n) { return n * n; }
-	inline uint64	logn			(uint64 n) { return (uint64)log10(n + 10); }
-	inline uint64	nlogn			(uint64 n) { return n * logn(n); }
-	inline uint64	nbylogn			(uint64 n) { return n / logn(n); }
-	inline uint64	lognlogn		(uint64 n) {
-		double val = log10(n + 10);
-		return uint64(val * val);
+	inline bool		hasstr			(const char* in, const char* ref)
+	{
+		size_t count = 0;
+		const size_t reflen = strlen(ref);
+		while (*in) {
+			if (ref[count] != *in)
+				count = 0;
+			else
+				count++;
+			in++;
+			if (count == reflen)
+				return true;
+		}
+		return false;
 	}
-	inline uint64	nlognlogn		(uint64 n) { return n * lognlogn(n); }
 	inline double	ratio			(const double& x, const double& y) { return y ? x / y : 0; }
 	inline uint64	ratio			(const uint64& x, const uint64& y) { return y ? x / y : 0; }
 	inline double	percent			(const double& x, const double& y) { return ratio(100 * x, y); }

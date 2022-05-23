@@ -21,7 +21,6 @@ using namespace pFROST;
 
 bool ParaFROST::canRestart()
 {
-	assert(inf.unassigned);
 	if (!DL()) return false;
 	if (stats.conflicts < limit.restart.conflicts) return false;
 	vibrate();
@@ -33,11 +32,11 @@ void ParaFROST::restart()
 {
 	assert(sp->propagated == trail.size());
 	assert(conflict == NOREF);
-	assert(cnfstate == UNSOLVED);
-	if (stable) stats.restart.stable++;
+	assert(UNSOLVED(cnfstate));
 	stats.restart.all++;
-	backtrack(opts.reusetrail_en ? reuse() : 0);
-	if (!stable) updateUnstableLimit();
+	backtrack(reuse());
+	if (stable) stats.restart.stable++;
+	else updateUnstableLimit();
 }
 
 void ParaFROST::updateUnstableLimit()
@@ -48,7 +47,7 @@ void ParaFROST::updateUnstableLimit()
 	limit.restart.conflicts = stats.conflicts + increase;
 }
 
-int ParaFROST::reuse()
+int ParaFROST::reuse() 
 {
 	bool stable = vsidsEnabled();
 	uint32 cand = stable ? nextVSIDS() : nextVMFQ();

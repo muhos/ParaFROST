@@ -96,17 +96,6 @@ namespace pFROST {
 			return bumped[a] < bumped[b];
 		}
 	};
-	struct UIP_CMP {
-		const int* level;
-		const uVec1D& index;
-		UIP_CMP(const int* _l, const uVec1D& _i) : level(_l), index(_i) {}
-		bool operator () (const uint32& a, const uint32& b) const {
-			const int lx = level[a], ly = level[b];
-			if (lx < ly) return true;
-			if (lx > ly) return false;
-			return index[a] <= index[b];
-		}
-	};
 	struct HIST_LCV_CMP {
 		const uVec1D& hist;
 		HIST_LCV_CMP(const uVec1D& _hist) : hist(_hist) {}
@@ -128,8 +117,8 @@ namespace pFROST {
 		}
 	};
 	struct KEY_CMP_ACTIVITY {
-		const uint32* scores;
 		const Vec<double>& acts;
+		const uint32* scores;
 		KEY_CMP_ACTIVITY(Vec<double>& _acts, const uint32* _scores) :
 			acts(_acts), scores(_scores) {}
 		bool operator()(const uint32& a, const uint32& b) const {

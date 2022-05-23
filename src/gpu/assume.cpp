@@ -100,7 +100,7 @@ void ParaFROST::iunassume()
 		}
 		assumptions.clear(true);
 	}
-	cnfstate = UNSOLVED;
+	cnfstate = UNSOLVED_M;
 	PFLDONE(2, 5);
 	backtrack();
 }
@@ -110,7 +110,7 @@ void ParaFROST::idecide()
 	assert(inf.unassigned);
 	assert(sp->propagated == trail.size());
 	assert(conflict == NOREF);
-	assert(cnfstate == UNSOLVED);
+	assert(UNSOLVED(cnfstate));
 	int level = DL();
 	uint32 dec = 0;
 	while (level < assumptions.size()) {

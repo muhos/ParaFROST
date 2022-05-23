@@ -30,7 +30,6 @@ bool ParaFROST::BCP()
 		const int level = l2dl(assign);
 		CHECKLIT(assign);
 		PFLOG2(4, "  propagating %d@%d", l2i(assign), level);
-		PFLBCPS(this, 4, assign);
 		WL& ws = wt[assign];
 		uint64 ticks = cacheLines(ws.size(), sizeof(WATCH));
 		WATCH* i = ws, *j = i, * wend = ws.end();
@@ -55,7 +54,7 @@ bool ParaFROST::BCP()
 				CLAUSE& c = cm[ref];
 				assert(c.size() > 2);
 				assert(c[0] != c[1]);
-				const uint32 other = c[0] ^ c[1] ^ f_assign; // Thanks to Cadical solver
+				const uint32 other = c[0] ^ c[1] ^ f_assign; // Thanks to CaDiCaL solver
 				CHECKLIT(other);
 				// check if first literal is true
 				const LIT_ST otherVal = values[other];
@@ -107,38 +106,34 @@ bool ParaFROST::BCP()
 		stats.searchticks += ticks;
 		isConflict = NEQUAL(conflict, NOREF);
 	} // end of trail loop
-	stats.propagations.search += sp->propagated - propsbefore;
+	stats.searchprops += sp->propagated - propsbefore;
 	if (isConflict) sp->trailpivot = dlevels.back();
 	else			sp->trailpivot = sp->propagated;
 	return isConflict;
 }
 
 bool ParaFROST::BCPProbe() {
-	assert(cnfstate);
+	assert(UNSOLVED(cnfstate));
 	assert(DL() == 1);
 	conflict = NOREF;
 	bool isConflict = false;
 	uint32 propagatedbin = sp->propagated;
-	const uint32 propsbefore = sp->propagated;
 	while (!isConflict && sp->propagated < trail.size()) {
 		if (propagatedbin < trail.size())
 			isConflict = propbinary(trail[propagatedbin++]);
 		else
 			isConflict = proplarge(trail[sp->propagated++], true);
 	}
-	stats.propagations.probe += sp->propagated - propsbefore;
 	return isConflict;
 }
 
 bool ParaFROST::BCPVivify() {
-	assert(cnfstate);
+	assert(UNSOLVED(cnfstate));
 	conflict = NOREF;
 	bool isConflict = false;
-	const uint32 propsbefore = sp->propagated;
 	while (!isConflict && sp->propagated < trail.size()) {
 		isConflict = proplarge(trail[sp->propagated++], false);
 	}
-	stats.propagations.vivify += sp->propagated - propsbefore;
 	return isConflict;
 }
 
@@ -176,7 +171,7 @@ inline bool ParaFROST::proplarge(const uint32& assign, const bool& hyper)
 	PFLOG2(4, "  propagating %d@%d in large clauses", l2i(assign), level);
 	LIT_ST* values = sp->value;
 	WL& ws = wt[assign];
-	uint64 ticks = cacheLines(ws.size(), sizeof(WATCH));
+	uint64 ticks = cacheLines(ws.size(), sizeof(WATCH)) + 1;
 	WATCH* i = ws, * j = i, * wend = ws.end();
 	while (i != wend) {
 		const WATCH w = *j++ = *i++;
@@ -228,13 +223,25 @@ inline bool ParaFROST::proplarge(const uint32& assign, const bool& hyper)
 					c[1] = newlit;
 					*k = f_assign;
 					assert(c[0] != c[1]);
-					delayWatch(newlit, other, ref, c.size());
-					j--;
+					delayWatch(newlit, other, ref, c.size()), j--;
 					ticks++;
 				}
 				else if (UNASSIGNED(otherVal)) {
 					assert(!val);
-					if (hbr) hyper2Resolve(c, other);
+					if (hbr) {
+						const uint32 dom = hyper2Resolve(c, other);
+						if (dom) {
+							CHECKLIT(dom);
+							PFLOG2(4, "  adding hyper binary resolvent(%d %d)", l2i(dom), l2i(other));
+							assert(learntC.empty());
+							learntC.push(dom);
+							learntC.push(other);
+							if (opts.proof_en) proof.addClause(learntC);
+							const int csize = c.size();
+							newHyper2(); // 'c' after this line is not valid and cm[ref] should be used if needed
+							delayWatch(f_assign, other, ref, csize), j--;
+						}
+					}
 					enqueueImp(other, ref);
 				}
 				else {

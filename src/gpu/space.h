@@ -43,7 +43,7 @@ namespace pFROST {
 	public:
 		// arrays
 		int* level;
-		uint32* tmp_stack, *stacktail;
+		uint32* tmpstack, *stacktail;
 		uint64* board;
 		C_REF* source;
 		VSTATE* vstate;
@@ -51,6 +51,8 @@ namespace pFROST {
 		LIT_ST* value, * psaved, * ptarget, * pbest;
 		// scalers
 		int learntLBD;
+		int reasonsize, resolventsize;
+		int conflictdepth, conflictsize;
 		uint32 trailpivot;
 		uint32 simplified;
 		uint32 propagated;
@@ -75,7 +77,7 @@ namespace pFROST {
 			board = (uint64*)(source + _sz);
 			// 4-byte arrays
 			level = (int*)(_mem + vec8Bytes);
-			tmp_stack = (uint32*)(level + _sz);
+			tmpstack = (uint32*)(level + _sz);
 			// 1-byte arrays
 			value = (LIT_ST*)(_mem + vec8Bytes + vec4Bytes);
 			frozen = value + _sz + _sz;
@@ -103,10 +105,6 @@ namespace pFROST {
 		}
 		void	copyFrom	(SP* src)
 		{
-			assert(src);
-			assert(src->value);
-			assert(src->level);
-			assert(src->vstate);
 			propagated = src->propagated;
 			trailpivot = src->trailpivot;
 			simplified = src->simplified;

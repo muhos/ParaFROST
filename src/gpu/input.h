@@ -39,7 +39,7 @@ namespace pFROST {
 		struct ARG_CMP {
 			bool operator()(const ARG* x, const ARG* y) {
 				int type_t = strcmp(x->type, y->type);
-				return type_t < 0 || (type_t == 0 && (strcmp(x->arg, y->arg) < 0));
+				return type_t < 0 || (type_t == 0 && strcmp(x->arg, y->arg) < 0);
 			}
 		};
 		ARG() { arg = ""; text = ""; type = ""; parsed = false; }
@@ -171,7 +171,7 @@ namespace pFROST {
 		virtual void help(bool verbose = false) {
 			PFLOGN1("  %s--%-20s = %-8s [", CHELP, arg, type);
 			if (r.h == INT64_MIN) fprintf(stdout, "%-8s", "-I64");
-			else fprintf(stdout, "%8lld", r.h);
+			else fprintf(stdout, "%-8lld", r.h);
 			fprintf(stdout, " .. ");
 			if (r.t == INT64_MAX) fprintf(stdout, "%8s", "+I64");
 			else fprintf(stdout, "%8lld", r.t);

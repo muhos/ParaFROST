@@ -20,8 +20,6 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 #include <cub/device/device_select.cuh>
 using namespace cub;
 using namespace pFROST;
-using namespace SIGmA;
-
 
 void ParaFROST::extract(CNF* dest, BCNF& src)
 {
@@ -50,24 +48,24 @@ void ParaFROST::newBeginning()
 	assert(orgs.empty());
 	assert(learnts.empty());
 	assert(inf.nClauses <= hcnf->size());
-	if (unified_access) assert(hcnf == NULL), hcnf = cnf;
+	if (gopts.unified_access) assert(hcnf == NULL), hcnf = cnf;
 	assert(!hcnf->empty());
 	cm.init(hcnf->data().size);
-	if (!unified_access) {
+	if (!gopts.unified_access) {
 		sync(streams[0]), sync(streams[1]); // sync CNF caching
-		if (profile_gpu) cutimer->stop(streams[1]), cutimer->io += cutimer->gpuTime();
+		if (gopts.profile_gpu) cutimer->stop(streams[1]), cutimer->io += cutimer->gpuTime();
 	}
 	cacheResolved(streams[2]);
-	writeback();
+	writeBack();
 	syncAll();
-	if (unified_access) {
+	if (gopts.unified_access) {
 		hcnf = NULL;
-		if (profile_gpu) cutimer->stop(), cutimer->io += cutimer->gpuTime();
+		if (gopts.profile_gpu) cutimer->stop(), cutimer->io += cutimer->gpuTime();
 	}
 	else cumm.breakMirror(), hcnf = NULL;
 }
 
-inline void ParaFROST::writeback()
+inline void ParaFROST::writeBack()
 {
 	stats.literals.original = stats.literals.learnt = 0;
 	for (uint32 i = 0; i < hcnf->size(); i++) {
@@ -88,10 +86,10 @@ void ParaFROST::cacheCNF(const cudaStream_t& s1, const cudaStream_t& s2)
 	if (interrupted()) killSolver();
 	if (simpstate == OTALLOC_FAIL) syncAll();
 	cudaStream_t copystream;
-	if (unified_access) copystream = 0, hcnf = cnf;
+	if (gopts.unified_access) copystream = 0, hcnf = cnf;
 	else copystream = s2, cumm.mirrorCNF(hcnf);
 	assert(hcnf);
-	if (profile_gpu) cutimer->start(copystream);
+	if (gopts.profile_gpu) cutimer->start(copystream);
 	if (compacted) countFinal();
 	else {
 		size_t bytes = 0;
@@ -107,11 +105,40 @@ void ParaFROST::cacheCNF(const cudaStream_t& s1, const cudaStream_t& s2)
 		if (inf.nClauses) hcnf->resize(inf.nClauses);
 	}
 	if (inf.nClauses) {
-		if (!unified_access) 
+		if (!gopts.unified_access) 
 			CHECK(cudaMemcpyAsync(hcnf->data().mem, cumm.cnfMem(), hcnf->data().size * hc_bucket, cudaMemcpyDeviceToHost, s2));
 		if (!reallocFailed() && opts.aggr_cnf_sort)
 			thrust::stable_sort(thrust::cuda::par(tca).on(s1), cumm.refsMem(), cumm.refsMem() + hcnf->size(), CNF_CMP_KEY(cnf));
-		if (!unified_access) 
+		if (!gopts.unified_access) 
 			CHECK(cudaMemcpyAsync(hcnf->refsData(), cumm.refsMem(), hcnf->size() * sizeof(S_REF), cudaMemcpyDeviceToHost, s1));
 	}
+}
+
+void ParaFROST::cacheUnits(const cudaStream_t& stream) 
+{
+	sync(stream);
+	if ((vars->nUnits = vars->tmpUnits.size()))
+		CHECK(cudaMemcpyAsync(vars->cachedUnits, cumm.unitsdPtr(), vars->nUnits * sizeof(uint32), cudaMemcpyDeviceToHost, stream));
+	if (gopts.sync_always) sync(stream);
+}
+
+void ParaFROST::cacheNumUnits(const cudaStream_t& stream)
+{
+	CHECK(cudaMemcpyAsync(&vars->tmpUnits, vars->units, sizeof(cuVecU), cudaMemcpyDeviceToHost, stream));
+	if (gopts.sync_always) sync(stream);
+}
+
+void ParaFROST::cacheResolved(const cudaStream_t& stream)
+{
+	cuVecU tmpObj;
+	CHECK(cudaMemcpy(&tmpObj, vars->resolved, sizeof(cuVecU), cudaMemcpyDeviceToHost));
+	const uint32* devStart = tmpObj.data();
+	const uint32 devSize = tmpObj.size();
+	if (!devSize) return;
+	assert(devStart);
+	const uint32 off = model.resolved.size();
+	model.resolved.resize(off + devSize);
+	uint32* start = model.resolved + off;
+	CHECK(cudaMemcpyAsync(start, devStart, devSize * sizeof(uint32), cudaMemcpyDeviceToHost, stream));
+	if (gopts.sync_always) sync(stream);
 }

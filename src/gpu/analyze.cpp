@@ -19,7 +19,8 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 #include "solve.h"
 using namespace pFROST;
 
-inline void	ParaFROST::bumpReason(const uint32& lit) {
+inline void	ParaFROST::bumpReason(const uint32& lit) 
+{
 	CHECKLIT(lit);
 	assert(isFalse(lit));
 	const uint32 v = ABS(lit);
@@ -30,7 +31,8 @@ inline void	ParaFROST::bumpReason(const uint32& lit) {
 	analyzed.push(v);
 }
 
-inline void	ParaFROST::bumpReasons(const uint32& lit) {
+inline void	ParaFROST::bumpReasons(const uint32& lit)
+{
 	CHECKLIT(lit);
 	const uint32 v = ABS(lit);
 	const C_REF r = sp->source[v];
@@ -50,7 +52,8 @@ inline void	ParaFROST::bumpReasons(const uint32& lit) {
 	}
 }
 
-inline void	ParaFROST::bumpReasons() {
+inline void	ParaFROST::bumpReasons()
+{
 	assert(!probed);
 	forall_clause(learntC, k) {
 		sp->seen[ABS(*k)] = ANALYZED_M;
@@ -61,14 +64,16 @@ inline void	ParaFROST::bumpReasons() {
 	}
 }
 
-inline void	ParaFROST::bumpVariable(const uint32& v) {
+inline void	ParaFROST::bumpVariable(const uint32& v) 
+{
 	CHECKVAR(v);
 	assert(!sp->vstate[v].state);
 	if (vsidsEnabled()) varBumpHeap(v);
 	else varBumpQueue(v);
 }
 
-inline void	ParaFROST::bumpVariables() {
+inline void	ParaFROST::bumpVariables() 
+{
 	if (opts.bumpreason_en) bumpReasons();
 	const bool vsidsEn = vsidsEnabled();
 	if (!vsidsEn) rSort(analyzed, QUEUE_CMP(bumps), QUEUE_RANK(bumps));
@@ -143,21 +148,28 @@ void ParaFROST::analyze()
 	assert(lbdlevels.empty());
 	PFLOG2(3, " Analyzing conflict%s:", probed ? " during probing" : "");
 	PFLTRAIL(this, 4);
-	stats.conflicts++;
-	if (opts.chrono_en && chronoAnalyze()) return;
-	if (!cnfstate) return;
-	if (!DL()) { learnEmpty(); return; }
-	// find first-UIP
-	finduip();
+	bool conflictchanged = true;
+	while (conflictchanged) {
+		stats.conflicts++;
+		if (opts.chrono_en && chronoAnalyze()) return;
+		if (!cnfstate) return;
+		if (!DL()) { learnEmpty(); return; }
+		// find first-UIP
+		conflictchanged = finduip();
+	}
 	// update luby restart
 	if (stable) lubyrest.update();
 	if (!probed) {
-		// update lbd restart mechanism
-		lbdrest.update(stable, sp->learntLBD);
 		// minimize learnt clause 
 		stats.minimize.before += learntC.size();
 		if (learntC.size() > 1) minimize();
+		if (learntC.size() > 1
+			&& sp->learntLBD <= opts.minimize_lbd
+			&& learntC.size() <= opts.minimize_min)
+			minimizebin();
 		stats.minimize.after += learntC.size();
+		// update lbd restart mechanism
+		lbdrest.update(stable, sp->learntLBD);
 		// bump variable activities
 		bumpVariables();
 	}
@@ -167,10 +179,11 @@ void ParaFROST::analyze()
 	// clear 
 	conflict = NOREF;
 	learntC.clear();
-	clearLevels(), clearAnalyzed();
+	clearLevels();
+	clearAnalyzed();
 	// subsume recent learnts 
 	if (opts.learntsub_max && REASON(added)) subsumeLearnt(added);
-	printStats(vsidsOnly() && stats.conflicts % opts.prograte == 0);
+	if (vsidsOnly()) printStats(stats.conflicts % opts.prograte == 0);
 }
 
 void ParaFROST::subsumeLearnt(const C_REF& l)
@@ -182,6 +195,7 @@ void ParaFROST::subsumeLearnt(const C_REF& l)
 	const int learntsize = learnt.size();
 	uint64 trials = stats.subtried + opts.learntsub_max;
 	C_REF* tail = learnts.end(), * head = learnts;
+	uint32 nsubsumed = 0;
 	while (tail != head && stats.subtried++ <= trials) {
 		const C_REF t = *--tail;
 		if (l == t) continue;
@@ -190,12 +204,12 @@ void ParaFROST::subsumeLearnt(const C_REF& l)
 		int sub = learntsize;
 		forall_clause(c, k) {
 			if (subsumed(*k) && !--sub) {
-				PFLCLAUSE(4, c, "  found subsumed learnt");
+				nsubsumed++;
 				removeClause(c, t);
-				stats.subsume.learntfly++;
 				break;
 			}
 		}
 	}
 	unmarkLits(learnt);
+	stats.subsume.learntfly += nsubsumed;
 }

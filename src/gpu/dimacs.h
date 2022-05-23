@@ -28,9 +28,9 @@ namespace pFROST {
 
 	struct FORMULA {
 		string path;
-		uint64 size;
 		double c2v;
-		uint32 units, binaries, ternaries, large;
+		uint64 size;
+		uint32 units, large, binaries, ternaries;
 		int maxClauseSize;
 		FORMULA() : 
 			path()

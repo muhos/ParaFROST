@@ -17,19 +17,18 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 **********************************************************************************/
 
 #include "solve.h"
-
 using namespace pFROST;
-using namespace SIGmA;
 
-void ParaFROST::calcOccurs(const uint32& numLits)
+uint32* ParaFROST::flattenCNF(const uint32& numLits)
 {
 	assert(numLits);
 	uint32* literals = cumm.resizeLits(numLits);
+	if (flattened || !literals) return literals;
 	PFLOGN2(2, " Copying survived literals..");
-	copyIf(literals, cnf, vars->gstats);
-	assert(vars->gstats->numLits == numLits);
+	copyIfAsync(literals, cnf);
 	PFLENDING(2, 5, "(%d copied)", numLits);
-	histSimp(numLits);
+	flattened = true;
+	return literals;
 }
 
 void ParaFROST::histSimp(const uint32& numLits)
@@ -38,13 +37,14 @@ void ParaFROST::histSimp(const uint32& numLits)
 	assert(numLits);
 	cuLits& culits = cumm.literals();
 	assert(culits.size >= numLits);
-	if (profile_gpu) cutimer->start();
 	t_iptr& thrust_lits = culits.thrust_lits;
 	t_iptr& thrust_hist = cuhist.thrust_hist;
+	sync(); // sync 'flattenCNF'
+	if (gopts.profile_gpu) cutimer->start();
 	thrust::sort(thrust::cuda::par(tca), thrust_lits, thrust_lits + numLits);
 	thrust::counting_iterator<size_t> search_begin(0);
 	thrust::upper_bound(thrust::cuda::par(tca), thrust_lits, thrust_lits + numLits, search_begin, search_begin + inf.nDualVars, thrust_hist);
 	thrust::adjacent_difference(thrust::cuda::par(tca), thrust_hist, thrust_hist + inf.nDualVars, thrust_hist);
-	if (profile_gpu) cutimer->stop(), cutimer->vo += cutimer->gpuTime();
+	if (gopts.profile_gpu) cutimer->stop(), cutimer->vo += cutimer->gpuTime();
 	PFLDONE(2, 5);
 }

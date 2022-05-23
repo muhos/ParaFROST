@@ -96,8 +96,7 @@ void ParaFROST::histCNF(BCNF& cnf, const bool& reset) {
 	}
 }
 
-void ParaFROST::histCNFFlat(BCNF& cnf, const bool& reset) 
-{
+void ParaFROST::histCNFFlat(BCNF& cnf, const bool& reset) {
 	if (cnf.empty()) return;
 	if (reset) {
 		forall_vector(uint32, vhist, h) { 

@@ -22,7 +22,7 @@ using namespace pFROST;
 
 void ParaFROST::vibrate() {
 
-	assert(cnfstate);
+	assert(UNSOLVED(cnfstate));
 	if (last.rephase.type) return;
 	if (!opts.stable_en) return;
 	if (stable) {

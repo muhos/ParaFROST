@@ -32,15 +32,21 @@ namespace pFROST {
 	
 	struct CSIZE {
 		C_REF ref;
-		size_t size;
+		uint32 size;
 		CSIZE() {}
-		CSIZE(const C_REF& _r, const int& _s) : ref(_r), size(_s) {}
+		CSIZE(const C_REF& _r, const uint32& _s) : ref(_r), size(_s) {}
 	};
 
 	struct DFS {
 		uint32 idx, min;
 		DFS() : idx(0), min(0) { }
 	};
+
+	#define forall_bol(BLIST, PTR) \
+		for (uint32* PTR = BLIST, *END = BLIST.end(); PTR != END; PTR++)
+
+	#define forall_wol(WLIST, PTR) \
+		for (C_REF* PTR = WLIST, *END = WLIST.end(); PTR != END; PTR++)
 }
 
 #endif

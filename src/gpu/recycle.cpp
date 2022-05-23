@@ -147,7 +147,7 @@ void ParaFROST::recycle()
 {
 	assert(sp->propagated == trail.size());
 	assert(conflict == NOREF);
-	assert(cnfstate == UNSOLVED);
+	assert(UNSOLVED(cnfstate));
 	shrink();
 	if (canCollect()) {
 		PFLOGN2(2, " Recycling garbage..");

@@ -25,14 +25,18 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 namespace pFROST {
 
 	struct MODEL {
+		LIT_ST* orgvalues;
 		Vec<LIT_ST> value, marks;
 		uVec1D lits, resolved;
-		LIT_ST* orgvalues;
-		uint32 *vorg, maxVar, orgVars, orgClauses, orgLiterals;
+		uint32* vorg, maxVar, orgVars, orgClauses, orgLiterals;
 		bool extended, verified;
 		MODEL() :
 			orgvalues(NULL)
-			, vorg(NULL), maxVar(0), orgVars(0), orgClauses(0), orgLiterals(0)
+			, vorg(NULL)
+			, maxVar(0)
+			, orgVars(0)
+			, orgClauses(0)
+			, orgLiterals(0) 
 			, extended(false), verified(true)
 		{}
 		~MODEL() {

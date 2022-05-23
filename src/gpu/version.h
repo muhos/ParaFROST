@@ -25,3 +25,7 @@ namespace pFROST {
 	const char* date();
 
 }
+#define VERSION "2.2.5"
+#define OSYSTEM "linux login3.lisa.surfsara.nl 4.19.0-17-amd64 x86_64"
+#define DATE "Fri 23 Jul 2021 07:27:17 AM CEST"
+#define COMPILER "g++ (GCC) 9.3.0 + nvcc 11.0.194"

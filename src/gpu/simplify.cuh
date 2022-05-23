@@ -16,43 +16,47 @@ You should have received a copy of the GNU General Public License
 along with this program.  If not, see <https://www.gnu.org/licenses/>.
 **********************************************************************************/
 
-#ifndef __SIGMA_SIMP_
-#define __SIGMA_SIMP_
+#ifndef __GPU_SIMP_
+#define __GPU_SIMP_
 
 #include <thrust/sort.h>
 #include <thrust/binary_search.h>
 #include <thrust/adjacent_difference.h>
 #include <thrust/iterator/counting_iterator.h>
+#include "options.cuh"
 #include "memory.cuh"
+#include "proof.cuh"
+#include "printer.cuh"
 #include "vstate.h"
 
 namespace pFROST {
+	//======================================================//
+	//                GPU Wrappers Declaration              //
+	//======================================================//
+	void printConstants();
+	void initSharedMem();
+	void initDevOpts(const cuOptions&);
+	void initDevVorg(const cuHist&);
+	void mapFrozenAsync(VARS*, const uint32&);
+	void cuMemSetAsync(addr_t, const Byte&, const size_t&);
+	void copyIf(uint32*, CNF*);
+	void copyIfAsync(uint32*, CNF*);
+	void calcScores(VARS*, uint32*);
+	void calcScores(VARS*, uint32*, OT*);
+	void prepareCNFAsync(CNF*, const cudaStream_t&);
+	void createOTAsync(CNF*, OT*, const bool&);
+	void reduceOTAsync(CNF*, OT*, const bool&);
+	void sortOTAsync(CNF*, OT*, VARS* vars, cudaStream_t*);
+	void veAsync(CNF*, OT*, VARS*, cudaStream_t*, cuVecB*, cuMM&, const cuHist&, const bool&);
+	void subAsync(CNF*, OT*, VARS*, cuVecB*);
+	void bceAsync(CNF*, OT*, VARS*, cuVecB*);
+	void ereAsync(CNF*, OT*, VARS*, cuVecB*);
+	void parevalReds(CNF*, VSTATE*);
+	void parcountCls(CNF*);
+	void parcountAll(CNF*);
+	void parcountLits(CNF*);
+	void seqcountMelted(VSTATE*);
 
-	namespace SIGmA {
-		//======================================================//
-		//                GPU Wrappers Declaration              //
-		//======================================================//
-		void initConstants(cuLimit);
-		void cuMemSetAsync(addr_t, const Byte&, const size_t&);
-		void copyIf(uint32*, CNF*, GSTATS*);
-		void calcScores(VARS*, uint32*);
-		void calcScores(VARS*, uint32*, OT*);
-		void prepareCNFAsync(CNF*, const cudaStream_t&);
-		void createOTAsync(CNF*, OT*, const bool&);
-		void reduceOTAsync(CNF*, OT*, const bool&);
-		void sortOTAsync(CNF*, OT*, VARS* vars, cudaStream_t*);
-		void veAsync(CNF*, OT*, VARS*, cudaStream_t*, cuMM&, const cuHist&, const bool&);
-		void subAsync(CNF*, OT*, VARS*);
-		void bceAsync(CNF*, OT*, VARS*, const uint32*);
-		void ereAsync(CNF*, OT*, VARS*);
-		void evalReds(CNF*, GSTATS*, VSTATE*);
-		void countFinal(CNF*, GSTATS*, VSTATE*);
-		void countCls(CNF*, GSTATS*);
-		void countAll(CNF*, GSTATS*);
-		void countLits(CNF*, GSTATS*);
-		void countMelted(VSTATE*);
-
-	}
 }
 
 #endif 

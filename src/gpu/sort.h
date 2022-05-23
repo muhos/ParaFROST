@@ -30,14 +30,15 @@ namespace pFROST {
 	//  Sorting Functions         //
 	//============================//
 	template<class T, class SZ, class CMP>
-	inline bool isSorted(T* d, const SZ& sz, CMP cmp) {
+	inline bool isSorted(T* d, const SZ& sz, CMP cmp) 
+	{
 		for (SZ i = 1; i < sz; i++)
 			if (cmp(d[i], d[i - 1])) return false;
 		return true;
 	}
 
 	template<class T, class SZ, class CMP>
-	void insertion_sort(T* d, const SZ& sz, CMP cmp)
+	inline void insertion_sort(T* d, const SZ& sz, CMP cmp)
 	{
 		if (sz == 2 && cmp(d[1], d[0]))
 			swap(d[1], d[0]);
@@ -53,7 +54,8 @@ namespace pFROST {
 	}
 
 	template<class T, class SZ>
-	void Sort(T* d, const SZ& sz) {
+	void Sort(T* d, const SZ& sz) 
+	{
 		assert(d != NULL);
 		if (!sz) return;
 		if (sz <= INSORT_THR)
@@ -64,7 +66,8 @@ namespace pFROST {
 	}
 
 	template<class T, class SZ, class CMP>
-	void Sort(T* d, const SZ& sz, CMP cmp) {
+	void Sort(T* d, const SZ& sz, CMP cmp)
+	{
 		assert(d != NULL);
 		if (!sz) return;
 		if (sz <= INSORT_THR)
@@ -75,81 +78,89 @@ namespace pFROST {
 	}
 
 	template<class T, class CMP>
-	void Sort(Vec<T>& d, CMP cmp) {
-		assert(d.data() != NULL);
-		if (!d.size()) return;
-		if (d.size() <= INSORT_THR)
-			insertion_sort(d.data(), d.size(), cmp);
+	void Sort(Vec<T>& d, CMP cmp) 
+	{
+		const auto size = d.size();
+		T* data = d.data();
+		assert(data != NULL);
+		if (!size) return;
+		if (size <= INSORT_THR)
+			insertion_sort(data, size, cmp);
 		else
-			std::sort(d.data(), d.data() + d.size(), cmp);
-		assert(isSorted(d.data(), d.size(), cmp));
+			std::sort(data, data + size, cmp);
+		assert(isSorted(d.data(), size, cmp));
 	}
 
 	template<class T, class SZ, class CMP>
-	void Sort(Vec<T, SZ>& d, CMP cmp) {
-		assert(d.data() != NULL);
-		if (!d.size()) return;
-		if (d.size() <= INSORT_THR)
-			insertion_sort(d.data(), d.size(), cmp);
+	void Sort(Vec<T, SZ>& d, CMP cmp)
+	{
+		const auto size = d.size();
+		T* data = d.data();
+		assert(data != NULL);
+		if (!size) return;
+		if (size <= INSORT_THR)
+			insertion_sort(data, size, cmp);
 		else
-			std::sort(d.data(), d.data() + d.size(), cmp);
-		assert(isSorted(d.data(), d.size(), cmp));
+			std::sort(data, data + size, cmp);
+		assert(isSorted(d.data(), size, cmp));
 	}
 
 	//==================//
 	//	radix sort		//
 	//==================//
+	#define RADIXBITS        8
+	#define RADIXWIDTH       (1 << RADIXBITS)
+    #define RADIXWIDTHBYTES  (RADIXWIDTH * 8)
+	#define RADIXMASK        (RADIXWIDTH - 1)
+	extern size_t  RADIXBUFFER[RADIXWIDTH]; // defined in 'pfinput.cpp'
+
 	template<class T, class RANK>
-	inline bool isSortedRadix(T* d, T* e, RANK rank) {
+	inline bool isSortedRadix(T* d, T* e, RANK rank)
+	{
 		for (T* p = d; p + 1 != e; p++)
 			if (rank(p[0]) > rank(p[1])) return false;
 		return true;
 	}
 
 	template<class T, class RANK>
-	void radixSort(T* data, T* end, RANK rank, const size_t& l = 8ULL)
+	void radixSort(T* data, T* end, RANK rank)
 	{
 		assert(data <= end);
 		size_t n = end - data;
 		if (n < 2) return;
-		const size_t sizebytes = sizeof(size_t);
-		const size_t w = (1ULL << l);
-		const size_t mask = w - 1;
 		const size_t dsize = (sizeof(rank(*data)) << 3);
 		Vec<T, size_t> b(n);
 		T* a = data, * c = a;
-		size_t* count = pfcalloc<size_t>(w);
-		for (size_t i = 0; i < dsize; i += l) {
+		for (size_t i = 0; i < dsize; i += RADIXBITS) {
+			memset(RADIXBUFFER, 0, RADIXWIDTHBYTES);
 			T* end = c + n;
 			size_t upper = 0, lower = SIZE_MAX;
 			for (T* p = c; p != end; p++) {
 				auto s = rank(*p) >> i;
-				auto m = s & mask;
+				auto m = s & RADIXMASK;
 				lower &= s;
 				upper |= s;
-				count[m]++;
+				RADIXBUFFER[m]++;
 			}
 			if (lower == upper) break;
 			size_t pos = 0;
-			for (size_t j = 0; j < w; j++) {
-				size_t delta = count[j];
-				count[j] = pos;
+			for (size_t j = 0; j < RADIXWIDTH; j++) {
+				size_t delta = RADIXBUFFER[j];
+				RADIXBUFFER[j] = pos;
 				pos += delta;
 			}
 			T* d = (c == a) ? b : a;
 			for (T* p = c; p != end; p++) {
 				auto s = rank(*p) >> i;
-				auto m = s & mask;
-				d[count[m]++] = *p;
+				auto m = s & RADIXMASK;
+				d[RADIXBUFFER[m]++] = *p;
 			}
 			c = d;
-			memset(count, 0, sizebytes * w);
 		}
 		if (c == b) {
 			for (size_t i = 0; i < n; i++)
 				a[i] = b[i];
 		}
-		std::free(count);
 		assert(isSortedRadix(data, end, rank));
 	}
 
@@ -180,7 +191,7 @@ namespace pFROST {
 	template<class T, class CMP, class RANK>
 	void rSort(Vec<T>& d, CMP cmp, RANK rank) {
 		assert(d.data() != NULL);
-		auto size = d.size();
+		const auto size = d.size();
 		if (!size) return;
 		if (size <= RSORT_THR) {
 			if (size <= INSORT_THR) insertion_sort(d.data(), size, cmp);
@@ -193,7 +204,7 @@ namespace pFROST {
 	template<class T, class SZ, class CMP, class RANK>
 	void rSort(Vec<T, SZ>& d, CMP cmp, RANK rank) {
 		assert(d.data() != NULL);
-		auto size = d.size();
+		const auto size = d.size();
 		if (!size) return;
 		if (size <= RSORT_THR) {
 			if (size <= INSORT_THR) insertion_sort(d.data(), size, cmp);

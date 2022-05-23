@@ -65,7 +65,7 @@ void ParaFROST::decide()
 	assert(inf.unassigned);
 	assert(sp->propagated == trail.size());
 	assert(conflict == NOREF);
-	assert(cnfstate == UNSOLVED);
+	assert(UNSOLVED(cnfstate));
 	uint32 cand = vsidsEnabled() ? nextVSIDS() : nextVMFQ();
 	uint32 dec = makeAssign(cand, useTarget());
 	enqueueDecision(dec);

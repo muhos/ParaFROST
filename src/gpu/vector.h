@@ -41,7 +41,7 @@ namespace pFROST {
 			if (idx >= sz) {
 				SETCOLOR(CERROR, stderr);
 				std::cerr << "ERROR - index is out of vector boundary (type: " << typeid(T).name() <<
-					", index: " << (long long)idx << ", size:" << (long long)sz << std::endl;
+					", index: " << (long long)idx << ", size:" << (long long)sz << ")" << std::endl;
 				SETCOLOR(CNORMAL, stderr);
 				return false;
 			}

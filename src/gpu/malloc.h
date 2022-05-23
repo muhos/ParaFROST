@@ -44,7 +44,7 @@ namespace pFROST {
 		return _mem;
 	}
 
-#if defined(__linux__) || defined(__CYGWIN__)
+#if defined(__GNUC__) && (__GNUC__ >= 8)
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wclass-memaccess"
 #endif
@@ -68,7 +68,7 @@ namespace pFROST {
 		mem = _mem;
 	}
 
-#if defined(__linux__) || defined(__CYGWIN__)
+#if defined(__GNUC__) && (__GNUC__ >= 8)
 #pragma GCC diagnostic pop
 #endif
 }

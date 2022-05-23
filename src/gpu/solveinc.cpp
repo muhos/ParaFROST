@@ -16,6 +16,7 @@ You should have received a copy of the GNU General Public License
 along with this program.  If not, see <https://www.gnu.org/licenses/>.
 **********************************************************************************/
 
+#include "control.h"
 #include "solve.h" 
 #include "version.h"
 
@@ -28,7 +29,7 @@ ParaFROST::ParaFROST() :
 	, bumped(0)
 	, conflict(NOREF)
 	, ignore(NOREF)
-	, cnfstate(UNSOLVED)
+	, cnfstate(UNSOLVED_M)
 	, intr(false)
 	, stable(false)
 	, probed(false)
@@ -37,16 +38,17 @@ ParaFROST::ParaFROST() :
 	, ot(NULL)
 	, cnf(NULL)
 	, hcnf(NULL)
+	, cuproof(cumm, proof)
 	, streams(NULL)
 	, mapped(false)
 	, compacted(false)
+	, flattened(false)
 	, phase(0)
 	, nForced(0)
 	, simpstate(AWAKEN_SUCC)
 	, devCount(0)
 {
 	PFNAME("ParaFROST (Parallel Formal Reasoning On Satisfiability)", version());
-	assert(pfrost);
 	getCPUInfo(stats.sysmem);
 	getBuildInfo();
 	initSolver();
@@ -85,7 +87,7 @@ void ParaFROST::iallocSpace()
 	newSP->copyFrom(sp);
 	delete sp;
 	sp = newSP;
-	if (opts.proof_en) 
+	if (opts.proof_en)
 		proof.init(sp, vorg);
 	ilevel.clear(true);
 	ivalue.clear(true);
@@ -100,7 +102,7 @@ void ParaFROST::isolve(Lits_t& assumptions)
 	timer.start();
 	iallocSpace();
 	iunassume();
-	assert(cnfstate == UNSOLVED);
+	assert(UNSOLVED(cnfstate));
 	if (BCP()) {
 		PFLOG2(2, " Incremental formula has a contradiction on top level");
 		learnEmpty();
@@ -110,10 +112,10 @@ void ParaFROST::isolve(Lits_t& assumptions)
 		iassume(assumptions);
 		if (verbose == 1) printTable();
 		if (canPreSigmify()) sigmify();
-		if (cnfstate == UNSOLVED) {
+		if (UNSOLVED(cnfstate)) {
 			PFLOG2(2, "-- Incremental CDCL search started..");
 			MDMInit();
-			while (cnfstate == UNSOLVED && !interrupted()) {
+			while (UNSOLVED(cnfstate) && !interrupted()) {
 				PFLDL(this, 3);
 				if (BCP()) analyze();
 				else if (!inf.unassigned) cnfstate = SAT;

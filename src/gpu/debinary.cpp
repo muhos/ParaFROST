@@ -48,7 +48,7 @@ void ParaFROST::debinary() {
 					markLit(other);
 					marked.push(other);
 				}
-				else if (NEQUAL(marker, SIGN(other))) {  // hyper unary resolution
+				else if (NEQUAL(marker, SIGN(other))) { // found 'hyper unary'
 					unit = FLIP(lit);
 					j = ws; // the whole list is satisfied by 'unit'
 					units++;
@@ -82,11 +82,10 @@ void ParaFROST::debinary() {
 		marked.clear();
 		if (unit) {
 			CHECKLIT(unit);
-			enqueue(unit);
+			enqueueUnit(unit);
 			if (BCP()) { learnEmpty(); break; }
 		}
 	}
-	if (cnfstate) assert(sp->propagated == trail.size());
 	stats.debinary.hyperunary += units;
 	stats.debinary.binaries += subsumed;
 	PFLOG2(2, " Deduplicate %lld: removed %lld binaries, producing %lld hyper unaries", stats.debinary.calls, subsumed, units);

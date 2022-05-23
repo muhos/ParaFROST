@@ -17,17 +17,14 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 **********************************************************************************/
 
 #include "solve.h"
-#include "sort.h"
-
 using namespace pFROST;
-using namespace SIGmA;
 
 void ParaFROST::VE()
 {
 	if (opts.ve_en) {
 		if (interrupted()) killSolver();
-		PFLOG2(2, "  Eliminating variables..");
-		veAsync(cnf, ot, vars, streams, cumm, cuhist, stats.sigma.calls > 1);
+		PFLOG2(2, " Eliminating variables..");
+		veAsync(cnf, ot, vars, streams, cuproof.gpuStream(), cumm, cuhist, stats.sigma.calls > 1);
 		postVE();
 		PFLREDALL(this, 2, "BVE Reductions");
 	}
@@ -35,22 +32,22 @@ void ParaFROST::VE()
 
 void ParaFROST::postVE()
 {
-	PFLOGN2(2, "   filtering out eliminated variables..");
+	PFLOGN2(2, "  filtering out eliminated variables..");
 	int n = 0, lastIdx = -1, len = vars->numPVs;
 	uint32* pvs = vars->pVars->data();
 	for (int i = 0; i < len; i++) {
 		const uint32 x = pvs[i];
 		if (ELIMINATED(x)) {
 			markEliminated(RECOVERVAR(x));
-			if (IS_ADDING(x) && lastIdx < i) 
+			if (IS_ADDING(x) && lastIdx < i)
 				lastIdx = i;
 		}
 		else pvs[n++] = x;
 	}
 	vars->pVars->resize(n);
 	PFLENDING(2, 5, "(survived: %d, last index: %d)", n, lastIdx);
-	if (!atomic_ve && lastIdx != -1) {
-		PFLOGN2(2, "   resizing CNF to consider added resolvents..");
+	if (!gopts.ve_atomic && lastIdx != -1) {
+		PFLOGN2(2, "  resizing CNF to consider added resolvents..");
 		assert(n < int(vars->numPVs));
 		S_REF* rref = cuhist.d_segs;
 		uint32* type = cuhist.d_hist, * rpos = type + inf.maxVar;
@@ -83,9 +80,8 @@ void ParaFROST::SUB()
 {
 	if (opts.sub_en || opts.ve_plus_en) {
 		if (interrupted()) killSolver();
-		PFLOGN2(2, "  Eliminating (self)-subsumptions..");
-		subAsync(cnf, ot, vars);
-		PFLDONE(2, 5);
+		PFLOG2(2, " Eliminating (self)-subsumptions..");
+		subAsync(cnf, ot, vars, cuproof.gpuStream());
 		PFLREDALL(this, 2, "SUB Reductions");
 	}
 }
@@ -95,9 +91,8 @@ void ParaFROST::BCE()
 	if (opts.bce_en) {
 		if (interrupted()) killSolver();
 		if (!vars->numPVs) return;
-		PFLOGN2(2, " Eliminating blocked clauses..");
-		bceAsync(cnf, ot, vars, cuhist.d_vorg);
-		PFLDONE(2, 5);
+		PFLOG2(2, " Eliminating blocked clauses..");
+		bceAsync(cnf, ot, vars, cuproof.gpuStream());
 		PFLREDALL(this, 2, "BCE Reductions");
 	}
 }
@@ -107,10 +102,11 @@ void ParaFROST::ERE()
 	if (opts.ere_en) {
 		if (interrupted()) killSolver();
 		if (!vars->numPVs) return;
-		PFLOGN2(2, " Eliminating redundances..");
+		PFLOG2(2, " Eliminating redundances..");
 		ereCls = inf.nClauses;
-		ereAsync(cnf, ot, vars);
-		PFLDONE(2, 5);
+		ereAsync(cnf, ot, vars, cuproof.gpuStream());
 		PFLREDALL(this, 2, "ERE Reductions");
+		cuproof.cacheProof(0);
+		cuproof.writeProof(0);
 	}
 }

@@ -24,13 +24,13 @@ inline uint32 ParaFROST::analyzeReason(const C_REF& ref, const uint32& lit)
 	CHECKLIT(lit);
 	assert(REASON(ref));
 	int* levels = sp->level;
-	const uint32 flit = FLIP(lit);
+	const uint32 fit = FLIP(lit);
 	CLAUSE& reason = cm[ref];
-	PFLCLAUSE(4, reason, "   checking %d reason", l2i(flit));
+	PFLCLAUSE(4, reason, "   checking %d reason", l2i(fit));
 	uint32 dom = 0;
 	forall_clause(reason, k) {
 		const uint32 other = *k, v = ABS(other);
-		if (NEQUAL(other, flit) && levels[v]) {
+		if (NEQUAL(other, fit) && levels[v]) {
 			assert(isFalse(other));
 			if (dom) return 0;
 			dom = other;
@@ -39,7 +39,7 @@ inline uint32 ParaFROST::analyzeReason(const C_REF& ref, const uint32& lit)
 	return dom;
 }
 
-void ParaFROST::hyper2Resolve(CLAUSE& c, const uint32& lit)
+uint32 ParaFROST::hyper2Resolve(CLAUSE& c, const uint32& lit)
 {
 	assert(DL() == 1);
 	int* levels = sp->level;
@@ -53,7 +53,7 @@ void ParaFROST::hyper2Resolve(CLAUSE& c, const uint32& lit)
 		}
 	}
 	assert(nonRoots);
-	if (nonRoots < 2) return;
+	if (nonRoots < 2) return 0;
 	CHECKLIT(child);
 	assert(analyzed.empty());
 	PFLCLAUSE(4, c, "  Finding first dominator for %d via", l2i(child));
@@ -75,6 +75,7 @@ void ParaFROST::hyper2Resolve(CLAUSE& c, const uint32& lit)
 		r = sp->source[vom];
 	}
 	PFLOG2(4, "   found dominator %d of child %d", dom ? l2i(dom) : l2i(prev), l2i(child));
+	const uint32 depth = analyzed.size();
 	uint32 reset = 0;
 	forall_clause(c, k) {
 		const uint32 q = *k;
@@ -94,7 +95,7 @@ void ParaFROST::hyper2Resolve(CLAUSE& c, const uint32& lit)
 			r = sp->source[vom];
 		}
 		PFLOG2(4, "   found dominator %d of child %d", dom ? l2i(dom) : l2i(prev), l2i(q));
-		while (reset < analyzed.size()) {
+		while (reset < depth) {
 			const uint32 a = analyzed[reset];
 			CHECKLIT(a);
 			if (a == dom) break;
@@ -103,13 +104,10 @@ void ParaFROST::hyper2Resolve(CLAUSE& c, const uint32& lit)
 			sp->seen[av] = 0;
 			reset++;
 		}
-		if (reset == analyzed.size()) {
-			PFLOG2(4, "  Early abort detected: all analyzed literals reset");
-			break;
-		}
+		if (reset == depth) break;
 	}
 	dom = 0;
-	while (reset < analyzed.size()) {
+	while (reset < depth) {
 		const uint32 a = analyzed[reset];
 		CHECKLIT(a);
 		if (!dom) dom = a;
@@ -119,12 +117,5 @@ void ParaFROST::hyper2Resolve(CLAUSE& c, const uint32& lit)
 		reset++;
 	}
 	analyzed.clear();
-	if (dom) {
-		PFLOG2(4, "  adding hyper binary resolvent(%d %d)", l2i(dom), l2i(lit));
-		assert(learntC.empty());
-		learntC.push(dom);
-		learntC.push(lit);
-		if (opts.proof_en) proof.addClause(learntC);
-		newHyper2(true); // 'c' after this line is not valid any more and cm[ref] should be used if needed
-	}
+	return dom;
 }
