@@ -34,7 +34,7 @@ To install either the CPU or the GPU solvers, use the `install.sh` script which 
 ## GPU solver
 To build the GPU solver, make sure you have a CUDA-capable GPU with pre-installed NVIDIA driver and CUDA toolkit.
 
-For installing the latest driver + CUDA v11.7, run the following commands on a Ubuntu 20.04:<br>
+For installing CUDA v11.7, run the following commands on a Ubuntu 20.04:<br>
 
 `wget https://developer.download.nvidia.com/compute/cuda/repos/ubuntu2004/x86_64/cuda-ubuntu2004.pin`<br>
 `sudo mv cuda-ubuntu2004.pin /etc/apt/preferences.d/cuda-repository-pin-600`<br>
