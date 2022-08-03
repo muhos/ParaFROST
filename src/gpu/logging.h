@@ -68,6 +68,7 @@ inline void REPCH(const char& ch, const size_t& size, const size_t& off = 0) {
 #define PFLOGW(FORMAT, ...) \
   do { \
      SETCOLOR(CWARNING, stderr); \
+     PRINT(PREFIX); \
      fprintf(stderr, "WARNING - ");\
      fprintf(stderr, FORMAT, ## __VA_ARGS__);\
      putc('\n', stderr); \
