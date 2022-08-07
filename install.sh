@@ -365,11 +365,16 @@ if [[ $pedantic = 1 ]]; then log "  turning off 'pedantic' due to incompatibilit
 if [[ $standard > 14 ]]; then log "  falling back to 'c++14' standard due to incompatibility with Thrust"; standard=14; fi
 
 # default flags
+INCLUDE="../../dep"
+EXTLAMBDA="--expt-extended-lambda"
+RELAXEDEXPR="--expt-relaxed-constexpr"
 OPTIMIZE="-O3"
 FASTMATH="-use_fast_math"
 ARCH="-m${TARGET_SIZE}"
 STD="-std=c++$standard"
 CCFLAGS="$STD"
+
+# building
 
 if [ $debug = 0 ] && [ $assert = 0 ]; then 
 	NVCCFLAGS="$NVCCFLAGS -DNDEBUG $OPTIMIZE $FASTMATH"
@@ -378,7 +383,7 @@ elif [ $debug = 1 ]; then
 elif [ $assert = 1 ]; then 
 	NVCCFLAGS="$NVCCFLAGS $OPTIMIZE"
 fi
-[ $wall = 1 ] && CCFLAGS="$CCFLAGS -Wall"
+[ $wall = 1 ] && CCFLAGS="$CCFLAGS -Wall -Wno-unknown-pragmas"
 [ $pedantic = 1 ] && CCFLAGS="$CCFLAGS -pedantic"
 [ $logging = 1 ] && NVCCFLAGS="$NVCCFLAGS -DLOGGING"
 [ $statistics = 1 ] && NVCCFLAGS="$NVCCFLAGS -DSTATISTICS"
@@ -386,14 +391,23 @@ fi
 
 NVCCFLAGS="$ARCH$NVCCFLAGS"
 
-if [[ $extra != "" ]]; then CCFLAGS="$CCFLAGS $extra"; fi
-
-# building
+if [ -d dep ]; then
+	log "  including 'dep' directory during compilation"
+	if [ -d dep/moderngpu ]; then
+		log "   enabling '$EXTLAMBDA' and"
+		log "            '$RELAXEDEXPR' flags for moderngpu"
+		NVCCFLAGS="$NVCCFLAGS $EXTLAMBDA $RELAXEDEXPR"
+	fi
+	NVCCFLAGS="$NVCCFLAGS -I$INCLUDE"
+fi
 
 log ""
 log "building with:"
-log ""
-log "'$NVCCFLAGS $CCFLAGS'"
+log "'$NVCCFLAGS"
+
+if [[ $extra != "" ]]; then CCFLAGS="$CCFLAGS $extra"; fi
+
+log "$CCFLAGS'"
 log ""
 
 [ ! -f $gputemplate ] && error "cannot find the GPU makefile template"

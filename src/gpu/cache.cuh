@@ -20,6 +20,7 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 #define __CU_CACHE_  
 
 #include <map>
+#include "logging.h"
 
 namespace pFROST {
 
@@ -30,12 +31,6 @@ namespace pFROST {
 	// memory exception types
 	class CACHEMEMOUT {};
 
-	#define CACHEMEMCHECK(X) \
-	if (X != cudaSuccess) {	\
-		PFLOGEN("cannot (de)allocate new memory block via the cache allocator"); \
-		throw CACHEMEMOUT(); \
-	}
-
 	// memory cache container
 	class CACHER {
 		size_t			used, maxcap;
@@ -45,7 +40,7 @@ namespace pFROST {
 	public:
 
 		CACHER() : used(0), maxcap(0) { }
-		~CACHER() { destroy(); }
+
 		inline size_t	maxCapacity		() const { return maxcap; }
 		inline void		updateMaxCap	() { if (maxcap < used) maxcap = used; }
 		inline void		insert			(void* p, const size_t size) {
@@ -58,6 +53,10 @@ namespace pFROST {
 			free_cache_t::iterator free_block = free_cache.lower_bound(size);
 			if (free_block != free_cache.end())
 				free_cache.erase(free_block);
+			else {
+				PFLOGEN("could not find the cached free memory block to erase");
+				throw CACHEMEMOUT();
+			}
 		}
 		void			destroy			();
 		void*			allocate		(size_t size);

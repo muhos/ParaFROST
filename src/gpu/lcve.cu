@@ -64,9 +64,8 @@ bool ParaFROST::LCVE()
 		assert(ot[p].size() >= cuhist[p]);
 		assert(ot[n].size() >= cuhist[n]);
 		if (!cuhist[p] && !cuhist[n]) continue;
+		const uint32 pMu = opts.mu_pos << mu_inc, nMu = opts.mu_neg << mu_inc;
 		if (cuhist[p] > opts.lcve_max || cuhist[n] > opts.lcve_max) break;
-		const uint32 pMu = opts.mu_pos << mu_inc;
-		const uint32 nMu = opts.mu_neg << mu_inc;
 		if (cuhist[p] >= pMu && cuhist[n] >= nMu) break;
 		assert(!sp->vstate[cand].state);
 		if (depFreeze(cand, ot[p]) && depFreeze(cand, ot[n]))

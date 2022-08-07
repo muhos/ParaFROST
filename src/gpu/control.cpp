@@ -106,7 +106,7 @@ namespace pFROST {
 #elif defined(_WIN32)
 		PFLOGW("memoryout not supported on Windows");
 #endif
-			}
+	}
 
 	void forceFPU()
 	{
@@ -207,18 +207,18 @@ namespace pFROST {
 		PFLOG1("       using %s%s %s%s", CREPORTVAL, compiler(), compilemode(), CNORMAL);
 	}
 
-	inline 
-	int SM2Cores(int major, int minor)
+	inline
+		int SM2Cores(int major, int minor)
 	{
 		typedef struct { int SM; int Cores; } SM;
 
-		SM nCores[] = { 
-			{0x30, 192}, {0x32, 192}, {0x35, 192}, {0x37, 192}, 
+		SM nCores[] = {
+			{0x30, 192}, {0x32, 192}, {0x35, 192}, {0x37, 192},
 			{0x50, 128}, {0x52, 128}, {0x53, 128},
-			{0x60,  64}, {0x61, 128}, {0x62, 128}, 
-			{0x70,  64}, {0x72,  64}, {0x75,  64}, 
-			{0x80,  64}, {0x86, 128}, {0x87, 128}, 
-			{-1, -1} 
+			{0x60,  64}, {0x61, 128}, {0x62, 128},
+			{0x70,  64}, {0x72,  64}, {0x75,  64},
+			{0x80,  64}, {0x86, 128}, {0x87, 128},
+			{-1, -1}
 		};
 
 		int index = 0;
@@ -251,6 +251,7 @@ namespace pFROST {
 		maxGPUSharedMem = devProp.sharedMemPerBlock - _shared_penalty;
 		if (!quiet_en) {
 			PFLOG1(" Available GPU: %d x %s%s @ %.2fGHz%s (compute cap: %d.%d)", devCount, CREPORTVAL, devProp.name, ratio((double)devProp.clockRate, 1e6), CNORMAL, devProp.major, devProp.minor);
+			const int cores = SM2Cores(devProp.major, devProp.minor);
 			PFLOG1(" Available GPU Multiprocessors: %d MPs (%s cores/MP)", devProp.multiProcessorCount, (cores < 0 ? "unknown" : std::to_string(cores).c_str()));
 			PFLOG1(" Available Global memory: %zd GB", _free / GBYTE);
 			PFLRULER('-', RULELEN);

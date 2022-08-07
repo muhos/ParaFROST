@@ -1,4 +1,4 @@
-﻿/***********************************************************************[main.cpp]
+/***********************************************************************[main.cpp]
 Copyright(c) 2020, Muhammad Osama - Anton Wijs,
 Technische Universiteit Eindhoven (TU/e).
 
@@ -15,17 +15,6 @@ GNU General Public License for more details.
 You should have received a copy of the GNU General Public License
 along with this program.  If not, see <https://www.gnu.org/licenses/>.
 **********************************************************************************/
-
-/*
-
-	██████╗░░█████╗░██████╗░░█████╗░███████╗██████╗░░█████╗░░██████╗████████╗
-	██╔══██╗██╔══██╗██╔══██╗██╔══██╗██╔════╝██╔══██╗██╔══██╗██╔════╝╚══██╔══╝
-	██████╔╝███████║██████╔╝███████║█████╗░░██████╔╝██║░░██║╚█████╗░░░░██║░░░
-	██╔═══╝░██╔══██║██╔══██╗██╔══██║██╔══╝░░██╔══██╗██║░░██║░╚═══██╗░░░██║░░░
-	██║░░░░░██║░░██║██║░░██║██║░░██║██║░░░░░██║░░██║╚█████╔╝██████╔╝░░░██║░░░
-	╚═╝░░░░░╚═╝░░╚═╝╚═╝░░╚═╝╚═╝░░╚═╝╚═╝░░░░░╚═╝░░╚═╝░╚════╝░╚═════╝░░░░╚═╝░░░
-
-*/
 
 #include "control.h"
 #include "solve.h"
@@ -51,7 +40,7 @@ int main(int argc, char **argv)
 		else if (!verbose) quiet_en = true;
 		if (!quiet_en && verbose) {
 			PFNAME("ParaFROST (Parallel Formal Reasoning On Satisfiability)", version());
-			PFAUTHORS("Muhammad Osama Mahmoud");
+			PFAUTHORS("Muhammad Osama and Anton Wijs");
 			PFRIGHTS("Technische Universiteit Eindhoven (TU/e)");
 			PFLRULER('-', RULELEN);
 			if (argc > 2) {

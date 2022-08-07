@@ -236,6 +236,7 @@ void ParaFROST::sigmifying()
 void ParaFROST::masterFree()
 {
 	syncAll();
+	cacher.destroy();
 	cumm.freeFixed();
 	cumm.freePinned();
 	cleanManaged();

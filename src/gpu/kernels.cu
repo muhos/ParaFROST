@@ -715,7 +715,7 @@ namespace pFROST {
 					if (pos.deleted()) continue;
 					forall_occurs(negs, j) {
 						SCLAUSE& neg = (*cnf)[*j];
-						if (neg.deleted()) continue;
+						if (neg.deleted() || (pos.size() + neg.size() - 2) > SH_MAX_ERE_OUT) continue;
 						uint32* m_c = smem + threadIdx.y * SH_MAX_ERE_OUT; // shared memory for resolvent
 						int m_len = 0;
 						if ((m_len = merge_ere(v, pos, neg, m_c)) > 1) {

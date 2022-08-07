@@ -60,11 +60,6 @@ void ParaFROST::iunfreeze(const uint32& v)
 	PFLOG2(3, "  melting original variable %d (mapped to %d)..", v, mvar);
 }
 
-#if defined(__linux__) || defined(__CYGWIN__)
-#pragma GCC diagnostic push
-#pragma GCC diagnostic ignored "-Wunused-variable"
-#endif
-
 void ParaFROST::iassume(Lits_t& assumptions)
 {
 	assert(inf.maxVar);
@@ -73,19 +68,15 @@ void ParaFROST::iassume(Lits_t& assumptions)
 	PFLOGN2(2, " Adding %d assumptions..", assumptions.size());
 	this->assumptions.reserve(assumptions.size());
 	forall_clause(assumptions, k) {
-		const uint32 a = *k, v = ABS(a);
+		const uint32 a = *k;
 		CHECKLIT(a);
-		assert(!ieliminated(v));
-		assert(!ifrozen[v]);
+		assert(!ieliminated(ABS(a)));
+		assert(!ifrozen[ABS(a)]);
 		ifrozen[ABS(a)] = 1;
 		this->assumptions.push(a);
 	}
 	PFLDONE(2, 5);
 }
-
-#if defined(__linux__) || defined(__CYGWIN__)
-#pragma GCC diagnostic pop
-#endif
 
 void ParaFROST::iunassume()
 {

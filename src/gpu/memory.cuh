@@ -22,7 +22,6 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 #include "simptypes.cuh"
 
 namespace pFROST {
-
 	/*****************************************************/
 	/*  Usage:    GPU global memory manager              */
 	/*  Dependency: all simplifier data types            */
@@ -32,12 +31,6 @@ namespace pFROST {
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wclass-memaccess"
 #endif
-
-#define CUMEMCHECK(X) \
-	if (X != cudaSuccess) {	\
-		PFLOGEN("cannot (de)allocate new memory block via the global GPU allocator"); \
-		throw MEMOUTEXCEPTION(); \
-	}
 
 	class cuMM {
 

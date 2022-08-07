@@ -73,11 +73,6 @@ uint32 ParaFROST::iadd()
 	return v;
 }
 
-#if defined(__linux__) || defined(__CYGWIN__)
-#pragma GCC diagnostic push
-#pragma GCC diagnostic ignored "-Wunused-variable"
-#endif
-
 bool ParaFROST::itoClause(Lits_t& c, Lits_t& org)
 {
 	if (org.empty()) {
@@ -146,8 +141,13 @@ bool ParaFROST::itoClause(Lits_t& c, Lits_t& org)
 			else assert(newsize > 3), formula.large++;
 			if (newsize > formula.maxClauseSize)
 				formula.maxClauseSize = newsize;
-			const C_REF newref = newClause(c, false);
+#ifdef LOGGING
+			const C_REF newref = 
+#endif
+				newClause(c, false);
+
 			PFLCLAUSE(3, cm[newref], "  adding new clause");
+		
 		}
 		if (opts.proof_en && newsize < org.size()) {
 			proof.addClause(c);
@@ -158,7 +158,3 @@ bool ParaFROST::itoClause(Lits_t& c, Lits_t& org)
 	c.clear(), org.clear();
 	return true;
 }
-
-#if defined(__linux__) || defined(__CYGWIN__)
-#pragma GCC diagnostic pop
-#endif

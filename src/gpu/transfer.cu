@@ -68,14 +68,22 @@ void ParaFROST::newBeginning()
 void ParaFROST::markEliminated(const cudaStream_t& _s)
 {
 	assert(vars->isEliminatedCached);
+
+#if	defined(_DEBUG) || defined(DEBUG) || !defined(NDEBUG)
 	uint32 unassigned = inf.unassigned;
+#endif
+
 	sync(_s);
+
 	forall_variables(v) {
 		if (vars->cachedEliminated[v])
 			markEliminated(v);
 	}
+
+#if	defined(_DEBUG) || defined(DEBUG) || !defined(NDEBUG)
 	assert(unassigned >= inf.unassigned);
 	assert((unassigned - inf.unassigned) == vars->nMelted);
+#endif
 }
 
 inline void ParaFROST::writeBack()

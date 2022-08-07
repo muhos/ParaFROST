@@ -25,11 +25,17 @@ using namespace pFROST;
 
 void CACHER::destroy() {
 	for (free_cache_t::iterator i = free_cache.begin(); i != free_cache.end(); i++) {
-		CACHEMEMCHECK(cudaFree(i->second));
+		if (cudaFree(i->second) != cudaSuccess) {
+			PFLOGEN("cannot deallocate cached free memory block %p", i->second);
+			throw CACHEMEMOUT();
+		}
 		i->second = NULL;
 	}
 	for (alloc_cache_t::iterator i = alloc_cache.begin(); i != alloc_cache.end(); i++) {
-		CACHEMEMCHECK(cudaFree(i->first));
+		if (cudaFree(i->first) != cudaSuccess) {
+			PFLOGEN("cannot deallocate cached memory block %p", i->first);
+			throw CACHEMEMOUT();
+		}
 	}
 	free_cache.clear();
 	alloc_cache.clear();
@@ -47,7 +53,10 @@ void* CACHER::allocate(size_t size) {
 	}
 	// no free blocks, allocate new one
 	else {
-		CACHEMEMCHECK(cudaMalloc((void**)&p, size));
+		if (cudaMalloc((void**)&p, size) != cudaSuccess) {
+			PFLOGEN("cannot allocate new memory block via cache allocator");
+			throw CACHEMEMOUT();
+		}
 		used += size;
 	}
 	assert(p);
@@ -76,7 +85,7 @@ void CACHER::deallocate(void* p, const size_t bound) {
 	alloc_cache.erase(allocated_block);
 	if (size < bound) free_cache.insert(std::make_pair(size, p)); // cache free block
 	else { // deallocate free block
-		CACHEMEMCHECK(cudaFree(p));
+		if (cudaFree(p) != cudaSuccess) throw CACHEMEMOUT();
 		used -= size;
 	}
 }

@@ -71,7 +71,7 @@ uint32* cuMM::resizeLits(const size_t& min_lits)
 		DFREE(litsPool);
 		assert(litsPool.mem == NULL);
 		if (!hasDeviceMem(min_cap, "Literals")) return NULL;
-		CUMEMCHECK(cudaMalloc((void**)&litsPool.mem, min_cap));
+		CHECK(cudaMalloc((void**)&litsPool.mem, min_cap));
 		litsPool.thrust_lits = t_iptr(litsPool.mem);
 		litsPool.cap = min_cap;
 		litsPool.size = min_lits;
@@ -93,7 +93,7 @@ bool cuMM::allocHist(cuHist& cuhist, const bool& proofEnabled)
 		DFREE(histPool);
 		assert(histPool.mem == NULL);
 		if (!hasDeviceMem(min_cap, "Histogram")) return false;
-		CUMEMCHECK(cudaMalloc((void**)&histPool.mem, min_cap));
+		CHECK(cudaMalloc((void**)&histPool.mem, min_cap));
 		// NOTE: d_segs, d_hist used internally by OT allocation and externally
 		//       by BVE for calculating resolvents offsets (memory reuse)
 		//		 lbyte is used for proof byte counting
@@ -126,7 +126,7 @@ bool cuMM::allocVars(VARS*& vars, const size_t& resolvedCap)
 	min_cap += uintVec_sz * 3 + scores_sz + resolved_sz + varsize; // data:    (pVars + units + eligible) + scores + resolved + eliminated
 	assert(min_cap);
 	if (!hasUnifiedMem(min_cap, "Fixed")) return false;
-	CUMEMCHECK(cudaMallocManaged((void**)&varsPool.mem, min_cap));
+	CHECK(cudaMallocManaged((void**)&varsPool.mem, min_cap));
 	addr_t ea = varsPool.mem, end = ea + min_cap;
 	vars->pVars = (cuVecU*)ea, ea += hc_cuvecsize;
 	vars->units = (cuVecU*)ea, ea += hc_cuvecsize;
@@ -166,7 +166,7 @@ bool cuMM::allocPinned(VARS* vars, cuHist& cuhist)
 	assert(min_cap);
 	if (pinnedPool.cap) {
 		assert(pinnedPool.mem);
-		CUMEMCHECK(cudaFreeHost(pinnedPool.mem));
+		CHECK(cudaFreeHost(pinnedPool.mem));
 		pinnedPool.mem = NULL;
 		pinnedPool.cap = 0;
 	}
@@ -176,12 +176,12 @@ bool cuMM::allocPinned(VARS* vars, cuHist& cuhist)
 		PFLOGW("CUDA runtime failure due to %s", cudaGetErrorString(retVal));
 		return false;
 	}
-	addr_t ea = pinnedPool.mem, end = ea + min_cap;
+	addr_t ea = pinnedPool.mem;
 	pinned_cnf = (CNF*)ea, ea += hc_cnfsize;
 	cuhist.h_hist = (uint32*)ea, ea += histBytes;
 	vars->cachedUnits = (uint32*)ea, ea += unitBytes;
 	vars->cachedEliminated = ea, ea += elimBytes;
-	assert(ea == end);
+	assert(ea == (pinnedPool.mem + min_cap));
 	pinnedPool.cap = min_cap;
 	return true;
 }
@@ -196,7 +196,7 @@ bool cuMM::allocAux(const size_t& clsCap)
 		DFREE(auxPool);
 		assert(auxPool.mem == NULL);
 		if (!hasDeviceMem(min_cap, "Auxiliary")) return false;
-		CUMEMCHECK(cudaMalloc((void**)&auxPool.mem, min_cap));
+		CHECK(cudaMalloc((void**)&auxPool.mem, min_cap));
 		d_scatter = (S_REF*)auxPool.mem;
 		d_stencil = auxPool.mem + scatterBytes;
 		auxPool.cap = min_cap;
@@ -219,7 +219,7 @@ bool cuMM::resizeCNF(CNF*& cnf, const size_t& clsCap, const size_t& litsCap)
 		assert(cnf == NULL);
 		assert(cnfPool.mem == NULL);
 		if (!hasUnifiedMem(min_cap, "CNF")) return false;
-		CUMEMCHECK(cudaMallocManaged((void**)&cnfPool.mem, min_cap));
+		CHECK(cudaMallocManaged((void**)&cnfPool.mem, min_cap));
 		#if !defined(_WIN32)
 		if (devProp.major > 5) {
 			PFLOGN2(2, " Advising GPU driver to favor global over system memory..");
@@ -239,7 +239,7 @@ bool cuMM::resizeCNF(CNF*& cnf, const size_t& clsCap, const size_t& litsCap)
 		if (!hasUnifiedMem(min_cap, "CNF")) return false;
 		cacheCNFPtr(cnf);
 		addr_t newMem = NULL;
-		CUMEMCHECK(cudaMallocManaged((void**)&newMem, min_cap));
+		CHECK(cudaMallocManaged((void**)&newMem, min_cap));
 		sync();
 		#if !defined(_WIN32)
 		if (devProp.major > 5) {
@@ -285,7 +285,7 @@ bool cuMM::resizeOTAsync(OT*& ot, const size_t& min_lits, const cudaStream_t& _s
 		FREE(otPool);
 		assert(otPool.mem == NULL);
 		if (!hasUnifiedMem(min_cap, "OT")) return false;
-		CUMEMCHECK(cudaMallocManaged((void**)&otPool.mem, min_cap));
+		CHECK(cudaMallocManaged((void**)&otPool.mem, min_cap));
 		#if !defined(_WIN32)
 		if (devProp.major > 5) {
 			PFLOGN2(2, " Advising GPU driver to favor global over system memory..");
@@ -393,8 +393,7 @@ void cuMM::freeFixed()
 void cuMM::freePinned()
 {
 	if (pinnedPool.mem) {
-		CUMEMCHECK(cudaFreeHost(pinnedPool.mem));
-		pinnedPool.mem = NULL;
+		CHECK(cudaFreeHost(pinnedPool.mem)), pinnedPool.mem = NULL;
 		pinnedPool.cap = 0;
 		pinned_cnf = NULL;
 	}
