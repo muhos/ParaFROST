@@ -29,7 +29,9 @@ void ParaFROST::varReorder()
 	else calcScores(vars, cuhist.d_hist);
 	cuhist.cacheHist(streams[2]);
 	if (gopts.profile_gpu) cutimer->start(streams[3]);
+	cacher.insert(cumm.scatter(), cumm.scatterCap());
 	thrust::sort(thrust::cuda::par(tca).on(streams[3]), vars->eligible, vars->eligible + inf.maxVar, GPU_LCV_CMP(vars->scores));
+	cacher.erase(cumm.scatterCap());
 	PFLDONE(2, 5);
 	vars->nUnits = 0;
 	sync(streams[2]);
@@ -55,7 +57,6 @@ bool ParaFROST::LCVE()
 	for (uint32 i = 0; i < inf.maxVar; i++) {
 		const uint32 cand = vars->eligible[i];
 		CHECKVAR(cand);
-		if (cand > MAXVARTOELIM) continue;
 		if (sp->frozen[cand]) continue;
 		if (sp->vstate[cand].state) continue;
 		if (iassumed(cand)) continue;
@@ -63,8 +64,9 @@ bool ParaFROST::LCVE()
 		assert(ot[p].size() >= cuhist[p]);
 		assert(ot[n].size() >= cuhist[n]);
 		if (!cuhist[p] && !cuhist[n]) continue;
-		const uint32 pMu = opts.mu_pos << mu_inc, nMu = opts.mu_neg << mu_inc;
 		if (cuhist[p] > opts.lcve_max || cuhist[n] > opts.lcve_max) break;
+		const uint32 pMu = opts.mu_pos << mu_inc;
+		const uint32 nMu = opts.mu_neg << mu_inc;
 		if (cuhist[p] >= pMu && cuhist[n] >= nMu) break;
 		assert(!sp->vstate[cand].state);
 		if (depFreeze(cand, ot[p]) && depFreeze(cand, ot[n]))

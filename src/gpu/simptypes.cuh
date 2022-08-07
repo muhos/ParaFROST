@@ -19,9 +19,6 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 #ifndef __SIMP_TYPES_
 #define __SIMP_TYPES_
 
-#include <thrust/system/cuda/vector.h>
-#include <thrust/system/cuda/execution_policy.h>
-#include <thrust/pair.h>
 #include <thrust/device_ptr.h>
 #include "vector.cuh"
 #include "definitions.cuh"
@@ -93,18 +90,25 @@ namespace pFROST {
 	/*****************************************************/
 	struct VARS {
 		cuVecU* pVars, * units, * resolved;
-		uint32* scores, * varcore, * eligible, * cachedUnits;
+		uint32* pVarsData, * pVarsSize, * scores, * varcore, * eligible, * cachedUnits;
+		Byte*   eliminated, *cachedEliminated;
 		cuVecU  tmpUnits;
-		uint32  numPVs, nUnits;
+		uint32  numPVs, nUnits, nMelted;
+		bool	isEliminatedCached;
 		VARS() : 
 			pVars(NULL)
 			, units(NULL)
 			, resolved(NULL)
+			, pVarsData(NULL)
+			, pVarsSize(NULL)
 			, scores(NULL)
 			, varcore(NULL)
 			, eligible(NULL)
 			, cachedUnits(NULL)
-			, numPVs(0), nUnits(0)
+			, eliminated(NULL)
+			, cachedEliminated(NULL)
+			, numPVs(0), nUnits(0), nMelted(0)
+			, isEliminatedCached(false)
 		{}
 	};
 	struct cuHist {
@@ -359,16 +363,25 @@ namespace pFROST {
 			return a > b;
 		}
 	};
+	struct COMPACT_VARS {
+		_PFROST_D_ bool operator()(const uint32& var) {
+			return var;
+		}
+	};
 	struct COMPACT_CMP {
 		const CNF* cnf;
+		_PFROST_H_D_ COMPACT_CMP() : cnf(NULL) {}
 		_PFROST_H_D_ COMPACT_CMP(const CNF* _cnf) : cnf(_cnf) { assert(cnf != NULL); }
+		_PFROST_H_D_ void init(const CNF* _cnf) { cnf = _cnf; }
 		_PFROST_D_ bool operator()(const S_REF& ref) {
 			return !cnf->cref(ref)->deleted();
 		}
 	};
-	struct CNF_CMP_KEY {
+	struct OLIST_CMP {
 		const CNF* cnf;
-		_PFROST_H_D_ CNF_CMP_KEY(const CNF* _cnf) : cnf(_cnf) { assert(cnf != NULL); }
+		_PFROST_H_D_ OLIST_CMP() : cnf(NULL) {}
+		_PFROST_H_D_ OLIST_CMP(const CNF* _cnf) : cnf(_cnf) { assert(cnf != NULL); }
+		_PFROST_H_D_ void init(const CNF* _cnf) { cnf = _cnf; }
 		_PFROST_D_ bool operator () (const S_REF& a, const S_REF& b) {
 			const SCLAUSE& x = (*cnf)[a];
 			const SCLAUSE& y = (*cnf)[b];

@@ -20,9 +20,9 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 #define __CU_MEMORY_
 
 #include "simptypes.cuh"
-#include <map>
 
 namespace pFROST {
+
 	/*****************************************************/
 	/*  Usage:    GPU global memory manager              */
 	/*  Dependency: all simplifier data types            */
@@ -33,17 +33,24 @@ namespace pFROST {
 #pragma GCC diagnostic ignored "-Wclass-memaccess"
 #endif
 
+#define CUMEMCHECK(X) \
+	if (X != cudaSuccess) {	\
+		PFLOGEN("cannot (de)allocate new memory block via the global GPU allocator"); \
+		throw MEMOUTEXCEPTION(); \
+	}
+
 	class cuMM {
 
 		// pools & arrays
 		cuLits  litsPool;
-		cuPool	hcnfPool,	cnfPool,	otPool,		varsPool;
-		cuPool	hhistPool,	histPool,	auxPool,	tmpPool;
-		S_REF	* d_refs_mem,	* d_scatter,	* d_segs;
-		uint32	* d_hist,		* d_cnf_mem;
-		uint32	* d_units,		* pinned_units;
-		Byte	* d_stencil;
+		cuPool	hcnfPool,	cnfPool,	otPool;
+		cuPool	varsPool,	histPool,	auxPool;
+		cuPool	pinnedPool;
 		CNF		* pinned_cnf;
+		S_REF	* d_refs_mem,	* d_scatter,	* d_segs,	* d_occurs;
+		uint32	* d_hist,		* d_cnf_mem;
+		uint32	* d_units;
+		Byte	* d_stencil;
 		size_t	nscatters;
 		// trackers
 		int64	_tot, _free, cap, dcap, maxcap, penalty;
@@ -111,6 +118,7 @@ namespace pFROST {
 		inline size_t	scatterCap		() const { return nscatters * sizeof(S_REF); }
 		inline S_REF*	refsMem			() { return d_refs_mem; }
 		inline S_REF*	scatter			() { return d_scatter; }
+		inline S_REF*	occurs			() { return d_occurs; }
 		inline uint32*	cnfMem			() { return d_cnf_mem; }
 		inline uint32*	unitsdPtr		() { return d_units; }
 		inline CNF*		pinnedCNF		() { return pinned_cnf; }
@@ -127,32 +135,38 @@ namespace pFROST {
 			CHECK(cudaMemcpyAsync(pinned_cnf, d_cnf, sizeof(CNF), cudaMemcpyDeviceToHost, _s));
 		}
 		inline void		prefetchCNF2D	(const cudaStream_t& _s = 0) {
+			#if !defined(_WIN32)
 			if (devProp.major > 5) {
 				PFLOGN2(2, " Prefetching CNF to global memory..");
 				CHECK(cudaMemAdvise(cnfPool.mem, cnfPool.cap, cudaMemAdviseSetPreferredLocation, MASTER_GPU));
 				CHECK(cudaMemPrefetchAsync(cnfPool.mem, cnfPool.cap, MASTER_GPU, _s));
 				PFLDONE(2, 5);
 			}
+			#endif	
 		}
 		inline void		prefetchCNF2H	(const cudaStream_t& _s = 0) {
+			#if !defined(_WIN32)
 			if (devProp.major > 5) {
 				PFLOGN2(2, " Prefetching CNF to system memory..");
 				CHECK(cudaMemPrefetchAsync(cnfPool.mem, cnfPool.cap, cudaCpuDeviceId, _s));
 				PFLDONE(2, 5);
 			}
+			#endif	
 		}
 		inline void		prefetchOT2H	(const cudaStream_t& _s = 0) {
+			#if !defined(_WIN32)
 			if (devProp.major > 5) {
 				PFLOGN2(2, " Prefetching OT to system memory..");
 				CHECK(cudaMemPrefetchAsync(otPool.mem, otPool.cap, cudaCpuDeviceId, _s));
 				PFLDONE(2, 5);
 			}
+			#endif	
 		}
 		void	        resizeCNFAsync	(CNF*, const S_REF&, const uint32&);
 		bool			resizeCNF		(CNF*&, const size_t&, const size_t&);
 		uint32*			resizeLits		(const size_t&);
-		addr_t			allocTemp		(const size_t&);
 		bool			allocAux		(const size_t&);
+		bool			allocPinned		(VARS*, cuHist&);
 		bool			allocHist		(cuHist&, const bool& proofEnabled);
 		bool			allocVars		(VARS*&, const size_t& resolvedCap);
 		bool			resizeOTAsync	(OT*&, const size_t&, const cudaStream_t& _s = 0);
@@ -166,35 +180,6 @@ namespace pFROST {
 #if defined(__GNUC__) && (__GNUC__ >= 8)
 #pragma GCC diagnostic pop
 #endif
-
-	/*****************************************************/
-	/*  Usage:    Thrust cached memory allocator         */
-	/*  Dependency: None                                 */
-	/*****************************************************/
-	class INVALID_PTR {
-		string msg;
-	public:
-		INVALID_PTR(void* p) : msg() {
-			msg = string(CERROR) + "pointer \"" + std::to_string((size_t)p) + "\" not allocated by Thrust cached allocator" + CNORMAL;
-		}
-		virtual arg_t what() const { return msg.c_str(); }
-	};
-	class TCA {
-		typedef std::map<char*, int64>      allocBlock_t;
-		typedef std::multimap<int64, char*> freeBlock_t;
-		freeBlock_t     freeBlocks;
-		allocBlock_t    allocBlocks;
-		size_t			used, maxcap;
-
-	public:
-		typedef char value_type;
-		TCA() { used = maxcap = 0; }
-		void	destroy			();
-		char*	allocate		(int64);
-		void	deallocate		(char*, size_t);
-		size_t	maxCapacity		() const { return maxcap; }
-		void	updateMaxCap	() { if (maxcap < used) maxcap = used; }
-	};
 
 }
 

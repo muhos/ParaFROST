@@ -30,9 +30,13 @@ namespace pFROST {
 	// ===== for CNF counting =====
 	#define MAXREDUCEBLOCKS 256
 	uint32 hostCBlocks[MAXREDUCEBLOCKS], hostLBlocks[MAXREDUCEBLOCKS];
-	__device__ uint32 devCBlocks[MAXREDUCEBLOCKS], devLBlocks[MAXREDUCEBLOCKS];   
+	__device__ uint32 devCBlocks[MAXREDUCEBLOCKS], devLBlocks[MAXREDUCEBLOCKS];
 	__device__ uint32 gcounter;
+	__device__ int    lastEliminatedID;
+	__global__ void reset_id() { lastEliminatedID = -1; }
+	__global__ void print_id() { printf("c lastEliminatedID = %d\n", lastEliminatedID); }
 	__global__ void reset_counter() { gcounter = 0; }
+	__global__ void print_counter() { printf("c gcounter = %d\n", gcounter); }
 	__global__ void check_counter(const uint32 checksum) { assert(checksum == gcounter); }
 	//=============================
 
@@ -68,22 +72,23 @@ namespace pFROST {
 	__global__ void reset_ot_k(OT* ot)
 	{
 		gridtype tid = global_tx;
-		while (tid < ot->size()) { 
-			(*ot)[tid].clear(); 
+		while (tid < ot->size()) {
+			(*ot)[tid].clear();
 			tid += stride_x;
 		}
 	}
 
-	__global__ void create_ot_k(CNF* __restrict__ cnf, OT* __restrict__ ot)
+	__global__ void create_ot_k(CNF* __restrict__ cnf, OT* __restrict__ ot_ptr)
 	{
 		gridtype tid = global_tx;
 		while (tid < cnf->size()) {
 			const S_REF r = cnf->ref(tid);
 			SCLAUSE& c = (*cnf)[r];
 			if (c.original() || c.learnt()) {
+				OT& ot = *ot_ptr;
 #pragma unroll
 				forall_clause(c, lit) {
-					(*ot)[*lit].insert(r);
+					ot[*lit].insert(r);
 				}
 			}
 			tid += stride_x;
@@ -106,7 +111,7 @@ namespace pFROST {
 			const uint32 x = pVars->at(tid), p = V2L(x);
 			assert(x);
 			OL& ol = (*ot)[p];
-			devSort(ol.data(), ol.size(), CNF_CMP_KEY(cnf));
+			devSort(ol.data(), ol.size(), OLIST_CMP(cnf));
 			tid += stride_x;
 		}
 	}
@@ -118,7 +123,7 @@ namespace pFROST {
 			const uint32 x = pVars->at(tid), n = NEG(V2L(x));
 			assert(x);
 			OL& ol = (*ot)[n];
-			devSort(ol.data(), ol.size(), CNF_CMP_KEY(cnf));
+			devSort(ol.data(), ol.size(), OLIST_CMP(cnf));
 			tid += stride_x;
 		}
 	}
@@ -130,7 +135,7 @@ namespace pFROST {
 			SCLAUSE& c = src->clause(tid);
 			if (c.original() || c.learnt()) {
 				uint32* d = dest + atomicAdd(&gcounter, c.size());
-				#pragma unroll
+#pragma unroll
 				forall_clause(c, s) { *d++ = *s; }
 			}
 			tid += stride_x;
@@ -258,7 +263,7 @@ namespace pFROST {
 
 	__global__ void assign_scores(
 		uint32* __restrict__ eligible,
-		uint32* __restrict__ scores, 
+		uint32* __restrict__ scores,
 		const uint32* __restrict__ hist,
 		uint32 size)
 	{
@@ -275,8 +280,8 @@ namespace pFROST {
 	__global__ void assign_scores(
 		uint32* __restrict__ eligible,
 		uint32* __restrict__ scores,
-		uint32* __restrict__ hist, 
-		const OT* __restrict__ ot, 
+		uint32* __restrict__ hist,
+		const OT* __restrict__ ot,
 		uint32 size)
 	{
 		gridtype tid = global_tx;
@@ -293,23 +298,23 @@ namespace pFROST {
 	__global__ void ve_k(
 		CNF* __restrict__ cnfptr,
 		OT* __restrict__ otptr,
-		cuVecU* __restrict__ pVars,
+		const cuVecU* __restrict__ pVars,
+		Byte* __restrict__ eliminated,
 		cuVecU* __restrict__ units,
-		cuVecU* __restrict__ resolved, 
+		cuVecU* __restrict__ resolved,
 		cuVecB* __restrict__ proof)
 	{
 		gridtype tid = global_tx;
 		__shared__ uint32 outs[BLVE * SH_MAX_BVE_OUT];
 		while (tid < pVars->size()) {
-			uint32& x = (*pVars)[tid];
+			const uint32 x = pVars->at(tid);
 			assert(x);
-			assert(!ELIMINATED(x));
-			assert(!IS_ADDING(x));
-			assert(x <= MAXVARTOELIM);
+			assert(!ELIMINATED(eliminated[x]));
+			assert(!IS_ADDING(eliminated[x]));
 			const uint32 p = V2L(x), n = NEG(p);
 			CNF& cnf = *cnfptr;
 			OT& ot = *otptr;
-			OL& poss = ot[p], &negs = ot[n];
+			OL& poss = ot[p], & negs = ot[n];
 			uint32 pOrgs = 0, nOrgs = 0;
 			countOrgs(cnf, poss, pOrgs), countOrgs(cnf, negs, nOrgs);
 			bool elim = false;
@@ -362,7 +367,7 @@ namespace pFROST {
 					elim = true;
 				}
 			}
-			if (elim) ELIMINATE(x);
+			if (elim) ELIMINATE(eliminated[x]);
 			tid += stride_x;
 		}
 	}
@@ -370,24 +375,24 @@ namespace pFROST {
 	__global__ void in_ve_k_1(
 		CNF* __restrict__ cnfptr,
 		OT* __restrict__ otptr,
-		cuVecU* __restrict__ pVars, 
-		cuVecU* __restrict__ units, 
-		cuVecU* __restrict__ resolved, 
+		const cuVecU* __restrict__ pVars,
+		Byte* __restrict__ eliminated,
+		cuVecU* __restrict__ units,
+		cuVecU* __restrict__ resolved,
 		cuVecB* __restrict__ proof,
 		const uint32* __restrict__ varcore,
-		uint32* __restrict__ ucnt, 
-		uint32* __restrict__ type, 
-		uint32* __restrict__ rpos, 
+		uint32* __restrict__ ucnt,
+		uint32* __restrict__ type,
+		uint32* __restrict__ rpos,
 		S_REF* __restrict__ rref)
 	{
 		gridtype tid = global_tx;
 		uint32* outs = SharedMemory<uint32>();
 		while (tid < pVars->size()) {
-			uint32& x = (*pVars)[tid];
+			const uint32 x = pVars->at(tid);
 			assert(x);
-			assert(!ELIMINATED(x));
-			assert(!IS_ADDING(x));
-			assert(x <= MAXVARTOELIM);
+			assert(!ELIMINATED(eliminated[x]));
+			assert(!IS_ADDING(eliminated[x]));
 			const uint32 p = V2L(x), n = NEG(p);
 			CNF& cnf = *cnfptr;
 			OT& ot = *otptr;
@@ -397,13 +402,13 @@ namespace pFROST {
 			// pure-literal elimination
 			if (!pOrgs || !nOrgs) {
 				toblivion(p, pOrgs, nOrgs, cnf, poss, negs, resolved);
-				ucnt[tid] = 0, type[tid] = 0, rref[tid] = 0, rpos[tid] = 0, ELIMINATE(x);
+				ucnt[tid] = 0, type[tid] = 0, rref[tid] = 0, rpos[tid] = 0, ELIMINATE(eliminated[x]);
 			}
 			// Equiv/NOT-gate Reasoning
 			else if (uint32 def = find_equ_gate(p, cnf, poss, negs)) {
 				saveResolved(p, pOrgs, nOrgs, cnf, poss, negs, resolved); // must be called before substitution
 				substitute_single(p, def, cnf, poss, negs, units, proof);
-				ucnt[tid] = 0, type[tid] = 0, rref[tid] = 0, rpos[tid] = 0, ELIMINATE(x);
+				ucnt[tid] = 0, type[tid] = 0, rref[tid] = 0, rpos[tid] = 0, ELIMINATE(eliminated[x]);
 			}
 			else {
 				assert(pOrgs && nOrgs);
@@ -414,7 +419,7 @@ namespace pFROST {
 				//=====================
 				if (nClsBefore > 2) {
 					// AND/OR-gate Reasoning
-					if (nOrgs < SH_MAX_BVE_OUT1 && 
+					if (nOrgs < SH_MAX_BVE_OUT1 &&
 						find_ao_gate(n, nClsBefore, cnf, ot, &outs[threadIdx.x * SH_MAX_BVE_OUT1], nElements, nAddedCls, nAddedLits))
 						elimType = AOIX_MASK;
 					else if (!nAddedCls && pOrgs < SH_MAX_BVE_OUT1 &&
@@ -432,15 +437,15 @@ namespace pFROST {
 					else if (find_xor_gate(p, nClsBefore, cnf, ot, &outs[threadIdx.x * SH_MAX_BVE_OUT1], nElements, nAddedCls, nAddedLits))
 						elimType = AOIX_MASK;
 					else if (!nAddedCls &&
-						find_xor_gate(n, nClsBefore, cnf, ot, &outs[threadIdx.x * SH_MAX_BVE_OUT1], nElements, nAddedCls, nAddedLits)) 
+						find_xor_gate(n, nClsBefore, cnf, ot, &outs[threadIdx.x * SH_MAX_BVE_OUT1], nElements, nAddedCls, nAddedLits))
 						elimType = AOIX_MASK;
 				}
 				// fun-tab reasoning
-				if (varcore && !elimType && nClsBefore > 2 && 
+				if (varcore && !elimType && nClsBefore > 2 &&
 					find_fun_gate(p, nClsBefore, varcore, cnf, ot, &outs[threadIdx.x * SH_MAX_BVE_OUT1], nElements, nAddedCls, nAddedLits))
 					elimType = CORE_MASK;
 				// n-by-m resolution
-				else if (!elimType && !nAddedCls && 
+				else if (!elimType && !nAddedCls &&
 					resolve(x, nClsBefore, cnf, poss, negs, nElements, nAddedCls, nAddedLits))
 					elimType = RES_MASK;
 				//=====================
@@ -448,7 +453,7 @@ namespace pFROST {
 				//=====================
 				if (!nAddedCls) { // eliminated without resolvents
 					toblivion(p, pOrgs, nOrgs, cnf, poss, negs, resolved);
-					ucnt[tid] = 0, type[tid] = 0, rref[tid] = 0, rpos[tid] = 0, ELIMINATE(x);
+					ucnt[tid] = 0, type[tid] = 0, rref[tid] = 0, rpos[tid] = 0, ELIMINATE(eliminated[x]);
 				}
 				else if (elimType) { // can be eliminated with resolvents in next phase
 					assert(nAddedLits >= nAddedCls);
@@ -468,41 +473,41 @@ namespace pFROST {
 
 	__global__ void ve_k_1(
 		CNF* __restrict__ cnfptr,
-		OT* __restrict__ otptr, 
-		cuVecU* __restrict__ pVars, 
-		cuVecU* __restrict__ units, 
-		cuVecU* __restrict__ resolved, 
+		OT* __restrict__ otptr,
+		const cuVecU* __restrict__ pVars,
+		Byte* __restrict__ eliminated,
+		cuVecU* __restrict__ units,
+		cuVecU* __restrict__ resolved,
 		cuVecB* __restrict__ proof,
 		const uint32* __restrict__ varcore,
-		uint32* __restrict__ ucnt, 
-		uint32* __restrict__ type, 
-		uint32* __restrict__ rpos, 
+		uint32* __restrict__ ucnt,
+		uint32* __restrict__ type,
+		uint32* __restrict__ rpos,
 		S_REF* __restrict__ rref)
 	{
 		gridtype tid = global_tx;
 		uint32* outs = SharedMemory<uint32>();
 		while (tid < pVars->size()) {
-			uint32& x = (*pVars)[tid];
+			const uint32 x = pVars->at(tid);
 			assert(x);
-			assert(!ELIMINATED(x));
-			assert(!IS_ADDING(x));
-			assert(x <= MAXVARTOELIM);
+			assert(!ELIMINATED(eliminated[x]));
+			assert(!IS_ADDING(eliminated[x]));
 			const uint32 p = V2L(x), n = NEG(p);
 			CNF& cnf = *cnfptr;
 			OT& ot = *otptr;
-			OL& poss = ot[p], &negs = ot[n];
+			OL& poss = ot[p], & negs = ot[n];
 			const uint32 pOrgs = poss.size();
 			const uint32 nOrgs = negs.size();
 			// pure-literal elimination
 			if (!pOrgs || !nOrgs) {
 				toblivion(p, pOrgs, nOrgs, cnf, poss, negs, resolved);
-				ucnt[tid] = 0, type[tid] = 0, rref[tid] = 0, rpos[tid] = 0, ELIMINATE(x);
+				ucnt[tid] = 0, type[tid] = 0, rref[tid] = 0, rpos[tid] = 0, ELIMINATE(eliminated[x]);
 			}
 			// Equiv/NOT-gate Reasoning
 			else if (uint32 def = find_equ_gate(p, cnf, poss, negs)) {
 				saveResolved(p, pOrgs, nOrgs, cnf, poss, negs, resolved); // must be called before substitution
 				substitute_single(p, def, cnf, poss, negs, units, proof);
-				ucnt[tid] = 0, type[tid] = 0, rref[tid] = 0, rpos[tid] = 0, ELIMINATE(x);
+				ucnt[tid] = 0, type[tid] = 0, rref[tid] = 0, rpos[tid] = 0, ELIMINATE(eliminated[x]);
 			}
 			else {
 				assert(pOrgs && nOrgs);
@@ -513,7 +518,7 @@ namespace pFROST {
 				//=====================
 				if (nClsBefore > 2) {
 					// AND/OR-gate Reasoning
-					if (nOrgs < SH_MAX_BVE_OUT1 && 
+					if (nOrgs < SH_MAX_BVE_OUT1 &&
 						find_ao_gate(n, nClsBefore, cnf, ot, &outs[threadIdx.x * SH_MAX_BVE_OUT1], nElements, nAddedCls, nAddedLits))
 						elimType = AOIX_MASK;
 					else if (!nAddedCls && pOrgs < SH_MAX_BVE_OUT1 &&
@@ -531,15 +536,15 @@ namespace pFROST {
 					else if (find_xor_gate(p, nClsBefore, cnf, ot, &outs[threadIdx.x * SH_MAX_BVE_OUT1], nElements, nAddedCls, nAddedLits))
 						elimType = AOIX_MASK;
 					else if (!nAddedCls &&
-						find_xor_gate(n, nClsBefore, cnf, ot, &outs[threadIdx.x * SH_MAX_BVE_OUT1], nElements, nAddedCls, nAddedLits)) 
+						find_xor_gate(n, nClsBefore, cnf, ot, &outs[threadIdx.x * SH_MAX_BVE_OUT1], nElements, nAddedCls, nAddedLits))
 						elimType = AOIX_MASK;
 				}
 				// fun-tab reasoning
-				if (varcore && !elimType && nClsBefore > 2 && 
+				if (varcore && !elimType && nClsBefore > 2 &&
 					find_fun_gate(p, nClsBefore, varcore, cnf, ot, &outs[threadIdx.x * SH_MAX_BVE_OUT1], nElements, nAddedCls, nAddedLits))
 					elimType = CORE_MASK;
 				// n-by-m resolution
-				else if (!elimType && !nAddedCls && 
+				else if (!elimType && !nAddedCls &&
 					resolve(x, nClsBefore, cnf, poss, negs, nElements, nAddedCls, nAddedLits))
 					elimType = RES_MASK;
 				//=====================
@@ -547,7 +552,7 @@ namespace pFROST {
 				//=====================
 				if (!nAddedCls) { // eliminated without resolvents
 					toblivion(p, pOrgs, nOrgs, cnf, poss, negs, resolved);
-					ucnt[tid] = 0, type[tid] = 0, rref[tid] = 0, rpos[tid] = 0, ELIMINATE(x);
+					ucnt[tid] = 0, type[tid] = 0, rref[tid] = 0, rpos[tid] = 0, ELIMINATE(eliminated[x]);
 				}
 				else if (elimType) { // can be eliminated with resolvents in next phase
 					assert(nAddedLits >= nAddedCls);
@@ -567,27 +572,29 @@ namespace pFROST {
 
 	__global__ void ve_k_2(
 		CNF* __restrict__ cnf,
-		OT* __restrict__ ot, 
-		cuVecU* __restrict__ pVars, 
-		cuVecU* __restrict__ units, 
+		OT* __restrict__ ot,
+		const cuVecU* __restrict__ pVars,
+		Byte* __restrict__ eliminated,
+		uint32* __restrict__ eligible,
+		cuVecU* __restrict__ units,
 		cuVecU* __restrict__ resolved,
 		cuVecB* __restrict__ proof,
-		const uint32* __restrict__ ucnt, 
-		const uint32* __restrict__ type, 
-		const uint32* __restrict__ rpos, 
+		const uint32* __restrict__ ucnt,
+		const uint32* __restrict__ type,
+		const uint32* __restrict__ rpos,
 		const S_REF* __restrict__ rref)
 	{
 		gridtype tid = global_tx;
 		uint32* outs = SharedMemory<uint32>();
 		while (tid < pVars->size()) {
-			uint32& x = (*pVars)[tid];
+			const uint32 x = pVars->at(tid);
 			assert(x);
 			const uint32 xinfo = type[tid];
 			const uint32 elimType = RECOVERTYPE(xinfo);
 			assert(elimType <= TYPE_MASK);
 			if (elimType) {
-				assert(!ELIMINATED(x));
-				assert(x <= MAXVARTOELIM);
+				assert(!ELIMINATED(eliminated[x]));
+				assert(!IS_ADDING(eliminated[x]));
 				const uint32 p = V2L(x);
 				const uint32 nAddedCls = RECOVERADDEDCLS(xinfo);
 				const uint32 nAddedLits = RECOVERADDEDLITS(xinfo);
@@ -600,34 +607,63 @@ namespace pFROST {
 					saveResolved(p, *cnf, poss, negs, resolved);
 					if (IS_RES(elimType))
 						resolve_x(x, ucnt[tid], nAddedCls, nAddedLits, added_pos, added_ref, *cnf, poss, negs, units, proof, outs + threadIdx.x * SH_MAX_BVE_OUT2);
-					else if (IS_CORE(elimType))		
+					else if (IS_CORE(elimType))
 						coresubstitute_x(x, ucnt[tid], nAddedCls, nAddedLits, added_pos, added_ref, *cnf, poss, negs, units, proof, outs + threadIdx.x * SH_MAX_BVE_OUT2);
 					else {
-						assert(IS_AOIX(elimType));						
+						assert(IS_AOIX(elimType));
 						substitute_x(x, ucnt[tid], nAddedCls, nAddedLits, added_pos, added_ref, *cnf, poss, negs, units, proof, outs + threadIdx.x * SH_MAX_BVE_OUT2);
 					}
-					ELIMINATE(x);
-					MARKADDING(x);
+					ELIMINATE(eliminated[x]);
+					MARKADDING(eliminated[x]);
+					atomicAggMax(&lastEliminatedID, tid);
 				}
 				else if (!IS_RES(elimType)) freezeClauses(*cnf, poss, negs);
 			}
+			eligible[tid] = eliminated[x] ? 0 : x;
 			tid += stride_x;
+		}
+	}
+
+	__global__ void resizeCNF_k(CNF* cnf,
+		const uint32* __restrict__ type,
+		const uint32* __restrict__ rpos,
+		const S_REF* __restrict__ rref,
+		const int verbose)
+	{
+		if (lastEliminatedID >= 0) {
+			const uint32 lastAdded = type[lastEliminatedID];
+			const uint32 lastAddedPos = rpos[lastEliminatedID];
+			const S_REF  lastAddedRef = rref[lastEliminatedID];
+			assert(lastAdded < NOVAR);
+			assert(lastAddedPos < NOVAR);
+			assert(lastAddedRef < GNOREF);
+			assert(RECOVERTYPE(lastAdded) < TYPE_MASK);
+			const uint32 lastAddedCls = RECOVERADDEDCLS(lastAdded);
+			const uint32 lastAddedLits = RECOVERADDEDLITS(lastAdded);
+			assert(lastAddedCls && lastAddedCls <= ADDEDCLS_MAX);
+			assert(lastAddedLits && lastAddedLits <= ADDEDLITS_MAX);
+			const S_REF lastAddedBuckets = lastAddedLits + dc_nbuckets * lastAddedCls;
+			const S_REF data_size = lastAddedBuckets + lastAddedRef;
+			const uint32 cs_size = lastAddedCls + lastAddedPos;
+			cnf->resize(data_size, cs_size);
+			if (verbose > 1) printf("c   resized CNF to %d clauses and %lld data for a last ID %d\n", cs_size, data_size, lastEliminatedID);
 		}
 	}
 
 	__global__ void sub_k(
 		CNF* __restrict__ cnf,
-		OT* __restrict__ otptr,  
+		OT* __restrict__ otptr,
 		cuVecB* __restrict__ proof,
 		cuVecU* __restrict__ units,
-		const cuVecU* __restrict__ pVars)
+		const cuVecU* __restrict__ pVars,
+		const Byte* __restrict__ eliminated)
 	{
 		gridtype tid = global_tx;
 		uint32* sh_cls = SharedMemory<uint32>();
 		while (tid < pVars->size()) {
 			const uint32 x = (*pVars)[tid];
 			assert(x);
-			assert(!ELIMINATED(x));
+			assert(!ELIMINATED(eliminated[x]));
 			const uint32 p = V2L(x), n = NEG(p);
 			OT& ot = *otptr;
 			if (ot[p].size() <= dc_options[0] && ot[n].size() <= dc_options[0])
@@ -637,18 +673,19 @@ namespace pFROST {
 	}
 
 	__global__ void bce_k(
-		CNF* __restrict__ cnf, 
-		OT* __restrict__ ot, 
+		CNF* __restrict__ cnf,
+		OT* __restrict__ ot,
 		cuVecB* __restrict__ proof,
 		cuVecU* __restrict__ resolved,
-		const cuVecU* __restrict__ pVars)
+		const cuVecU* __restrict__ pVars,
+		const Byte* __restrict__ eliminated)
 	{
 		gridtype tid = global_tx;
 		__shared__ uint32 sh_cls[BLBCE * SH_MAX_BCE_IN];
 		while (tid < pVars->size()) {
 			const uint32 x = (*pVars)[tid];
 			assert(x);
-			assert(!ELIMINATED(x));
+			assert(!ELIMINATED(eliminated[x]));
 			const uint32 p = V2L(x), n = NEG(p);
 			if ((*ot)[p].size() <= dc_options[1] && (*ot)[n].size() <= dc_options[1])
 				blocked_x(x, *cnf, (*ot)[p], (*ot)[n], resolved, proof, sh_cls + threadIdx.x * SH_MAX_BCE_IN);
@@ -657,17 +694,18 @@ namespace pFROST {
 	}
 
 	__global__ void ere_k(
-		CNF* __restrict__ cnf, 
+		CNF* __restrict__ cnf,
 		OT* __restrict__ ot,
 		cuVecB* __restrict__ proof,
-		const cuVecU* __restrict__ pVars)
+		const cuVecU* __restrict__ pVars,
+		const Byte* __restrict__ eliminated)
 	{
 		gridtype gid = global_ty;
 		uint32* smem = SharedMemory<uint32>();
 		while (gid < pVars->size()) {
 			const uint32 v = pVars->at(gid);
 			assert(v);
-			assert(!ELIMINATED(v));
+			assert(!ELIMINATED(eliminated[v]));
 			const uint32 p = V2L(v), n = NEG(p);
 			OL& poss = (*ot)[p], & negs = (*ot)[n];
 			// do merging and apply forward equality check (on-the-fly) over resolvents
@@ -677,7 +715,7 @@ namespace pFROST {
 					if (pos.deleted()) continue;
 					forall_occurs(negs, j) {
 						SCLAUSE& neg = (*cnf)[*j];
-						if (neg.deleted() || (pos.size() + neg.size() - 2) > SH_MAX_ERE_OUT) continue;
+						if (neg.deleted()) continue;
 						uint32* m_c = smem + threadIdx.y * SH_MAX_ERE_OUT; // shared memory for resolvent
 						int m_len = 0;
 						if ((m_len = merge_ere(v, pos, neg, m_c)) > 1) {
@@ -722,7 +760,7 @@ namespace pFROST {
 
 	void printConstants()
 	{
-		printCMem<<<1,1>>>();
+		printCMem << <1, 1 >> > ();
 		LOGERR("Printing constant memory failed");
 		syncAll();
 	}
@@ -834,18 +872,6 @@ namespace pFROST {
 		}
 	}
 
-	void seqcountMelted(VSTATE* vstate)
-	{
-		inf.n_del_vars_after = 0;
-		forall_variables(v) {
-			if (MELTED(vstate[v].state))
-				inf.n_del_vars_after++;
-		}
-		assert(inf.n_del_vars_after >= inf.maxMelted);
-		inf.n_del_vars_after -= inf.maxMelted;
-		inf.maxMelted += inf.n_del_vars_after;
-	}
-
 	uint32 cuPROOF::count(const uint32* literals, const uint32& numLits)
 	{
 		if (!proof.checkFile()) PFLOGE("host proof system is not activated");
@@ -893,22 +919,6 @@ namespace pFROST {
 		OPTIMIZEBLOCKS2(cnf_sz, BLOCK1D);
 		OPTIMIZESHARED(BLOCK1D, sizeof(uint32) * 2);
 		cnt_cls_lits << <nBlocks, BLOCK1D, smemSize >> > (cnf);
-		CHECK(cudaMemcpyFromSymbol(hostCBlocks, devCBlocks, nBlocks * sizeof(uint32)));
-		CHECK(cudaMemcpyFromSymbol(hostLBlocks, devLBlocks, nBlocks * sizeof(uint32)));
-		seqreduceBlocks(hostCBlocks, hostLBlocks, nBlocks);
-	}
-
-	void parevalReds(CNF* cnf, VSTATE* vstate)
-	{
-		const uint32 cnf_sz = inf.nClauses + (inf.nClauses >> 1);
-		OPTIMIZEBLOCKS2(cnf_sz, BLOCK1D);
-		OPTIMIZESHARED(BLOCK1D, sizeof(uint32) * 2);
-		cnt_cls_lits << <nBlocks, BLOCK1D, smemSize >> > (cnf);
-		seqcountMelted(vstate);
-		if (gopts.sync_always) {
-			LOGERR("Full CNF counting failed");
-			syncAll();
-		}
 		CHECK(cudaMemcpyFromSymbol(hostCBlocks, devCBlocks, nBlocks * sizeof(uint32)));
 		CHECK(cudaMemcpyFromSymbol(hostLBlocks, devLBlocks, nBlocks * sizeof(uint32)));
 		seqreduceBlocks(hostCBlocks, hostLBlocks, nBlocks);
@@ -971,17 +981,15 @@ namespace pFROST {
 		if (gopts.profile_gpu) cutimer->stop(), cutimer->cot += cutimer->gpuTime();
 	}
 
-	void sortOTAsync(CNF* cnf, OT* ot, VARS* vars, cudaStream_t* streams)
+	void sortOTAsync(CNF* cnf, OT* ot, VARS* vars)
 	{
 		assert(cnf);
 		assert(ot);
 		assert(vars->numPVs);
 		OPTIMIZEBLOCKS(vars->numPVs, BLSORT);
-		cudaStream_t s1, s2;
-		if (gopts.profile_gpu) s1 = s2 = 0, cutimer->start();
-		else s1 = streams[0], s2 = streams[1];
-		sort_ot_p << <nBlocks, BLSORT, 0, s1 >> > (cnf, ot, vars->pVars);
-		sort_ot_n << <nBlocks, BLSORT, 0, s2 >> > (cnf, ot, vars->pVars);
+		if (gopts.profile_gpu) cutimer->start();
+		sort_ot_p << <nBlocks, BLSORT >> > (cnf, ot, vars->pVars);
+		sort_ot_n << <nBlocks, BLSORT >> > (cnf, ot, vars->pVars);
 		if (gopts.sync_always) {
 			LOGERR("Sorting OT failed");
 			syncAll();
@@ -993,26 +1001,29 @@ namespace pFROST {
 	//=======================
 	inline void vePhase1(
 		CNF* cnf,
-		OT* ot, 
+		OT* ot,
 		VARS* vars,
 		cuVecB* proof,
 		uint32* ucnt,
 		uint32* type,
 		uint32* rpos,
-		S_REF* rref, 
+		S_REF* rref,
 		const bool& in)
 	{
+		PFLOGN2(2, "  resetting last eliminated ID to -1.. ");
+		reset_id << <1, 1 >> > ();
+		PFLDONE(2, 5);
 		PFLOGN2(2, "  configuring phase 1 with ");
 		OPTIMIZEBLOCKSELIM(vars->numPVs, BLVE1, gopts.ve);
 		OPTIMIZESHARED(nThreads, SH_MAX_BVE_OUT1 * sizeof(uint32));
 		PFLENDING(2, 5, "(%d/%d ths, %d/%d bls) and %zd KB shared memory",
 			nThreads, BLVE1, nBlocks, MAXBLOCKS, smemSize / KBYTE);
 #if VE_DBG
-		if (in) in_ve_k_1 << <1, 1, smemSize >> > (cnf, ot, vars->pVars, vars->units, vars->resolved, proof, vars->varcore, ucnt, type, rpos, rref);
-		else	   ve_k_1 << <1, 1, smemSize >> > (cnf, ot, vars->pVars, vars->units, vars->resolved, proof, vars->varcore, ucnt, type, rpos, rref);
+		if (in) in_ve_k_1 << <1, 1, smemSize >> > (cnf, ot, vars->pVars, vars->eliminated, vars->units, vars->resolved, proof, vars->varcore, ucnt, type, rpos, rref);
+		else	   ve_k_1 << <1, 1, smemSize >> > (cnf, ot, vars->pVars, vars->eliminated, vars->units, vars->resolved, proof, vars->varcore, ucnt, type, rpos, rref);
 #else
-		if (in) in_ve_k_1 << <nBlocks, nThreads, smemSize >> > (cnf, ot, vars->pVars, vars->units, vars->resolved, proof, vars->varcore, ucnt, type, rpos, rref);
-		else	   ve_k_1 << <nBlocks, nThreads, smemSize >> > (cnf, ot, vars->pVars, vars->units, vars->resolved, proof, vars->varcore, ucnt, type, rpos, rref);
+		if (in) in_ve_k_1 << <nBlocks, nThreads, smemSize >> > (cnf, ot, vars->pVars, vars->eliminated, vars->units, vars->resolved, proof, vars->varcore, ucnt, type, rpos, rref);
+		else	   ve_k_1 << <nBlocks, nThreads, smemSize >> > (cnf, ot, vars->pVars, vars->eliminated, vars->units, vars->resolved, proof, vars->varcore, ucnt, type, rpos, rref);
 #endif
 		LOGERR("BVE Phase-1 failed");
 		sync();
@@ -1030,28 +1041,29 @@ namespace pFROST {
 		size_t tb1 = 0, tb2 = 0;
 		DeviceScan::ExclusiveScan(NULL, tb1, rpos, rpos, Sum(), cs_offset, vars->numPVs);
 		DeviceScan::ExclusiveScan(NULL, tb2, rref, rref, Sum(), data_offset, vars->numPVs);
-		addr_t tmpmem = (addr_t)cumm.scatter();
-		addr_t ts1 = NULL, ts2  = NULL;
-		if ((tb1 + tb2) > cumm.scatterCap()) {
-			if (!(tmpmem = cumm.allocTemp(tb2))) 
-				throw MEMOUTEXCEPTION();
-		}
+		size_t tmpcap = tb1 + tb2;
+		addr_t ts1 = NULL, ts2 = NULL;
+		addr_t tmpmem = (addr_t) ((tmpcap > cumm.scatterCap()) ? cacher.allocate(tmpcap) : cumm.scatter());
 		ts1 = tmpmem, ts2 = ts1 + tb1;
 		DeviceScan::ExclusiveScan(ts1, tb1, rpos, rpos, Sum(), cs_offset, vars->numPVs, streams[0]);
 		DeviceScan::ExclusiveScan(ts2, tb2, rref, rref, Sum(), data_offset, vars->numPVs, streams[1]);
 		LOGERR("BVE Phase-2 failed");
 		sync(streams[0]);
 		sync(streams[1]);
+		if (tmpcap > cumm.scatterCap()) {
+			assert(tmpmem != (addr_t)cumm.scatter());
+			cacher.deallocate(tmpmem);
+		}
 	}
 
 	inline void vePhase3(
 		CNF* cnf,
-		OT* ot, 
+		OT* ot,
 		VARS* vars,
 		cuVecB* proof,
 		uint32* ucnt,
 		uint32* type,
-		uint32* rpos, 
+		uint32* rpos,
 		S_REF* rref)
 	{
 		PFLOGN2(2, "  configuring phase 3 with ");
@@ -1060,21 +1072,23 @@ namespace pFROST {
 		PFLENDING(2, 5, "(%d/%d ths, %d/%d bls) and %zd KB shared memory",
 			nThreads, BLVE2, nBlocks, MAXBLOCKS, smemSize / KBYTE);
 #if VE_DBG
-		ve_k_2 << <1, 1, smemSize >> > (cnf, ot, vars->pVars, vars->units, vars->resolved, proof, ucnt, type, rpos, rref);
+		ve_k_2 << <1, 1, smemSize >> > (cnf, ot, vars->pVars, vars->eliminated, vars->eligible, vars->units, vars->resolved, proof, ucnt, type, rpos, rref);
 #else
-		ve_k_2 << <nBlocks, nThreads, smemSize >> > (cnf, ot, vars->pVars, vars->units, vars->resolved, proof, ucnt, type, rpos, rref);
+		ve_k_2 << <nBlocks, nThreads, smemSize >> > (cnf, ot, vars->pVars, vars->eliminated, vars->eligible, vars->units, vars->resolved, proof, ucnt, type, rpos, rref);
 #endif
-		LOGERR("BVE Phase-3 failed");
-		sync();
+		if (gopts.sync_always) {
+			LOGERR("BVE Phase-3 failed");
+			sync();
+		}
 	}
 
 	void veAsync(
 		CNF* cnf,
-		OT* ot, 
+		OT* ot,
 		VARS* vars,
-		cudaStream_t* streams, 
+		cudaStream_t* streams,
 		cuVecB* proof,
-		cuMM& cumm, 
+		cuMM& cumm,
 		const cuHist& cuhist,
 		const bool& in)
 	{
@@ -1097,12 +1111,23 @@ namespace pFROST {
 			ve_k << <1, 1 >> > (cnf, ot, vars->pVars, vars->units, vars->resolved, proof);
 #else
 			OPTIMIZEBLOCKS(vars->numPVs, BLVE);
-			ve_k << <nBlocks, BLVE >> > (cnf, ot, vars->pVars, vars->units, vars->resolved, proof);
+			ve_k << <nBlocks, BLVE >> > (cnf, ot, vars->pVars, vars->eliminated, vars->units, vars->resolved, proof);
 #endif
 			LOGERR("Atomic BVE failed");
 			syncAll();
 		}
 		if (gopts.profile_gpu) cutimer->stop(), cutimer->ve += cutimer->gpuTime();
+	}
+
+	void veResizeCNFAsync(CNF* cnf, const cuHist& cuhist)
+	{
+		S_REF* rref = cuhist.d_segs;
+		uint32* type = cuhist.d_hist, * rpos = type + inf.maxVar;
+		resizeCNF_k << <1, 1 >> > (cnf, type, rpos, rref, verbose);
+		if (gopts.sync_always) {
+			LOGERR("Resizing CNF after BVE failed");
+			sync();
+		}
 	}
 
 	void subAsync(CNF* cnf, OT* ot, VARS* vars, cuVecB* proof)
@@ -1117,9 +1142,9 @@ namespace pFROST {
 		PFLENDING(2, 5, "(%d/%d ths, %d/%d bls) and %zd KB shared memory",
 			nThreads, BLSUB, nBlocks, MAXBLOCKS, smemSize / KBYTE);
 #if SS_DBG
-		sub_k << <1, 1, smemSize >> > (cnf, ot, proof, vars->units, vars->pVars);
+		sub_k << <1, 1, smemSize >> > (cnf, ot, proof, vars->units, vars->pVars, vars->eliminated);
 #else
-		sub_k << <nBlocks, nThreads, smemSize >> > (cnf, ot, proof, vars->units, vars->pVars);
+		sub_k << <nBlocks, nThreads, smemSize >> > (cnf, ot, proof, vars->units, vars->pVars, vars->eliminated);
 #endif
 		if (gopts.profile_gpu) cutimer->stop(), cutimer->sub += cutimer->gpuTime();
 		if (gopts.sync_always) {
@@ -1135,7 +1160,7 @@ namespace pFROST {
 		assert(vars->numPVs);
 		if (gopts.profile_gpu) cutimer->start();
 		OPTIMIZEBLOCKS(vars->numPVs, BLBCE);
-		bce_k << <nBlocks, BLBCE >> > (cnf, ot, proof, vars->resolved, vars->pVars);
+		bce_k << <nBlocks, BLBCE >> > (cnf, ot, proof, vars->resolved, vars->pVars, vars->eliminated);
 		if (gopts.profile_gpu) cutimer->stop(), cutimer->bce += cutimer->gpuTime();
 		if (gopts.sync_always) {
 			LOGERR("BCE Elimination failed");
@@ -1149,11 +1174,11 @@ namespace pFROST {
 		assert(ot);
 		assert(vars->numPVs);
 		if (gopts.profile_gpu) cutimer->start();
-		#if	defined(_DEBUG) || defined(DEBUG) || !defined(NDEBUG)
+#if	defined(_DEBUG) || defined(DEBUG) || !defined(NDEBUG)
 		dim3 block2D(16, devProp.warpSize);
-		#else 
+#else 
 		dim3 block2D(devProp.warpSize, devProp.warpSize);
-		#endif
+#endif
 		dim3 grid2D(1, 1, 1);
 		PFLOGN2(2, "  configuring ERE kernel with ");
 		OPTIMIZEBLOCKSERE(vars->numPVs, block2D, gopts.ere);
@@ -1161,7 +1186,7 @@ namespace pFROST {
 		grid2D.y = nBlocks;
 		PFLENDING(2, 5, "(%d/%d ths, %d/%d bls) and %zd KB shared memory",
 			block2D.y, devProp.warpSize, grid2D.y, MAXBLOCKS, smemSize / KBYTE);
-		ere_k << <grid2D, block2D, smemSize >> > (cnf, ot, proof, vars->pVars);
+		ere_k << <grid2D, block2D, smemSize >> > (cnf, ot, proof, vars->pVars, vars->eliminated);
 		if (gopts.profile_gpu) cutimer->stop(), cutimer->ere += cutimer->gpuTime();
 		if (gopts.sync_always) {
 			LOGERR("ERE Elimination failed");

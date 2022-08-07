@@ -285,12 +285,14 @@ namespace pFROST {
 				bool core = false;
 				for (int i = poss.size() - 1; i >= 0; i--) {
 					copyfun(fun, neg);
-					buildfuntab(p, varcore, i, poss, cnf, cls, fun, core);
+					if (cnf[poss[i]].original())
+						buildfuntab(p, varcore, i, poss, cnf, cls, fun, core);
 				}
 				OL& negs = ot[n];
 				for (int i = negs.size() - 1; i >= 0; i--) {
 					truefun(fun);
-					buildfuntab(n, varcore, i, negs, cnf, cls, fun, core);
+					if (cnf[negs[i]].original())
+						buildfuntab(n, varcore, i, negs, cnf, cls, fun, core);
 				}
 				// check resolvability
 				nElements = 0, nAddedCls = 0, nAddedLits = 0;

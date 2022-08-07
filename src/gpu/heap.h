@@ -41,8 +41,8 @@ namespace pFROST {
 		__forceinline bool		hasParent	(const uint32& x) { return pos[x] > 0; }
 		__forceinline void		exch		(const uint32& x, const uint32& y) {
 			uint32& i = pos[x], & j = pos[y];
-			swap(heap[i], heap[j]);
-			swap(i, j);
+			std::swap(heap[i], heap[j]);
+			std::swap(i, j);
 		}
 		__forceinline void		bubbleUp	(uint32 x) {
 			assert(x < ILLEGAL_POS);

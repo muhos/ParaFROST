@@ -41,7 +41,7 @@ void ParaFROST::report()
 				PFLOG1(" %s - BCE                 : %s%-16.2f  ms%s", CREPORT, CREPORTVAL, cutimer->bce, CNORMAL);
 				PFLOG1(" %s - ERE                 : %s%-16.2f  ms%s", CREPORT, CREPORTVAL, cutimer->ere, CNORMAL);
 			}
-			PFLOG1(" %sDevice memory          : %s%-16.3f  MB%s", CREPORT, CREPORTVAL, ratio((double)(cumm.maxCapacity() + tca.maxCapacity()), double(MBYTE)), CNORMAL);
+			PFLOG1(" %sDevice memory          : %s%-16.3f  MB%s", CREPORT, CREPORTVAL, ratio((double)(cumm.maxCapacity() + cacher.maxCapacity()), double(MBYTE)), CNORMAL);
 			PFLOG1(" %sSigmifications         : %s%-10d%s", CREPORT, CREPORTVAL, stats.sigma.calls, CNORMAL);
 			PFLOG1(" %s Forced units          : %s%-10d%s", CREPORT, CREPORTVAL, stats.units.forced, CNORMAL);
 			PFLOG1(" %s Removed variables     : %s%-16lld%s", CREPORT, CREPORTVAL, stats.sigma.all.variables + stats.units.forced, CNORMAL);

@@ -37,6 +37,15 @@ namespace pFROST {
 		return (prefix + warpRes);
 	}
 
+	template<class T, class R>
+	_PFROST_D_ void atomicAggMax(T* counter, const R ref) {
+		const uint32 mask = __activemask(), max_id = (32 - __clz(mask)) - 1;
+		uint32 lane_id;
+		laneId(lane_id);
+		if (lane_id == max_id)
+			atomicMax(counter, ref);
+	}
+
 }
 
 #endif

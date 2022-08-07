@@ -41,7 +41,7 @@ namespace pFROST {
 	inline void insertion_sort(T* d, const SZ& sz, CMP cmp)
 	{
 		if (sz == 2 && cmp(d[1], d[0]))
-			swap(d[1], d[0]);
+			std::swap(d[1], d[0]);
 		else if (sz > 2) {
 			SZ i, j;
 			for (i = 1; i < sz; i++) {
@@ -216,4 +216,4 @@ namespace pFROST {
 
 }
 
-#endif // __SORT_
+#endif

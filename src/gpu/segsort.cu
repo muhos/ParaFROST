@@ -1,4 +1,4 @@
-/***********************************************************************[version.h]
+/***********************************************************************[segsort.cu]
 Copyright(c) 2020, Muhammad Osama - Anton Wijs,
 Technische Universiteit Eindhoven (TU/e).
 
@@ -16,12 +16,27 @@ You should have received a copy of the GNU General Public License
 along with this program.  If not, see <https://www.gnu.org/licenses/>.
 **********************************************************************************/
 
-namespace pFROST {
+#include "solve.h"
 
-	const char* version();
-	const char* compiler();
-	const char* compilemode();
-	const char* osystem();
-	const char* date();
+#if defined(_WIN32) && !defined(__CUDACC__)
+#define __CUDACC__
+#endif
+#include <moderngpu/kernel_segsort.hxx>
+#include "modernalloc.cuh"
 
+using namespace mgpu;
+using namespace pFROST;
+
+MCA context(0, 0); // for segmented sort
+
+void ParaFROST::sortOT() {
+	assert(cumm.occurs());
+	if (gopts.profile_gpu) cutimer->start();
+	const int offset = 3; // first three elements in occurs = zero
+	segmented_sort(cumm.occurs(), inf.nLiterals, cuhist.d_segs + offset, inf.nDualVars - offset, olist_cmp, context);
+	if (gopts.sync_always) {
+		LOGERR("Sorting OT failed");
+		syncAll();
+	}
+	if (gopts.profile_gpu) cutimer->stop(), cutimer->sot += cutimer->gpuTime();
 }

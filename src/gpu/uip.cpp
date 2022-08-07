@@ -157,7 +157,7 @@ inline void ParaFROST::strengthenOTF(CLAUSE& c, const C_REF& ref, const uint32& 
 			maxLevel = otherLevel;
 		}
 	}
-	if (NEQUAL(maxPos, 1)) swap(c[1], c[maxPos]);
+	if (NEQUAL(maxPos, 1)) std::swap(c[1], c[maxPos]);
 	const uint32 first = c[0];
 	const uint32 second = c[1];
 	attachWatch(second, first, ref, size);

@@ -656,6 +656,8 @@ namespace pFROST {
 		S_REF			dataoff;
 		uint32			csoff, mu_inc, ereCls;
 		cudaStream_t	*streams;
+		COMPACT_CMP		compact_cmp;
+		OLIST_CMP		olist_cmp;
 		bool			mapped, compacted, flattened;
 		int				phase, nForced, simpstate, devCount;
 	public:
@@ -720,14 +722,17 @@ namespace pFROST {
 				inf.n_cls_after,
 				inf.n_lits_after, CNORMAL);
 		}
-		inline void		countMelted         () {
-			seqcountMelted(sp->vstate);
+		inline uint32	updateNumElims		() {
+			const uint32 remainedPVs = *vars->pVarsSize;
+			assert(remainedPVs <= vars->numPVs);
+			inf.n_del_vars_after = vars->numPVs - remainedPVs;
+			return remainedPVs;
 		}
-		inline void		countFinal          (const bool& host = 0) {
-			if (host) countMelted(), countAll(1);
-			else parevalReds(cnf, sp->vstate);
-			inf.nClauses = inf.n_cls_after;
-			inf.nLiterals = inf.n_lits_after;
+		inline void		updateNumPVs		() {
+			uint32 remainedPVs = updateNumElims();
+			vars->nMelted += inf.n_del_vars_after;
+			vars->numPVs = remainedPVs;
+			PFLOG2(2, "  BVE eliminated %d variables while %d survived", inf.n_del_vars_after, vars->numPVs);
 		}
 		inline void		countCls            (const bool& host = 0) {
 			if (host) {
@@ -765,10 +770,6 @@ namespace pFROST {
 			}
 			else parcountAll(cnf);
 		}
-		inline void		evalReds            (const bool& host = 0) {
-			if (host) countMelted(), countAll(1);
-			else parevalReds(cnf, sp->vstate);
-		}
 		inline bool		stop                (const int64 cr, const int64 lr) {
 			return (phase == opts.phases)
 				|| (simpstate == CNFALLOC_FAIL)
@@ -783,6 +784,7 @@ namespace pFROST {
 		void			sigmify             ();
 		void			awaken              ();
 		bool			LCVE                ();
+		void			sortOT				();
 		void			postVE              ();
 		void			VE                  ();
 		void			SUB                 ();
@@ -800,6 +802,8 @@ namespace pFROST {
 		void			cacheUnits          (const cudaStream_t&);
 		void			cacheNumUnits       (const cudaStream_t&);
 		void			cacheResolved       (const cudaStream_t&);
+		void			cacheEliminated     (const cudaStream_t&);
+		void			markEliminated		(const cudaStream_t&);
 		void			reflectCNF          (const cudaStream_t&, const cudaStream_t&);
 		inline bool		depFreeze           (const uint32&, OL&);
 		inline bool		propClause          (const LIT_ST*, const uint32&, SCLAUSE&);

@@ -40,6 +40,60 @@ namespace pFROST {
 			if (v1 == x) it1++;
 			else if (v2 == x) it2++;
 			else if (IS_TAUTOLOGY(lit1, lit2)) return 0;
+			else if (v1 < v2) { 
+				it1++; 
+				if (len < SH_MAX_ERE_OUT) out_c[len++] = lit1;
+				else return 0;
+			}
+			else if (v2 < v1) { 
+				it2++;
+				if (len < SH_MAX_ERE_OUT) out_c[len++] = lit2;
+				else return 0;
+			}
+			else if (len < SH_MAX_ERE_OUT) { // repeated literal
+				it1++, it2++;
+				 out_c[len++] = lit1;
+			}
+			else return 0; // out of bounds
+		}
+
+		while (it1 < n1) {
+			lit1 = c1[it1++];
+			if (NEQUAL(ABS(lit1), x)) {
+				 if (len < SH_MAX_ERE_OUT) out_c[len++] = lit1;
+				 else return 0;
+			}
+		}
+		
+		while (it2 < n2) {
+			lit2 = c2[it2++];
+			if (NEQUAL(ABS(lit2), x)) {
+				if (len < SH_MAX_ERE_OUT) out_c[len++] = lit2;
+				else return 0;
+			}
+		}
+
+		assert(len <= SH_MAX_ERE_OUT);
+		return len;
+	}
+
+	_PFROST_D_ int _merge_ere(const uint32& x, SCLAUSE& c1, SCLAUSE& c2, uint32* out_c)
+	{
+		assert(x);
+		assert(!c1.deleted());
+		assert(!c2.deleted());
+		assert(c1.size() > 1);
+		assert(c2.size() > 1);
+		int n1 = c1.size(), n2 = c2.size();
+		int it1 = 0, it2 = 0;
+		uint32 lit1, lit2, v1, v2;
+		int len = 0;
+		while (it1 < n1 && it2 < n2) {
+			lit1 = c1[it1], lit2 = c2[it2];
+			v1 = ABS(lit1), v2 = ABS(lit2);
+			if (v1 == x) it1++;
+			else if (v2 == x) it2++;
+			else if (IS_TAUTOLOGY(lit1, lit2)) return 0;
 			else if (v1 < v2) { it1++; out_c[len++] = lit1; }
 			else if (v2 < v1) { it2++; out_c[len++] = lit2; }
 			else { // repeated literal

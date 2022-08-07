@@ -33,7 +33,7 @@ inline bool ParaFROST::findBinary(uint32 first, uint32 second)
     assert(active(second));
     CHECKLIT(first);
     CHECKLIT(second);
-    if (wot[first].size() > wot[second].size()) swap(first, second);
+    if (wot[first].size() > wot[second].size()) std::swap(first, second);
     CHECKLIT(first);
     WOL& list = wot[first];
     stats.ternary.checks += cacheLines(list.size(), sizeof(WATCH)) + 1;
@@ -54,8 +54,8 @@ inline bool ParaFROST::findTernary(uint32 first, uint32 second, uint32 third)
     CHECKLIT(first);
     CHECKLIT(second);
     CHECKLIT(third);
-    if (wot[second].size() > wot[third].size()) swap(second, third);
-    if (wot[first].size() > wot[second].size()) swap(first, second);
+    if (wot[second].size() > wot[third].size()) std::swap(second, third);
+    if (wot[first].size() > wot[second].size()) std::swap(first, second);
     CHECKLIT(first);
     WOL& list = wot[first];
     stats.ternary.checks += cacheLines(list.size(), sizeof(WATCH)) + 1;

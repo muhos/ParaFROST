@@ -327,6 +327,6 @@ void MODEL::saveClause(uint32* lits, const int& size, const uint32& witlit)
 	}
 	assert(pos >= 0);
 	if (pos)
-		swap(resolved[pos + last], resolved[last]);
+		std::swap(resolved[pos + last], resolved[last]);
 	resolved.push(size);
 }

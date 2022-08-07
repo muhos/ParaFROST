@@ -25,6 +25,7 @@ namespace pFROST {
 	ParaFROST		*pfrost = NULL;
 	cuTIMER			*cutimer = NULL;
 	cudaDeviceProp	devProp;
+	CACHER			cacher;
 	uint32			maxGPUThreads = 0;
 	size_t			maxGPUSharedMem = 0;
 	size_t			hc_bucket = sizeof(uint32);

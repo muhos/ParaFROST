@@ -58,7 +58,6 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 #undef ERROR
 #undef hyper 
 #undef SET_BOUNDS
-using std::swap;
 using std::string;
 using std::ifstream;
 

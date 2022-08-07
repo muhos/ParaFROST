@@ -68,6 +68,7 @@ inline void REPCH(const char& ch, const size_t& size, const size_t& off = 0) {
 #define PFLOGW(FORMAT, ...) \
   do { \
      SETCOLOR(CWARNING, stderr); \
+	 PRINT(PREFIX); \
      fprintf(stderr, "WARNING - ");\
      fprintf(stderr, FORMAT, ## __VA_ARGS__);\
      putc('\n', stderr); \
@@ -165,20 +166,22 @@ inline void REPCH(const char& ch, const size_t& size, const size_t& off = 0) {
 
 #define PFLREDALL(SOLVER, VERBOSITY, MESSAGE) \
     if (verbose >= VERBOSITY) { \
-        SOLVER->evalReds(); \
+        SOLVER->countAll(); \
+        SOLVER->updateNumElims(); \
         PFLOG1("\t\t %s%s%s", CLBLUE, MESSAGE, CNORMAL); \
         SOLVER->logReductions(); }
 
 #define PFLREDALLHOST(SOLVER, VERBOSITY, MESSAGE) \
     if (verbose >= VERBOSITY) { \
-        SOLVER->evalReds(1); \
+        SOLVER->countAll(1); \
+        SOLVER->updateNumElims(); \
         PFLOG1("\t\t %s", MESSAGE); \
         SOLVER->logReductions(); }
 
 #define PFLREDCL(SOLVER, VERBOSITY, MESSAGE) \
     if (verbose >= VERBOSITY) { \
-        inf.n_del_vars_after = 0; \
         SOLVER->countAll(); \
+        inf.n_del_vars_after = 0; \
         PFLOG1("\t\t %s%s%s", CLBLUE, MESSAGE, CNORMAL); \
         SOLVER->logReductions(); }
 

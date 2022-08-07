@@ -39,6 +39,7 @@ inline bool	ParaFROST::reallocCNF()
 			return false;
 		}
 		compacted = true;
+		olist_cmp.init(cnf), compact_cmp.init(cnf);
 	}
 	else cumm.cacheCNFPtr(cnf), compacted = false;
 	return true;
@@ -57,7 +58,7 @@ inline void	ParaFROST::initSimplifier()
 {
 	cleanManaged();
 	cumm.freeFixed();
-	tca.destroy();
+	cacher.destroy();
 	simpstate = AWAKEN_SUCC;
 	phase = mu_inc = 0;
 	ereCls = nForced = 0;
@@ -95,7 +96,7 @@ void ParaFROST::awaken()
 	initSimplifier();
 	// overapproximate the size of new formula and saved witnesses
 	size_t numCls = maxClauses(), numLits = maxLiterals();
-	size_t savedLits = inf.nDualVars + numCls + numLits;
+	size_t savedLits = numCls + numLits;
 	if (opts.phases) {
 		size_t maxAddedCls = opts.ve_en ? stats.clauses.original : 0;
 		size_t maxAddedLits = opts.ve_en ? size_t(stats.literals.original * opts.lits_mul) : 0;
@@ -106,7 +107,9 @@ void ParaFROST::awaken()
 	if (!cumm.allocHist(cuhist, opts.proof_en) ||
 		!cumm.allocAux(numCls) ||
 		!cumm.allocVars(vars, savedLits) ||
+		!cumm.allocPinned(vars, cuhist) ||
 		!cumm.resizeCNF(cnf, numCls, numLits)) { simpstate = CNFALLOC_FAIL; return; }
+	olist_cmp.init(cnf), compact_cmp.init(cnf);
 	printStats(1, '-', CGREEN0);
 	inf.nClauses = inf.nLiterals = 0;
 	wt.clear(true);
@@ -173,7 +176,7 @@ void ParaFROST::sigmifying()
 	/*      reduction phases        */
 	/********************************/
 	assert(!phase && !mu_inc);
-	const int64 bmelted = inf.maxMelted, bclauses = inf.nClauses, bliterals = inf.nLiterals;
+	const int64 bmelted = inf.maxMelted, bclauses = inf.nClauses;
 	int64 cdiff = INT64_MAX, ldiff = INT64_MAX;
 	int64 clsbefore = inf.nClauses, litsbefore = inf.nLiterals;
 	while (!simpstate && !interrupted()) {
@@ -183,11 +186,12 @@ void ParaFROST::sigmifying()
 		createOTAsync(cnf, ot, 0);
 		if (!prop()) killSolver();
 		if (!LCVE()) break;
-		sortOTAsync(cnf, ot, vars, streams);
+		sortOT();
 		if (stop(cdiff, ldiff)) { ERE(); break; }
 		SUB(), VE(), BCE();
 		cuproof.cacheProof(streams[4]);
 		countAll();
+		updateNumPVs();
 		cacheNumUnits(streams[3]);
 		inf.nClauses = inf.n_cls_after, inf.nLiterals = inf.n_lits_after;
 		cdiff = clsbefore - inf.nClauses, clsbefore = inf.nClauses;
@@ -202,12 +206,14 @@ void ParaFROST::sigmifying()
 	/*          Write Back          */
 	/********************************/
 	assert(sp->propagated == trail.size());
-	cumm.updateMaxCap(), tca.updateMaxCap(); // for reporting GPU memory only
+	cacheEliminated(streams[5]);             // if ERE is enabled, this transfer would be already done
+	cumm.updateMaxCap(), cacher.updateMaxCap(); // for reporting GPU memory only
+	markEliminated(streams[5]);              // must be executed before map()
 	cacheCNF(streams[0], streams[1]);
-	if (!propFailed()) killSolver(); // prop any pending units via host memory if 'realloc' failed
-	bool success = (bliterals != inf.nLiterals);
+	if (!propFailed()) killSolver();         // prop any pending units via host memory if 'realloc' failed
+	bool success = (bclauses != inf.nClauses);
+	inf.maxMelted += vars->nMelted;
 	stats.sigma.all.clauses += bclauses - int64(inf.nClauses);
-	stats.sigma.all.literals += bliterals - int64(inf.nLiterals);
 	stats.sigma.all.variables += int64(inf.maxMelted) - bmelted;
 	last.shrink.removed = stats.shrunken;
 	if (ereCls > inf.nClauses) stats.sigma.ere.removed += ereCls - inf.nClauses;
@@ -232,7 +238,6 @@ void ParaFROST::masterFree()
 	syncAll();
 	cumm.freeFixed();
 	cumm.freePinned();
-	tca.destroy();
 	cleanManaged();
 	destroyStreams();
 	cumm.breakMirror(), hcnf = NULL;

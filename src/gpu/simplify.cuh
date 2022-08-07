@@ -25,6 +25,8 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 #include <thrust/iterator/counting_iterator.h>
 #include "options.cuh"
 #include "memory.cuh"
+#include "thrustalloc.cuh"
+#include "cache.cuh"
 #include "proof.cuh"
 #include "printer.cuh"
 #include "vstate.h"
@@ -46,16 +48,15 @@ namespace pFROST {
 	void prepareCNFAsync(CNF*, const cudaStream_t&);
 	void createOTAsync(CNF*, OT*, const bool&);
 	void reduceOTAsync(CNF*, OT*, const bool&);
-	void sortOTAsync(CNF*, OT*, VARS* vars, cudaStream_t*);
+	void sortOTAsync(CNF*, OT*, VARS*);
 	void veAsync(CNF*, OT*, VARS*, cudaStream_t*, cuVecB*, cuMM&, const cuHist&, const bool&);
+	void veResizeCNFAsync(CNF*, const cuHist&);
 	void subAsync(CNF*, OT*, VARS*, cuVecB*);
 	void bceAsync(CNF*, OT*, VARS*, cuVecB*);
 	void ereAsync(CNF*, OT*, VARS*, cuVecB*);
-	void parevalReds(CNF*, VSTATE*);
 	void parcountCls(CNF*);
 	void parcountAll(CNF*);
 	void parcountLits(CNF*);
-	void seqcountMelted(VSTATE*);
 
 }
 

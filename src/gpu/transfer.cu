@@ -65,8 +65,22 @@ void ParaFROST::newBeginning()
 	else cumm.breakMirror(), hcnf = NULL;
 }
 
+void ParaFROST::markEliminated(const cudaStream_t& _s)
+{
+	assert(vars->isEliminatedCached);
+	uint32 unassigned = inf.unassigned;
+	sync(_s);
+	forall_variables(v) {
+		if (vars->cachedEliminated[v])
+			markEliminated(v);
+	}
+	assert(unassigned >= inf.unassigned);
+	assert((unassigned - inf.unassigned) == vars->nMelted);
+}
+
 inline void ParaFROST::writeBack()
 {
+	int64 bliterals = maxLiterals();
 	stats.literals.original = stats.literals.learnt = 0;
 	for (uint32 i = 0; i < hcnf->size(); i++) {
 		SCLAUSE& s = hcnf->clause(i);
@@ -75,6 +89,7 @@ inline void ParaFROST::writeBack()
 	}
 	stats.clauses.original = orgs.size();
 	stats.clauses.learnt = learnts.size();
+	stats.sigma.all.literals += bliterals - maxLiterals();
 	assert(maxClauses() == int64(inf.nClauses));
 }
 
@@ -90,25 +105,30 @@ void ParaFROST::cacheCNF(const cudaStream_t& s1, const cudaStream_t& s2)
 	else copystream = s2, cumm.mirrorCNF(hcnf);
 	assert(hcnf);
 	if (gopts.profile_gpu) cutimer->start(copystream);
-	if (compacted) countFinal();
+	if (compacted) {
+		countCls();
+		inf.nClauses = inf.n_cls_after;
+	}
 	else {
 		size_t bytes = 0;
 		S_REF* tmp = NULL;
+		DeviceSelect::If(NULL, bytes, cumm.refsMem(), cumm.refsMem(), tmp, hcnf->size(), compact_cmp);
+		tmp = (bytes > cumm.scatterCap()) ? (S_REF*)cacher.allocate(bytes) : cumm.scatter();
+		assert(tmp);
 		// *tmp will hold the new size, so tmp + 1 will be the start of the temporary array
-		DeviceSelect::If(NULL, bytes, cumm.refsMem(), cumm.refsMem(), tmp, hcnf->size(), COMPACT_CMP(cnf));
-		tmp = cumm.scatter();
-		if (bytes > cumm.scatterCap()) tmp = (S_REF*)cumm.allocTemp(bytes);
-		if (!tmp) throw MEMOUTEXCEPTION();
-		DeviceSelect::If(tmp + 1, bytes, cumm.refsMem(), cumm.refsMem(), tmp, hcnf->size(), COMPACT_CMP(cnf), s1);
-		countMelted();
+		DeviceSelect::If(tmp + 1, bytes, cumm.refsMem(), cumm.refsMem(), tmp, hcnf->size(), compact_cmp, s1);
 		CHECK(cudaMemcpy(&inf.nClauses, tmp, sizeof(uint32), cudaMemcpyDeviceToHost));
 		if (inf.nClauses) hcnf->resize(inf.nClauses);
+		if (bytes > cumm.scatterCap()) {
+			assert(tmp != cumm.scatter());
+			cacher.deallocate(tmp);
+		}
 	}
 	if (inf.nClauses) {
 		if (!gopts.unified_access) 
 			CHECK(cudaMemcpyAsync(hcnf->data().mem, cumm.cnfMem(), hcnf->data().size * hc_bucket, cudaMemcpyDeviceToHost, s2));
 		if (!reallocFailed() && opts.aggr_cnf_sort)
-			thrust::stable_sort(thrust::cuda::par(tca).on(s1), cumm.refsMem(), cumm.refsMem() + hcnf->size(), CNF_CMP_KEY(cnf));
+			thrust::stable_sort(thrust::cuda::par(tca).on(s1), cumm.refsMem(), cumm.refsMem() + hcnf->size(), olist_cmp);
 		if (!gopts.unified_access) 
 			CHECK(cudaMemcpyAsync(hcnf->refsData(), cumm.refsMem(), hcnf->size() * sizeof(S_REF), cudaMemcpyDeviceToHost, s1));
 	}
@@ -120,6 +140,14 @@ void ParaFROST::cacheUnits(const cudaStream_t& stream)
 	if ((vars->nUnits = vars->tmpUnits.size()))
 		CHECK(cudaMemcpyAsync(vars->cachedUnits, cumm.unitsdPtr(), vars->nUnits * sizeof(uint32), cudaMemcpyDeviceToHost, stream));
 	if (gopts.sync_always) sync(stream);
+}
+
+void ParaFROST::cacheEliminated(const cudaStream_t& stream)
+{
+	if (vars->isEliminatedCached) return;
+	CHECK(cudaMemcpyAsync(vars->cachedEliminated, vars->eliminated, inf.maxVar + 1, cudaMemcpyDeviceToHost, stream));
+	if (gopts.sync_always) sync(stream);
+	vars->isEliminatedCached = true;
 }
 
 void ParaFROST::cacheNumUnits(const cudaStream_t& stream)

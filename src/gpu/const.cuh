@@ -35,9 +35,8 @@ namespace pFROST {
 	// BVE bit-masking
 	#define MAXFUNVAR			12
 	#define FUNTABLEN			64
-	#define MAXVARTOELIM		0x3FFFFFFFU
-	#define MELTING_MASK		0x80000000U
-	#define ADDING_MASK	    	0x40000000U
+	#define MELTING_MASK		(Byte) 0x01
+	#define ADDING_MASK	    	(Byte) 0x02
 	#define RES_MASK			0x00000001U
 	#define AOIX_MASK			0x00000002U
 	#define CORE_MASK			0x00000003U
@@ -55,7 +54,6 @@ namespace pFROST {
 	#define IS_CORE(x)						((x) == CORE_MASK)
 	#define IS_ADDING(x)					((x) & ADDING_MASK)
 	#define ELIMINATED(x)					((x) & MELTING_MASK)
-	#define RECOVERVAR(x)					((x) & MAXVARTOELIM)
 	#define RECOVERTYPE(x)					((x) & TYPE_MASK)
 	#define RECOVERADDEDCLS(x)				(((x) & ADDEDCLS_MASK) >> 2)
 	#define RECOVERADDEDLITS(x)				(((x) & ADDEDLITS_MASK) >> 16)
