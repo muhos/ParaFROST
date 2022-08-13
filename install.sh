@@ -1,8 +1,8 @@
 #!/bin/bash
 
-ch='|'
+ch=' '
 lineWidth=90
-logfile=install.log
+logfile=LOGINSTALL
 cputemplate=templates/makefile.cpu
 gputemplate=templates/makefile.gpu
 binary=parafrost
@@ -133,9 +133,9 @@ fi
 ruler () {
 if [ $noverb = 0 ] && [ $quiet = 0 ]; then
 	echo -n $ch
-	printf "%${lineWidth}s+\n" |tr ' ' '-'
+	printf "+%${lineWidth}s+\n" |tr ' ' '-'
 	echo -n $ch >> $logfile
-	printf "%${lineWidth}s+\n" |tr ' ' '-' >> $logfile
+	printf "+%${lineWidth}s+\n" |tr ' ' '-' >> $logfile
 fi
 }
 
@@ -155,8 +155,8 @@ fi
 
 endline () {
 if [ $noverb = 0 ] && [ $quiet = 0 ]; then
-	echo "done."
-	echo "done." >> $logfile
+	echo " done"
+	echo " done" >> $logfile
 fi
 }
 
@@ -168,7 +168,7 @@ cleanCPU=0
 cleanGPU=0
 if [[ "$clean" = "cpu" ]] || [[ "$clean" = "all" ]]; then 
 	cleanCPU=1
-	logn "cleaning up CPU files (other options will be ignored).."
+	logn "cleaning up CPU files (other options will be ignored)..."
 	rm -rf build/cpu
 	rm -f Makefile
 	srcdir=src/cpu
@@ -179,7 +179,7 @@ if [[ "$clean" = "cpu" ]] || [[ "$clean" = "all" ]]; then
 fi
 if [[ "$clean" = "gpu" ]] || [[ "$clean" = "all" ]]; then 
 	cleanGPU=1
-	logn "cleaning up GPU files (other options will be ignored).."
+	logn "cleaning up GPU files (other options will be ignored)..."
 	rm -rf build/gpu
 	rm -f Makefile
 	srcdir=src/gpu
@@ -231,7 +231,7 @@ cpubuild=src/cpu/version.h
 gpubuild=src/gpu/version.h
 if [ $icpu = 1 ] || [ $igpu = 1 ]; then 
 	cp $vertemplate $cpubuild; cp $vertemplate $gpubuild
-	logn "generating header 'version.h' from 'version.in'.."
+	logn "generating header 'version.h' from 'version.in'..."
 	cpuversion=0; gpuversion=0
 	[ -f VERSION ] && cpuversion=$(sed -n '1p' < VERSION) && gpuversion=$(sed -n '2p' < VERSION)
 	versionme "$cpuversion" "$cpubuild"
@@ -263,7 +263,7 @@ log ""
 [ ! -f $cpubuild ] && error "cannot find '$cpubuild' generated file"
 echo "#define COMPILER \"$compilerVer\"" >> $cpubuild
 
-logn "creating '$HOST_COMPILER' flags.."
+logn "creating '$HOST_COMPILER' flags..."
 
 if [ $debug = 0 ] && [ $assert = 0 ]; then 
 	CCFLAGS="$CCFLAGS -DNDEBUG $OPTIMIZE $FASTMATH"
@@ -327,8 +327,11 @@ if [ $igpu = 1 ]; then # start of GPU installation block
 
 if [[ "$HOST_OS" == *"cygwin"* ]]; then error "cygwin not supported to install the GPU solver, use VS C++ instead"; fi
 
+CUDA_DIR=$CUDA_PATH
+[ ! -d "$CUDA_DIR" ] && log "CUDA_PATH is not set" && logn "looking for '/usr/local/cuda'..."
 CUDA_DIR=/usr/local/cuda
 [ ! -d "$CUDA_DIR" ] && error "no cuda toolkit installed"
+printf "found\n"
 NVCC=$CUDA_DIR/bin/nvcc
 
 # nvcc compiler version
@@ -343,7 +346,7 @@ NVCCVER="nvcc $NVCCVERSHORT"
 extshared=0
 NVIDIASMI=/usr/bin/nvidia-smi
 if [[ ! -f $NVIDIASMI ]]; then
-  log "cannot find nvidia-smi, detecting GPU family is skipped."
+  log "cannot find nvidia-smi, detecting GPU family is skipped"
 else
   GPUFAMILYLINE=$($NVIDIASMI -q | grep -m1 'Product Name')
   if [[ "$GPUFAMILYLINE" == *"RTX"* ]]; then
@@ -364,7 +367,7 @@ log ""
 [ ! -f $gpubuild ] && error "cannot find '$gpubuild' generated file"
 echo "#define COMPILER \"$compilerVer + $NVCCVER\"" >> $gpubuild
 
-log "creating '$NVCC + $HOST_COMPILER' flags.."
+log "creating '$NVCC + $HOST_COMPILER' flags..."
 
 if [[ $pedantic = 1 ]]; then log "  turning off 'pedantic' due to incompatibility with Thrust"; pedantic=0; fi
 if [[ $standard > 14 ]]; then log "  falling back to 'c++14' standard due to incompatibility with Thrust"; standard=14; fi

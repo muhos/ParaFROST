@@ -13,10 +13,10 @@ T := $(shell $(MAKE) $(MAKECMDGOALS) --no-print-directory -nrRf $(firstword $(MA
 N := x
 C = $(words $N)$(eval N := x $N)
 PERC = `expr $C '*' 100 / $T`
-PROGRESS = printf "| [ %3d%% ] compiling: %-15s\r" $(PERC)
-ARCHIVE  = printf "| [ 100%% ] compiling: %-20s\r\n| building archive ( %-15s )..."
-ENDING   = printf "| building binary  ( %-15s )..."
-DONE     = printf "%-20s\n" " done."
+PROGRESS = printf "  [ %3d%% ] compiling: %-15s\r" $(PERC)
+ARCHIVE  = printf "  [ 100%% ] compiling: %-20s\r\n  building archive ( %-15s )..."
+ENDING   = printf "  building binary  ( %-15s )..."
+DONE     = printf "%-20s\n" " done"
 endif
 
 HOST_COMPILER := g++
@@ -50,7 +50,7 @@ obj := $(patsubst %.cpp,%.o,$(src))
 all: $(BIN)
 
 $(LIB): $(obj)
-	@$(ARCHIVE) "done." $@
+	@$(ARCHIVE) "done" $@
 	@ar rc $@ $+
 	@ranlib $@
 	@$(DONE)

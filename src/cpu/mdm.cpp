@@ -150,7 +150,7 @@ void ParaFROST::MDMInit()
 
 	eligible_initial; 
 
-	mdm_prefetch(values, states, occs, frozen, tail);
+	mdm_prefetch(values, states, frozen, tail);
 
 	if (MDM_ASSUME)
 		MDMAssume(values, frozen, tail);
@@ -198,7 +198,7 @@ void ParaFROST::MDM()
 		walk();
 	}
 
-	mdm_prefetch(values, states, occs, frozen, tail);
+	mdm_prefetch(values, states, frozen, tail);
 
 	if (MDM_ASSUME)
 		MDMAssume(values, frozen, tail);

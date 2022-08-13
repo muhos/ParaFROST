@@ -25,10 +25,9 @@ namespace pFROST {
 
 	#define MDM_ASSUME (opts.mdmassume_en && assumptions.size())
 
-	#define mdm_prefetch(VALUES,STATES,OCCURS,FROZEN,TAIL) \
+	#define mdm_prefetch(VALUES,STATES,FROZEN,TAIL) \
 		const LIT_ST* VALUES = sp->value;				\
 		const VSTATE* STATES = sp->vstate;				\
-		const OCCUR* OCCURS = occurs.data();			\
 		LIT_ST* FROZEN = sp->frozen;					\
 		sp->stacktail = sp->tmpstack;					\
 		uint32*& TAIL = sp->stacktail;					\
