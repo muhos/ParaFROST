@@ -341,10 +341,15 @@ NVCCVER="nvcc $NVCCVERSHORT"
 
 # try to find GPU family
 extshared=0
-GPUFAMILYLINE=$(nvidia-smi -q | grep -m1 'Product Name')
-if [[ "$GPUFAMILYLINE" == *"RTX"* ]]; then
-  log "detected an RTX GPU family, thus permitting shared memory extension"; log ""
-  extshared=1
+NVIDIASMI=/usr/bin/nvidia-smi
+if [[ ! -f $NVIDIASMI ]]; then
+  log "cannot find nvidia-smi, detecting GPU family is skipped."
+else
+  GPUFAMILYLINE=$($NVIDIASMI -q | grep -m1 'Product Name')
+  if [[ "$GPUFAMILYLINE" == *"RTX"* ]]; then
+    log "detected an RTX GPU family, thus permitting shared memory extension"; log ""
+    extshared=1
+  fi
 fi
 
 srcdir=src/gpu
