@@ -1,7 +1,7 @@
 [![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](https://www.gnu.org/licenses/gpl-3.0)
 [![Build Status](https://app.travis-ci.com/muhos/ParaFROST.svg?branch=master)](https://app.travis-ci.com/muhos/ParaFROST)
 # ParaFROST
-ParaFROST stands for Parallel Formal Reasoning On SaTisfiability. 
+ParaFROST stands for Parallel Formal Reasoning about SaTisfiability. 
 It is a parallel SAT solver with GPU-accelerated inprocessing capable of harnessing NVIDIA CUDA-enabled GPUs in applying modern inprocessing tecnhiques in parallel. 
 The CDCL search is built from scratch with various optimisations based on CaDiCaL heuristics (see our paper in [TACAS'21](https://gears.win.tue.nl/papers/parafrost_gpu.pdf)).
 The inprocessing engine extends our previous work in SIGmA simplifier with new data structures, parallel garbage collection and more.
@@ -34,12 +34,10 @@ To install either the CPU or the GPU solvers, use the `install.sh` script which 
 ## GPU solver
 To build the GPU solver, make sure you have a CUDA-capable GPU with pre-installed NVIDIA driver and CUDA toolkit.
 
-For installing CUDA v11.7, run the following commands on a Ubuntu 20.04:<br>
+For installing CUDA v11.8, run the following commands on a Ubuntu 20.04:<br>
 
-`wget https://developer.download.nvidia.com/compute/cuda/repos/ubuntu2004/x86_64/cuda-ubuntu2004.pin`<br>
-`sudo mv cuda-ubuntu2004.pin /etc/apt/preferences.d/cuda-repository-pin-600`<br>
-`sudo apt-key adv --fetch-keys https://developer.download.nvidia.com/compute/cuda/repos/ubuntu2004/x86_64/3bf863cc.pub`<br>
-`sudo add-apt-repository "deb https://developer.download.nvidia.com/compute/cuda/repos/ubuntu2004/x86_64/ /"`<br>
+`wget https://developer.download.nvidia.com/compute/cuda/repos/ubuntu2004/x86_64/cuda-keyring_1.0-1_all.deb`<br>
+`sudo dpkg -i cuda-keyring_1.0-1_all.deb`<br>
 `sudo apt-get update`<br>
 `sudo apt-get -y install cuda`<br>
 
