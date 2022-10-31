@@ -23,7 +23,7 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 #include "datatypes.h"
 #include "warp.cuh"
 
-namespace pFROST {
+namespace ParaFROST {
 
 	template<class T>
 	_PFROST_D_ T atomicAggInc(T* counter) {

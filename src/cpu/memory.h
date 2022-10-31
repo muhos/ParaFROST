@@ -26,7 +26,7 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 #include <limits>
 #include <cassert>
 
-namespace pFROST {
+namespace ParaFROST {
     /******************************************************/
     /*  Usage: global memory manager with garbage monitor */
     /*         and boundary checker                       */

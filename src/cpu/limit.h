@@ -22,7 +22,7 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 #include "datatypes.h"
 #include "scale.h"
 
-namespace pFROST {
+namespace ParaFROST {
 
 	struct LAST {
 		struct {

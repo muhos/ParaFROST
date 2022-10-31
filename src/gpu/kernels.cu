@@ -25,7 +25,7 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 using namespace cub;
 
-namespace pFROST {
+namespace ParaFROST {
 
 	// ===== for CNF counting =====
 	#define MAXREDUCEBLOCKS 256

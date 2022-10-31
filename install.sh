@@ -30,6 +30,7 @@ $ch	-p or --pedantic      compile with '-pedantic' flag
 $ch	-l or --logging       enable logging (needed for verbosity level > 2)
 $ch	-s or --statistics    enable costly statistics (may impact runtime)
 $ch	-a or --all           enable all above flags except 'assert' and 'verbosity'
+$ch	--ncolors             disable colors in all solver outputs
 $ch	--clean=<target>      remove old installation of <cpu | gpu | all> solvers
 $ch	--standard=<n>        compile with <11 | 14 | 17 > c++ standard
 $ch	--extra="flags"       pass extra "flags" to the compiler(s)
@@ -58,6 +59,7 @@ extra=""
 clean=""
 assert=0
 logging=0
+ncolors=0
 pedantic=0
 standard=17
 statistics=0
@@ -76,6 +78,7 @@ do
 	-p|--pedantic) pedantic=1;;
 	
     	-l|--logging) logging=1;;
+		--ncolors) ncolors=1;;
 	-s|--statistics) statistics=1;;
 
 	-c|--cpu) icpu=1;;
@@ -277,6 +280,7 @@ if [[ "$HOST_OS" == *"cygwin"* ]]; then pedantic=0; fi
 [ $pedantic = 1 ] && CCFLAGS="$CCFLAGS -pedantic"
 [ $logging = 1 ] && CCFLAGS="$CCFLAGS -DLOGGING"
 [ $statistics = 1 ] && CCFLAGS="$CCFLAGS -DSTATISTICS"
+[ $ncolors = 1 ] && CCFLAGS="$CCFLAGS -DNCOLORS"
 
 CCFLAGS="$ARCH $STD$CCFLAGS"
 
@@ -395,6 +399,7 @@ fi
 [ $pedantic = 1 ] && CCFLAGS="$CCFLAGS -pedantic"
 [ $logging = 1 ] && NVCCFLAGS="$NVCCFLAGS -DLOGGING"
 [ $statistics = 1 ] && NVCCFLAGS="$NVCCFLAGS -DSTATISTICS"
+[ $ncolors = 1 ] && NVCCFLAGS="$NVCCFLAGS -DNCOLORS"
 [ $extshared = 1 ] && NVCCFLAGS="$NVCCFLAGS -DEXTSHMEM"
 
 NVCCFLAGS="$ARCH$NVCCFLAGS"

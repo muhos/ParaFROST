@@ -23,7 +23,7 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 #include <cub/device/device_select.cuh>
 
 using namespace cub;
-using namespace pFROST;
+using namespace ParaFROST;
 
 //=============================//
 //    CUDA memory management   //

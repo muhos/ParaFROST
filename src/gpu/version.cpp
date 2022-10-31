@@ -23,7 +23,7 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 #include <Windows.h>
 #endif
 
-using namespace pFROST;
+using namespace ParaFROST;
 
 #define BUFFERSIZE 256
 char buffer[BUFFERSIZE];
@@ -58,7 +58,7 @@ char buffer[BUFFERSIZE];
 	#define DATE __DATE__ " " __TIME__
 #endif
 
-namespace pFROST {
+namespace ParaFROST {
 
 	const char* version() { return VERSION; }
 

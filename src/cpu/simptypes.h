@@ -23,7 +23,7 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 #include "vector.h"
 #include "sclause.h"
 
-namespace pFROST {
+namespace ParaFROST {
 
 	typedef Vec<S_REF, int> OL;
 	typedef Vec<OL> OT;

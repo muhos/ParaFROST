@@ -23,7 +23,7 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 #include <fpu_control.h>
 #endif
 
-namespace pFROST {
+namespace ParaFROST {
 
 	int64 sysMemUsed()
 	{
@@ -128,7 +128,7 @@ namespace pFROST {
 	{
 		fflush(stdout);
 		PFLOG1("%s%s%s", CYELLOW, "INTERRUPTED", CNORMAL);
-		pfrost->interrupt();
+		solver->interrupt();
 	}
 
 	void handler_mercy_timeout(int)
@@ -136,7 +136,7 @@ namespace pFROST {
 		fflush(stdout);
 		PFLOG1("%s%s%s", CYELLOW, "TIME OUT", CNORMAL);
 		PFLOGS("UNKNOWN");
-		pfrost->interrupt();
+		solver->interrupt();
 	}
 
 	void signal_handler(void h_intr(int), void h_timeout(int))
@@ -208,13 +208,13 @@ namespace pFROST {
 
 }
 
-void pFROST::ParaFROST::killSolver()
+void ParaFROST::Solver::killSolver()
 {
 	wrapup();
 	PFLOG0("");
 	PFLOGN2(1, " Cleaning up..");
-	this->~ParaFROST();
-	pfrost = NULL;
+	this->~Solver();
+	solver = NULL;
 	PFLDONE(1, 5);
 	if (!quiet_en) PFLRULER('-', RULELEN);
 	exit(EXIT_SUCCESS);

@@ -18,9 +18,9 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 #include "solve.h" 
 #include "control.h"
-using namespace pFROST;
+using namespace ParaFROST;
 
-void ParaFROST::report()
+void Solver::report()
 {
 	if (opts.report_en) {
 		PFLOG0("");

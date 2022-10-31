@@ -18,9 +18,9 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 #include "solve.h"
 
-using namespace pFROST;
+using namespace ParaFROST;
 
-bool ParaFROST::ifailed(const uint32& v)
+bool Solver::ifailed(const uint32& v)
 {
 	const uint32 mlit = imap(v);
 	if (!mlit) return false;
@@ -34,7 +34,7 @@ bool ParaFROST::ifailed(const uint32& v)
 	return false;
 }
 
-bool ParaFROST::ieliminated(const uint32& v)
+bool Solver::ieliminated(const uint32& v)
 {
 	const uint32 mlit = imap(v);
 	if (!mlit) return true;
@@ -42,7 +42,7 @@ bool ParaFROST::ieliminated(const uint32& v)
 	return MELTED(sp->vstate[ABS(mlit)].state) || SUBSTITUTED(sp->vstate[ABS(mlit)].state);
 }
 
-void ParaFROST::ifreeze(const uint32& v) 
+void Solver::ifreeze(const uint32& v) 
 {
 	const uint32 mlit = imap(v);
 	CHECKLIT(mlit);
@@ -51,7 +51,7 @@ void ParaFROST::ifreeze(const uint32& v)
 	PFLOG2(3, "  freezing original variable %d (mapped to %d)..", v, mvar);
 }
 
-void ParaFROST::iunfreeze(const uint32& v)
+void Solver::iunfreeze(const uint32& v)
 {
 	const uint32 mlit = imap(v);
 	CHECKLIT(mlit);
@@ -60,7 +60,7 @@ void ParaFROST::iunfreeze(const uint32& v)
 	PFLOG2(3, "  melting original variable %d (mapped to %d)..", v, mvar);
 }
 
-void ParaFROST::iassume(Lits_t& assumptions)
+void Solver::iassume(Lits_t& assumptions)
 {
 	assert(inf.maxVar);
 	assert(stats.clauses.original);
@@ -78,7 +78,7 @@ void ParaFROST::iassume(Lits_t& assumptions)
 	PFLDONE(2, 5);
 }
 
-void ParaFROST::iunassume()
+void Solver::iunassume()
 {
 	assert(inf.maxVar);
 	assert(stats.clauses.original);
@@ -96,7 +96,7 @@ void ParaFROST::iunassume()
 	backtrack();
 }
 
-void ParaFROST::idecide()
+void Solver::idecide()
 {
 	assert(inf.unassigned);
 	assert(sp->propagated == trail.size());
@@ -129,7 +129,7 @@ void ParaFROST::idecide()
 	stats.decisions.single++;
 }
 
-void ParaFROST::ianalyze(const uint32& failed)
+void Solver::ianalyze(const uint32& failed)
 {
 	assert(cnfstate);
 	assert(vorg);

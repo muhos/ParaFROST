@@ -23,7 +23,7 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 #include <cassert>
 #include <cstring>
 
-namespace pFROST {
+namespace ParaFROST {
 
 	struct SIGMASTATS {
 		uint32 calls;

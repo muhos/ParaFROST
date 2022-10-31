@@ -19,7 +19,7 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 #include "options.cuh"
 #include "input.h"
 
-using namespace pFROST;
+using namespace ParaFROST;
 
 BOOL_OPT opt_ve_atomic_en("veatomic", "enable atomic version of BVE (produces out-of-order resolvents)", false);
 BOOL_OPT opt_gc_gpu_en("gcgpu", "enable device garbage collection in parallel (stream compaction approach)", true);

@@ -20,9 +20,9 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 #define __CU_VECTOR_
 
 #include "definitions.cuh"
-#include "const.h"
+#include "constants.h"
 
-namespace pFROST {
+namespace ParaFROST {
 
 	template<typename T>
 	class cuVec {

@@ -18,9 +18,9 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 #include "solve.h"
 
-using namespace pFROST;
+using namespace ParaFROST;
 
-void ParaFROST::createOTHost(HOT& hot)
+void Solver::createOTHost(HOT& hot)
 {
 	assert(hcnf != NULL);
 	assert(vars->nUnits);
@@ -38,7 +38,7 @@ void ParaFROST::createOTHost(HOT& hot)
 	}
 }
 
-bool ParaFROST::propFailed()
+bool Solver::propFailed()
 {
 	if (vars->nUnits) {
 		syncAll(); // sync 'cacheCNF'
@@ -100,7 +100,7 @@ bool ParaFROST::propFailed()
 	return true;
 }
 
-bool ParaFROST::prop()
+bool Solver::prop()
 {
 	if (!enqueueCached(streams[3])) { learnEmpty(); return false; }
 	LIT_ST* values = sp->value;
@@ -137,7 +137,7 @@ bool ParaFROST::prop()
 	return true;
 }
 
-inline bool ParaFROST::propClause(const LIT_ST* values, const uint32& lit, SCLAUSE& c)
+inline bool Solver::propClause(const LIT_ST* values, const uint32& lit, SCLAUSE& c)
 {
 	assert(c.size() > 1);
 	uint32 sig = 0;
@@ -158,7 +158,7 @@ inline bool ParaFROST::propClause(const LIT_ST* values, const uint32& lit, SCLAU
 	return false;
 }
 
-inline bool ParaFROST::enqueueCached(const cudaStream_t& stream) {
+inline bool Solver::enqueueCached(const cudaStream_t& stream) {
 	if (vars->nUnits) {
 		nForced = sp->propagated;
 		sync(stream); // sync units copy
@@ -179,7 +179,7 @@ inline bool ParaFROST::enqueueCached(const cudaStream_t& stream) {
 	return true;
 }
 
-inline void	ParaFROST::cleanProped() {
+inline void	Solver::cleanProped() {
 	if (vars->nUnits) {
 		PFLDONE(2, 5);
 		nForced = sp->propagated - nForced;

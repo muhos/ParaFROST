@@ -26,6 +26,7 @@ To install either the CPU or the GPU solvers, use the `install.sh` script which 
        -l or --logging       enable logging (needed for verbosity level > 2)
        -s or --statistics    enable costly statistics (may impact runtime)
        -a or --all           enable all above flags except 'assert'
+	   --ncolors             disable colors in all solver outputs
        --clean=<target>      remove old installation of <cpu | gpu | all> solvers
        --standard=<n>        compile with <11 | 14 | 17 > c++ standard
        --extra="flags"       pass extra "flags" to the compiler(s)

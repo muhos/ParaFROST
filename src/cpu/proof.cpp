@@ -31,7 +31,7 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 #define L2B(x)			(((x) & BYTEMASK) | BYTEMAX)
 #define ISLARGE(x)		((x) & IBYTEMAX)
 
-using namespace pFROST;
+using namespace ParaFROST;
 
 PROOF::PROOF() : 
 	proofFile(NULL)

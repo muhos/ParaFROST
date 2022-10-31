@@ -29,7 +29,7 @@ constexpr size_t MAXMEMBLOCK = 10 * MBYTE;
 
 using namespace mgpu;
 
-namespace pFROST {
+namespace ParaFROST {
 
 	/*****************************************************/
 	/*  Usage:    Modern-GPU cached memory allocator     */

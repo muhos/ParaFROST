@@ -22,7 +22,7 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 #include <map>
 #include "logging.h"
 
-namespace pFROST {
+namespace ParaFROST {
 
 	// memory cache types
 	typedef std::map		< void*, size_t > alloc_cache_t;

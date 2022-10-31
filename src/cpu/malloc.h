@@ -24,7 +24,7 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 #include <cstdlib>
 #include <cstring>
 
-namespace pFROST {
+namespace ParaFROST {
 
 	class MEMOUTEXCEPTION {};
 

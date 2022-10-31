@@ -20,9 +20,9 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 #include <cub/device/device_select.cuh>
 
 using namespace cub;
-using namespace pFROST;
+using namespace ParaFROST;
 
-void ParaFROST::VE()
+void Solver::VE()
 {
 	if (opts.ve_en) {
 		if (interrupted()) killSolver();
@@ -34,7 +34,7 @@ void ParaFROST::VE()
 	}
 }
 
-void ParaFROST::postVE()
+void Solver::postVE()
 {
 	size_t bytes = 0;
 	uint32* tmpmem = NULL;
@@ -49,7 +49,7 @@ void ParaFROST::postVE()
 	}
 }
 
-void ParaFROST::SUB()
+void Solver::SUB()
 {
 	if (opts.sub_en || opts.ve_plus_en) {
 		if (interrupted()) killSolver();
@@ -59,7 +59,7 @@ void ParaFROST::SUB()
 	}
 }
 
-void ParaFROST::BCE()
+void Solver::BCE()
 {
 	if (opts.bce_en) {
 		if (interrupted()) killSolver();
@@ -70,7 +70,7 @@ void ParaFROST::BCE()
 	}
 }
 
-void ParaFROST::ERE()
+void Solver::ERE()
 {
 	if (opts.ere_en) {
 		if (interrupted()) killSolver();

@@ -18,16 +18,16 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 #include "solve.h"
 
-using namespace pFROST;
+using namespace ParaFROST;
 
-inline void	ParaFROST::cleanManaged() 
+inline void	Solver::cleanManaged() 
 {
 	if (vars != NULL) delete vars;
 	cumm.freeVars(), cumm.freeCNF(), cumm.freeOT();
 	vars = NULL, cnf = NULL, ot = NULL;
 }
 
-inline bool	ParaFROST::reallocCNF()
+inline bool	Solver::reallocCNF()
 {
 	int times = phase + 1;
 	if (times > 1 && times != opts.phases && (times % opts.shrink_rate) == 0) {
@@ -45,7 +45,7 @@ inline bool	ParaFROST::reallocCNF()
 	return true;
 }
 
-inline bool	ParaFROST::reallocOT(const cudaStream_t& stream)
+inline bool	Solver::reallocOT(const cudaStream_t& stream)
 {
 	assert(inf.nLiterals);
 	if (!flattenCNF(inf.nLiterals)) { simpstate = OTALLOC_FAIL; return false; }
@@ -54,7 +54,7 @@ inline bool	ParaFROST::reallocOT(const cudaStream_t& stream)
 	return true;
 }
 
-inline void	ParaFROST::initSimplifier()
+inline void	Solver::initSimplifier()
 {
 	cleanManaged();
 	cumm.freeFixed();
@@ -72,7 +72,7 @@ inline void	ParaFROST::initSimplifier()
 	}
 }
 
-void ParaFROST::sigmify()
+void Solver::sigmify()
 {
 	if (alldisabled()) return;
 	assert(conflict == NOREF);
@@ -88,7 +88,7 @@ void ParaFROST::sigmify()
 	}
 }
 
-void ParaFROST::awaken()
+void Solver::awaken()
 {
 	assert(conflict == NOREF);
 	assert(UNSOLVED(cnfstate));
@@ -152,7 +152,7 @@ void ParaFROST::awaken()
 	}
 }
 
-void ParaFROST::sigmifying()
+void Solver::sigmifying()
 {
 	/********************************/
 	/*         awaken sigma         */
@@ -179,7 +179,7 @@ void ParaFROST::sigmifying()
 	const int64 bmelted = inf.maxMelted, bclauses = inf.nClauses;
 	int64 cdiff = INT64_MAX, ldiff = INT64_MAX;
 	int64 clsbefore = inf.nClauses, litsbefore = inf.nLiterals;
-	while (!simpstate && !interrupted()) {
+	while (inf.nClauses && inf.nLiterals && !simpstate && !interrupted()) {
 		if (!reallocOT(streams[0])) break;
 		sync(streams[0]);
 		reallocCNF();
@@ -233,7 +233,7 @@ void ParaFROST::sigmifying()
 	timer.start();
 }
 
-void ParaFROST::masterFree()
+void Solver::masterFree()
 {
 	syncAll();
 	cacher.destroy();
@@ -246,12 +246,7 @@ void ParaFROST::masterFree()
 		cuproof.destroy();
 }
 
-void ParaFROST::slavesFree()
-{
-
-}
-
-void ParaFROST::optSimp()
+void Solver::optSimp()
 {
 	PFLOGN2(2, " Initializing device options..");
 	gopts.init();

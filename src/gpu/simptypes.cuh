@@ -22,13 +22,13 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 #include <thrust/device_ptr.h>
 #include "vector.cuh"
 #include "definitions.cuh"
-#include "const.cuh"
+#include "constants.cuh"
 #include "definitions.h"
 #include "sclause.h"
 #include "clause.h"
 #include "sort.h"
 
-namespace pFROST {
+namespace ParaFROST {
 
 	class cuTIMER {
 	private:

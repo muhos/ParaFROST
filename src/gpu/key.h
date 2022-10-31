@@ -22,9 +22,9 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 #include "vector.h"
 #include "definitions.h"
 
-namespace pFROST {
+namespace ParaFROST {
 
-	class ParaFROST;
+	class Solver;
 
 	//============================//
 	//  Default Comparators       //
@@ -75,8 +75,8 @@ namespace pFROST {
 		}
 	};
 	struct SCORS_CMP {
-		ParaFROST* solver;
-		SCORS_CMP(ParaFROST* _solver) : solver(_solver) {}
+		Solver* solver;
+		SCORS_CMP(Solver* _solver) : solver(_solver) {}
 		inline bool operator () (const uint32& a, const uint32& b) const;
 	};
 	struct VSIDS_CMP {

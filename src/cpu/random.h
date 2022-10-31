@@ -22,7 +22,7 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 #include <cassert>
 #include "datatypes.h"
 
-namespace pFROST {
+namespace ParaFROST {
 
     class RANDOM {
         uint32 _seed_;

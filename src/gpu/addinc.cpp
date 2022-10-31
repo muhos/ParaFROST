@@ -17,7 +17,7 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 **********************************************************************************/
 
 #include "solve.h"
-using namespace pFROST;
+using namespace ParaFROST;
 
 inline void printOriginal(Lits_t& clause)
 {
@@ -42,7 +42,7 @@ inline bool verifyMarkings(Vec<LIT_ST>& marks, Lits_t& clause)
 	return true;
 }
 
-uint32 ParaFROST::iadd() 
+uint32 Solver::iadd() 
 {
 	inf.unassigned++;
 	const uint32 v = inf.orgVars = ++inf.maxVar;
@@ -73,7 +73,7 @@ uint32 ParaFROST::iadd()
 	return v;
 }
 
-bool ParaFROST::itoClause(Lits_t& c, Lits_t& org)
+bool Solver::itoClause(Lits_t& c, Lits_t& org)
 {
 	if (org.empty()) {
 		learnEmpty();

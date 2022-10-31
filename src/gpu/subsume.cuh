@@ -21,7 +21,7 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 #include "elimination.cuh"
 
-namespace pFROST {
+namespace ParaFROST {
 
 #define SS_DBG 0 // set to 1 to serialize SUB
 

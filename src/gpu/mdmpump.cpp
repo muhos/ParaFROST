@@ -17,10 +17,10 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 **********************************************************************************/
 
 #include "solve.h" 
-using namespace pFROST;
+using namespace ParaFROST;
 
 
-inline void ParaFROST::pumpFrozenHeap(const uint32& lit)
+inline void Solver::pumpFrozenHeap(const uint32& lit)
 {
 	CHECKLIT(lit);
 	WL& ws = wt[lit];
@@ -42,7 +42,7 @@ inline void ParaFROST::pumpFrozenHeap(const uint32& lit)
 	}
 }
 
-inline void ParaFROST::pumpFrozenQue(const uint32& lit)
+inline void Solver::pumpFrozenQue(const uint32& lit)
 {
 	CHECKLIT(lit);
 	WL& ws = wt[lit];
@@ -66,7 +66,7 @@ inline void ParaFROST::pumpFrozenQue(const uint32& lit)
 	}
 }
 
-void ParaFROST::pumpFrozen()
+void Solver::pumpFrozen()
 {
 	if (!last.mdm.decisions) return;
 	assert(trail.size() > sp->propagated);

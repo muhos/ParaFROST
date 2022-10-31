@@ -22,7 +22,7 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 #include "vector.h"
 #include "definitions.h"
 
-namespace pFROST {
+namespace ParaFROST {
 
 	struct LINK {
 		uint32 prev, next;

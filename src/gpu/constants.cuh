@@ -1,4 +1,4 @@
-/***********************************************************************[const.cuh]
+/***********************************************************************[constants.cuh]
 Copyright(c) 2020, Muhammad Osama - Anton Wijs,
 Technische Universiteit Eindhoven (TU/e).
 
@@ -19,7 +19,7 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 #ifndef __GL_CU_MACROS_
 #define __GL_CU_MACROS_
 
-namespace pFROST {
+namespace ParaFROST {
 
 	extern size_t hc_bucket;
 	extern size_t hc_nbuckets;

@@ -18,9 +18,9 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 #include "solve.h"
 
-using namespace pFROST;
+using namespace ParaFROST;
 
-void ParaFROST::attachBins(BCNF& src, const bool& hasElim)
+void Solver::attachBins(BCNF& src, const bool& hasElim)
 {
     assert(!wt.empty());
     if (hasElim) {
@@ -51,7 +51,7 @@ void ParaFROST::attachBins(BCNF& src, const bool& hasElim)
     }
 }
 
-void ParaFROST::attachNonBins(BCNF& src, const bool& hasElim)
+void Solver::attachNonBins(BCNF& src, const bool& hasElim)
 {
     assert(!wt.empty());
     if (hasElim) {
@@ -91,7 +91,7 @@ void ParaFROST::attachNonBins(BCNF& src, const bool& hasElim)
     }
 }
 
-void ParaFROST::attachClauses(BCNF& src, const bool& hasElim)
+void Solver::attachClauses(BCNF& src, const bool& hasElim)
 {
     assert(!wt.empty());
     if (hasElim) {
@@ -129,7 +129,7 @@ void ParaFROST::attachClauses(BCNF& src, const bool& hasElim)
     }
 }
 
-void ParaFROST::rebuildWT(const CL_ST& code)
+void Solver::rebuildWT(const CL_ST& code)
 {
     wt.resize(inf.nDualVars);
     if (PRIORALLBINS(code)) {
@@ -150,7 +150,7 @@ void ParaFROST::rebuildWT(const CL_ST& code)
     }
 }
 
-void ParaFROST::sortWT()
+void Solver::sortWT()
 {
     WL saved;
     forall_literal(lit) {
@@ -169,7 +169,7 @@ void ParaFROST::sortWT()
     saved.clear(true);
 }
 
-void ParaFROST::detachClauses(const bool& keepbinaries)
+void Solver::detachClauses(const bool& keepbinaries)
 {
     forall_literal(lit) {
         WL& ws = wt[lit];
@@ -183,7 +183,7 @@ void ParaFROST::detachClauses(const bool& keepbinaries)
     }
 }
 
-void ParaFROST::binarizeWT(const bool& keeplearnts)
+void Solver::binarizeWT(const bool& keeplearnts)
 {
     assert(!DL());
     const LIT_ST* values = sp->value;

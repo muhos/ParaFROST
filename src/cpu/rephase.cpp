@@ -17,9 +17,9 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 **********************************************************************************/
 
 #include "solve.h"
-using namespace pFROST;
+using namespace ParaFROST;
 
-inline void	ParaFROST::varOrgPhase() 
+inline void	Solver::varOrgPhase() 
 {
 #ifdef STATISTICS
 	stats.rephase.org++;
@@ -29,7 +29,7 @@ inline void	ParaFROST::varOrgPhase()
 }
 
 
-inline void	ParaFROST::varInvPhase() 
+inline void	Solver::varInvPhase() 
 {
 #ifdef STATISTICS
 	stats.rephase.inv++;
@@ -38,7 +38,7 @@ inline void	ParaFROST::varInvPhase()
 	last.rephase.type = INVPHASE;
 }
 
-inline void	ParaFROST::varFlipPhase()
+inline void	Solver::varFlipPhase()
 {
 #ifdef STATISTICS
 	stats.rephase.flip++;
@@ -49,7 +49,7 @@ inline void	ParaFROST::varFlipPhase()
 	last.rephase.type = FLIPPHASE;
 }
 
-inline void	ParaFROST::varRandPhase()
+inline void	Solver::varRandPhase()
 {
 #ifdef STATISTICS
 	stats.rephase.random++;
@@ -60,7 +60,7 @@ inline void	ParaFROST::varRandPhase()
 	last.rephase.type = RANDPHASE;
 }
 
-inline void	ParaFROST::varBestPhase() 
+inline void	Solver::varBestPhase() 
 {
 #ifdef STATISTICS
 	stats.rephase.best++;
@@ -72,7 +72,7 @@ inline void	ParaFROST::varBestPhase()
 	last.rephase.type = BESTPHASE;
 }
 
-inline void	ParaFROST::varWalkPhase() 
+inline void	Solver::varWalkPhase() 
 {
 	walk();
 	if (last.rephase.type == WALKPHASE) autarky();
@@ -82,7 +82,7 @@ inline void	ParaFROST::varWalkPhase()
 	}
 }
 
-void ParaFROST::rephase()
+void Solver::rephase()
 {
 	rootify();
 	assert(UNSOLVED(cnfstate));

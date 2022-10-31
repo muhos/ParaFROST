@@ -34,7 +34,7 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 #include <csignal>
 #include "logging.h"
 #include "datatypes.h"
-#include "const.h"
+#include "constants.h"
 
 #if defined(__linux__)
 #include <sys/resource.h>
@@ -62,7 +62,7 @@ using std::swap;
 using std::string;
 using std::ifstream;
 
-namespace pFROST {
+namespace ParaFROST {
 
 	#define RESETSTRUCT(MEMPTR) \
 	{ \

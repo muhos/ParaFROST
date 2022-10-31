@@ -23,7 +23,7 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 #include <cassert>
 #include "datatypes.h"
 
-namespace pFROST {
+namespace ParaFROST {
 
 	inline uint64 linear	    (const uint64& n) { return n; }
 	inline uint64 quadratic	    (const uint64& n) { return n * n; }

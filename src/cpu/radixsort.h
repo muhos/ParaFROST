@@ -21,7 +21,7 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 #include "malloc.h"
 
-namespace pFROST {
+namespace ParaFROST {
 
 	constexpr size_t RADIXBITS			= 8;
 	constexpr size_t RADIXWIDTH			= (1 << RADIXBITS);

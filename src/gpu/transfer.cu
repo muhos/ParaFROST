@@ -19,9 +19,9 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 #include "solve.h"
 #include <cub/device/device_select.cuh>
 using namespace cub;
-using namespace pFROST;
+using namespace ParaFROST;
 
-void ParaFROST::extract(CNF* dest, BCNF& src)
+void Solver::extract(CNF* dest, BCNF& src)
 {
 	for (uint32 i = 0; i < src.size(); i++) {
 		CLAUSE& c = cm[src[i]];
@@ -31,7 +31,7 @@ void ParaFROST::extract(CNF* dest, BCNF& src)
 	}
 }
 
-void ParaFROST::reflectCNF(const cudaStream_t& s1, const cudaStream_t& s2) 
+void Solver::reflectCNF(const cudaStream_t& s1, const cudaStream_t& s2) 
 {
 	S_REF len1 = hcnf->data().size - dataoff;
 	if (!len1) return;
@@ -41,7 +41,7 @@ void ParaFROST::reflectCNF(const cudaStream_t& s1, const cudaStream_t& s2)
 	dataoff = hcnf->data().size, csoff = hcnf->size();
 }
 
-void ParaFROST::newBeginning() 
+void Solver::newBeginning() 
 {
 	assert(opts.sigma_en || opts.sigma_live_en);
 	assert(wt.empty());
@@ -65,7 +65,7 @@ void ParaFROST::newBeginning()
 	else cumm.breakMirror(), hcnf = NULL;
 }
 
-void ParaFROST::markEliminated(const cudaStream_t& _s)
+void Solver::markEliminated(const cudaStream_t& _s)
 {
 	assert(vars->isEliminatedCached);
 
@@ -86,7 +86,7 @@ void ParaFROST::markEliminated(const cudaStream_t& _s)
 #endif
 }
 
-inline void ParaFROST::writeBack()
+inline void Solver::writeBack()
 {
 	int64 bliterals = maxLiterals();
 	stats.literals.original = stats.literals.learnt = 0;
@@ -101,7 +101,7 @@ inline void ParaFROST::writeBack()
 	assert(maxClauses() == int64(inf.nClauses));
 }
 
-void ParaFROST::cacheCNF(const cudaStream_t& s1, const cudaStream_t& s2)
+void Solver::cacheCNF(const cudaStream_t& s1, const cudaStream_t& s2)
 {
 	// NOTE: if there are units propagated at the last phase,
 	// deleted clauses will be left (not compacted), 
@@ -142,7 +142,7 @@ void ParaFROST::cacheCNF(const cudaStream_t& s1, const cudaStream_t& s2)
 	}
 }
 
-void ParaFROST::cacheUnits(const cudaStream_t& stream) 
+void Solver::cacheUnits(const cudaStream_t& stream) 
 {
 	sync(stream);
 	if ((vars->nUnits = vars->tmpUnits.size()))
@@ -150,7 +150,7 @@ void ParaFROST::cacheUnits(const cudaStream_t& stream)
 	if (gopts.sync_always) sync(stream);
 }
 
-void ParaFROST::cacheEliminated(const cudaStream_t& stream)
+void Solver::cacheEliminated(const cudaStream_t& stream)
 {
 	if (vars->isEliminatedCached) return;
 	CHECK(cudaMemcpyAsync(vars->cachedEliminated, vars->eliminated, inf.maxVar + 1, cudaMemcpyDeviceToHost, stream));
@@ -158,13 +158,13 @@ void ParaFROST::cacheEliminated(const cudaStream_t& stream)
 	vars->isEliminatedCached = true;
 }
 
-void ParaFROST::cacheNumUnits(const cudaStream_t& stream)
+void Solver::cacheNumUnits(const cudaStream_t& stream)
 {
 	CHECK(cudaMemcpyAsync(&vars->tmpUnits, vars->units, sizeof(cuVecU), cudaMemcpyDeviceToHost, stream));
 	if (gopts.sync_always) sync(stream);
 }
 
-void ParaFROST::cacheResolved(const cudaStream_t& stream)
+void Solver::cacheResolved(const cudaStream_t& stream)
 {
 	cuVecU tmpObj;
 	CHECK(cudaMemcpy(&tmpObj, vars->resolved, sizeof(cuVecU), cudaMemcpyDeviceToHost));

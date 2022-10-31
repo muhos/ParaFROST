@@ -17,9 +17,9 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 **********************************************************************************/
 
 #include "solve.h"
-using namespace pFROST;
+using namespace ParaFROST;
 
-uint32 ParaFROST::nextVSIDS()
+uint32 Solver::nextVSIDS()
 {
 	assert(inf.unassigned);
 	VSTATE* states = sp->vstate;
@@ -35,7 +35,7 @@ uint32 ParaFROST::nextVSIDS()
 	return cand;
 }
 
-uint32 ParaFROST::nextVMFQ()
+uint32 Solver::nextVMFQ()
 {
 	assert(inf.unassigned);
 	VSTATE* states = sp->vstate;
@@ -50,7 +50,7 @@ uint32 ParaFROST::nextVMFQ()
 	return free;
 }
 
-uint32 ParaFROST::makeAssign(const uint32& v, const bool& tphase) 
+uint32 Solver::makeAssign(const uint32& v, const bool& tphase) 
 {
 	CHECKVAR(v);
 	LIT_ST pol = UNDEFINED;
@@ -60,7 +60,7 @@ uint32 ParaFROST::makeAssign(const uint32& v, const bool& tphase)
 	return V2DEC(v, pol);
 }
 
-void ParaFROST::decide()
+void Solver::decide()
 {
 	assert(inf.unassigned);
 	assert(sp->propagated == trail.size());

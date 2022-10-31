@@ -21,7 +21,7 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 #include "datatypes.h"
 
-namespace pFROST {
+namespace ParaFROST {
 
 	struct GOPTION {
 		GOPTION();

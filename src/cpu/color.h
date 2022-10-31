@@ -21,6 +21,56 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 #include <cstdio>
 
+#if defined(NCOLORS)
+
+#define UNDERLINE	""
+#define CNORMAL     ""
+#define CRED        ""
+#define CGREEN      ""
+#define CYELLOW     ""
+#define CBLUE       ""
+#define CMAGENTA    ""
+#define CCYAN       ""
+#define CWHITE      ""
+#define CLRED       ""
+#define CLGREEN     ""
+#define CLYELLOW    ""
+#define CLBLUE      ""
+#define CLMAGENTA   ""
+#define CLCYAN      ""
+#define CGREEN0		""
+#define CGREEN1		""
+#define CGREEN2		""
+#define CGREEN3		""
+#define CVIOLET0	""
+#define CVIOLET1	""
+#define CVIOLET2	""
+#define CVIOLET3	""
+#define CVIOLET4	""
+#define CVIOLET5	""
+
+#define CORANGE0	""
+#define CORANGE1	""
+#define CMDM		""
+#define CSOLVER		""
+#define CAUTHOR		""
+#define CRIGHTS		""
+#define CERROR		""
+#define CWARNING	""
+#define CHEADER		""
+#define CREPORT		""
+#define CREPORTVAL	""
+#define CLOGGING	""
+#define CCONFLICT	""
+#define CHELP		""
+#define CARGDEFAULT	""
+#define CARGVALUE	""
+#define CARGON		""
+#define CARGOFF		""
+
+#else
+
+#define UNDERLINE	"\u001b[4m"
 #define CNORMAL     "\x1B[0m"
 #define CRED        "\x1B[31m"
 #define CGREEN      "\x1B[32m"
@@ -65,6 +115,7 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 #define CARGON		"\x1B[38;5;34m"
 #define CARGOFF		"\x1B[38;5;124m"
 
+#endif
 
 #define SETCOLOR(COLOR, STD) fprintf(STD, "%s", COLOR); 
 

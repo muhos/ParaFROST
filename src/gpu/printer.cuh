@@ -21,7 +21,7 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 #include "simptypes.cuh"
 
-namespace pFROST {
+namespace ParaFROST {
 
 	_PFROST_H_D_ void pLit(const uint32& l) { printf("%6d", SIGN(l) ? -int(ABS(l)) : ABS(l)); }
 

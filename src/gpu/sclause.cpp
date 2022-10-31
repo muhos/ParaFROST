@@ -17,9 +17,9 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 **********************************************************************************/
 
 #include "solve.h"
-using namespace pFROST;
+using namespace ParaFROST;
 
-void ParaFROST::newClause(SCLAUSE& s)
+void Solver::newClause(SCLAUSE& s)
 {
 	int size = s.size();
 	assert(size > 1);
@@ -56,7 +56,7 @@ void ParaFROST::newClause(SCLAUSE& s)
 	}
 }
 
-void ParaFROST::markSubsume(SCLAUSE& s) {
+void Solver::markSubsume(SCLAUSE& s) {
 	assert(s.added());
 	forall_clause(s, k) {
 		markSubsume(*k);

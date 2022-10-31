@@ -20,7 +20,7 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 #define __SIMPLIFY_
 
 #include "solve.h" 
-using namespace pFROST;
+using namespace ParaFROST;
 
 #define RESOLUTION 1
 #define SUBSTITUTION 2
@@ -238,7 +238,7 @@ inline bool countSubstituted(const uint32& x, const int& clsbefore, OL& me, OL& 
 {
 	assert(!nAddedCls);
 	int nAddedLits = 0;
-	const int rlimit = pfrost->opts.ve_clause_limit;
+	const int rlimit = solver->opts.ve_clause_limit;
 	for (int i = 0; i < me.size(); i++) {
 		const SCLAUSE& ci = *me[i];
 		if (ci.original()) {
@@ -256,7 +256,7 @@ inline bool countSubstituted(const uint32& x, const int& clsbefore, OL& me, OL& 
 			}
 		}
 	}
-	if (pfrost->opts.ve_lbound_en) {
+	if (solver->opts.ve_lbound_en) {
 		int nLitsBefore = 0;
 		countLitsBefore(me, nLitsBefore);
 		countLitsBefore(other, nLitsBefore);
@@ -269,7 +269,7 @@ inline bool countResolvents(const uint32& x, const int& clsbefore, OL& me, OL& o
 {
 	assert(!nAddedCls);
 	int nAddedLits = 0;
-	const int rlimit = pfrost->opts.ve_clause_limit;
+	const int rlimit = solver->opts.ve_clause_limit;
 	for (int i = 0; i < me.size(); i++) {
 		const SCLAUSE& ci = *me[i];
 		if (ci.original()) {
@@ -285,7 +285,7 @@ inline bool countResolvents(const uint32& x, const int& clsbefore, OL& me, OL& o
 			}
 		}
 	}
-	if (pfrost->opts.ve_lbound_en) {
+	if (solver->opts.ve_lbound_en) {
 		int nLitsBefore = 0;
 		countLitsBefore(me, nLitsBefore);
 		countLitsBefore(other, nLitsBefore);

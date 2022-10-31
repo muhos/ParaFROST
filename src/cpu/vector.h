@@ -31,7 +31,7 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 #define __forceinline __attribute__((always_inline))
 #endif
 
-namespace pFROST {
+namespace ParaFROST {
 
 	template<class T, class S = uint32>
 	class Vec {

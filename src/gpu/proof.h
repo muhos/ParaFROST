@@ -24,7 +24,7 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 #include "logging.h"
 #include "space.h"
 
-namespace pFROST {
+namespace ParaFROST {
 
 	class PROOF {
 

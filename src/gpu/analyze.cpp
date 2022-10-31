@@ -17,9 +17,9 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 **********************************************************************************/
 
 #include "solve.h"
-using namespace pFROST;
+using namespace ParaFROST;
 
-inline void	ParaFROST::bumpReason(const uint32& lit) 
+inline void	Solver::bumpReason(const uint32& lit) 
 {
 	CHECKLIT(lit);
 	assert(isFalse(lit));
@@ -31,7 +31,7 @@ inline void	ParaFROST::bumpReason(const uint32& lit)
 	analyzed.push(v);
 }
 
-inline void	ParaFROST::bumpReasons(const uint32& lit)
+inline void	Solver::bumpReasons(const uint32& lit)
 {
 	CHECKLIT(lit);
 	const uint32 v = ABS(lit);
@@ -52,7 +52,7 @@ inline void	ParaFROST::bumpReasons(const uint32& lit)
 	}
 }
 
-inline void	ParaFROST::bumpReasons()
+inline void	Solver::bumpReasons()
 {
 	assert(!probed);
 	forall_clause(learntC, k) {
@@ -64,7 +64,7 @@ inline void	ParaFROST::bumpReasons()
 	}
 }
 
-inline void	ParaFROST::bumpVariable(const uint32& v) 
+inline void	Solver::bumpVariable(const uint32& v) 
 {
 	CHECKVAR(v);
 	assert(!sp->vstate[v].state);
@@ -72,7 +72,7 @@ inline void	ParaFROST::bumpVariable(const uint32& v)
 	else varBumpQueue(v);
 }
 
-inline void	ParaFROST::bumpVariables() 
+inline void	Solver::bumpVariables() 
 {
 	if (opts.bumpreason_en) bumpReasons();
 	const bool vsidsEn = vsidsEnabled();
@@ -83,7 +83,7 @@ inline void	ParaFROST::bumpVariables()
 	if (vsidsEn) last.vsids.boost();
 }
 
-bool ParaFROST::chronoAnalyze()
+bool Solver::chronoAnalyze()
 {
 	assert(conflict != NOREF);
 	const int level = DL();
@@ -140,7 +140,7 @@ bool ParaFROST::chronoAnalyze()
 	return false;
 }
 
-void ParaFROST::analyze()
+void Solver::analyze()
 {
 	assert(conflict != NOREF);
 	assert(learntC.empty());
@@ -186,7 +186,7 @@ void ParaFROST::analyze()
 	if (vsidsOnly()) printStats(stats.conflicts % opts.prograte == 0);
 }
 
-void ParaFROST::subsumeLearnt(const C_REF& l)
+void Solver::subsumeLearnt(const C_REF& l)
 {
 	if (learnts.size() < 2) return;
 	assert(l != NOREF);

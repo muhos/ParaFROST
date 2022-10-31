@@ -21,9 +21,9 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 #include "mdmlimit.h"
 #include "mdmassign.h"
 
-using namespace pFROST;
+using namespace ParaFROST;
 
-inline bool	ParaFROST::verifyMDM() 
+inline bool	Solver::verifyMDM() 
 {
 	for (uint32 i = sp->propagated; i < trail.size(); i++) {
 		uint32 v = ABS(trail[i]);
@@ -37,7 +37,7 @@ inline bool	ParaFROST::verifyMDM()
 	return true;
 }
 
-inline bool	ParaFROST::verifySeen()
+inline bool	Solver::verifySeen()
 {
 	for (uint32 v = 0; v <= inf.maxVar; v++) {
 		if (sp->seen[v]) {
@@ -50,7 +50,7 @@ inline bool	ParaFROST::verifySeen()
 	return true;
 }
 
-inline bool ParaFROST::valid(const LIT_ST* values, WL& ws)
+inline bool Solver::valid(const LIT_ST* values, WL& ws)
 {
 	forall_watches(ws, i) {
 		const WATCH w = *i;
@@ -78,7 +78,7 @@ inline bool ParaFROST::valid(const LIT_ST* values, WL& ws)
 	return true;
 }
 
-inline bool ParaFROST::depFreeze(const uint32& cand, const LIT_ST* values, LIT_ST* frozen, uint32*& stack, WL& ws)
+inline bool Solver::depFreeze(const uint32& cand, const LIT_ST* values, LIT_ST* frozen, uint32*& stack, WL& ws)
 {
 	forall_watches(ws, i) {
 		const WATCH w = *i;
@@ -107,7 +107,7 @@ inline bool ParaFROST::depFreeze(const uint32& cand, const LIT_ST* values, LIT_S
 	return true;
 }
 
-inline void ParaFROST::MDMAssume(const LIT_ST* values, LIT_ST* frozen, uint32*& tail)
+inline void Solver::MDMAssume(const LIT_ST* values, LIT_ST* frozen, uint32*& tail)
 {
 	assert(sp->stacktail == sp->tmpstack);
 	int level = DL();
@@ -131,7 +131,7 @@ inline void ParaFROST::MDMAssume(const LIT_ST* values, LIT_ST* frozen, uint32*& 
 	stats.decisions.massumed += trail.size() - sp->propagated;
 }
 
-void ParaFROST::MDMInit()
+void Solver::MDMInit()
 {
 	if (!last.mdm.rounds) return;
 
@@ -173,7 +173,7 @@ void ParaFROST::MDMInit()
 	printStats(1, 'm', CMDM);
 }
 
-void ParaFROST::MDM()
+void Solver::MDM()
 {
 	assert(inf.unassigned);
 	assert(sp->propagated == trail.size());

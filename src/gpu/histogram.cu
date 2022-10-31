@@ -17,9 +17,9 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 **********************************************************************************/
 
 #include "solve.h"
-using namespace pFROST;
+using namespace ParaFROST;
 
-uint32* ParaFROST::flattenCNF(const uint32& numLits)
+uint32* Solver::flattenCNF(const uint32& numLits)
 {
 	assert(numLits);
 	uint32* literals = cumm.resizeLits(numLits);
@@ -31,7 +31,7 @@ uint32* ParaFROST::flattenCNF(const uint32& numLits)
 	return literals;
 }
 
-void ParaFROST::histSimp(const uint32& numLits)
+void Solver::histSimp(const uint32& numLits)
 {
 	PFLOGN2(2, " Computing histogram on %d elements..", numLits);
 	assert(numLits);

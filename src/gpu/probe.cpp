@@ -17,7 +17,7 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 **********************************************************************************/
 
 #include "solve.h"
-using namespace pFROST;
+using namespace ParaFROST;
 
 struct PROBE_QUEUE_CMP {
 	const VSTATE* states;
@@ -50,7 +50,7 @@ struct PROBE_HEAP_CMP {
 	}
 };
 
-void ParaFROST::analyzeFailed(const uint32& failed)
+void Solver::analyzeFailed(const uint32& failed)
 {
 	assert(UNSOLVED(cnfstate));
 	assert(DL() == 1);
@@ -70,7 +70,7 @@ void ParaFROST::analyzeFailed(const uint32& failed)
 	}
 }
 
-void ParaFROST::scheduleProbes() 
+void Solver::scheduleProbes() 
 {
 	assert(probes.empty());
 	vhist.resize(inf.nDualVars);
@@ -95,7 +95,7 @@ void ParaFROST::scheduleProbes()
 	PFLOG2(2, "  scheduled %d (%d prioritized) probes %.2f%%", probes.size(), count[1], percent(probes.size(), maxActive()));
 }
 
-uint32 ParaFROST::nextProbe() 
+uint32 Solver::nextProbe() 
 {
 	while (!probes.empty()) {
 		const uint32 probe = probes.back();
@@ -107,7 +107,7 @@ uint32 ParaFROST::nextProbe()
 	return 0;
 }
 
-void ParaFROST::FLE()
+void Solver::FLE()
 {
 	if (!cnfstate) return;
 	assert(!DL());
@@ -193,7 +193,7 @@ void ParaFROST::FLE()
 	printStats(success, 'f', CVIOLET4);
 }
 
-void ParaFROST::probe()
+void Solver::probe()
 {
 	rootify();
 	assert(conflict == NOREF);

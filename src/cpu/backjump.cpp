@@ -17,9 +17,9 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 **********************************************************************************/
 
 #include "solve.h"
-using namespace pFROST;
+using namespace ParaFROST;
 
-int ParaFROST::where()
+int Solver::where()
 {
 	const int level = DL();
 	int jmplevel = UNDEFINED;
@@ -54,7 +54,7 @@ int ParaFROST::where()
 	return jmplevel;
 }
 
-C_REF ParaFROST::backjump()
+C_REF Solver::backjump()
 {
 	assert(trail.size());
 	const int jmplevel = where();

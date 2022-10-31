@@ -19,9 +19,9 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 #include "control.h"
 #include "solve.h"
 
-using namespace pFROST;
+using namespace ParaFROST;
 
-void ParaFROST::map(BCNF& cnf)
+void Solver::map(BCNF& cnf)
 {
 	if (cnf.empty()) return;
 	assert(!vmap.empty());
@@ -30,7 +30,7 @@ void ParaFROST::map(BCNF& cnf)
 	}
 }
 
-void ParaFROST::map(WL& ws)
+void Solver::map(WL& ws)
 {
 	if (ws.empty()) return;
 	forall_watches(ws, w) {
@@ -38,7 +38,7 @@ void ParaFROST::map(WL& ws)
 	}
 }
 
-void ParaFROST::map(WT& wt)
+void Solver::map(WT& wt)
 {
 	if (wt.empty()) return;
 	assert(!vmap.empty());
@@ -58,7 +58,7 @@ void ParaFROST::map(WT& wt)
 	wt.shrinkCap();
 }
 
-void ParaFROST::map(const bool& sigmified)
+void Solver::map(const bool& sigmified)
 {
 	assert(inf.unassigned);
 	assert(conflict == NOREF);

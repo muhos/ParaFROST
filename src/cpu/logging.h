@@ -21,12 +21,11 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 #include <cstdio>
 #include <cstring>
-#include "const.h"
+#include "constants.h"
 #include "color.h"
 
 #define RULELEN     92
 #define PREFIX      "c "
-#define UNDERLINE	"\u001b[4m"
 
 #if defined(__linux__) || defined(__CYGWIN__)
 #pragma GCC system_header
@@ -97,22 +96,12 @@ inline void REPCH(const char& ch, const size_t& size, const size_t& off = 0) {
 #define PFAUTHORS(AUTHORS) \
   do { \
      const char *prefix = "Authors: "; \
-     size_t len = strlen(prefix) + strlen(AUTHORS); \
+     const char *suffix = ", all rights reserved"; \
+     size_t len = strlen(prefix) + strlen(AUTHORS) + strlen(suffix); \
      if (RULELEN < len) PFLOGE("ruler length is smaller than the authors"); \
      size_t gap = RULELEN - len - 1; \
      PRINT(PREFIX); PUTCH(' '); \
-     PRINT("%s%s%s%s", CAUTHOR, prefix, AUTHORS, CNORMAL); \
-     REPCH(' ', gap), PUTCH('\n'); \
-  } while (0); \
-
-#define PFRIGHTS(RIGHTS) \
-  do { \
-     const char *suffix = ", all rights reserved"; \
-     size_t len = strlen(RIGHTS) + strlen(suffix); \
-     if (RULELEN < len) PFLOGE("ruler length is smaller than the rights"); \
-     size_t gap = RULELEN - len - 1; \
-     PRINT(PREFIX); PUTCH(' ');\
-     PRINT("%s%s%s%s", CRIGHTS, RIGHTS, CNORMAL, suffix); \
+     PRINT("%s%s%s%s%s", prefix, CAUTHOR, AUTHORS, suffix, CNORMAL); \
      REPCH(' ', gap), PUTCH('\n'); \
   } while (0); \
 

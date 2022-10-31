@@ -20,7 +20,7 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 #define __AND_
 
 #include "simplify.h"
-using namespace pFROST;
+using namespace ParaFROST;
 
 inline void find_fanin(const uint32& gate_out, OL& list, Lits_t& out_c, uint32& sig)
 {

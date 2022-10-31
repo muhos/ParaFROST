@@ -20,7 +20,7 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 #define __ERE_
 
 #include "simplify.h"
-using namespace pFROST;
+using namespace ParaFROST;
 
 inline void find_best(const uint32 x, const SCLAUSE& c, const OT& ot, int& minsize, uint32& sig, uint32& best)
 {
@@ -134,7 +134,7 @@ inline void forward_equ(const uint32& x, const SCLAUSE& c1, const SCLAUSE& c2, c
 				if (c->learnt()) erestats.learnts++;
 				else erestats.orgs++;
 #endif
-				pfrost->removeClause(c);
+				solver->removeClause(c);
 				break;
 			}
 		}

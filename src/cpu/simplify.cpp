@@ -19,9 +19,9 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 #include "simplify.h"
 #include "control.h"
 
-using namespace pFROST;
+using namespace ParaFROST;
 
-inline bool	ParaFROST::checkMem(const string& _name, const size_t& size)
+inline bool	Solver::checkMem(const string& _name, const size_t& size)
 {
 	const size_t sysMemCons = size_t(sysMemUsed()) + size;
 	if (sysMemCons > size_t(stats.sysmem)) { // to catch memout problems before exception does
@@ -32,7 +32,7 @@ inline bool	ParaFROST::checkMem(const string& _name, const size_t& size)
 	return true;
 }
 
-void ParaFROST::createOT(const bool& reset)
+void Solver::createOT(const bool& reset)
 {
 	if (opts.profile_simp) timer.pstart();
 	if (reset) {
@@ -55,7 +55,7 @@ void ParaFROST::createOT(const bool& reset)
 	if (opts.profile_simp) timer.pstop(), timer.cot += timer.pcpuTime();
 }
 
-void ParaFROST::reduceOL(OL& ol)
+void Solver::reduceOL(OL& ol)
 {
 	if (ol.empty()) return;
 	S_REF *j = ol;
@@ -67,7 +67,7 @@ void ParaFROST::reduceOL(OL& ol)
 	ol.resize(int(j - ol));
 }
 
-void ParaFROST::reduceOT()
+void Solver::reduceOT()
 {
 	if (opts.profile_simp) timer.pstart();
 	forall_variables(v) {
@@ -78,7 +78,7 @@ void ParaFROST::reduceOT()
 	if (opts.profile_simp) timer.pstop(), timer.rot += timer.pcpuTime();
 }
 
-void ParaFROST::sortOT()
+void Solver::sortOT()
 {
 	if (opts.profile_simp) timer.pstart();
 	for (uint32 i = 0; i < PVs.size(); i++) {
@@ -92,7 +92,7 @@ void ParaFROST::sortOT()
 	if (opts.profile_simp) timer.pstop(), timer.sot += timer.pcpuTime();
 }
 
-void ParaFROST::extract(BCNF& cnf)
+void Solver::extract(BCNF& cnf)
 {
 	assert(hc_isize == sizeof(uint32));
 	assert(hc_scsize == sizeof(SCLAUSE));
@@ -112,7 +112,7 @@ void ParaFROST::extract(BCNF& cnf)
 	}
 }
 
-void ParaFROST::sigmify()
+void Solver::sigmify()
 {
 	if (!opts.phases && !(opts.all_en || opts.ere_en)) return;
 	assert(conflict == NOREF);
@@ -128,7 +128,7 @@ void ParaFROST::sigmify()
 	}
 }
 
-void ParaFROST::awaken()
+void Solver::awaken()
 { 
 	initSimp();
 	PFLOGN2(2, " Allocating memory..");
@@ -154,7 +154,7 @@ void ParaFROST::awaken()
 	return;
 }
 
-void ParaFROST::sigmifying()
+void Solver::sigmifying()
 {
 	/********************************/
 	/*         awaken sigma         */
@@ -181,7 +181,7 @@ void ParaFROST::sigmifying()
 	assert(!phase && !mu_inc);
 	int64 bmelted = inf.maxMelted, bclauses = inf.nClauses, bliterals = inf.nLiterals;
 	int64 litsbefore = inf.nLiterals, diff = INT64_MAX;
-	while (litsbefore) {
+	while (inf.nClauses && inf.nLiterals) {
 		resizeCNF();
 		createOT();
 		if (!prop()) killSolver();
@@ -231,7 +231,7 @@ void ParaFROST::sigmifying()
 	timer.start();
 }
 
-void ParaFROST::shrinkSimp() 
+void Solver::shrinkSimp() 
 {
 	if (opts.profile_simp) timer.start();
 	S_REF* j = scnf;
@@ -244,7 +244,7 @@ void ParaFROST::shrinkSimp()
 	if (opts.profile_simp) timer.stop(), timer.gc += timer.cpuTime();
 }
 
-void ParaFROST::newBeginning() 
+void Solver::newBeginning() 
 {
 	assert(opts.sigma_en || opts.sigma_live_en);
 	assert(wt.empty());

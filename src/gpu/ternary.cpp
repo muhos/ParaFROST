@@ -17,7 +17,7 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 **********************************************************************************/
 
 #include "solve.h"
-using namespace pFROST;
+using namespace ParaFROST;
 
 inline bool SCORS_CMP::operator () (const uint32& a, const uint32& b) const {
     const double as = solver->livescore(a), bs = solver->livescore(b);
@@ -26,7 +26,7 @@ inline bool SCORS_CMP::operator () (const uint32& a, const uint32& b) const {
     return a > b;
 }
 
-inline bool ParaFROST::findBinary(uint32 first, uint32 second) 
+inline bool Solver::findBinary(uint32 first, uint32 second) 
 {
     assert(wot.size());
     assert(active(first));
@@ -46,7 +46,7 @@ inline bool ParaFROST::findBinary(uint32 first, uint32 second)
     return false;
 }
 
-inline bool ParaFROST::findTernary(uint32 first, uint32 second, uint32 third)
+inline bool Solver::findTernary(uint32 first, uint32 second, uint32 third)
 {
     assert(wot.size());
     assert(active(first));
@@ -89,7 +89,7 @@ inline bool ParaFROST::findTernary(uint32 first, uint32 second, uint32 third)
     return findBinary(second, third);
 }
 
-bool ParaFROST::hyper3Resolve(CLAUSE& pos, CLAUSE& neg, const uint32& p)
+bool Solver::hyper3Resolve(CLAUSE& pos, CLAUSE& neg, const uint32& p)
 {
     CHECKLIT(p);
     assert(pos.size() == 3), assert(neg.size() == 3);
@@ -127,7 +127,7 @@ bool ParaFROST::hyper3Resolve(CLAUSE& pos, CLAUSE& neg, const uint32& p)
     return true;
 }
 
-void ParaFROST::ternaryResolve(const uint32& p, const uint64& limit) 
+void Solver::ternaryResolve(const uint32& p, const uint64& limit) 
 {
     CHECKLIT(p);
     WOL& poss = wot[p], &negs = wot[NEG(p)];
@@ -171,7 +171,7 @@ void ParaFROST::ternaryResolve(const uint32& p, const uint64& limit)
     }
 }
 
-void ParaFROST::scheduleTernary(LIT_ST* use)
+void Solver::scheduleTernary(LIT_ST* use)
 {
     assert(vschedule.empty());
     VSTATE* states = sp->vstate;
@@ -184,7 +184,7 @@ void ParaFROST::scheduleTernary(LIT_ST* use)
         stats.ternary.calls, vschedule.size(), percent(vschedule.size(), maxActive()));
 }
 
-void ParaFROST::attachTernary(BCNF& cnf, LIT_ST* use)
+void Solver::attachTernary(BCNF& cnf, LIT_ST* use)
 {
     LIT_ST* value = sp->value;
     forall_cnf(cnf, i) {
@@ -206,7 +206,7 @@ void ParaFROST::attachTernary(BCNF& cnf, LIT_ST* use)
     }
 }
 
-void ParaFROST::ternarying(const uint64& resolvents_limit, const uint64& checks_limit)
+void Solver::ternarying(const uint64& resolvents_limit, const uint64& checks_limit)
 {
     uint32 scheduled = vschedule.size();
     while (!vschedule.empty()) {
@@ -222,7 +222,7 @@ void ParaFROST::ternarying(const uint64& resolvents_limit, const uint64& checks_
         stats.ternary.calls, processed, percent(processed, vschedule.size()));
 }
 
-void ParaFROST::ternary()
+void Solver::ternary()
 {
     if (!cnfstate) return;
     if (interrupted()) return;
@@ -259,7 +259,7 @@ void ParaFROST::ternary()
     last.ternary.resolvents = 0;
 }
 
-bool ParaFROST::canTernary()
+bool Solver::canTernary()
 {
     return opts.ternary_en && (uint64(maxClauses() << 1) < (stats.searchticks + opts.ternary_min_eff));
 }

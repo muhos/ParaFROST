@@ -24,7 +24,7 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 #include "wolfsort.h"
 #include "radixsort.h"
 
-namespace pFROST {
+namespace ParaFROST {
 
 #define INSORT_THR 20
 #define RSORT_THR 800

@@ -20,9 +20,9 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 #include "simplify.h"
 #include "histogram.h"
 
-using namespace pFROST;
+using namespace ParaFROST;
 
-void ParaFROST::varReorder()
+void Solver::varReorder()
 {
 	PFLOGN2(2, " Finding eligible variables for LCVE..");
 	if (opts.profile_simp) timer.pstart();
@@ -43,7 +43,7 @@ void ParaFROST::varReorder()
 	}
 }
 
-bool ParaFROST::LCVE()
+bool Solver::LCVE()
 {
 	// reorder variables
 	varReorder();
@@ -80,7 +80,7 @@ bool ParaFROST::LCVE()
 	return true;
 }
 
-inline void ParaFROST::depFreeze(OL& ol, const uint32& cand, const uint32& p_temp, const uint32& n_temp)
+inline void Solver::depFreeze(OL& ol, const uint32& cand, const uint32& p_temp, const uint32& n_temp)
 {
 	LIT_ST* frozen = sp->frozen;
 	uint32*& frozen_stack = sp->stacktail;

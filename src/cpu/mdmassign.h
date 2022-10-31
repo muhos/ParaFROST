@@ -21,7 +21,7 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 #include "solvertypes.h"
 
-namespace pFROST {
+namespace ParaFROST {
 
 	#define MDM_ASSUME (opts.mdmassume_en && assumptions.size())
 

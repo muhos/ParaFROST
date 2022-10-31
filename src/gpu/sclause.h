@@ -22,7 +22,7 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 #include "definitions.cuh"
 #include "clause.h"
 
-namespace pFROST {
+namespace ParaFROST {
 
 	/*****************************************************/
 	/*  Usage:      abstract clause for GPU simplifier   */

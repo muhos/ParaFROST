@@ -20,43 +20,118 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 #include "dimacs.h"
 #include "control.h"
 
-using namespace pFROST;
+using namespace ParaFROST;
 
-bool ParaFROST::parser() 
+bool Solver::parser() 
 {
 	FAULT_DETECTOR;
 	struct stat st;
-	if (!canAccess(formula.path.c_str(), st)) PFLOGE("cannot access the input file");
+	bool readfile = canAccess(formula.path.c_str(), st);
 	const uint64 fsz = formula.size = st.st_size;
-	PFLOG2(1, " Parsing CNF file \"%s%s%s\" (size: %s%lld MB%s)",
-		CREPORTVAL, formula.path.c_str(), CNORMAL, CREPORTVAL, ratio(fsz, uint64(MBYTE)), CNORMAL);
+	if (readfile)
+		PFLOG2(1, " Parsing CNF file \"%s%s%s\" (size: %s%lld MB%s)",
+			CREPORTVAL, formula.path.c_str(), CNORMAL, CREPORTVAL, ratio(fsz, uint64(MBYTE)), CNORMAL);
+	else {
+		formula.size = st.st_size = 0;
+		formula.path.assign("stdin");
+		PFLOG2(1, " Reading DIMACS from \"%sstdin%s\"...", CREPORTVAL, CNORMAL);
+	}
 	timer.start();
-#if defined(__linux__) || defined(__CYGWIN__)
-	int fd = open(formula.path.c_str(), O_RDONLY, 0);
-	if (fd == -1) PFLOGE("cannot open input file");
-	void* buffer = mmap(NULL, fsz, PROT_READ, MAP_PRIVATE, fd, 0);
-	char* str = (char*)buffer;
-#else
-	ifstream inputFile;
-	inputFile.open(formula.path, ifstream::in);
-	if (!inputFile.is_open()) PFLOGE("cannot open input file");
-	char* buffer = pfcalloc<char>(fsz + 1), * str = buffer;
-	inputFile.read(buffer, fsz);
-	buffer[fsz] = '\0';
-#endif
 	Lits_t in_c, org;
-	in_c.reserve(INIT_CAP);
-	org.reserve(INIT_CAP);
-	PFLMEMCALL(this, 2);
-	char* eof = str + fsz;
-	while (str < eof) {
-		eatWS(str);
-		if (*str == '\0' || *str == '0' || *str == '%') break;
-		if (*str == 'c') eatLine(str);
-		else if (*str == 'p') {
-			if (!eq(str, "p cnf")) PFLOGE("header has wrong format");
+	if (readfile) {
+		char* str = NULL;
+#if defined(__linux__) || defined(__CYGWIN__)
+		int fd = open(formula.path.c_str(), O_RDONLY, 0);
+		if (fd == -1) PFLOGE("cannot open input file");
+		void* buffer = mmap(NULL, fsz, PROT_READ, MAP_PRIVATE, fd, 0);
+		str = (char*) buffer;
+#else
+		ifstream inputFile;
+		inputFile.open(formula.path, ifstream::in);
+		if (!inputFile.is_open()) PFLOGE("cannot open input file");
+		char* buffer = pfcalloc<char>(fsz + 1);
+		str = buffer;
+		inputFile.read(buffer, fsz);
+		buffer[fsz] = '\0';
+#endif
+		in_c.reserve(INIT_CAP);
+		org.reserve(INIT_CAP);
+		char* eof = str + fsz;
+		while (str < eof) {
+			eatWS(str);
+			if (*str == '\0' || *str == '0' || *str == '%') break;
+			if (*str == 'c') eatLine(str);
+			else if (*str == 'p') {
+				if (!eq(str, "p cnf")) PFLOGE("header has wrong format");
+				uint32 sign = 0;
+				inf.orgVars = toInteger(str, sign);
+				if (!opts.parseincr_en) {
+					inf.unassigned = inf.maxVar = inf.orgVars;
+					inf.nDualVars = V2L(inf.orgVars + 1);
+				}
+				if (sign) PFLOGE("number of variables in header is negative");
+				if (inf.orgVars == 0) PFLOGE("zero number of variables in header");
+				if (inf.orgVars >= INT_MAX - 1) PFLOGE("number of variables not supported");
+				inf.nOrgCls = toInteger(str, sign);
+				if (sign) PFLOGE("number of clauses in header is negative");
+				if (inf.nOrgCls == 0) PFLOGE("zero number of clauses in header");
+				PFLOG2(1, " Found header %s%d %d%s", CREPORTVAL, inf.orgVars, inf.nOrgCls, CNORMAL);
+				assert(orgs.empty());
+				if (!opts.parseincr_en) {
+					allocSolver();
+					initQueue();
+					initHeap();
+					initVars();
+					assert(vorg.size() == inf.maxVar + 1);
+					model.init(vorg);
+					if (opts.proof_en)
+						proof.init(sp, vorg);
+				}
+			}
+			else if (!toClause(in_c, org, str)) return false;
+			else if (opts.parseincr_en) {
+				incremental = true;
+				uint32 v = 0, s = 0;
+				while ((v = toInteger(str, s)) != 0) {
+					while (v > inf.maxVar) iadd();
+					org.push(V2DEC(v, s));
+				}
+				if (!itoClause(in_c, org)) return false;
+			}
+		}
+#if defined(__linux__) || defined(__CYGWIN__)
+		if (munmap(buffer, fsz) != 0) PFLOGE("cannot clean input file %s mapping", formula.path.c_str());
+		close(fd);
+#else
+		delete[] buffer;
+		inputFile.close();
+#endif
+	}
+	else {
+		in_c.reserve(INIT_CAP);
+		org.reserve(INIT_CAP);
+		int ch;
+		formula.eatComment(ch);
+		// read CNF header
+		if (ch != 'p') 
+			PFLOGE("expected 'c' or 'p'");
+		ch = formula.get();
+		if (!isSpace(ch))
+			PFLOGE("expected space after 'p'");
+		else 
+			formula.eatWS(ch);
+		if (ch == 'c') {
+			if ((ch = formula.get()) != 'n') 
+				PFLOGE("expected 'n' after 'p c'");
+			if ((ch = formula.get()) != 'f') 
+				PFLOGE("expected 'f' after 'p cn'");
+			ch =  formula.get();
+			if (!isSpace(ch)) 
+				PFLOGE("expected space after 'p cnf'");
+			formula.eatWS(ch);
+			if (isSpace(ch)) PFLOGE("expected digit after 'p cnf '");
 			uint32 sign = 0;
-			inf.orgVars = toInteger(str, sign);
+			inf.orgVars = formula.toInteger(ch, sign);
 			if (!opts.parseincr_en) {
 				inf.unassigned = inf.maxVar = inf.orgVars;
 				inf.nDualVars = V2L(inf.orgVars + 1);
@@ -64,9 +139,19 @@ bool ParaFROST::parser()
 			if (sign) PFLOGE("number of variables in header is negative");
 			if (inf.orgVars == 0) PFLOGE("zero number of variables in header");
 			if (inf.orgVars >= INT_MAX - 1) PFLOGE("number of variables not supported");
-			inf.nOrgCls = toInteger(str, sign);
+			if (!isSpace(ch)) 
+				PFLOGE("expected space after 'p cnf %d'", inf.orgVars);
+			formula.eatWS(ch);
+			if (!isDigit(ch)) 
+				PFLOGE("expected digit after 'p cnf %d '", inf.orgVars);
+			inf.nOrgCls = formula.toInteger(ch, sign);
 			if (sign) PFLOGE("number of clauses in header is negative");
 			if (inf.nOrgCls == 0) PFLOGE("zero number of clauses in header");
+			while (ch != '\n') {
+				if (!isSpace(ch))
+					PFLOGE("expected newline after 'p cnf %d %d'", inf.orgVars, inf.nOrgCls);
+				ch = formula.get();
+			}
 			PFLOG2(1, " Found header %s%d %d%s", CREPORTVAL, inf.orgVars, inf.nOrgCls, CNORMAL);
 			assert(orgs.empty());
 			if (!opts.parseincr_en) {
@@ -76,28 +161,27 @@ bool ParaFROST::parser()
 				initVars();
 				assert(vorg.size() == inf.maxVar + 1);
 				model.init(vorg);
-				if (opts.proof_en) 
+				if (opts.proof_en)
 					proof.init(sp, vorg);
-			}
+			}		
 		}
-		else if (!toClause(in_c, org, str)) return false;
-		else if (opts.parseincr_en) {
-			incremental = true;
-			uint32 v = 0, s = 0;
-			while ((v = toInteger(str, s)) != 0) {
-				while (v > inf.maxVar) iadd();
-				org.push(V2DEC(v, s));
+		else
+			PFLOGE("expected 'c' after 'p '");
+		// now read clauses
+		while ((ch = formula.get()) != EOF) {
+			if (isSpace(ch)) continue;
+			else if (!toClause(in_c, org, ch)) return false;
+			else if (opts.parseincr_en) {
+				incremental = true;
+				uint32 v = 0, s = 0;
+				while ((v = formula.toInteger(ch, s)) != 0) {
+					while (v > inf.maxVar) iadd();
+					org.push(V2DEC(v, s));
+				}
+				if (!itoClause(in_c, org)) return false;
 			}
-			if (!itoClause(in_c, org)) return false;
 		}
 	}
-#if defined(__linux__) || defined(__CYGWIN__)
-	if (munmap(buffer, fsz) != 0) PFLOGE("cannot clean input file %s mapping", formula.path.c_str());
-	close(fd);
-#else
-	delete[] buffer;
-	inputFile.close();
-#endif
 	assert(stats.clauses.original == orgs.size());
 	assert(orgs.size() <= inf.nOrgCls);
 	orgs.shrinkCap();
@@ -118,7 +202,7 @@ bool ParaFROST::parser()
 	return true;
 }
 
-bool ParaFROST::toClause(Lits_t& c, Lits_t& org, char*& str)
+bool Solver::toClause(Lits_t& c, Lits_t& org, char*& str)
 {
 	assert(c.empty());
 	assert(org.empty());
@@ -148,7 +232,69 @@ bool ParaFROST::toClause(Lits_t& c, Lits_t& org, char*& str)
 	else {
 		if (org.empty()) { 
 			if (opts.proof_en) proof.addEmpty();
+			PFLOG2(1, "  Found empty clause");
 			return false; 
+		}
+		int newsize = c.size();
+		if (newsize == 1) {
+			const uint32 unit = *c;
+			CHECKLIT(unit);
+			LIT_ST val = sp->value[unit];
+			if (UNASSIGNED(val)) enqueueUnit(unit), formula.units++;
+			else if (!val) return false;
+		}
+		else if (orgs.size() + 1 > inf.nOrgCls) PFLOGE("too many clauses");
+		else if (newsize) {
+			if (newsize == 2) formula.binaries++;
+			else if (newsize == 3) formula.ternaries++;
+			else assert(newsize > 3), formula.large++;
+			if (newsize > formula.maxClauseSize)
+				formula.maxClauseSize = newsize;
+			newClause(c, false);
+		}
+		if (opts.proof_en && newsize < org.size()) {
+			proof.addClause(c);
+			proof.deleteClause(org);
+			org.clear();
+		}
+	}
+	c.clear(), org.clear();
+	return true;
+}
+
+bool Solver::toClause(Lits_t& c, Lits_t& org, int& ch)
+{
+	assert(c.empty());
+	assert(org.empty());
+	uint32 v = 0, s = 0;
+	bool satisfied = false;
+	while ((v = formula.toInteger(ch, s)) != 0) {
+		formula.eatWS(ch);
+		if (v > inf.maxVar) PFLOGE("too many variables");
+		uint32 lit = V2DEC(v, s);
+		CHECKLIT(lit);
+		org.push(lit);
+		// checking literal
+		LIT_ST marker = l2marker(lit);
+		if (UNASSIGNED(marker)) {
+			markLit(lit);
+			LIT_ST val = sp->value[lit];
+			if (UNASSIGNED(val)) c.push(lit);
+			else if (val) satisfied = true;
+		}
+		else if (marker != SIGN(lit)) satisfied = true; // tautology
+	}
+	forall_clause(org, k) {
+		unmarkLit(*k);
+	}
+	if (satisfied) {
+		if (opts.proof_en) proof.deleteClause(org);
+	}
+	else {
+		if (org.empty()) {
+			if (opts.proof_en) proof.addEmpty();
+			PFLOG2(1, "  Found empty clause");
+			return false;
 		}
 		int newsize = c.size();
 		if (newsize == 1) {

@@ -17,9 +17,9 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 **********************************************************************************/
 
 #include "solve.h"
-using namespace pFROST;
+using namespace ParaFROST;
 
-inline int ParaFROST::calcLBD(CLAUSE& c) 
+inline int Solver::calcLBD(CLAUSE& c) 
 {
 	int lbd = 0;
 	if (c.binary()) lbd = (l2dl(c[0]) != l2dl(c[1])) + 1;
@@ -36,7 +36,7 @@ inline int ParaFROST::calcLBD(CLAUSE& c)
 	return lbd;
 }
 
-inline void	ParaFROST::bumpClause(CLAUSE& c)
+inline void	Solver::bumpClause(CLAUSE& c)
 {
 	assert(c.learnt());
 	assert(c.size() > 2);
@@ -56,7 +56,7 @@ inline void	ParaFROST::bumpClause(CLAUSE& c)
 	else if (used && old_lbd <= opts.lbd_tier2) c.initTier2();
 }
 
-inline void	ParaFROST::analyzeLit(const uint32& lit, int& track, int& size)
+inline void	Solver::analyzeLit(const uint32& lit, int& track, int& size)
 {
 	CHECKLIT(lit);
 	assert(isFalse(lit));
@@ -83,7 +83,7 @@ inline void	ParaFROST::analyzeLit(const uint32& lit, int& track, int& size)
 	}
 }
 
-inline bool ParaFROST::analyzeReason(const C_REF& ref, const uint32& parent, int& track) 
+inline bool Solver::analyzeReason(const C_REF& ref, const uint32& parent, int& track) 
 {
 	CHECKLIT(parent);
 	CLAUSE& reason = cm[ref];
@@ -125,7 +125,7 @@ inline bool ParaFROST::analyzeReason(const C_REF& ref, const uint32& parent, int
 	return false;
 }
 
-inline void ParaFROST::strengthenOTF(CLAUSE& c, const C_REF& ref, const uint32& self)
+inline void Solver::strengthenOTF(CLAUSE& c, const C_REF& ref, const uint32& self)
 {
 	CHECKLIT(self);
 	assert(c.size() > 2);
@@ -171,7 +171,7 @@ inline void ParaFROST::strengthenOTF(CLAUSE& c, const C_REF& ref, const uint32& 
 	}
 }
 
-bool ParaFROST::finduip()
+bool Solver::finduip()
 {
 	assert(UNSOLVED(cnfstate));
 	assert(conflict != NOREF);

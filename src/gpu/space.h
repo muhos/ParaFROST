@@ -23,7 +23,7 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 #include "definitions.h"
 #include "vstate.h"
 
-namespace pFROST {
+namespace ParaFROST {
 	/*****************************************************/
 	/*  Usage:    Information of search space            */
 	/*  Dependency: none                                 */

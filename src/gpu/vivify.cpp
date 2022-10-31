@@ -17,7 +17,7 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 **********************************************************************************/
 
 #include "solve.h"
-using namespace pFROST;
+using namespace ParaFROST;
 
 // In clauses scheduling, binary clauses are also considered
 // for histogram but ignored in the actual vivification
@@ -53,7 +53,7 @@ struct VIVIFY_WORSE_CMP {
 	}
 };
 
-void ParaFROST::sortviv(BCNF& schedule)
+void Solver::sortviv(BCNF& schedule)
 {
 	if (schedule.empty()) return;
 	HIST_MCV_CMP clauseKey(vhist);
@@ -64,7 +64,7 @@ void ParaFROST::sortviv(BCNF& schedule)
 	Sort(schedule.data(), schedule.size(), VIVIFY_WORSE_CMP(cm, clauseKey));
 }
 
-bool ParaFROST::analyzeVivify(CLAUSE& cand, bool& original)
+bool Solver::analyzeVivify(CLAUSE& cand, bool& original)
 {
 	assert(learntC.empty());
 	assert(analyzed.empty());
@@ -163,7 +163,7 @@ bool ParaFROST::analyzeVivify(CLAUSE& cand, bool& original)
 	return candsubsumed;
 }
 
-bool ParaFROST::learnVivify(CLAUSE& cand, const C_REF& cref, const int& nonFalse, const bool& original)
+bool Solver::learnVivify(CLAUSE& cand, const C_REF& cref, const int& nonFalse, const bool& original)
 {
 	assert(conflict < NOREF);
 	assert(nonFalse > 2);
@@ -215,7 +215,7 @@ bool ParaFROST::learnVivify(CLAUSE& cand, const C_REF& cref, const int& nonFalse
 	return success;
 }
 
-bool ParaFROST::vivifyClause(const C_REF& cref)
+bool Solver::vivifyClause(const C_REF& cref)
 {
 	assert(UNSOLVED(cnfstate));
 	CLAUSE* candptr = cm.clause(cref);
@@ -344,7 +344,7 @@ bool ParaFROST::vivifyClause(const C_REF& cref)
 	return success;
 }
 
-void ParaFROST::schedule2viv(BCNF& schedule, const bool& tier2, const bool& learnt)
+void Solver::schedule2viv(BCNF& schedule, const bool& tier2, const bool& learnt)
 {
 	int lowlbd = 0, highlbd = 0;
 	if (tier2) { lowlbd = opts.lbd_tier1 + 1; highlbd = opts.lbd_tier2; }
@@ -407,7 +407,7 @@ void ParaFROST::schedule2viv(BCNF& schedule, const bool& tier2, const bool& lear
 		stats.probe.calls, scheduled, ctype, percent(scheduled, learnt ? learnts.size() : orgs.size()));
 }
 
-void ParaFROST::vivifying(const CL_ST& type)
+void Solver::vivifying(const CL_ST& type)
 {
 	assert(!DL());
 	assert(sp->propagated == trail.size());
@@ -450,7 +450,7 @@ void ParaFROST::vivifying(const CL_ST& type)
 		percent(vivified, candidates), candidates);
 }
 
-void ParaFROST::vivify()
+void Solver::vivify()
 {
 	if (!cnfstate) return;
 	assert(probed);
@@ -465,7 +465,7 @@ void ParaFROST::vivify()
 	printStats(1, 'v', CVIOLET5);
 }
 
-bool ParaFROST::canVivify()
+bool Solver::canVivify()
 {
 	if (!opts.vivify_en) return false;
 	if (!stats.clauses.learnt) return false;

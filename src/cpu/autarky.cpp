@@ -18,7 +18,7 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 #include "solve.h"
 
-using namespace pFROST;
+using namespace ParaFROST;
 
 // Autartic variables here are eliminated but 
 // treated as frozen variables and get values
@@ -26,7 +26,7 @@ using namespace pFROST;
 // had to be made in variable mapping though
 // to make this acceptable
 
-uint32 ParaFROST::useAutarky(LIT_ST* autarkies)
+uint32 Solver::useAutarky(LIT_ST* autarkies)
 {
 	uint32 eliminated = 0;
 	forall_variables(v) {
@@ -42,7 +42,7 @@ uint32 ParaFROST::useAutarky(LIT_ST* autarkies)
 	return eliminated;
 }
 
-uint32 ParaFROST::autarkReasoning(LIT_ST* autarkies)
+uint32 Solver::autarkReasoning(LIT_ST* autarkies)
 {
 	assert(analyzed.empty());
 	const LIT_ST* values = sp->value;
@@ -148,7 +148,7 @@ uint32 ParaFROST::autarkReasoning(LIT_ST* autarkies)
 	return assigned;
 }
 
-void ParaFROST::autarky()
+void Solver::autarky()
 {
 	if (!opts.autarky_en || incremental) return;
 	if (!UNSOLVED(cnfstate)) return;
@@ -171,7 +171,7 @@ void ParaFROST::autarky()
 	printStats(eliminated, 'k', CCYAN);
 }
 
-void ParaFROST::filterAutarky()
+void Solver::filterAutarky()
 {
 	const VSTATE* states = sp->vstate;
 	forall_literal(lit) {
@@ -198,7 +198,7 @@ void ParaFROST::filterAutarky()
 	}
 }
 
-uint32 ParaFROST::propAutarky(const LIT_ST* values, LIT_ST* autarkies)
+uint32 Solver::propAutarky(const LIT_ST* values, LIT_ST* autarkies)
 {
 	assert(!DL());
 	uint32 unassigned = 0;
@@ -238,7 +238,7 @@ uint32 ParaFROST::propAutarky(const LIT_ST* values, LIT_ST* autarkies)
 	return unassigned;
 }
 
-inline void ParaFROST::cancelAutark(const bool& add, const uint32& lit, LIT_ST* autarkies)
+inline void Solver::cancelAutark(const bool& add, const uint32& lit, LIT_ST* autarkies)
 {
 	const uint32 flit = FLIP(lit);
 	assert(autarkies[flit] > 0);
@@ -247,7 +247,7 @@ inline void ParaFROST::cancelAutark(const bool& add, const uint32& lit, LIT_ST* 
 	PFLOG2(4, "   autarky %d cancelled", l2i(flit));
 }
 
-inline uint32 ParaFROST::propAutarkClause(const bool& add, const C_REF& ref, CLAUSE& c, const LIT_ST* values, LIT_ST* autarkies)
+inline uint32 Solver::propAutarkClause(const bool& add, const C_REF& ref, CLAUSE& c, const LIT_ST* values, LIT_ST* autarkies)
 {
 	assert(c.size() > 2);
 	assert(c.original());

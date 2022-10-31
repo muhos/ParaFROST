@@ -25,11 +25,11 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 #include "modernalloc.cuh"
 
 using namespace mgpu;
-using namespace pFROST;
+using namespace ParaFROST;
 
 MCA context(0, 0); // for segmented sort
 
-void ParaFROST::sortOT() {
+void Solver::sortOT() {
 	assert(cumm.occurs());
 	if (gopts.profile_gpu) cutimer->start();
 	const int offset = 3; // first three elements in occurs = zero

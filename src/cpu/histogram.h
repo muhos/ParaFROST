@@ -18,7 +18,7 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 #include "definitions.h"
 
-namespace pFROST {
+namespace ParaFROST {
 
 	#define hist_score(V,OCCURS) (OCCURS + V)->ps * (OCCURS + V)->ns
 

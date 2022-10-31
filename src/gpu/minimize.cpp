@@ -18,9 +18,9 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 #include "solve.h"
 
-using namespace pFROST;
+using namespace ParaFROST;
 
-inline int ParaFROST::calcLBD()
+inline int Solver::calcLBD()
 {
 	assert(!learntC.empty());
 	if (learntC.size() == 1) return 0;
@@ -39,7 +39,7 @@ inline int ParaFROST::calcLBD()
 	}
 }
 
-void ParaFROST::minimizebin()
+void Solver::minimizebin()
 {
 	const uint32 uip = FLIP(learntC[0]);
 	const uint64 unmarker = stats.marker++, marker = stats.marker;
@@ -77,7 +77,7 @@ void ParaFROST::minimizebin()
 	}
 }
 
-bool ParaFROST::minimize(const uint32& lit, const int& depth)
+bool Solver::minimize(const uint32& lit, const int& depth)
 {
 	CHECKLIT(lit);
 	if (depth >= opts.minimize_depth) return false;
@@ -103,7 +103,7 @@ bool ParaFROST::minimize(const uint32& lit, const int& depth)
 	return gone;
 }
 
-void ParaFROST::minimize()
+void Solver::minimize()
 {
 	assert(learntC.size() > 1);
 	assert(minimized.empty());

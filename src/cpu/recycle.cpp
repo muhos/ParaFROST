@@ -17,9 +17,9 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 **********************************************************************************/
 
 #include "solve.h"
-using namespace pFROST;
+using namespace ParaFROST;
 
-inline void ParaFROST::moveClause(C_REF& r, CMM& newBlock)
+inline void Solver::moveClause(C_REF& r, CMM& newBlock)
 {
 	assert(r < cm.size());
 	CLAUSE& c = cm[r];
@@ -29,7 +29,7 @@ inline void ParaFROST::moveClause(C_REF& r, CMM& newBlock)
 	c.set_ref(r);
 }
 
-inline void	ParaFROST::moveWatches(WL& ws, CMM& new_cm)
+inline void	Solver::moveWatches(WL& ws, CMM& new_cm)
 {
 	forall_watches(ws, w) {
 		moveClause(w->ref, new_cm);
@@ -37,7 +37,7 @@ inline void	ParaFROST::moveWatches(WL& ws, CMM& new_cm)
 	ws.shrinkCap();
 }
 
-inline void	ParaFROST::recycleWL(const uint32& lit)
+inline void	Solver::recycleWL(const uint32& lit)
 {
 	CHECKLIT(lit);
 	WL& ws = wt[lit], hypers;
@@ -63,7 +63,7 @@ inline void	ParaFROST::recycleWL(const uint32& lit)
 	hypers.clear(true);
 }
 
-void ParaFROST::markReasons() 
+void Solver::markReasons() 
 {
 	const VSTATE* states = sp->vstate;
 	const C_REF* sources = sp->source;
@@ -80,7 +80,7 @@ void ParaFROST::markReasons()
 	}
 }
 
-void ParaFROST::unmarkReasons() 
+void Solver::unmarkReasons() 
 {
 	const VSTATE* states = sp->vstate;
 	const C_REF* sources = sp->source;
@@ -97,7 +97,7 @@ void ParaFROST::unmarkReasons()
 	}
 }
 
-void ParaFROST::recycleWT() 
+void Solver::recycleWT() 
 {
 	forall_variables(v) {
 		uint32 p = V2L(v), n = NEG(p);
@@ -114,7 +114,7 @@ void ParaFROST::recycleWT()
 	}
 }
 
-void ParaFROST::recycle(CMM& new_cm)
+void Solver::recycle(CMM& new_cm)
 {
 	reduced.clear(true);
 	analyzed.clear(true);
@@ -143,7 +143,7 @@ void ParaFROST::recycle(CMM& new_cm)
 	orgs.shrinkCap();
 }
 
-void ParaFROST::recycle() 
+void Solver::recycle() 
 {
 	assert(sp->propagated == trail.size());
 	assert(conflict == NOREF);
@@ -167,7 +167,7 @@ void ParaFROST::recycle()
 	}
 }
 
-void ParaFROST::filter(BCNF& cnf) 
+void Solver::filter(BCNF& cnf) 
 {
 	if (cnf.empty()) return;
 	C_REF* j = cnf;
@@ -180,7 +180,7 @@ void ParaFROST::filter(BCNF& cnf)
 	cnf.resize(uint32(j - cnf));
 }
 
-void ParaFROST::filter(BCNF& cnf, CMM& new_cm)
+void Solver::filter(BCNF& cnf, CMM& new_cm)
 {
 	if (cnf.empty()) return;
 	C_REF* j = cnf;

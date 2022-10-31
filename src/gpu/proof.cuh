@@ -22,7 +22,7 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 #include "proof.h"
 #include "memory.cuh"
 
-namespace pFROST {
+namespace ParaFROST {
 
 	class cuMM;
 	class PROOF;

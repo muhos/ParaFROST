@@ -23,9 +23,9 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 #include "redundancy.h"
 #include "subsume.h" 
 
-using namespace pFROST;
+using namespace ParaFROST;
 
-void ParaFROST::bve()
+void Solver::bve()
 {
 	assert(hc_isize == sizeof(uint32));
 	assert(hc_scsize == sizeof(SCLAUSE));
@@ -143,11 +143,11 @@ void ParaFROST::bve()
 	if (opts.profile_simp) timer.pstop(), timer.ve += timer.pcpuTime();
 }
 
-inline void ParaFROST::xsubstitute(const uint32& x, Lits_t& out_c)
+inline void Solver::xsubstitute(const uint32& x, Lits_t& out_c)
 {
 	CHECKVAR(x);
 	PFLOG2(4, " Substituting(%d):", x);
-	PFLOCCURS(pfrost, 4, x);
+	PFLOCCURS(solver, 4, x);
 	uint32 dx = V2L(x), fx = NEG(dx);
 	if (ot[dx].size() > ot[fx].size()) swap(dx, fx);
 	OL& me = ot[dx], & other = ot[fx];
@@ -167,11 +167,11 @@ inline void ParaFROST::xsubstitute(const uint32& x, Lits_t& out_c)
 	}
 }
 
-inline void ParaFROST::xresolve(const uint32& x, Lits_t& out_c)
+inline void Solver::xresolve(const uint32& x, Lits_t& out_c)
 {
 	CHECKVAR(x);
 	PFLOG2(4, " Resolving(%d):", x);
-	PFLOCCURS(pfrost, 4, x);
+	PFLOCCURS(solver, 4, x);
 	uint32 dx = V2L(x), fx = NEG(dx);
 	if (ot[dx].size() > ot[fx].size()) swap(dx, fx);
 	OL& me = ot[dx], & other = ot[fx];
@@ -187,7 +187,7 @@ inline void ParaFROST::xresolve(const uint32& x, Lits_t& out_c)
 	}
 }
 
-inline void ParaFROST::newResolvent(const Lits_t& resolvent)
+inline void Solver::newResolvent(const Lits_t& resolvent)
 {
 	const int size = resolvent.size();
 	assert(size);

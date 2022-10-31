@@ -17,9 +17,9 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 **********************************************************************************/
 
 #include "solve.h"
-using namespace pFROST;
+using namespace ParaFROST;
 
-void ParaFROST::bumpShrunken(CLAUSE& c)
+void Solver::bumpShrunken(CLAUSE& c)
 {
 	assert(c.learnt());
 	assert(c.size() > 1);
@@ -34,7 +34,7 @@ void ParaFROST::bumpShrunken(CLAUSE& c)
 	PFLCLAUSE(4, c, " Bumping shrunken clause with LBD %d ", new_lbd);
 }
 
-CL_ST ParaFROST::rootedTop(CLAUSE& c)
+CL_ST Solver::rootedTop(CLAUSE& c)
 {
 	assert(!DL());
 	assert(!c.deleted());
@@ -50,7 +50,7 @@ CL_ST ParaFROST::rootedTop(CLAUSE& c)
 	return st;
 }
 
-CL_ST ParaFROST::rooted(CLAUSE& c)
+CL_ST Solver::rooted(CLAUSE& c)
 {
 	assert(!c.deleted());
 	CL_ST st = UNDEFINED;
@@ -69,7 +69,7 @@ CL_ST ParaFROST::rooted(CLAUSE& c)
 	return st;
 }
 
-int ParaFROST::removeRooted(CLAUSE& c)
+int Solver::removeRooted(CLAUSE& c)
 {
 	const int* levels = sp->level;
 	uint32* j = c;
@@ -82,7 +82,7 @@ int ParaFROST::removeRooted(CLAUSE& c)
 	return int(c.end() - j);
 }
 
-void ParaFROST::shrinkClause(CLAUSE& c, const int& remLits)
+void Solver::shrinkClause(CLAUSE& c, const int& remLits)
 {
 	assert(remLits >= 0);
 	if (!remLits) return;
@@ -102,7 +102,7 @@ void ParaFROST::shrinkClause(CLAUSE& c, const int& remLits)
 	cm.collectLiterals(remLits);
 }
 
-void ParaFROST::shrinkClause(const C_REF& r)
+void Solver::shrinkClause(const C_REF& r)
 {
 	CLAUSE& c = cm[r];
 	assert(!c.deleted());
@@ -123,7 +123,7 @@ void ParaFROST::shrinkClause(const C_REF& r)
 	shrinkClause(c, removeRooted(c));
 }
 
-bool ParaFROST::shrink()
+bool Solver::shrink()
 {
 	if (sp->simplified >= inf.maxFrozen) return false;
 	sp->simplified = inf.maxFrozen;
@@ -149,7 +149,7 @@ bool ParaFROST::shrink()
 	return true;
 }
 
-void ParaFROST::shrinkTop(const bool& conditional)
+void Solver::shrinkTop(const bool& conditional)
 {
 	if (conditional && sp->simplified >= inf.maxFrozen) return;
 	assert(UNSOLVED(cnfstate));
@@ -172,7 +172,7 @@ void ParaFROST::shrinkTop(const bool& conditional)
 #endif
 }
 
-void ParaFROST::shrink(BCNF& cnf)
+void Solver::shrink(BCNF& cnf)
 {
 	if (cnf.empty()) return;
 	C_REF* j = cnf;
@@ -193,7 +193,7 @@ void ParaFROST::shrink(BCNF& cnf)
 	cnf.resize(uint32(j - cnf));
 }
 
-void ParaFROST::shrinkTop(BCNF& cnf)
+void Solver::shrinkTop(BCNF& cnf)
 {
 	if (cnf.empty()) return;
 	assert(!DL());

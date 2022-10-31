@@ -31,7 +31,7 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 #include "printer.cuh"
 #include "vstate.h"
 
-namespace pFROST {
+namespace ParaFROST {
 	//======================================================//
 	//                GPU Wrappers Declaration              //
 	//======================================================//

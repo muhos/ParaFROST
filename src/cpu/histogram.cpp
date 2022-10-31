@@ -19,9 +19,9 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 #include "solve.h" 
 #include "histogram.h"
 
-using namespace pFROST;
+using namespace ParaFROST;
 
-inline bool ParaFROST::isBinary(const C_REF& r, uint32& first, uint32& second)
+inline bool Solver::isBinary(const C_REF& r, uint32& first, uint32& second)
 {
 	assert(!DL());
 	CLAUSE& c = cm[r];
@@ -46,7 +46,7 @@ inline bool ParaFROST::isBinary(const C_REF& r, uint32& first, uint32& second)
 	return true;
 }
 
-void ParaFROST::histBins(BCNF& cnf)
+void Solver::histBins(BCNF& cnf)
 {
 	forall_cnf(cnf, i) {
 		const C_REF r = *i;
@@ -60,7 +60,7 @@ void ParaFROST::histBins(BCNF& cnf)
 	}
 }
 
-void ParaFROST::histCNF(BCNF& cnf, const bool& reset) 
+void Solver::histCNF(BCNF& cnf, const bool& reset) 
 {
 	if (cnf.empty()) return;
 
@@ -79,7 +79,7 @@ void ParaFROST::histCNF(BCNF& cnf, const bool& reset)
 	}
 }
 
-void ParaFROST::histSimp(SCNF& cnf, const bool& reset) 
+void Solver::histSimp(SCNF& cnf, const bool& reset) 
 {
 	if (cnf.empty()) return;
 

@@ -19,13 +19,13 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 #include "solve.h"
 #include "histogram.h"
 
-using namespace pFROST;
+using namespace ParaFROST;
 
 struct SUBSUME_RANK {
 	uint32 operator () (const CSIZE& a) const { return a.size; }
 };
 
-inline void ParaFROST::strengthen(CLAUSE& c, const uint32& self) {
+inline void Solver::strengthen(CLAUSE& c, const uint32& self) {
 	CHECKLIT(self);
 	assert(c.size() > 2);
 	assert(unassigned(self));
@@ -42,7 +42,7 @@ inline void ParaFROST::strengthen(CLAUSE& c, const uint32& self) {
 	c.initTier3();
 }
 
-inline void	ParaFROST::removeSubsumed(CLAUSE& c, const C_REF& cref, CLAUSE* s) {
+inline void	Solver::removeSubsumed(CLAUSE& c, const C_REF& cref, CLAUSE* s) {
 	assert(s->size() <= c.size());
 	assert(c.size() > 2);
 	if (c.original() && s->learnt()) {
@@ -59,7 +59,7 @@ inline void	ParaFROST::removeSubsumed(CLAUSE& c, const C_REF& cref, CLAUSE* s) {
 	removeClause(c, cref);
 }
 
-inline bool ParaFROST::subsumeCheck(CLAUSE* subsuming, uint32& self)
+inline bool Solver::subsumeCheck(CLAUSE* subsuming, uint32& self)
 {
 	stats.subsume.checks++;
 	assert(!self);
@@ -84,7 +84,7 @@ inline bool ParaFROST::subsumeCheck(CLAUSE* subsuming, uint32& self)
 	return good;
 }
 
-inline CL_ST ParaFROST::subsumeClause(CLAUSE& c, const C_REF& cref)
+inline CL_ST Solver::subsumeClause(CLAUSE& c, const C_REF& cref)
 {
 	assert(!c.deleted());
 	assert(c.size() > 2);
@@ -148,7 +148,7 @@ inline CL_ST ParaFROST::subsumeClause(CLAUSE& c, const C_REF& cref)
 	}
 }
 
-void ParaFROST::schedule2sub(BCNF& src)
+void Solver::schedule2sub(BCNF& src)
 {
 	if (src.empty()) return;
 	const LIT_ST* values = sp->value;
@@ -177,7 +177,7 @@ void ParaFROST::schedule2sub(BCNF& src)
 	}
 }
 
-bool ParaFROST::subsumeAll()
+bool Solver::subsumeAll()
 {
 	if (interrupted()) killSolver();
 	assert(!DL());
@@ -261,7 +261,7 @@ ending:
 	return (subsumed || strengthened);
 }
 
-void ParaFROST::subsume()
+void Solver::subsume()
 {
 	if (!stats.clauses.original && !stats.clauses.learnt) return;
 	rootify();
@@ -277,7 +277,7 @@ void ParaFROST::subsume()
 	printStats(success, 'u', CORANGE1);
 }
 
-void ParaFROST::filterOrg() {
+void Solver::filterOrg() {
 	C_REF* j = learnts;
 	forall_cnf(learnts, i) {
 		const C_REF r = *i;

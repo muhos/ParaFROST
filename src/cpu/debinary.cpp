@@ -17,9 +17,9 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 **********************************************************************************/
 
 #include "solve.h"
-using namespace pFROST;
+using namespace ParaFROST;
 
-void ParaFROST::debinary() {
+void Solver::debinary() {
 	if (!opts.debinary_en) return;
 	if (!cnfstate) return;
 	assert(!DL());

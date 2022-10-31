@@ -21,7 +21,7 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 #include "definitions.h"
 
-namespace pFROST {
+namespace ParaFROST {
 
     // reference: https://doi.org/10.29007/89dw
     struct EMA {

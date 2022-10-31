@@ -22,7 +22,7 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 #include "primitives.cuh"
 #include "printer.cuh"
 
-namespace pFROST {
+namespace ParaFROST {
 
 	#define PROOF_DBG 0
 

@@ -36,14 +36,14 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 #include "simptypes.h"
 #include "dimacs.h"
 
-namespace pFROST {
+namespace ParaFROST {
 	/*****************************************************/
-	/*  Name:     ParaFROST                              */
+	/*  Name:     Solver                              */
 	/*  Usage:    global handler for solver/simplifier   */
 	/*  Scope:    host only                              */
 	/*  Memory:   system memory                          */
 	/*****************************************************/
-	class ParaFROST {
+	class Solver {
 	protected:
 		FORMULA			formula;
 		TIMER			timer;
@@ -135,7 +135,7 @@ namespace pFROST {
 		inline int		calcLBD				();
 		inline void		resetoccurs			();
 		//==============================================
-		inline			~ParaFROST			() { }
+		inline			~Solver			() { }
 		inline void		interrupt			() { intr = true; }
 		inline void		nointerrupt			() { intr = false; }
 		inline void		incDL				() { dlevels.push(trail.size()); }
@@ -147,7 +147,7 @@ namespace pFROST {
 		inline bool		useTarget			() const { return (stable && opts.targetphase_en) || opts.targetonly_en; }
 		inline bool		vsidsOnly			() const { return (stable && opts.vsidsonly_en); }
 		inline bool		vsidsEnabled		() const { return (stable && opts.vsids_en); }
-		inline bool		canPreSigmify		() const { return opts.sigma_en; }
+		inline bool		canPreSigmify		() const { return opts.sigma_en && stats.clauses.original; }
 		inline bool		canRephase			() const { return opts.rephase_en && stats.conflicts > limit.rephase; }
 		inline bool		canReduce			() const { return opts.reduce_en && stats.clauses.learnt && stats.conflicts >= limit.reduce; }
 		inline bool		canCollect			() const { return cm.garbage() > (cm.size() * opts.gc_perc); }
@@ -569,6 +569,7 @@ namespace pFROST {
 		void	newClause			(SCLAUSE&);
 		C_REF	newClause			(const Lits_t&, const bool&);
 		void	newClause			(const C_REF&, CLAUSE&, const bool&);
+		bool	toClause			(Lits_t&, Lits_t&, int&);
 		bool	toClause			(Lits_t&, Lits_t&, char*&);
 		void	backtrack			(const int& jmplevel = 0);
 		void	recycle				(CMM&);
@@ -668,7 +669,7 @@ namespace pFROST {
 		void	map					(WL&);
 		void	map					(WT&);
 		void	map					(const bool& sigmified = false);
-				ParaFROST			(const string&);
+				Solver			(const string&);
 		//==========================================//
 		//                Simplifier                //
 		//==========================================//
@@ -843,7 +844,7 @@ namespace pFROST {
 		Vec1D			ilevel;
 		Lits_t			assumptions, iconflict;
 	public:
-						ParaFROST			();
+						Solver			();
 		void			iunassume			();
 		void			iallocSpace			();
 		uint32			iadd			    ();
@@ -890,7 +891,7 @@ namespace pFROST {
 		void printLearnt		();
 		
 	};
-	extern ParaFROST* pfrost;
+	extern Solver* solver;
 }
 
 #endif 

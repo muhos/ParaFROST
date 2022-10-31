@@ -22,7 +22,7 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 #include "space.h"
 #include "watch.h"
 
-namespace pFROST {
+namespace ParaFROST {
 	
 	typedef Vec<C_REF> BCNF;
 	typedef Vec<WATCH, int> WL;

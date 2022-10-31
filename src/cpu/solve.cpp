@@ -19,14 +19,14 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 #include "solve.h" 
 #include "control.h"
 
-namespace pFROST {
+namespace ParaFROST {
 	CNF_INFO inf;
-	ParaFROST* pfrost = NULL;
+	Solver* solver = NULL;
 }
 
-using namespace pFROST;
+using namespace ParaFROST;
 
-ParaFROST::ParaFROST(const string& _path) :
+Solver::Solver(const string& _path) :
 	formula(_path)
 	, sp(NULL)
 	, vsids(VSIDS_CMP(activity))
@@ -45,11 +45,12 @@ ParaFROST::ParaFROST(const string& _path) :
 	getCPUInfo(stats.sysmem);
 	getBuildInfo();
 	initSolver();
+	PFLRULER('-', RULELEN);
 	if (!parser() || BCP()) { learnEmpty(), killSolver(); }
 	if (opts.parseonly_en) killSolver();
 }
 
-void ParaFROST::allocSolver()
+void Solver::allocSolver()
 {
 	PFLOGN2(2, " Allocating fixed memory for %d variables..", inf.maxVar);
 	assert(sizeof(LIT_ST) == 1);
@@ -69,7 +70,7 @@ void ParaFROST::allocSolver()
 	PFLMEMCALL(this, 2);
 }
 
-void ParaFROST::initSolver()
+void Solver::initSolver()
 {
 	assert(!ORIGINAL && LEARNT && DELETED);
 	assert(FROZEN_M && MELTED_M && SUBSTITUTED_M);
@@ -92,7 +93,7 @@ void ParaFROST::initSolver()
 	}
 }
 
-void ParaFROST::initLimits() 
+void Solver::initLimits() 
 {
 	PFLOG2(2, " Initializing solver limits..");
 	formula.c2v = ratio(double(stats.clauses.original), double(inf.maxVar));
@@ -134,7 +135,7 @@ void ParaFROST::initLimits()
 	PFLOG2(2, " Limits initialized successfully");
 }
 
-void ParaFROST::solve()
+void Solver::solve()
 {
 	FAULT_DETECTOR;
 	timer.start();
@@ -161,7 +162,7 @@ void ParaFROST::solve()
 	wrapup();
 }
 
-void ParaFROST::wrapup() 
+void Solver::wrapup() 
 {
 	if (!quiet_en) { PFLRULER('-', RULELEN); PFLOG0(""); }
 	if (cnfstate == SAT) {

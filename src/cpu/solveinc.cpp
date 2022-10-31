@@ -20,9 +20,9 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 #include "solve.h" 
 #include "version.h"
 
-using namespace pFROST;
+using namespace ParaFROST;
 
-ParaFROST::ParaFROST() :
+Solver::Solver() :
 	  sp(NULL)
 	, vsids(VSIDS_CMP(activity))
 	, vschedule(SCORS_CMP(this))
@@ -37,13 +37,13 @@ ParaFROST::ParaFROST() :
 	, mapped(false)
 	, simpstate(AWAKEN_SUCC)
 {
-	PFNAME("ParaFROST (Parallel Formal Reasoning On Satisfiability)", version());
+	PFNAME("Solver (Parallel Formal Reasoning On Satisfiability)", version());
 	getCPUInfo(stats.sysmem);
 	getBuildInfo();
 	initSolver();
 }
 
-void ParaFROST::iallocSpace()
+void Solver::iallocSpace()
 {
 	imarks.clear(true);
 	if (sp->size() == size_t(inf.maxVar) + 1) return; // avoid allocation if 'maxVar' didn't change
@@ -73,7 +73,7 @@ void ParaFROST::iallocSpace()
 	PFLMEMCALL(this, 2);
 }
 
-void ParaFROST::isolve(Lits_t& assumptions)
+void Solver::isolve(Lits_t& assumptions)
 {
 	timer.start();
 	iallocSpace();

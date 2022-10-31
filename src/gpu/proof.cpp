@@ -19,7 +19,7 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 #include "proof.h"
 #include "sort.h"
 
-using namespace pFROST;
+using namespace ParaFROST;
 
 PROOF::PROOF() :
 	proofFile(NULL)

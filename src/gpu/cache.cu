@@ -21,7 +21,7 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 #include "cache.cuh"
 #include "logging.h"
 
-using namespace pFROST;
+using namespace ParaFROST;
 
 void CACHER::destroy() {
 	for (free_cache_t::iterator i = free_cache.begin(); i != free_cache.end(); i++) {
@@ -43,6 +43,8 @@ void CACHER::destroy() {
 }
 
 void* CACHER::allocate(size_t size) {
+	if (!size) 
+		return NULL;
 	void* p = NULL;
 	free_cache_t::iterator free_block = free_cache.lower_bound(size);
 	// found free block

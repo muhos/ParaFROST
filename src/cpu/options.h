@@ -23,7 +23,7 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 #include "datatypes.h"
 #include "input.h"
 
-namespace pFROST {
+namespace ParaFROST {
 
 	struct OPTION {
 		//==========================================//

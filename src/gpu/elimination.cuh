@@ -26,7 +26,7 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 #include "primitives.cuh"
 #include "options.cuh"
 
-namespace pFROST {
+namespace ParaFROST {
 
 	#define RES_UNBOUNDED 0
 

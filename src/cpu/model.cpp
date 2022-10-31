@@ -19,7 +19,7 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 #include "model.h"
 #include "dimacs.h"
 
-using namespace pFROST;
+using namespace ParaFROST;
 
 void MODEL::printClause(const Lits_t& clause, const bool& printvalues) 
 {

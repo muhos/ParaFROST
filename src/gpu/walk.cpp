@@ -18,7 +18,7 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 #include "solve.h"
 
-using namespace pFROST;
+using namespace ParaFROST;
 
 /**** cannot be touched ****/
 #define WALKBASE  0.5
@@ -69,7 +69,7 @@ inline void WALK::destroy()
 	initial = nclauses = 0;
 }
 
-void ParaFROST::walk()
+void Solver::walk()
 {
 	assert(!DL());
 	assert(UNSOLVED(cnfstate));
@@ -91,7 +91,7 @@ void ParaFROST::walk()
 	if (retrail()) PFLOG2(2, " Propagation after walk proved a contradiction");
 }
 
-void ParaFROST::walkinit()
+void Solver::walkinit()
 {
 	assert(lookup[0] == BREAKMAX);
 	assert(minscore >= 0 && minscore <= BREAKMIN);
@@ -111,7 +111,7 @@ void ParaFROST::walkinit()
 	memset(tracker.value, UNDEFINED, inf.nDualVars);
 }
 
-bool ParaFROST::walkschedule()
+bool Solver::walkschedule()
 {
 	assert(tracker.nclauses == stats.clauses.original);
 	assert(tracker.orgs.size() == tracker.nclauses);
@@ -163,7 +163,7 @@ bool ParaFROST::walkschedule()
 	return true;
 }
 
-void ParaFROST::walkstop()
+void Solver::walkstop()
 {
 	assert(tracker.minimum <= tracker.initial);
 	if (tracker.minimum == tracker.initial) {
@@ -181,7 +181,7 @@ void ParaFROST::walkstop()
 	tracker.destroy();
 }
 
-uint32 ParaFROST::promoteLit()
+uint32 Solver::promoteLit()
 {
 	assert(assumptions.empty());
 	assert(tracker.current == tracker.unsat.size());
@@ -227,7 +227,7 @@ uint32 ParaFROST::promoteLit()
 	return promoted;
 }
 
-uint32 ParaFROST::ipromoteLit()
+uint32 Solver::ipromoteLit()
 {
 	assert(tracker.current == tracker.unsat.size());
 	const uint32 unsatpos = random.irand() % tracker.current;
@@ -272,7 +272,7 @@ uint32 ParaFROST::ipromoteLit()
 	return promoted;
 }
 
-void ParaFROST::walkstep()
+void Solver::walkstep()
 {
 	tracker.flipped++;
 	const uint32 lit = assumptions.empty() ? promoteLit() : ipromoteLit();
@@ -315,7 +315,7 @@ void ParaFROST::walkstep()
 	PFLOG2(4, "  remained %d unsatsified clauses after flipping", tracker.current);
 }
 
-void ParaFROST::walking()
+void Solver::walking()
 {
 	SET_BOUNDS(this, walk_limit, walk, walk.checks, searchticks, 2 * maxClauses());
 	tracker.limit = walk_limit;
@@ -330,7 +330,7 @@ void ParaFROST::walking()
 	PFLOG2(2, " Walk %lld: got minimum %lld unsatisfied clauses after %d flips", stats.walk.calls, stats.walk.minimum, tracker.flipped);
 }
 
-inline void ParaFROST::walkassign()
+inline void Solver::walkassign()
 {
 	const bool targeting = useTarget();
 	const VSTATE* states = sp->vstate;
@@ -366,7 +366,7 @@ inline void ParaFROST::walkassign()
 	}
 }
 
-inline uint32 ParaFROST::breakValue(const uint32& lit)
+inline uint32 Solver::breakValue(const uint32& lit)
 {
 	CHECKLIT(lit);
 	assert(!tracker.value[lit]);
@@ -381,7 +381,7 @@ inline uint32 ParaFROST::breakValue(const uint32& lit)
 	return breaks;
 }
 
-inline void ParaFROST::saveAll(const LIT_ST* values)
+inline void Solver::saveAll(const LIT_ST* values)
 {
 	assert(tracker.trail.empty());
 	assert(tracker.best == NOVAR);
@@ -393,7 +393,7 @@ inline void ParaFROST::saveAll(const LIT_ST* values)
 	tracker.best = 0;
 }
 
-inline void ParaFROST::saveTrail(const LIT_ST* values, const bool& keep)
+inline void Solver::saveTrail(const LIT_ST* values, const bool& keep)
 {
 	uint32* t = tracker.trail, * best = t + tracker.best;
 	for (uint32* k = t; k != best; k++) {
@@ -413,7 +413,7 @@ inline void ParaFROST::saveTrail(const LIT_ST* values, const bool& keep)
 	}
 }
 
-inline bool ParaFROST::popUnsat(const uint32& infoidx, const uint32& unsatidx, Vec<CINFO>& cinfo)
+inline bool Solver::popUnsat(const uint32& infoidx, const uint32& unsatidx, Vec<CINFO>& cinfo)
 {
 	assert(cinfo[infoidx].unsatidx == unsatidx);
 	assert(tracker.current && tracker.current == tracker.unsat.size());
@@ -431,7 +431,7 @@ inline bool ParaFROST::popUnsat(const uint32& infoidx, const uint32& unsatidx, V
 	return false;
 }
 
-inline void ParaFROST::breakClauses(const uint32& lit)
+inline void Solver::breakClauses(const uint32& lit)
 {
 	CHECKLIT(lit);
 	const uint32 negated = FLIP(lit);
@@ -454,7 +454,7 @@ inline void ParaFROST::breakClauses(const uint32& lit)
 	PFLDONE(4, 5);
 }
 
-inline void ParaFROST::makeClauses(const uint32& lit)
+inline void Solver::makeClauses(const uint32& lit)
 {
 	CHECKLIT(lit);
 	assert(tracker.value[lit] > 0);

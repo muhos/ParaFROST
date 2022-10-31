@@ -20,7 +20,7 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 #define __XOR_
 
 #include "simplify.h" 
-using namespace pFROST;
+using namespace ParaFROST;
 
 #if defined(__linux__) || defined(__CYGWIN__) 
 #define COUNTFLIPS(X) while (__builtin_parity(++X)); 
@@ -112,7 +112,7 @@ inline bool find_XOR_gate(const uint32& dx, const int& nOrgCls, OT& ot, Lits_t& 
 		if (ci.original()) {
 			const int size = ci.size();
 			const int arity = size - 1; // XOR arity
-			if (size < 3 || arity > pfrost->opts.xor_max_arity) continue;
+			if (size < 3 || arity > solver->opts.xor_max_arity) continue;
 			// share to out_c
 			copyClause(ci, out_c);
 			// find arity clauses

@@ -17,10 +17,10 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 **********************************************************************************/
 
 #include "solve.h" 
-using namespace pFROST;
+using namespace ParaFROST;
 
 
-void ParaFROST::varOrder()
+void Solver::varOrder()
 {
 	PFLOGN2(2, " Finding eligible decisions at initial round..");
 	histCNF(orgs, true);
@@ -41,7 +41,7 @@ void ParaFROST::varOrder()
 	}
 }
 
-void ParaFROST::eligibleVSIDS()
+void Solver::eligibleVSIDS()
 {
 	PFLOGN2(2, "  finding VSIDS eligible decisions..");
 	stats.mdm.vsids++;
@@ -67,7 +67,7 @@ void ParaFROST::eligibleVSIDS()
 	}
 }
 
-void ParaFROST::eligibleVMFQ()
+void Solver::eligibleVMFQ()
 {
 	PFLOGN2(2, "  finding VMFQ eligible decisions..");
 	stats.mdm.vmtf++;

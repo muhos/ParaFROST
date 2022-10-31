@@ -17,10 +17,10 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 **********************************************************************************/
 
 #include "solve.h"
-using namespace pFROST;
+using namespace ParaFROST;
 
 
-void ParaFROST::vibrate() {
+void Solver::vibrate() {
 
 	assert(UNSOLVED(cnfstate));
 	if (last.rephase.type) return;
@@ -33,7 +33,7 @@ void ParaFROST::vibrate() {
 	else stableMode();
 }
 
-void ParaFROST::stableMode()
+void Solver::stableMode()
 {
 	assert(!stable);
 	stats.stablemodes++;
@@ -45,7 +45,7 @@ void ParaFROST::stableMode()
 	updateHeap();
 }
 
-void ParaFROST::unstableMode()
+void Solver::unstableMode()
 {
 	assert(stable);
 	stats.unstablemodes++;
@@ -55,7 +55,7 @@ void ParaFROST::unstableMode()
 	updateUnstableLimit();
 }
 
-void ParaFROST::updateModeLimit()
+void Solver::updateModeLimit()
 {
 	assert(opts.stable_en);
 	if (stable) {

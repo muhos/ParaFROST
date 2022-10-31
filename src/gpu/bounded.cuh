@@ -26,7 +26,7 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 #include "ifthenelse.cuh"
 #include "equivalence.cuh"
 
-namespace pFROST {
+namespace ParaFROST {
 
 	//=========== Debugging macros =============//
 	// each header above has its own flag

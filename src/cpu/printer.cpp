@@ -17,9 +17,9 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 **********************************************************************************/
 
 #include "solve.h"
-using namespace pFROST;
+using namespace ParaFROST;
 
-void ParaFROST::printTable()
+void Solver::printTable()
 {
 	const char* header = " Progress ";
 	size_t len = strlen(header);
@@ -50,7 +50,7 @@ void ParaFROST::printTable()
 	PFLRULER('-', RULELEN);
 }
 
-void ParaFROST::printStats(const bool& _p, const Byte& _t, const char* _c)
+void Solver::printStats(const bool& _p, const Byte& _t, const char* _c)
 {
 	if (verbose == 1 && _p) {
 		const int l2c = (int)ratio(stats.literals.learnt, stats.clauses.learnt);
@@ -69,7 +69,7 @@ void ParaFROST::printStats(const bool& _p, const Byte& _t, const char* _c)
 	}
 }
 
-void ParaFROST::printVars(const uint32* arr, const uint32& size, const LIT_ST& type)
+void Solver::printVars(const uint32* arr, const uint32& size, const LIT_ST& type)
 {
 	PRINT("(size = %d)->[", size);
 	for (uint32 i = 0; i < size; i++) {
@@ -89,7 +89,7 @@ void ParaFROST::printVars(const uint32* arr, const uint32& size, const LIT_ST& t
 	PUTCH('\n');
 }
 
-void ParaFROST::printClause(const Lits_t& c)
+void Solver::printClause(const Lits_t& c)
 {
 	PUTCH('(');
 	for (int i = 0; i < c.size(); i++)
@@ -97,7 +97,7 @@ void ParaFROST::printClause(const Lits_t& c)
 	PUTCH(')'); PUTCH('\n');
 }
 
-void ParaFROST::printTrail(const uint32& off)
+void Solver::printTrail(const uint32& off)
 {
 	if (trail.empty()) return;
 	PFLOGN1(" Trail (size = %d)->[", trail.size());
@@ -108,7 +108,7 @@ void ParaFROST::printTrail(const uint32& off)
 	PUTCH(']'); PUTCH('\n');
 }
 
-void ParaFROST::printCNF(const BCNF& cnf, const int& off)
+void Solver::printCNF(const BCNF& cnf, const int& off)
 {
 	PFLOG1("\tHost CNF(size = %d)", cnf.size());
 	for (uint32 i = off; i < cnf.size(); i++) {
@@ -118,7 +118,7 @@ void ParaFROST::printCNF(const BCNF& cnf, const int& off)
 	}
 }
 
-void ParaFROST::printCNF(const SCNF& cnf, const int& off, const char* t)
+void Solver::printCNF(const SCNF& cnf, const int& off, const char* t)
 {
 	PFLOG1("\tHost CNF(size = %zd)", cnf.size());
 	if (!strcmp(t, "added")) {
@@ -147,7 +147,7 @@ void ParaFROST::printCNF(const SCNF& cnf, const int& off, const char* t)
 	}
 }
 
-void ParaFROST::printOL(const OL& list) 
+void Solver::printOL(const OL& list) 
 {
 	for (int i = 0; i < list.size(); i++) {
 		PFLOGN0(" ");
@@ -155,7 +155,7 @@ void ParaFROST::printOL(const OL& list)
 	}
 }
 
-void ParaFROST::printOL(const uint32& lit)
+void Solver::printOL(const uint32& lit)
 {
 	CHECKLIT(lit);
 	if (ot[lit].empty()) return;
@@ -163,14 +163,14 @@ void ParaFROST::printOL(const uint32& lit)
 	printOL(ot[lit]);
 }
 
-void ParaFROST::printOccurs(const uint32& v)
+void Solver::printOccurs(const uint32& v)
 {
 	CHECKVAR(v);
 	uint32 p = V2L(v);
 	printOL(p), printOL(NEG(p));
 }
 
-void ParaFROST::printWL(const uint32& lit, const bool& bin)
+void Solver::printWL(const uint32& lit, const bool& bin)
 {
 	CHECKLIT(lit);
 	const WL& ws = wt[lit];
@@ -182,7 +182,7 @@ void ParaFROST::printWL(const uint32& lit, const bool& bin)
 	}
 }
 
-void ParaFROST::printWL(const WL& ws, const bool& bin)
+void Solver::printWL(const WL& ws, const bool& bin)
 {
 	for (int i = 0; i < ws.size(); i++) {
 		if (!ws[i].binary() && bin) continue;
@@ -191,28 +191,28 @@ void ParaFROST::printWL(const WL& ws, const bool& bin)
 	}
 }
 
-void ParaFROST::printWatched(const uint32& v)
+void Solver::printWatched(const uint32& v)
 {
 	CHECKVAR(v);
 	uint32 p = V2L(v);
 	printWL(p), printWL(NEG(p));
 }
 
-void ParaFROST::printBinaries(const uint32& v)
+void Solver::printBinaries(const uint32& v)
 {
 	CHECKVAR(v);
 	uint32 p = V2L(v);
 	printWL(p, 1), printWL(NEG(p), 1);
 }
 
-void ParaFROST::printWT() 
+void Solver::printWT() 
 {
 	PFLOG0(" Watches:");
 	for (uint32 lit = 2; lit < wt.size(); lit++)
 		printWL(lit);
 }
 
-void ParaFROST::printOT() 
+void Solver::printOT() 
 {
 	PFLOG0(" Positive occurs:");
 	forall_variables(v) {
@@ -224,14 +224,14 @@ void ParaFROST::printOT()
 	}
 }
 
-void ParaFROST::printHeap() 
+void Solver::printHeap() 
 {
 	PFLOG1(" Heap (size = %d):", vsids.size());
 	for (uint32 i = 0; i < vsids.size(); i++)
 		PFLOG1(" h(%d)->(v: %d, a: %g)", i, vsids[i], activity[vsids[i]]);
 }
 
-void ParaFROST::printSource()
+void Solver::printSource()
 {
 	for (uint32 i = 0; i < trail.size(); i++) {
 		assert(trail[i] > 1);
@@ -242,7 +242,7 @@ void ParaFROST::printSource()
 	}
 }
 
-void ParaFROST::printLearnt()
+void Solver::printLearnt()
 {
 	PFLOGN1(" %sLearnt(", CCONFLICT);
 	for (int i = 0; i < learntC.size(); i++)
@@ -250,7 +250,7 @@ void ParaFROST::printLearnt()
 	PRINT(")%s\n", CNORMAL);
 }
 
-void ParaFROST::printSortedStack(const int& tail) 
+void Solver::printSortedStack(const int& tail) 
 {
 	if (!tail) return;
 	if (vhist.empty()) return;

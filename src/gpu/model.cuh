@@ -21,7 +21,7 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 #include "primitives.cuh"
 
-namespace pFROST {
+namespace ParaFROST {
 
 	#define MODEL_DBG 0
 

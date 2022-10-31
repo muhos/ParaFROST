@@ -23,7 +23,7 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 #include "dimacs.h"
 #include "datatypes.h"
 
-namespace pFROST {
+namespace ParaFROST {
 
 	void	forceFPU				();
 	int64	sysMemUsed				();

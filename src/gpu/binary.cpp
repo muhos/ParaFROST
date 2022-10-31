@@ -17,9 +17,9 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 **********************************************************************************/
 
 #include "solve.h"
-using namespace pFROST;
+using namespace ParaFROST;
 
-inline uint32 ParaFROST::analyzeReason(const C_REF& ref, const uint32& lit)
+inline uint32 Solver::analyzeReason(const C_REF& ref, const uint32& lit)
 {
 	CHECKLIT(lit);
 	assert(REASON(ref));
@@ -39,7 +39,7 @@ inline uint32 ParaFROST::analyzeReason(const C_REF& ref, const uint32& lit)
 	return dom;
 }
 
-uint32 ParaFROST::hyper2Resolve(CLAUSE& c, const uint32& lit)
+uint32 Solver::hyper2Resolve(CLAUSE& c, const uint32& lit)
 {
 	assert(DL() == 1);
 	int* levels = sp->level;

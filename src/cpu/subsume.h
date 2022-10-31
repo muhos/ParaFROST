@@ -20,7 +20,7 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 #define __SUB_
 
 #include "simplify.h" 
-using namespace pFROST;
+using namespace ParaFROST;
 
 #define HSE_MAX_CL_SIZE 1000
 
@@ -111,7 +111,7 @@ inline bool subsume(OL& list, S_REF* end, SCLAUSE& cand)
 		if (cand.molten() && subsuming.size() > candsz) continue;
 		if (subsuming.size() > 1 && sub(subsuming.sig(), cand.sig()) && sub(subsuming, cand)) {
 			if (subsuming.learnt() && cand.original()) subsuming.set_status(ORIGINAL);
-			pfrost->removeClause(cand);
+			solver->removeClause(cand);
 			PFLCLAUSE(4, cand, " Clause ");
 			PFLCLAUSE(4, subsuming, " Subsumed by ");
 			return true;
@@ -132,7 +132,7 @@ inline bool selfsubsume(const uint32& x, const uint32& fx, OL& list, SCLAUSE& ca
 		if (subsuming.deleted()) continue;
 		if (subsize > 1 && selfsub(subsuming.sig(), candsig) && selfsub(x, fx, subsuming, cand)) {
 			PFLCLAUSE(4, cand, " Clause ");
-			pfrost->strengthen(cand, x);
+			solver->strengthen(cand, x);
 			cand.melt(); // mark for fast recongnition in ot update 
 			PFLCLAUSE(4, subsuming, " Strengthened by ");
 			return true; // cannot strengthen "cand" anymore, 'x' already removed

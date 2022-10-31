@@ -17,9 +17,9 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 **********************************************************************************/
 
 #include "solve.h"
-using namespace pFROST;
+using namespace ParaFROST;
 
-bool ParaFROST::BCP()
+bool Solver::BCP()
 {
 	conflict = NOREF;
 	const uint32 propsbefore = sp->propagated;
@@ -112,7 +112,7 @@ bool ParaFROST::BCP()
 	return isConflict;
 }
 
-bool ParaFROST::BCPProbe() {
+bool Solver::BCPProbe() {
 	assert(UNSOLVED(cnfstate));
 	assert(DL() == 1);
 	conflict = NOREF;
@@ -127,7 +127,7 @@ bool ParaFROST::BCPProbe() {
 	return isConflict;
 }
 
-bool ParaFROST::BCPVivify() {
+bool Solver::BCPVivify() {
 	assert(UNSOLVED(cnfstate));
 	conflict = NOREF;
 	bool isConflict = false;
@@ -137,7 +137,7 @@ bool ParaFROST::BCPVivify() {
 	return isConflict;
 }
 
-inline bool ParaFROST::propbinary(const uint32& assign)
+inline bool Solver::propbinary(const uint32& assign)
 {
 	CHECKLIT(assign);
 	assert(DL() == 1);
@@ -162,7 +162,7 @@ inline bool ParaFROST::propbinary(const uint32& assign)
 	return false;
 }
 
-inline bool ParaFROST::proplarge(const uint32& assign, const bool& hyper)
+inline bool Solver::proplarge(const uint32& assign, const bool& hyper)
 {
 	CHECKLIT(assign);
 	const bool hbr = opts.probehbr_en && hyper;

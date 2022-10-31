@@ -20,7 +20,7 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 #define __ITE_
 
 #include "simplify.h"
-using namespace pFROST;
+using namespace ParaFROST;
 
 inline S_REF fast_equality_check(OT& ot, uint32 x, uint32 y, uint32 z)
 {

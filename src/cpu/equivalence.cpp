@@ -17,13 +17,13 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 **********************************************************************************/
 
 #include "solve.h"
-using namespace pFROST;
+using namespace ParaFROST;
 
 // 'substitute' corresponding clauses having literals represented by 'smallest'
 // but start with learnts first which gives priority to substituted learnts in 
 // the watch table when new clauses are added
 
-inline uint32 ParaFROST::minReachable(WL& ws, DFS* dfs, const DFS& node) 
+inline uint32 Solver::minReachable(WL& ws, DFS* dfs, const DFS& node) 
 {
 	uint32 new_min = node.min;
 	forall_watches(ws, i) {
@@ -38,7 +38,7 @@ inline uint32 ParaFROST::minReachable(WL& ws, DFS* dfs, const DFS& node)
 	return new_min;
 }
 
-bool ParaFROST::decompose()
+bool Solver::decompose()
 {
 	if (!cnfstate) return false;
 	assert(!DL());
@@ -193,7 +193,7 @@ bool ParaFROST::decompose()
 	return !cnfstate || (substituted && (orgsucc || learntsucc));
 }
 
-bool ParaFROST::substitute(BCNF& cnf, uint32* smallests)
+bool Solver::substitute(BCNF& cnf, uint32* smallests)
 {
 	assert(UNSOLVED(cnfstate));
 	assert(learntC.empty());
@@ -293,7 +293,7 @@ bool ParaFROST::substitute(BCNF& cnf, uint32* smallests)
 	return (units || binaries);
 }
 
-bool ParaFROST::canELS(const bool& first)
+bool Solver::canELS(const bool& first)
 {
 	if (!opts.decompose_en) return false;
 	const uint64 clauses = maxClauses();
@@ -301,7 +301,7 @@ bool ParaFROST::canELS(const bool& first)
 	return (3 * clauses) < (stats.searchticks + opts.decompose_min_eff);
 }
 
-void ParaFROST::ELS(const bool& first) {
+void Solver::ELS(const bool& first) {
 	if (!canELS(first)) return;
 	int rounds = opts.decompose_min;
 	if (maxClauses() > opts.decompose_limit) rounds = 1;

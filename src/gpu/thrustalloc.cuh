@@ -24,7 +24,7 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 #include "logging.h"
 #include "cache.cuh"
 
-namespace pFROST {
+namespace ParaFROST {
 
 	/*****************************************************/
 	/*  Usage:    Thrust cached memory allocator         */

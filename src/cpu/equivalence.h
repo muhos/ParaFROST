@@ -20,7 +20,7 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 #define __EQU_
 
 #include "simplify.h" 
-using namespace pFROST;
+using namespace ParaFROST;
 
 inline uint32 substitute_single(const uint32& dx, SCLAUSE& org, const uint32& def)
 {
@@ -48,7 +48,7 @@ inline bool substitute_single(const uint32& p, const uint32& def, OT& ot)
 	assert(!SIGN(p));
 	const uint32 n = NEG(p), def_f = FLIP(def);
 	OL& poss = ot[p], & negs = ot[n];
-	const bool proofEN = pfrost->opts.proof_en;
+	const bool proofEN = solver->opts.proof_en;
 	// substitute negatives 
 	for (int i = 0; i < negs.size(); i++) {
 		SCLAUSE& neg = *negs[i];
@@ -57,13 +57,13 @@ inline bool substitute_single(const uint32& p, const uint32& def, OT& ot)
 		else if (neg.original()) {
 			uint32 unit = substitute_single(n, neg, def_f);
 			if (unit) {
-				const LIT_ST val = pfrost->litvalue(unit);
+				const LIT_ST val = solver->litvalue(unit);
 				if (UNASSIGNED(val))
-					pfrost->enqueueUnit(unit);
+					solver->enqueueUnit(unit);
 				else if (!val) return true;
 			}
 			else if (proofEN)
-				pfrost->proof.addResolvent(neg);
+				solver->proof.addResolvent(neg);
 		}
 	}
 	// substitute positives
@@ -74,13 +74,13 @@ inline bool substitute_single(const uint32& p, const uint32& def, OT& ot)
 		else if (pos.original()) {
 			uint32 unit = substitute_single(p, pos, def);
 			if (unit) {
-				const LIT_ST val = pfrost->litvalue(unit);
+				const LIT_ST val = solver->litvalue(unit);
 				if (UNASSIGNED(val))
-					pfrost->enqueueUnit(unit);
+					solver->enqueueUnit(unit);
 				else if (!val) return true;
 			}
 			else if (proofEN)
-				pfrost->proof.addResolvent(pos);
+				solver->proof.addResolvent(pos);
 		}
 	}
 	return false; 
@@ -121,7 +121,7 @@ inline uint32 find_BN_gate(const uint32& p, OL& poss, OL& negs)
 			if (c.original() && c.size() == 2 && c[0] == first && c[1] == second) {
 				c.melt(); // mark as fanout clause
 				PFLOG2(3, " Gate %d = -/+%d found", ABS(p), ABS(def));
-				PFLOCCURS(pfrost, 4, ABS(p));
+				PFLOCCURS(solver, 4, ABS(p));
 				return def;
 			}
 		}

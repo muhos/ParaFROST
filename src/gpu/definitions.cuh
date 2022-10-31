@@ -26,7 +26,7 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 #include <device_launch_parameters.h>
 #include "logging.h"
 
-namespace pFROST {
+namespace ParaFROST {
 
 	extern cudaDeviceProp devProp;
 	extern uint32 maxGPUThreads;

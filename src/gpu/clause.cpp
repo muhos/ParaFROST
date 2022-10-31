@@ -18,9 +18,9 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 #include "solve.h"
 #include "dimacs.h"
-using namespace pFROST;
+using namespace ParaFROST;
 
-void ParaFROST::markLits(CLAUSE& c) 
+void Solver::markLits(CLAUSE& c) 
 {
 	assert(c.size() > 1);
 	forall_clause(c, k) {
@@ -29,7 +29,7 @@ void ParaFROST::markLits(CLAUSE& c)
 	}
 }
 
-void ParaFROST::unmarkLits(CLAUSE& c)
+void Solver::unmarkLits(CLAUSE& c)
 {
 	forall_clause(c, k) {
 		assert(!UNASSIGNED(l2marker(*k)));
@@ -37,7 +37,7 @@ void ParaFROST::unmarkLits(CLAUSE& c)
 	}
 }
 
-void ParaFROST::markSubsume(CLAUSE& c)
+void Solver::markSubsume(CLAUSE& c)
 {
 	assert(keeping(c));
 	forall_clause(c, k) {
@@ -45,7 +45,7 @@ void ParaFROST::markSubsume(CLAUSE& c)
 	}
 }
 
-bool ParaFROST::keeping(CLAUSE& c) 
+bool Solver::keeping(CLAUSE& c) 
 {
 	if (c.original()) return true;
 	if (c.keep()) return true;
@@ -54,7 +54,7 @@ bool ParaFROST::keeping(CLAUSE& c)
 	return true;
 }
 
-void ParaFROST::removeClause(CLAUSE& c, const C_REF& cref)
+void Solver::removeClause(CLAUSE& c, const C_REF& cref)
 {
 	assert(cm[cref] == c);
 	assert(!c.deleted());
@@ -79,7 +79,7 @@ void ParaFROST::removeClause(CLAUSE& c, const C_REF& cref)
 	cm.collectClause(cref, size);
 }
 
-void ParaFROST::newClause(const C_REF& cref, CLAUSE& c, const bool& learnt)
+void Solver::newClause(const C_REF& cref, CLAUSE& c, const bool& learnt)
 {
 	assert(cm[cref] == c);
 	const int size = c.size();
@@ -104,7 +104,7 @@ void ParaFROST::newClause(const C_REF& cref, CLAUSE& c, const bool& learnt)
 	if (keeping(c)) markSubsume(c);
 }
 
-C_REF ParaFROST::newClause(const Lits_t& in_c, const bool& learnt)
+C_REF Solver::newClause(const Lits_t& in_c, const bool& learnt)
 {
 	const C_REF r = cm.alloc(in_c);
 	CLAUSE& c = cm[r];
@@ -115,7 +115,7 @@ C_REF ParaFROST::newClause(const Lits_t& in_c, const bool& learnt)
 	return r;
 }
 
-void ParaFROST::newHyper2()
+void Solver::newHyper2()
 {
 	assert(learntC.size() == 2);
 	stats.binary.resolvents++;
@@ -130,7 +130,7 @@ void ParaFROST::newHyper2()
 	learntC.clear();
 }
 
-void ParaFROST::newHyper3(const bool& learnt)
+void Solver::newHyper3(const bool& learnt)
 {
 	const int size = learntC.size();
 	assert(size > 1 && size <= 3);
@@ -144,7 +144,7 @@ void ParaFROST::newHyper3(const bool& learnt)
 	PFLCLAUSE(4, c, "  added new hyper ternary resolvent");
 }
 
-inline LIT_ST ParaFROST::sortClause(CLAUSE& c, const int& start, const int& size, const bool& satonly)
+inline LIT_ST Solver::sortClause(CLAUSE& c, const int& start, const int& size, const bool& satonly)
 {
 	assert(size > 1);
 	assert(start < size);
@@ -194,7 +194,7 @@ inline LIT_ST ParaFROST::sortClause(CLAUSE& c, const int& start, const int& size
 	return xval;
 }
 
-void ParaFROST::sortClause(CLAUSE& c)
+void Solver::sortClause(CLAUSE& c)
 {
 	int size = c.size();
 	LIT_ST val = sortClause(c, 0, size, false);

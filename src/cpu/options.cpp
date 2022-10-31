@@ -18,7 +18,7 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 #include "options.h"
 
-using namespace pFROST;
+using namespace ParaFROST;
 
 // simplifier options
 BOOL_OPT opt_all_en("all", "enable all simplifications", false);

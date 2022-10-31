@@ -18,9 +18,9 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 #include "solve.h"
 
-using namespace pFROST;
+using namespace ParaFROST;
 
-void ParaFROST::varReorder()
+void Solver::varReorder()
 {
 	PFLOGN2(2, " Finding eligible variables for LCVE..");
 	assert(cuhist.d_hist != NULL);
@@ -45,7 +45,7 @@ void ParaFROST::varReorder()
 	}
 }
 
-bool ParaFROST::LCVE()
+bool Solver::LCVE()
 {
 	// reorder variables
 	varReorder();
@@ -89,7 +89,7 @@ bool ParaFROST::LCVE()
 	return true;
 }
 
-inline void	ParaFROST::mapFrozen()
+inline void	Solver::mapFrozen()
 {
 	if (!opts.ve_fun_en) return;
 	const uint32 *frozen = sp->tmpstack;
@@ -101,7 +101,7 @@ inline void	ParaFROST::mapFrozen()
 	mapFrozenAsync(vars, nFrozen);
 }
 
-inline bool ParaFROST::depFreeze(const uint32& cand, OL& ol)
+inline bool Solver::depFreeze(const uint32& cand, OL& ol)
 {
 	LIT_ST* frozen = sp->frozen;
 	uint32*& frozentail = sp->stacktail;

@@ -23,7 +23,7 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 #include "atomics.cuh"
 #include "simptypes.cuh"
 
-namespace pFROST {
+namespace ParaFROST {
 
 	// saving nr. of 'SCLAUSE' buckets as constant
 	__constant__ uint32 dc_nbuckets = sizeof(SCLAUSE) / sizeof(uint32);

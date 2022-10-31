@@ -23,9 +23,9 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 #include "redundancy.h"
 #include "subsume.h" 
 
-using namespace pFROST;
+using namespace ParaFROST;
 
-inline void ParaFROST::bumpShrunken(SCLAUSE& c)
+inline void Solver::bumpShrunken(SCLAUSE& c)
 {
 	assert(c.learnt());
 	assert(c.size() > 1);
@@ -38,7 +38,7 @@ inline void ParaFROST::bumpShrunken(SCLAUSE& c)
 	PFLCLAUSE(4, c, " Bumping shrunken clause with (lbd:%d, usage:%d) ", new_lbd, c.usage());
 }
 
-inline bool ParaFROST::propClause(const LIT_ST* values, const uint32& lit, SCLAUSE& c)
+inline bool Solver::propClause(const LIT_ST* values, const uint32& lit, SCLAUSE& c)
 {
 	uint32 sig = 0;
 	uint32* j = c;
@@ -61,7 +61,7 @@ inline bool ParaFROST::propClause(const LIT_ST* values, const uint32& lit, SCLAU
 	return false;
 }
 
-bool ParaFROST::prop()
+bool Solver::prop()
 {
 	nForced = sp->propagated;
 	LIT_ST* values = sp->value;
@@ -98,7 +98,7 @@ bool ParaFROST::prop()
 	return true;
 }
 
-void ParaFROST::VE()
+void Solver::VE()
 {
 	if (opts.ve_en) {
 		PFLOG2(2, " Eliminating variables..");
@@ -107,7 +107,7 @@ void ParaFROST::VE()
 	}
 }
 
-void ParaFROST::SUB()
+void Solver::SUB()
 {
 	if (opts.sub_en || opts.ve_plus_en) {
 		if (interrupted()) killSolver();
@@ -128,7 +128,7 @@ void ParaFROST::SUB()
 	}
 }
 
-void ParaFROST::BCE()
+void Solver::BCE()
 {
 	if (opts.bce_en) {
 		if (interrupted()) killSolver();
@@ -166,7 +166,7 @@ void ParaFROST::BCE()
 	}
 }
 
-void ParaFROST::ERE()
+void Solver::ERE()
 {
 	if (!opts.ere_en) return;
 	if (interrupted()) killSolver();
@@ -196,7 +196,7 @@ void ParaFROST::ERE()
 	PFLREDCL(this, 2, "ERE Reductions");
 }
 
-void ParaFROST::strengthen(SCLAUSE& c, const uint32& me)
+void Solver::strengthen(SCLAUSE& c, const uint32& me)
 {
 	uint32 sig = 0;
 	int n = 0;

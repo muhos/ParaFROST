@@ -21,7 +21,7 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 #include "datatypes.h"
 
-namespace pFROST {
+namespace ParaFROST {
 
 	struct VSTATE {
 		Byte state : 3, dlcount : 2, subsume : 1, probe : 1;

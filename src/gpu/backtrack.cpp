@@ -17,9 +17,9 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 **********************************************************************************/
 
 #include "solve.h"
-using namespace pFROST;
+using namespace ParaFROST;
 
-inline void ParaFROST::savePhases()
+inline void Solver::savePhases()
 {
 	const LIT_ST reset = (last.rephase.type && stats.conflicts > last.rephase.conflicts);
 	if (!probed) {
@@ -37,7 +37,7 @@ inline void ParaFROST::savePhases()
 	if (reset) last.rephase.type = 0;
 }
 
-inline void	ParaFROST::cancelAssign(const uint32& lit) {
+inline void	Solver::cancelAssign(const uint32& lit) {
 	CHECKLIT(lit);
 	assert(inf.unassigned < inf.maxVar);
 	sp->value[lit] = UNDEFINED;
@@ -46,7 +46,7 @@ inline void	ParaFROST::cancelAssign(const uint32& lit) {
 	PFLOG2(4, "  literal %d@%d cancelled", l2i(lit), l2dl(lit));
 }
 
-void ParaFROST::backtrack(const int& jmplevel)
+void Solver::backtrack(const int& jmplevel)
 {
 	if (DL() == jmplevel) return;
 	const uint32 pivot = jmplevel + 1;

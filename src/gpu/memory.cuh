@@ -21,7 +21,7 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 #include "simptypes.cuh"
 
-namespace pFROST {
+namespace ParaFROST {
 	/*****************************************************/
 	/*  Usage:    GPU global memory manager              */
 	/*  Dependency: all simplifier data types            */

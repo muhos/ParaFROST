@@ -20,7 +20,7 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 #include "primitives.cuh"
 #include "options.cuh"
 
-using namespace pFROST;
+using namespace ParaFROST;
 
 __global__ void printHead(cuVecB* proof)
 {

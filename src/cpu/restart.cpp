@@ -17,9 +17,9 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 **********************************************************************************/
 
 #include "solve.h"
-using namespace pFROST;
+using namespace ParaFROST;
 
-bool ParaFROST::canRestart()
+bool Solver::canRestart()
 {
 	if (!DL()) return false;
 	if (stats.conflicts < limit.restart.conflicts) return false;
@@ -28,7 +28,7 @@ bool ParaFROST::canRestart()
 	return lbdrest.restart(stable);
 }
 
-void ParaFROST::restart()
+void Solver::restart()
 {
 	assert(sp->propagated == trail.size());
 	assert(conflict == NOREF);
@@ -39,7 +39,7 @@ void ParaFROST::restart()
 	else updateUnstableLimit();
 }
 
-void ParaFROST::updateUnstableLimit()
+void Solver::updateUnstableLimit()
 {
 	assert(!stable);
 	uint64 increase = opts.restart_inc - 1;
@@ -47,7 +47,7 @@ void ParaFROST::updateUnstableLimit()
 	limit.restart.conflicts = stats.conflicts + increase;
 }
 
-int ParaFROST::reuse() 
+int Solver::reuse() 
 {
 	bool stable = vsidsEnabled();
 	uint32 cand = stable ? nextVSIDS() : nextVMFQ();

@@ -22,7 +22,7 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 #include "definitions.cuh"
 #include "datatypes.h"
 
-namespace pFROST {
+namespace ParaFROST {
 
 #define FULLWARP 0xFFFFFFFFU
 

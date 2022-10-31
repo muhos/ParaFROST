@@ -17,9 +17,9 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 **********************************************************************************/
 
 #include "solve.h"
-using namespace pFROST;
+using namespace ParaFROST;
 
-void ParaFROST::transiting(const uint32& src, const uint64& limit, uint64& removed, uint32& units)
+void Solver::transiting(const uint32& src, const uint64& limit, uint64& removed, uint32& units)
 {
 	CHECKLIT(src);
 	bool failed = false;
@@ -104,7 +104,7 @@ void ParaFROST::transiting(const uint32& src, const uint64& limit, uint64& remov
 	}
 }
 
-void ParaFROST::transitive()
+void Solver::transitive()
 {
 	if (!cnfstate) return;
 	if (!opts.transitive_en) return;

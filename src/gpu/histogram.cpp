@@ -18,9 +18,9 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 #include "solve.h" 
 
-using namespace pFROST;
+using namespace ParaFROST;
 
-inline bool ParaFROST::isBinary(const C_REF& r, uint32& first, uint32& second)
+inline bool Solver::isBinary(const C_REF& r, uint32& first, uint32& second)
 {
 	assert(!DL());
 	CLAUSE& c = cm[r];
@@ -45,14 +45,14 @@ inline bool ParaFROST::isBinary(const C_REF& r, uint32& first, uint32& second)
 	return true;
 }
 
-inline void	ParaFROST::resetoccurs()
+inline void	Solver::resetoccurs()
 {
 	forall_vector(OCCUR, occurs, o) {
 		o->ps = o->ns = 0;
 	}
 }
 
-inline void	ParaFROST::countoccurs(CLAUSE& c)
+inline void	Solver::countoccurs(CLAUSE& c)
 {
 	assert(!c.deleted());
 	forall_clause(c, k) {
@@ -63,7 +63,7 @@ inline void	ParaFROST::countoccurs(CLAUSE& c)
 	}
 }
 
-void ParaFROST::histClause(CLAUSE& c)
+void Solver::histClause(CLAUSE& c)
 {
 	assert(!c.deleted());
 	forall_clause(c, k) {
@@ -72,7 +72,7 @@ void ParaFROST::histClause(CLAUSE& c)
 	}
 }
 
-void ParaFROST::histBins(BCNF& cnf)
+void Solver::histBins(BCNF& cnf)
 {
 	forall_cnf(cnf, i) {
 		const C_REF r = *i;
@@ -86,7 +86,7 @@ void ParaFROST::histBins(BCNF& cnf)
 	}
 }
 
-void ParaFROST::histCNF(BCNF& cnf, const bool& reset) {
+void Solver::histCNF(BCNF& cnf, const bool& reset) {
 	if (cnf.empty()) return;
 	if (reset) resetoccurs();
 	forall_cnf(cnf, i) {
@@ -96,7 +96,7 @@ void ParaFROST::histCNF(BCNF& cnf, const bool& reset) {
 	}
 }
 
-void ParaFROST::histCNFFlat(BCNF& cnf, const bool& reset) {
+void Solver::histCNFFlat(BCNF& cnf, const bool& reset) {
 	if (cnf.empty()) return;
 	if (reset) {
 		forall_vector(uint32, vhist, h) { 

@@ -17,7 +17,7 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 **********************************************************************************/
 
 #include "solve.h"
-using namespace pFROST;
+using namespace ParaFROST;
 
 struct LEARNT_CMP {
 	const CMM& cm;
@@ -31,7 +31,7 @@ struct LEARNT_CMP {
 	}
 };
 
-bool ParaFROST::chronoHasRoot() {
+bool Solver::chronoHasRoot() {
 	if (!opts.chrono_en || !DL()) return true;
 	for (uint32 i = dlevels[1]; i < trail.size(); i++) {
 		uint32 lit = trail[i];
@@ -46,7 +46,7 @@ bool ParaFROST::chronoHasRoot() {
 	return true;	
 }
 
-void ParaFROST::reduce()
+void Solver::reduce()
 {
 	assert(sp->propagated == trail.size());
 	assert(conflict == NOREF);
@@ -65,7 +65,7 @@ void ParaFROST::reduce()
 	if (shrunken && canMap()) map(); // "recycle" must be called beforehand
 }
 
-void ParaFROST::reduceLearnts()
+void Solver::reduceLearnts()
 {
 	assert(reduced.empty());
 	assert(learnts.size());

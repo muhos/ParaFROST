@@ -19,10 +19,10 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 #include "solve.h" 
 #include "control.h"
 
-namespace pFROST {
+namespace ParaFROST {
 	GOPTION			gopts;
 	CNF_INFO		inf;
-	ParaFROST		*pfrost = NULL;
+	Solver		*solver = NULL;
 	cuTIMER			*cutimer = NULL;
 	cudaDeviceProp	devProp;
 	CACHER			cacher;
@@ -32,10 +32,10 @@ namespace pFROST {
 	size_t			hc_nbuckets = sizeof(SCLAUSE) / hc_bucket;
 }
 
-using namespace pFROST;
+using namespace ParaFROST;
 
-ParaFROST::ParaFROST(const string& _path) :
-	formula(_path)
+Solver::Solver(const string& formulaStr) :
+	formula(formulaStr)
 	, sp(NULL)
 	, vsids(VSIDS_CMP(activity))
 	, vschedule(SCORS_CMP(this))
@@ -74,12 +74,13 @@ ParaFROST::ParaFROST(const string& _path) :
 		opts.sigma_en = opts.sigma_live_en = false;
 	}
 	else cumm.init(_gfree, _gpenalty);
+	PFLRULER('-', RULELEN);
 	if (!parser() || BCP()) { learnEmpty(), killSolver(); }
 	if (opts.parseonly_en) killSolver();
 	if (opts.sigma_en || opts.sigma_live_en) { optSimp(), createStreams(); }
 }
 
-void ParaFROST::allocSolver()
+void Solver::allocSolver()
 {
 	PFLOGN2(2, " Allocating fixed memory for %d variables..", inf.maxVar);
 	assert(sizeof(LIT_ST) == 1);
@@ -99,7 +100,7 @@ void ParaFROST::allocSolver()
 	PFLMEMCALL(this, 2);
 }
 
-void ParaFROST::initSolver()
+void Solver::initSolver()
 {
 	assert(!ORIGINAL && LEARNT && DELETED);
 	assert(FROZEN_M && MELTED_M && SUBSTITUTED_M);
@@ -122,7 +123,7 @@ void ParaFROST::initSolver()
 	}
 }
 
-void ParaFROST::initLimits() 
+void Solver::initLimits() 
 {
 	PFLOG2(2, " Initializing solver limits..");
 	formula.c2v = ratio(double(stats.clauses.original), double(inf.maxVar));
@@ -164,7 +165,7 @@ void ParaFROST::initLimits()
 	PFLOG2(2, " Limits initialized successfully");
 }
 
-void ParaFROST::solve()
+void Solver::solve()
 {
 	FAULT_DETECTOR;
 	timer.start();
@@ -191,7 +192,7 @@ void ParaFROST::solve()
 	wrapup();
 }
 
-void ParaFROST::wrapup() {
+void Solver::wrapup() {
 	if (!quiet_en) { PFLRULER('-', RULELEN); PFLOG0(""); }
 	if (cnfstate == SAT) {
 		PFLOGS("SATISFIABLE");

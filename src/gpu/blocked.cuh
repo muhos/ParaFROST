@@ -21,7 +21,7 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 #include "elimination.cuh"
 
-namespace pFROST {
+namespace ParaFROST {
 
 	_PFROST_D_ void blocked_x(
 		const uint32& x,

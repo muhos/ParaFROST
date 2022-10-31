@@ -24,7 +24,7 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 #include <cassert>
 #include <string>
 
-namespace pFROST {
+namespace ParaFROST {
 
 	/*****************************************************/
 	/*  Usage:   structure for CNF clause storage        */

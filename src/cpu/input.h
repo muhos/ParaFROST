@@ -22,10 +22,10 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 #include "definitions.h"
 #include "vector.h"
 
-namespace pFROST {
+namespace ParaFROST {
 
 	// global
-	void parseArguments(int& argc, char** argv);
+	bool parseArguments(int& argc, char** argv);
 	void printUsage(int  argc, char** argv, bool verbose = false);
 
 	class ARG;
@@ -49,7 +49,7 @@ namespace pFROST {
 		}
 	public:
 		// global
-		friend void parseArguments(int& argc, char** argv);
+		friend bool parseArguments(int& argc, char** argv);
 		friend void printUsage(int  argc, char** argv, bool verbose);
 		// derived methods
 		virtual ~ARG() {}
