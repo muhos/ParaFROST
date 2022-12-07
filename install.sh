@@ -332,10 +332,10 @@ if [ $igpu = 1 ]; then # start of GPU installation block
 if [[ "$HOST_OS" == *"cygwin"* ]]; then error "cygwin not supported to install the GPU solver, use VS C++ instead"; fi
 
 CUDA_DIR=$CUDA_PATH
-[ ! -d "$CUDA_DIR" ] && log "CUDA_PATH is not set" && logn "looking for '/usr/local/cuda'..."
-CUDA_DIR=/usr/local/cuda
+[ ! -d "$CUDA_DIR" ] && CUDA_DIR=/usr/local/cuda
 [ ! -d "$CUDA_DIR" ] && error "no cuda toolkit installed"
-printf "found\n"
+logn "found CUDA version"
+
 NVCC=$CUDA_DIR/bin/nvcc
 
 # nvcc compiler version
@@ -345,6 +345,8 @@ NVCCVER=$(echo $NVCCVER|tr -d '\r')
 [ -z "$NVCCVER" ] && error "cannot read the compiler version"
 NVCCVERSHORT=$(echo $NVCCVER | cut -d "V" -f2)
 NVCCVER="nvcc $NVCCVERSHORT"
+
+log "$NVCCVERSHORT"
 
 # try to find GPU family
 extshared=0
