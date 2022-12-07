@@ -27,13 +27,13 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 using namespace mgpu;
 using namespace ParaFROST;
 
-__global__ void dummy_k() { }
+__global__ void ptx_dummy_k() { }
 
 MCA context(0);
 
 void MCA::init() {
 	cudaFuncAttributes attr;
-	cudaError_t result = cudaFuncGetAttributes(&attr, dummy_k);
+	cudaError_t result = cudaFuncGetAttributes(&attr, ptx_dummy_k);
 	if (cudaSuccess != result) throw mgpu::cuda_exception_t(result);
 	_ptx_version = attr.ptxVersion;
 	_props = devProp;
