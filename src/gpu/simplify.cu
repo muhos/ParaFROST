@@ -186,7 +186,7 @@ void Solver::sigmifying()
 		createOTAsync(cnf, ot, 0);
 		if (!prop()) killSolver();
 		if (!LCVE()) break;
-		sortOT();
+		segsortOTAsync();
 		if (stop(cdiff, ldiff)) { ERE(); break; }
 		SUB(), VE(), BCE();
 		cuproof.cacheProof(streams[4]);

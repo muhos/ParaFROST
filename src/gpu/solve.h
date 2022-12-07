@@ -37,13 +37,15 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 #include "solvertypes.h"
 
 namespace ParaFROST {
+
 	/*****************************************************/
-	/*  Name:     Solver                              */
-	/*  Usage:    global handler for solver/simplifier   */
+	/*  Name:     Solver                                 */
+	/*  Usage:    global handler of solver/simplifier    */
 	/*  Scope:    host only                              */
 	/*  Memory:   system memory                          */
 	/*****************************************************/
 	class Solver {
+
 	protected:
 		FORMULA			formula;
 		TIMER			timer;
@@ -85,10 +87,12 @@ namespace ParaFROST {
 		string			solLine;
 		CNF_ST			cnfstate;
 		bool			intr, stable, probed, incremental;
+
 	public:
 		OPTION			opts;
 		MODEL			model;
 		PROOF			proof;
+
 		//============== inline methods ===============
 		inline int		calcLBD				(CLAUSE&);
 		inline void		bumpClause			(CLAUSE&);
@@ -135,8 +139,6 @@ namespace ParaFROST {
 		inline void		clearMDM			();
 		inline int		calcLBD				();
 		inline void		resetoccurs			();
-		//==============================================
-		inline			~Solver				() { }
 		inline void		interrupt			() { intr = true; }
 		inline void		nointerrupt			() { intr = false; }
 		inline void		incDL				() { dlevels.push(trail.size()); }
@@ -642,7 +644,8 @@ namespace ParaFROST {
 		void			map					(WL&);
 		void			map					(WT&);
 		void			map					(const bool& sigmified = false);
-						Solver			(const string&);
+						Solver				(const string&);
+						~Solver				() { }
 		//==========================================//
 		//                Simplifier                //
 		//==========================================//
@@ -661,9 +664,21 @@ namespace ParaFROST {
 		OLIST_CMP		olist_cmp;
 		bool			mapped, compacted, flattened;
 		int				phase, nForced, simpstate, devCount;
+
 	public:
-		cuOptions			cuopt;
+		cuOptions		cuopt;
+
 		//============= inline methods ==============//
+		inline bool		depFreeze			(const uint32&, OL&);
+		inline bool		propClause			(const LIT_ST*, const uint32&, SCLAUSE&);
+		inline bool		enqueueCached		(const cudaStream_t&);
+		inline bool		reallocOT			(const cudaStream_t& stream = 0);
+		inline bool		reallocCNF			();
+		inline void		writeBack			();
+		inline void		mapFrozen			();
+		inline void		cleanProped			();
+		inline void		cleanManaged		();
+		inline void		initSimplifier		();
 		inline void		enqueueDevUnit		(const uint32& lit) {
 			CHECKLIT(lit);
 			assert(active(lit));
@@ -785,7 +800,7 @@ namespace ParaFROST {
 		void			sigmify             ();
 		void			awaken              ();
 		bool			LCVE                ();
-		void			sortOT				();
+		
 		void			postVE              ();
 		void			VE                  ();
 		void			SUB                 ();
@@ -794,6 +809,7 @@ namespace ParaFROST {
 		bool			prop                ();
 		bool			propFailed          ();
 		void			masterFree          ();
+		void			segsortOTAsync		();
 		void			createOTHost        (HOT&);
 		uint32*			flattenCNF          (const uint32&);
 		void			histSimp            (const uint32&);
@@ -805,16 +821,7 @@ namespace ParaFROST {
 		void			cacheEliminated     (const cudaStream_t&);
 		void			markEliminated		(const cudaStream_t&);
 		void			reflectCNF          (const cudaStream_t&, const cudaStream_t&);
-		inline bool		depFreeze           (const uint32&, OL&);
-		inline bool		propClause          (const LIT_ST*, const uint32&, SCLAUSE&);
-		inline bool		enqueueCached       (const cudaStream_t&);
-		inline bool		reallocOT           (const cudaStream_t& stream = 0);
-		inline bool		reallocCNF          ();
-		inline void		writeBack           ();
-		inline void		mapFrozen			();
-		inline void		cleanProped         ();
-		inline void		cleanManaged        ();
-		inline void		initSimplifier      ();
+
 		//==========================================//
 		//             Local search                 //
 		//==========================================//
@@ -822,7 +829,6 @@ namespace ParaFROST {
 		inline void		saveTrail			(const LIT_ST*, const bool&);
 		inline void		saveAll				(const LIT_ST*);
 		inline uint32	breakValue			(const uint32&);
-		inline double	breakScore			(const uint32&);
 		inline void		makeClauses			(const uint32&);
 		inline void		breakClauses		(const uint32&);
 		inline void		walkassign			();
@@ -834,6 +840,7 @@ namespace ParaFROST {
 		void			walkstop			();
 		void			walking				();
 		void			walk				();
+
 		//==========================================//
 		//          Incremental Solving             //
 		//==========================================//
@@ -843,7 +850,7 @@ namespace ParaFROST {
 		Vec1D			ilevel;
 		Lits_t			assumptions, iconflict;
 	public:
-		                Solver           ();
+		                Solver				();
 		void			iunassume           ();
 		void			iallocSpace         ();
 		uint32			iadd                ();
@@ -865,6 +872,7 @@ namespace ParaFROST {
 			CHECKVAR(v);
 			return incremental && ifrozen[v];
 		}
+
 		//==========================================//
 		//			       Printers                 //
 		//==========================================//
@@ -887,6 +895,7 @@ namespace ParaFROST {
 		void			printLearnt			();
 		
 	};
+
 	extern Solver* solver;
 }
 

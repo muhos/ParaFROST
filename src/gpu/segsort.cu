@@ -27,11 +27,22 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 using namespace mgpu;
 using namespace ParaFROST;
 
-MCA context(0, 0); // for segmented sort
+__global__ void dummy_k() { }
 
-void Solver::sortOT() {
+MCA context(0);
+
+void MCA::init() {
+	cudaFuncAttributes attr;
+	cudaError_t result = cudaFuncGetAttributes(&attr, dummy_k);
+	if (cudaSuccess != result) throw mgpu::cuda_exception_t(result);
+	_ptx_version = attr.ptxVersion;
+	_props = devProp;
+}
+
+void Solver::segsortOTAsync() {
 	assert(cumm.occurs());
 	if (gopts.profile_gpu) cutimer->start();
+	if (!context.ptx_version()) context.init();
 	const int offset = 3; // first three elements in occurs = zero
 	segmented_sort(cumm.occurs(), inf.nLiterals, cuhist.d_segs + offset, inf.nDualVars - offset, olist_cmp, context);
 	if (gopts.sync_always) {
