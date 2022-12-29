@@ -17,7 +17,7 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 **********************************************************************************/
 
 #include "options.cuh"
-#include "input.h"
+#include "input.hpp"
 
 using namespace ParaFROST;
 

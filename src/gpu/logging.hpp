@@ -21,8 +21,8 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 #include <cstdio>
 #include <cstring>
-#include "constants.h"
-#include "color.h"
+#include "constants.hpp"
+#include "color.hpp"
 
 #define RULELEN     92
 #define PREFIX      "c "

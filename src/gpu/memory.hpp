@@ -19,9 +19,9 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 #ifndef __MEMORY_
 #define __MEMORY_
 
-#include "clause.h"
-#include "vector.h"
-#include "logging.h"
+#include "clause.hpp"
+#include "vector.hpp"
+#include "logging.hpp"
 #include <cstdint>
 #include <limits>
 #include <cassert>

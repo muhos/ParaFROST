@@ -19,8 +19,8 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 #ifndef __HEAP_
 #define __HEAP_
 
-#include "vector.h"
-#include "definitions.h"
+#include "vector.hpp"
+#include "definitions.hpp"
 
 namespace ParaFROST {
 

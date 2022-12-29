@@ -1,4 +1,4 @@
-/***********************************************************************[vstate.h]
+/***********************************************************************[walk.h]
 Copyright(c) 2020, Muhammad Osama - Anton Wijs,
 Technische Universiteit Eindhoven (TU/e).
 
@@ -16,17 +16,33 @@ You should have received a copy of the GNU General Public License
 along with this program.  If not, see <https://www.gnu.org/licenses/>.
 **********************************************************************************/
 
-#ifndef __VSTATE_
-#define __VSTATE_
+#ifndef __WALK_
+#define __WALK_
 
-#include "datatypes.h"
+#include "solvertypes.hpp"
 
 namespace ParaFROST {
 
-	struct VSTATE {
-		Byte state : 3, dlcount : 2, subsume : 1, probe : 1;
-		VSTATE() : state(0), dlcount(0), subsume(0), probe(0) {}
+	struct CINFO {
+		uint32 size;
+		uint32 unsatidx;
 	};
+
+	struct WALK {
+		BCNF orgs;
+		uVec1D trail, unsat;
+		Vec<CINFO> cinfo;
+		Vec<double> scores;
+		LIT_ST* value;
+		uint64 limit;
+		uint32 initial, current;
+		uint32 minimum, flipped;
+		uint32 nclauses, best;
+
+		            WALK    ();
+		inline void destroy ();
+	};
+
 }
 
 #endif

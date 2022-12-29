@@ -132,9 +132,9 @@ bool cuMM::allocVars(VARS*& vars, const size_t& resolvedCap)
 	vars->units = (cuVecU*)ea, ea += hc_cuvecsize;
 	vars->resolved = (cuVecU*)ea, ea += hc_cuvecsize;
 	uint32* uintPtr = (uint32*)ea;
-	vars->pVarsData = uintPtr;
-	vars->pVarsSize = (uint32*)(vars->pVars + sizeof(uint32*));
 	vars->pVars->alloc(uintPtr, inf.maxVar), uintPtr += inf.maxVar, d_units = uintPtr;
+	vars->pVarsData = vars->pVars->data();
+	vars->pVarsSize = vars->pVars->sizeptr();
 	vars->units->alloc(uintPtr, inf.maxVar), uintPtr += inf.maxVar;
 	vars->eligible = uintPtr, uintPtr += inf.maxVar;
 	vars->scores = uintPtr, uintPtr += varsize;

@@ -19,10 +19,10 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 #ifndef __PROOF_
 #define __PROOF_
 
-#include "vector.h"
-#include "clause.h"
-#include "logging.h"
-#include "space.h"
+#include "vector.hpp"
+#include "clause.hpp"
+#include "logging.hpp"
+#include "space.hpp"
 
 namespace ParaFROST {
 

@@ -24,7 +24,7 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 #include <cassert>
 #include <cuda.h>
 #include <device_launch_parameters.h>
-#include "logging.h"
+#include "logging.hpp"
 
 namespace ParaFROST {
 

@@ -19,8 +19,8 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 #ifndef __CLAUSE_
 #define __CLAUSE_
 
-#include "datatypes.h"
-#include "vector.h"
+#include "datatypes.hpp"
+#include "vector.hpp"
 #include <cassert>
 #include <string>
 

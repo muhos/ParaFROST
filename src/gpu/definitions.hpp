@@ -32,9 +32,9 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 #include <climits>
 #include <cstdlib>
 #include <csignal>
-#include "logging.h"
-#include "datatypes.h"
-#include "constants.h"
+#include "logging.hpp"
+#include "datatypes.hpp"
+#include "constants.hpp"
 
 #if defined(__linux__)
 #include <sys/resource.h>

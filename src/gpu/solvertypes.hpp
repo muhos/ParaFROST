@@ -1,4 +1,4 @@
-/***********************************************************************[walk.h]
+/***********************************************************************[solvertypes.h]
 Copyright(c) 2020, Muhammad Osama - Anton Wijs,
 Technische Universiteit Eindhoven (TU/e).
 
@@ -16,33 +16,37 @@ You should have received a copy of the GNU General Public License
 along with this program.  If not, see <https://www.gnu.org/licenses/>.
 **********************************************************************************/
 
-#ifndef __WALK_
-#define __WALK_
+#ifndef __SOLVER_TYPES_
+#define __SOLVER_TYPES_
 
-#include "solvertypes.h"
+#include "space.hpp"
+#include "watch.hpp"
 
 namespace ParaFROST {
-
-	struct CINFO {
+	
+	typedef Vec<C_REF> BCNF;
+	typedef Vec<WATCH, int> WL;
+	typedef Vec<WL> WT;
+	typedef Vec<uint32, int> BOL;
+	typedef Vec<C_REF, int> WOL;
+	
+	struct CSIZE {
+		C_REF ref;
 		uint32 size;
-		uint32 unsatidx;
+		CSIZE() {}
+		CSIZE(const C_REF& _r, const uint32& _s) : ref(_r), size(_s) {}
 	};
 
-	struct WALK {
-		BCNF orgs;
-		uVec1D trail, unsat;
-		Vec<CINFO> cinfo;
-		Vec<double> scores;
-		LIT_ST* value;
-		uint64 limit;
-		uint32 initial, current;
-		uint32 minimum, flipped;
-		uint32 nclauses, best;
-
-		            WALK    ();
-		inline void destroy ();
+	struct DFS {
+		uint32 idx, min;
+		DFS() : idx(0), min(0) { }
 	};
 
+	#define forall_bol(BLIST, PTR) \
+		for (uint32* PTR = BLIST, *END = BLIST.end(); PTR != END; PTR++)
+
+	#define forall_wol(WLIST, PTR) \
+		for (C_REF* PTR = WLIST, *END = WLIST.end(); PTR != END; PTR++)
 }
 
 #endif

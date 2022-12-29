@@ -19,8 +19,8 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 #ifndef __ARGS_
 #define __ARGS_
 
-#include "definitions.h"
-#include "vector.h"
+#include "definitions.hpp"
+#include "vector.hpp"
 
 namespace ParaFROST {
 

@@ -19,7 +19,7 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 #ifndef __RESTART_
 #define __RESTART_
 
-#include "definitions.h"
+#include "definitions.hpp"
 
 namespace ParaFROST {
 

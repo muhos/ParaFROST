@@ -19,8 +19,8 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 #ifndef __DIMACS_
 #define __DIMACS_
 
-#include "sort.h"
-#include "definitions.h"
+#include "sort.hpp"
+#include "definitions.hpp"
 #include <fcntl.h>
 #include <sys/stat.h>
 

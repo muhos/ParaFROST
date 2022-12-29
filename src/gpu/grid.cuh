@@ -20,7 +20,7 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 #define __GRID_INFO_
 
 #include "definitions.cuh"
-#include "datatypes.h"
+#include "datatypes.hpp"
 
 namespace ParaFROST {
 

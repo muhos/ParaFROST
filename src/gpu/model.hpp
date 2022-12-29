@@ -19,8 +19,8 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 #ifndef __MODEL_
 #define __MODEL_
 
-#include "vector.h"
-#include "definitions.h"
+#include "vector.hpp"
+#include "definitions.hpp"
 
 namespace ParaFROST {
 

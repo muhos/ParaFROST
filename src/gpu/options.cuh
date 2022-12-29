@@ -19,7 +19,7 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 #ifndef __GPU_OPTIONS_
 #define __GPU_OPTIONS_
 
-#include "datatypes.h"
+#include "datatypes.hpp"
 
 namespace ParaFROST {
 

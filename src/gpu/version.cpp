@@ -16,7 +16,7 @@ You should have received a copy of the GNU General Public License
 along with this program.  If not, see <https://www.gnu.org/licenses/>.
 **********************************************************************************/
 
-#include "version.h"
+#include "version.hpp"
 #include <string>
 #include <cuda.h>
 #ifdef  _WIN32

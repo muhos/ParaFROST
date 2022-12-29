@@ -19,7 +19,7 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 #ifndef __STATS_
 #define __STATS_
 
-#include "datatypes.h"
+#include "datatypes.hpp"
 #include <cassert>
 #include <cstring>
 

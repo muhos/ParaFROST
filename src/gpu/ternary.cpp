@@ -16,7 +16,7 @@ You should have received a copy of the GNU General Public License
 along with this program.  If not, see <https://www.gnu.org/licenses/>.
 **********************************************************************************/
 
-#include "solve.h"
+#include "solve.hpp"
 using namespace ParaFROST;
 
 inline bool SCORS_CMP::operator () (const uint32& a, const uint32& b) const {

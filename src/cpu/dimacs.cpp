@@ -59,7 +59,7 @@ bool Solver::parser()
 		char* eof = str + fsz;
 		while (str < eof) {
 			eatWS(str);
-			if (*str == '\0' || *str == '0' || *str == '%') break;
+			if (*str == '\0' || *str == '%') break;
 			if (*str == 'c') eatLine(str);
 			else if (*str == 'p') {
 				if (!eq(str, "p cnf")) PFLOGE("header has wrong format");

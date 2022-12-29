@@ -19,22 +19,22 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 #ifndef __SOLVE_
 #define __SOLVE_
 
-#include "sort.h"
-#include "heap.h"
-#include "vmap.h"
-#include "walk.h"
-#include "model.h"
-#include "proof.h"
-#include "limit.h"
-#include "queue.h"
-#include "dimacs.h"
-#include "random.h"
-#include "memory.h"
-#include "restart.h"
-#include "options.h"
+#include "sort.hpp"
+#include "heap.hpp"
+#include "vmap.hpp"
+#include "walk.hpp"
+#include "model.hpp"
+#include "proof.hpp"
+#include "limit.hpp"
+#include "queue.hpp"
+#include "dimacs.hpp"
+#include "random.hpp"
+#include "memory.hpp"
+#include "restart.hpp"
+#include "options.hpp"
 #include "simplify.cuh"
-#include "statistics.h"
-#include "solvertypes.h"
+#include "statistics.hpp"
+#include "solvertypes.hpp"
 
 namespace ParaFROST {
 
@@ -696,7 +696,7 @@ namespace ParaFROST {
 #endif
 		}
 		inline bool		alldisabled         () {
-			return !opts.phases && !(opts.all_en | opts.ere_en);
+			return !opts.phases && !(opts.all_en || opts.ere_en);
 		}
 		inline bool		reallocFailed       () {
 			return (simpstate == OTALLOC_FAIL || simpstate == CNFALLOC_FAIL);
@@ -739,7 +739,7 @@ namespace ParaFROST {
 				inf.n_lits_after, CNORMAL);
 		}
 		inline uint32	updateNumElims		() {
-			const uint32 remainedPVs = *vars->pVarsSize;
+			const uint32 remainedPVs = vars->pVars->size();
 			assert(remainedPVs <= vars->numPVs);
 			inf.n_del_vars_after = vars->numPVs - remainedPVs;
 			return remainedPVs;

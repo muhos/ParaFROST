@@ -19,8 +19,8 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 #ifndef __RALLOC_
 #define __RALLOC_
 
-#include "datatypes.h"
-#include "logging.h"
+#include "datatypes.hpp"
+#include "logging.hpp"
 #include <cstdlib>
 #include <cstring>
 

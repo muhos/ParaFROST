@@ -23,10 +23,10 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 #include "vector.cuh"
 #include "definitions.cuh"
 #include "constants.cuh"
-#include "definitions.h"
-#include "sclause.h"
-#include "clause.h"
-#include "sort.h"
+#include "definitions.hpp"
+#include "sclause.hpp"
+#include "clause.hpp"
+#include "sort.hpp"
 
 namespace ParaFROST {
 

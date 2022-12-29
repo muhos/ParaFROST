@@ -16,7 +16,7 @@ You should have received a copy of the GNU General Public License
 along with this program.  If not, see <https://www.gnu.org/licenses/>.
 **********************************************************************************/
 
-#include "solve.h"
+#include "solve.hpp"
 using namespace ParaFROST;
 
 void Solver::transiting(const uint32& src, const uint64& limit, uint64& removed, uint32& units)

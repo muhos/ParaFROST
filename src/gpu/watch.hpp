@@ -19,9 +19,9 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 #ifndef __WATCH_
 #define __WATCH_
 
-#include "clause.h"
-#include "vector.h"
-#include "definitions.h"
+#include "clause.hpp"
+#include "vector.hpp"
+#include "definitions.hpp"
 
 namespace ParaFROST {
 

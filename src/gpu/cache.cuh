@@ -20,7 +20,7 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 #define __CU_CACHE_  
 
 #include <map>
-#include "logging.h"
+#include "logging.hpp"
 
 namespace ParaFROST {
 

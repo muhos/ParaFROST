@@ -19,8 +19,8 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 #ifndef __VECTOR_
 #define __VECTOR_
 
-#include "malloc.h"
-#include "color.h"
+#include "malloc.hpp"
+#include "color.hpp"
 #include <cstdlib>
 #include <limits>
 #include <cassert>

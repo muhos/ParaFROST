@@ -19,8 +19,8 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 #ifndef __LIMIT_
 #define __LIMIT_
 
-#include "datatypes.h"
-#include "scale.h"
+#include "datatypes.hpp"
+#include "scale.hpp"
 
 namespace ParaFROST {
 

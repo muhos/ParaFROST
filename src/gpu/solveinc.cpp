@@ -16,9 +16,9 @@ You should have received a copy of the GNU General Public License
 along with this program.  If not, see <https://www.gnu.org/licenses/>.
 **********************************************************************************/
 
-#include "control.h"
-#include "solve.h" 
-#include "version.h"
+#include "control.hpp"
+#include "solve.hpp" 
+#include "version.hpp"
 
 using namespace ParaFROST;
 

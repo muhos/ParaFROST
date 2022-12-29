@@ -19,9 +19,9 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 #ifndef __CONTROL_
 #define __CONTROL_
 
-#include "definitions.h"
-#include "dimacs.h"
-#include "datatypes.h"
+#include "definitions.hpp"
+#include "dimacs.hpp"
+#include "datatypes.hpp"
 
 namespace ParaFROST {
 

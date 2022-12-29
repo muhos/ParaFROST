@@ -1,4 +1,4 @@
-/***********************************************************************[solvertypes.h]
+/***********************************************************************[vstate.h]
 Copyright(c) 2020, Muhammad Osama - Anton Wijs,
 Technische Universiteit Eindhoven (TU/e).
 
@@ -16,37 +16,17 @@ You should have received a copy of the GNU General Public License
 along with this program.  If not, see <https://www.gnu.org/licenses/>.
 **********************************************************************************/
 
-#ifndef __SOLVER_TYPES_
-#define __SOLVER_TYPES_
+#ifndef __VSTATE_
+#define __VSTATE_
 
-#include "space.h"
-#include "watch.h"
+#include "datatypes.hpp"
 
 namespace ParaFROST {
-	
-	typedef Vec<C_REF> BCNF;
-	typedef Vec<WATCH, int> WL;
-	typedef Vec<WL> WT;
-	typedef Vec<uint32, int> BOL;
-	typedef Vec<C_REF, int> WOL;
-	
-	struct CSIZE {
-		C_REF ref;
-		uint32 size;
-		CSIZE() {}
-		CSIZE(const C_REF& _r, const uint32& _s) : ref(_r), size(_s) {}
+
+	struct VSTATE {
+		Byte state : 3, dlcount : 2, subsume : 1, probe : 1;
+		VSTATE() : state(0), dlcount(0), subsume(0), probe(0) {}
 	};
-
-	struct DFS {
-		uint32 idx, min;
-		DFS() : idx(0), min(0) { }
-	};
-
-	#define forall_bol(BLIST, PTR) \
-		for (uint32* PTR = BLIST, *END = BLIST.end(); PTR != END; PTR++)
-
-	#define forall_wol(WLIST, PTR) \
-		for (C_REF* PTR = WLIST, *END = WLIST.end(); PTR != END; PTR++)
 }
 
 #endif

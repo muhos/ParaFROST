@@ -29,7 +29,7 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 #include "cache.cuh"
 #include "proof.cuh"
 #include "printer.cuh"
-#include "vstate.h"
+#include "vstate.hpp"
 
 namespace ParaFROST {
 	//======================================================//

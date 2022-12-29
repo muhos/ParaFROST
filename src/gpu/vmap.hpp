@@ -19,7 +19,7 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 #ifndef __VMAP_
 #define __VMAP_
 
-#include "solvertypes.h"
+#include "solvertypes.hpp"
 
 namespace ParaFROST {
 

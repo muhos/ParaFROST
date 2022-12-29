@@ -16,9 +16,9 @@ You should have received a copy of the GNU General Public License
 along with this program.  If not, see <https://www.gnu.org/licenses/>.
 **********************************************************************************/
 
-#include "solve.h"
-#include "dimacs.h"
-#include "control.h"
+#include "solve.hpp"
+#include "dimacs.hpp"
+#include "control.hpp"
 
 using namespace ParaFROST;
 
@@ -59,7 +59,7 @@ bool Solver::parser()
 		char* eof = str + fsz;
 		while (str < eof) {
 			eatWS(str);
-			if (*str == '\0' || *str == '0' || *str == '%') break;
+			if (*str == '\0' || *str == '%') break;
 			if (*str == 'c') eatLine(str);
 			else if (*str == 'p') {
 				if (!eq(str, "p cnf")) PFLOGE("header has wrong format");
@@ -208,6 +208,7 @@ bool Solver::toClause(Lits_t& c, Lits_t& org, char*& str)
 	assert(org.empty());
 	uint32 v = 0, s = 0;
 	bool satisfied = false;
+
 	while ((v = toInteger(str, s)) != 0) {
 		if (v > inf.maxVar) PFLOGE("too many variables");
 		uint32 lit = V2DEC(v, s);
@@ -232,7 +233,7 @@ bool Solver::toClause(Lits_t& c, Lits_t& org, char*& str)
 	else {
 		if (org.empty()) { 
 			if (opts.proof_en) proof.addEmpty();
-			PFLOG2(1, "  Found empty clause");
+			PFLOG2(1, " Found empty clause");
 			return false; 
 		}
 		int newsize = c.size();

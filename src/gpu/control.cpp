@@ -16,9 +16,9 @@ You should have received a copy of the GNU General Public License
 along with this program.  If not, see <https://www.gnu.org/licenses/>.
 **********************************************************************************/
 
-#include "solve.h" 
+#include "solve.hpp" 
 #include "definitions.cuh"
-#include "version.h"
+#include "version.hpp"
 
 #if defined(__linux__)
 #include <fpu_control.h>

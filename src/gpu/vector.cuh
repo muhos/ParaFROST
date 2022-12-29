@@ -20,7 +20,7 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 #define __CU_VECTOR_
 
 #include "definitions.cuh"
-#include "constants.h"
+#include "constants.hpp"
 
 namespace ParaFROST {
 
@@ -59,8 +59,9 @@ namespace ParaFROST {
 		_PFROST_H_D_ T*         data		() { return _mem; }
 		_PFROST_H_D_ T*         end			() { return _mem + sz; }
 		_PFROST_H_D_ T&         back		() { assert(sz); return _mem[sz - 1]; }
-		_PFROST_H_D_ bool		empty		() const { return !sz; }
+		_PFROST_H_D_ uint32*	sizeptr		() { return (uint32 *) &sz; }
 		_PFROST_H_D_ uint32		size		() const { return sz; }
+		_PFROST_H_D_ bool		empty		() const { return !sz; }
 		_PFROST_H_D_ uint32		capacity	() const { return cap; }
 		_PFROST_H_D_ void		resize		(const uint32& n) { assert(n <= cap); sz = n; }
 		_PFROST_H_D_ void		shareTo		(T* dest) {

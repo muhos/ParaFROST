@@ -19,9 +19,9 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 #ifndef __SPACE_
 #define __SPACE_
 
-#include "malloc.h"
-#include "definitions.h"
-#include "vstate.h"
+#include "malloc.hpp"
+#include "definitions.hpp"
+#include "vstate.hpp"
 
 namespace ParaFROST {
 	/*****************************************************/

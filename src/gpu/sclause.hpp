@@ -20,7 +20,7 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 #define __SCLAUSE_
 
 #include "definitions.cuh"
-#include "clause.h"
+#include "clause.hpp"
 
 namespace ParaFROST {
 

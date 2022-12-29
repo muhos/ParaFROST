@@ -19,7 +19,7 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 #ifndef __GL_MACROS_
 #define __GL_MACROS_
 
-#include "datatypes.h"
+#include "datatypes.hpp"
 
 extern bool quiet_en;
 extern int verbose;

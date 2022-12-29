@@ -20,8 +20,8 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 #define __SOLVER_OPTS_
 
 #include <cstring>
-#include "datatypes.h"
-#include "input.h"
+#include "datatypes.hpp"
+#include "input.hpp"
 
 namespace ParaFROST {
 

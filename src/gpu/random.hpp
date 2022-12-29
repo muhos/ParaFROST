@@ -20,7 +20,7 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 #define __RANDOM_
 
 #include <cassert>
-#include "datatypes.h"
+#include "datatypes.hpp"
 
 namespace ParaFROST {
 

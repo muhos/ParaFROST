@@ -20,7 +20,7 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 #define __GL_ATOMIC_
 
 #include "definitions.cuh"
-#include "datatypes.h"
+#include "datatypes.hpp"
 #include "warp.cuh"
 
 namespace ParaFROST {

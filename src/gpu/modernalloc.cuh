@@ -22,7 +22,7 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 #include <exception>
 #include <cuda_runtime.h>
 #include "moderngpu/context.hxx"
-#include "logging.h"
+#include "logging.hpp"
 #include "cache.cuh"
 
 constexpr size_t MAXMEMBLOCK = 10 * MBYTE;

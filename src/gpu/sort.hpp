@@ -19,7 +19,7 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 #ifndef __SORT_
 #define __SORT_
 
-#include "key.h"
+#include "key.hpp"
 
 namespace ParaFROST {
 

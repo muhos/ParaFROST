@@ -21,7 +21,7 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 #include <thrust/system/cuda/vector.h>
 #include <thrust/device_ptr.h>
-#include "logging.h"
+#include "logging.hpp"
 #include "cache.cuh"
 
 namespace ParaFROST {

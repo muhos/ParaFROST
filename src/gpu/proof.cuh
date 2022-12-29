@@ -19,7 +19,7 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 #ifndef __GPU_PROOF_
 #define __GPU_PROOF_
 
-#include "proof.h"
+#include "proof.hpp"
 #include "memory.cuh"
 
 namespace ParaFROST {

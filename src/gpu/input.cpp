@@ -16,10 +16,10 @@ You should have received a copy of the GNU General Public License
 along with this program.  If not, see <https://www.gnu.org/licenses/>.
 **********************************************************************************/
 
-#include "sort.h"
-#include "input.h"
-#include "control.h"
-#include "version.h"
+#include "sort.hpp"
+#include "input.hpp"
+#include "control.hpp"
+#include "version.hpp"
 
 namespace ParaFROST {
 

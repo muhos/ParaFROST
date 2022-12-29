@@ -19,7 +19,7 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 #include <cuda_runtime.h>
 #include <cassert>
 #include "cache.cuh"
-#include "logging.h"
+#include "logging.hpp"
 
 using namespace ParaFROST;
 
