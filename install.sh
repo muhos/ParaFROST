@@ -231,10 +231,10 @@ versionme () {
 	echo "#define DATE \"$now\"" >> $2
 }
 cpubuild=src/cpu/version.h
-gpubuild=src/gpu/version.h
+gpubuild=src/gpu/version.hpp
 if [ $icpu = 1 ] || [ $igpu = 1 ]; then 
 	cp $vertemplate $cpubuild; cp $vertemplate $gpubuild
-	logn "generating header 'version.h' from 'version.in'..."
+	logn "generating header 'version.h(pp)' from 'version.in'..."
 	cpuversion=0; gpuversion=0
 	[ -f VERSION ] && cpuversion=$(sed -n '1p' < VERSION) && gpuversion=$(sed -n '2p' < VERSION)
 	versionme "$cpuversion" "$cpubuild"

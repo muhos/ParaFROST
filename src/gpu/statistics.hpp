@@ -1,4 +1,4 @@
-/***********************************************************************[statistics.h]
+/***********************************************************************[statistics.hpp]
 Copyright(c) 2020, Muhammad Osama - Anton Wijs,
 Technische Universiteit Eindhoven (TU/e).
 
