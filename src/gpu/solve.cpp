@@ -22,7 +22,7 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 namespace ParaFROST {
 	GOPTION			gopts;
 	CNF_INFO		inf;
-	Solver		*solver = NULL;
+	Solver			*solver = NULL;
 	cuTIMER			*cutimer = NULL;
 	cudaDeviceProp	devProp;
 	CACHER			cacher;
@@ -70,10 +70,17 @@ Solver::Solver(const string& formulaStr) :
 		killSolver();
 	}
 	if (_gfree <= 200 * MBYTE) {
-		PFLOGW("not enough GPU memory (free = %zd MB) -> skip GPU simplifier", _gfree / MBYTE);
+		PFLOGW("skipping GPU simplifier due to not enough GPU memory (free = %zd MB)", _gfree / MBYTE);
 		opts.sigma_en = opts.sigma_live_en = false;
 	}
 	else cumm.init(_gfree, _gpenalty);
+	PFLOG2(2, "advicing GPU driver about memory preferences..");
+	if (cumm.checkMemAdvice()) {
+		PFLENDING(2, 5, "enabled");
+	}
+	else {
+		PFLENDING(2, 5, "disabled");
+	}
 	PFLRULER('-', RULELEN);
 	if (!parser() || BCP()) { learnEmpty(), killSolver(); }
 	if (opts.parseonly_en) killSolver();

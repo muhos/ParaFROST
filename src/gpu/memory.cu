@@ -143,15 +143,13 @@ bool cuMM::allocVars(VARS*& vars, const size_t& resolvedCap)
 	vars->eliminated = bytePtr, bytePtr += varsize;
 	assert(bytePtr == end);
 	varsPool.cap = min_cap;
-	#if !defined(_WIN32)
-	if (devProp.major > 5) {
-		PFLOGN2(2, " Advising GPU driver to favor global over system memory..");
+	if (isMemAdviseSafe) {
+		PFLOGN2(2, " Advising GPU driver to favor global over system memory in %s call..", __func__);
 		addr_t tmpPtr = ea + uintVec_sz; // skip pVars
 		CHECK(cudaMemAdvise(tmpPtr, end - tmpPtr, cudaMemAdviseSetPreferredLocation, MASTER_GPU));
 		CHECK(cudaMemPrefetchAsync(tmpPtr, end - tmpPtr, MASTER_GPU));
 		PFLDONE(2, 5);
 	}
-	#endif
 	return true;
 }
 
@@ -220,13 +218,11 @@ bool cuMM::resizeCNF(CNF*& cnf, const size_t& clsCap, const size_t& litsCap)
 		assert(cnfPool.mem == NULL);
 		if (!hasUnifiedMem(min_cap, "CNF")) return false;
 		CHECK(cudaMallocManaged((void**)&cnfPool.mem, min_cap));
-		#if !defined(_WIN32)
-		if (devProp.major > 5) {
-			PFLOGN2(2, " Advising GPU driver to favor global over system memory..");
+		if (isMemAdviseSafe) {
+			PFLOGN2(2, " Advising GPU driver to favor global over system memory in %s call..", __func__);
 			CHECK(cudaMemAdvise(cnfPool.mem, min_cap, cudaMemAdviseSetPreferredLocation, MASTER_GPU));
 			PFLDONE(2, 5);
 		}
-		#endif
 		cnf = (CNF*)cnfPool.mem;
 		const S_REF data_cap = S_REF(dataBytes / hc_bucket);
 		new (cnf) CNF(data_cap, uint32(clsCap));
@@ -241,14 +237,12 @@ bool cuMM::resizeCNF(CNF*& cnf, const size_t& clsCap, const size_t& litsCap)
 		addr_t newMem = NULL;
 		CHECK(cudaMallocManaged((void**)&newMem, min_cap));
 		sync();
-		#if !defined(_WIN32)
-		if (devProp.major > 5) {
-			PFLOGN2(2, " Advising GPU driver to favor global over system memory..");
+		if (isMemAdviseSafe) {
+			PFLOGN2(2, " Advising GPU driver to favor global over system memory in %s call..", __func__);
 			CHECK(cudaMemAdvise(newMem, min_cap, cudaMemAdviseSetPreferredLocation, MASTER_GPU));
 			CHECK(cudaMemPrefetchAsync(newMem, min_cap, MASTER_GPU));
 			PFLDONE(2, 5);
 		}
-		#endif
 		CNF* tmp_cnf = (CNF*)newMem;
 		const S_REF data_cap = S_REF(dataBytes / hc_bucket);
 		new (tmp_cnf) CNF(data_cap, uint32(clsCap));
@@ -286,14 +280,12 @@ bool cuMM::resizeOTAsync(OT*& ot, const size_t& min_lits, const cudaStream_t& _s
 		assert(otPool.mem == NULL);
 		if (!hasUnifiedMem(min_cap, "OT")) return false;
 		CHECK(cudaMallocManaged((void**)&otPool.mem, min_cap));
-		#if !defined(_WIN32)
-		if (devProp.major > 5) {
-			PFLOGN2(2, " Advising GPU driver to favor global over system memory..");
+		if (isMemAdviseSafe) {
+			PFLOGN2(2, " Advising GPU driver to favor global over system memory in %s call..", __func__);
 			CHECK(cudaMemAdvise(otPool.mem, min_cap, cudaMemAdviseSetPreferredLocation, MASTER_GPU));
 			CHECK(cudaMemPrefetchAsync(otPool.mem, min_cap, MASTER_GPU, _s));
 			PFLDONE(2, 5);
 		}
-		#endif
 		ot = (OT*)otPool.mem;
 		LOGERR("Exclusively scanning histogram failed");
 		sync(_s); // needed for calling the next constructor on host
@@ -405,4 +397,12 @@ void cuMM::breakMirror()
 		std::free(hcnfPool.mem), hcnfPool.mem = NULL;
 		hcnfPool.cap = 0;
 	}
+}
+
+bool cuMM::checkMemAdvice()
+{
+	int concurrentManaged = 0;
+	cudaDeviceGetAttribute(&concurrentManaged, cudaDevAttrConcurrentManagedAccess, MASTER_GPU);
+	isMemAdviseSafe = concurrentManaged ? true : false;
+	return isMemAdviseSafe;
 }

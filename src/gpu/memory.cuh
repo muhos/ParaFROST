@@ -47,6 +47,7 @@ namespace ParaFROST {
 		size_t	nscatters;
 		// trackers
 		int64	_tot, _free, cap, dcap, maxcap, penalty;
+		bool	isMemAdviseSafe;
 
 	public:
 
@@ -127,34 +128,6 @@ namespace ParaFROST {
 		inline void		cacheCNFPtr		(const CNF* d_cnf, const cudaStream_t& _s = 0) {
 			CHECK(cudaMemcpyAsync(pinned_cnf, d_cnf, sizeof(CNF), cudaMemcpyDeviceToHost, _s));
 		}
-		inline void		prefetchCNF2D	(const cudaStream_t& _s = 0) {
-			#if !defined(_WIN32)
-			if (devProp.major > 5) {
-				PFLOGN2(2, " Prefetching CNF to global memory..");
-				CHECK(cudaMemAdvise(cnfPool.mem, cnfPool.cap, cudaMemAdviseSetPreferredLocation, MASTER_GPU));
-				CHECK(cudaMemPrefetchAsync(cnfPool.mem, cnfPool.cap, MASTER_GPU, _s));
-				PFLDONE(2, 5);
-			}
-			#endif	
-		}
-		inline void		prefetchCNF2H	(const cudaStream_t& _s = 0) {
-			#if !defined(_WIN32)
-			if (devProp.major > 5) {
-				PFLOGN2(2, " Prefetching CNF to system memory..");
-				CHECK(cudaMemPrefetchAsync(cnfPool.mem, cnfPool.cap, cudaCpuDeviceId, _s));
-				PFLDONE(2, 5);
-			}
-			#endif	
-		}
-		inline void		prefetchOT2H	(const cudaStream_t& _s = 0) {
-			#if !defined(_WIN32)
-			if (devProp.major > 5) {
-				PFLOGN2(2, " Prefetching OT to system memory..");
-				CHECK(cudaMemPrefetchAsync(otPool.mem, otPool.cap, cudaCpuDeviceId, _s));
-				PFLDONE(2, 5);
-			}
-			#endif	
-		}
 		void	        resizeCNFAsync	(CNF*, const S_REF&, const uint32&);
 		bool			resizeCNF		(CNF*&, const size_t&, const size_t&);
 		uint32*			resizeLits		(const size_t&);
@@ -167,6 +140,7 @@ namespace ParaFROST {
 		void			mirrorCNF		(CNF*&);
 		void			scatterCNF		(CNF*, S_REF*, Byte*);
 		void			compactCNF		(CNF*, CNF*);
+		bool			checkMemAdvice	();
 
 	};
 

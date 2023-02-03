@@ -357,7 +357,7 @@ log "$NVCCVERSHORT."
 log ""
 extshared=0
 NVIDIASMI=$(type -P nvidia-smi)
-if [[ -z $NVIDIASMI ]]; then
+if [ -z "$NVIDIASMI" ]; then
   log "cannot find nvidia-smi, detecting GPU family is skipped and hence automated shared"
   log "memory extension will be disabled. To extend it manually use '--gextra=-DEXTSHMEM'"
   log "if the GPU compute capability is 7 or higher."
