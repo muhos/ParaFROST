@@ -1,8 +1,12 @@
-name: C/C++ CI
+name: build
 
 on:
   push:
     branches: [ "master" ]
+    paths-ignore: 
+      - '**/README.md'
+      - '**/VERSION'
+      - '**/.gitignore'
   pull_request:
     branches: [ "master" ]
 
