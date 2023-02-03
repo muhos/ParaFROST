@@ -28,19 +28,23 @@ To install either the CPU or the GPU solvers, use the `install.sh` script which 
        -a or --all           enable all above flags except 'assert'
 	   --ncolors             disable colors in all solver outputs
        --clean=<target>      remove old installation of <cpu | gpu | all> solvers
-       --standard=<n>        compile with <11 | 14 | 17 > c++ standard
-       --extra="flags"       pass extra "flags" to the compiler(s)
+       --standard=<n>        compile with <11 | 14 | 17> c++ standard
+       --gextra="flags"      pass extra "flags" to the GPU compiler (nvcc)
+	   --cextra="flags"      pass extra "flags" to the CPU compiler (g++)
 
 
 ## GPU solver
 To build the GPU solver, make sure you have a CUDA-capable GPU with pre-installed NVIDIA driver and CUDA toolkit.
 
-For installing CUDA v11.8, run the following commands on a Ubuntu 20.04:<br>
+For installing CUDA v12, run the following commands on a Ubuntu 22.04:<br>
 
-`wget https://developer.download.nvidia.com/compute/cuda/repos/ubuntu2004/x86_64/cuda-keyring_1.0-1_all.deb`<br>
+`wget https://developer.download.nvidia.com/compute/cuda/repos/ubuntu2204/x86_64/cuda-keyring_1.0-1_all.deb`<br>
 `sudo dpkg -i cuda-keyring_1.0-1_all.deb`<br>
 `sudo apt-get update`<br>
 `sudo apt-get -y install cuda`<br>
+
+The source code is also platform-compatible with Windows and WSL2. To install CUDA on those platforms, follow the
+installation guide in https://docs.nvidia.com/cuda/.
 
 Now the GPU solver is ready to install by running the install script via the command `./install.sh -g`. 
 The `parafrost` binary and the library `libparafrost.a` will be created by default in the build directory.<br>

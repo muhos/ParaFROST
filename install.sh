@@ -32,8 +32,9 @@ $ch	-s or --statistics    enable costly statistics (may impact runtime)
 $ch	-a or --all           enable all above flags except 'assert' and 'verbosity'
 $ch	--ncolors             disable colors in all solver outputs
 $ch	--clean=<target>      remove old installation of <cpu | gpu | all> solvers
-$ch	--standard=<n>        compile with <11 | 14 | 17 > c++ standard
-$ch	--extra="flags"       pass extra "flags" to the compiler(s)
+$ch	--standard=<n>        compile with <11 | 14 | 17> c++ standard
+$ch	--gextra="flags"      pass extra "flags" to the GPU compiler (nvcc)
+$ch --cextra="flags"      pass extra "flags" to the CPU compiler (g++)
 EOF
 printf "+%${lineWidth}s+\n" |tr ' ' '-'
 exit 0
@@ -55,7 +56,8 @@ wall=1
 icpu=0
 igpu=0
 debug=0
-extra=""
+cextra=""
+gextra=""
 clean=""
 assert=0
 logging=0
@@ -94,8 +96,12 @@ do
       standard="${1#*=}"
       ;;
 
-    --extra=*)
-      extra="${1#*=}"
+    --gextra=*)
+      gextra="${1#*=}"
+      ;;
+
+    --cextra=*)
+      cextra="${1#*=}"
       ;;
 
     *) error "invalid option '$1' (use '-h' for help)";;
@@ -234,7 +240,7 @@ cpubuild=src/cpu/version.h
 gpubuild=src/gpu/version.hpp
 if [ $icpu = 1 ] || [ $igpu = 1 ]; then 
 	cp $vertemplate $cpubuild; cp $vertemplate $gpubuild
-	logn "generating header 'version.h(pp)' from 'version.in'..."
+	logn "generating header 'version.hpp' from 'version.in'..."
 	cpuversion=0; gpuversion=0
 	[ -f VERSION ] && cpuversion=$(sed -n '1p' < VERSION) && gpuversion=$(sed -n '2p' < VERSION)
 	versionme "$cpuversion" "$cpubuild"
@@ -256,7 +262,6 @@ makefile=$srcdir/Makefile
 OPTIMIZE="-O3"
 FASTMATH="-use_fast_math"
 ARCH="-m${TARGET_SIZE}"
-STD="-std=c++$standard"
 
 log "installing ParaFROST-CPU on '$now'"
 log " under operating system '$HOST_OS'"
@@ -282,9 +287,9 @@ if [[ "$HOST_OS" == *"cygwin"* ]]; then pedantic=0; fi
 [ $statistics = 1 ] && CCFLAGS="$CCFLAGS -DSTATISTICS"
 [ $ncolors = 1 ] && CCFLAGS="$CCFLAGS -DNCOLORS"
 
-CCFLAGS="$ARCH $STD$CCFLAGS"
+CCFLAGS="$ARCH -std=c++$standard$CCFLAGS"
 
-if [[ $extra != "" ]]; then CCFLAGS="$CCFLAGS $extra"; fi
+if [[ $cextra != "" ]]; then CCFLAGS="$CCFLAGS $cextra"; fi
 
 endline
 
@@ -346,17 +351,20 @@ NVCCVER=$(echo $NVCCVER|tr -d '\r')
 NVCCVERSHORT=$(echo $NVCCVER | cut -d "V" -f2)
 NVCCVER="nvcc $NVCCVERSHORT"
 
-log "$NVCCVERSHORT"
+log "$NVCCVERSHORT."
 
 # try to find GPU family
+log ""
 extshared=0
-NVIDIASMI=/usr/bin/nvidia-smi
-if [[ ! -f $NVIDIASMI ]]; then
-  log "cannot find nvidia-smi, detecting GPU family is skipped"
+NVIDIASMI=$(type -P nvidia-smi)
+if [[ -z $NVIDIASMI ]]; then
+  log "cannot find nvidia-smi, detecting GPU family is skipped and hence automated shared"
+  log "memory extension will be disabled. To extend it manually use '--gextra=-DEXTSHMEM'"
+  log "if the GPU compute capability is 7 or higher."
 else
   GPUFAMILYLINE=$($NVIDIASMI -q | grep -m1 'Product Name')
   if [[ "$GPUFAMILYLINE" == *"RTX"* ]]; then
-    log "detected an RTX GPU family, thus permitting shared memory extension"; log ""
+    log "detected an RTX GPU family, thus permitting shared memory extension"
     extshared=1
   fi
 fi
@@ -365,6 +373,7 @@ srcdir=src/gpu
 builddir=build/gpu
 makefile=$srcdir/Makefile
 
+log ""
 log "installing ParaFROST-GPU on '$now'"
 log " under operating system '$HOST_OS'"
 log " with $compilerVer and $NVCCVER compilers"
@@ -376,7 +385,6 @@ echo "#define COMPILER \"$compilerVer + $NVCCVER\"" >> $gpubuild
 log "creating '$NVCC + $HOST_COMPILER' flags..."
 
 if [[ $pedantic = 1 ]]; then log "  turning off 'pedantic' due to incompatibility with Thrust"; pedantic=0; fi
-if [[ $standard > 14 ]]; then log "  falling back to 'c++14' standard due to incompatibility with Thrust"; standard=14; fi
 
 # default flags
 INCLUDE="../../dep"
@@ -385,8 +393,8 @@ RELAXEDEXPR="--expt-relaxed-constexpr"
 OPTIMIZE="-O3"
 FASTMATH="-use_fast_math"
 ARCH="-m${TARGET_SIZE}"
-STD="-std=c++$standard"
-CCFLAGS="$STD"
+CCFLAGS="-std=c++$standard"
+NVCCFLAGS="--std c++$standard"
 
 # building
 
@@ -404,7 +412,7 @@ fi
 [ $ncolors = 1 ] && NVCCFLAGS="$NVCCFLAGS -DNCOLORS"
 [ $extshared = 1 ] && NVCCFLAGS="$NVCCFLAGS -DEXTSHMEM"
 
-NVCCFLAGS="$ARCH$NVCCFLAGS"
+NVCCFLAGS="$ARCH $NVCCFLAGS"
 
 if [ -d dep ]; then
 	log "  including 'dep' directory during compilation"
@@ -416,13 +424,13 @@ if [ -d dep ]; then
 	NVCCFLAGS="$NVCCFLAGS -I$INCLUDE"
 fi
 
+if [[ $gextra != "" ]]; then NVCCFLAGS="$NVCCFLAGS $gextra"; fi
+if [[ $cextra != "" ]]; then CCFLAGS="$CCFLAGS $cextra"; fi
+
 log ""
 log "building with:"
 log "'$NVCCFLAGS"
-
-if [[ $extra != "" ]]; then CCFLAGS="$CCFLAGS $extra"; fi
-
-log "$CCFLAGS'"
+log "-Xcompiler $CCFLAGS'"
 log ""
 
 [ ! -f $gputemplate ] && error "cannot find the GPU makefile template"
