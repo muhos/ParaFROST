@@ -6,7 +6,7 @@ matrix:
   include:
     - name: CUDA
       env:
-      - UBUNTU_VERSION=ubuntu2004
+      - UBUNTU_VERSION=ubuntu2204
       dist: jammy
 
 before_install:
