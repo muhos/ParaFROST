@@ -61,9 +61,7 @@ int main(int argc, char **argv)
 		if (opt_timeout > 0) set_timeout(opt_timeout);
 		if (opt_memoryout > 0) set_memoryout(opt_memoryout);
 		signal_handler(handler_mercy_interrupt, handler_mercy_timeout);
-		Lits_t assumptions;
-		assumptions.push(2);
-		parafrost->isolve(assumptions);
+		parafrost->solve();
 		if (!quiet_en) PFLOG0("");
 		PFLOGN2(1, " Cleaning up..");
 		solver = NULL;
