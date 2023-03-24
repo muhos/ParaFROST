@@ -117,7 +117,7 @@ namespace ParaFROST {
 	_PFROST_D_ void devInsertionSort(T* data, const S& size, CMP cmp)
 	{
 		int i, j;
-#pragma unroll
+#pragma unroll 5
 		for (i = 1; i < size; i++) {
 			T tmp = data[i];
 			for (j = i; j > 0 && cmp(tmp, data[j - 1]); j--) data[j] = data[j - 1];
@@ -158,7 +158,6 @@ namespace ParaFROST {
 		}
 		while (i < size && i <= mid) aux[k++] = data[i++];
 		// copy sorted segment to input data
-#pragma unroll
 		for (k = from; k <= to; k++) data[k] = aux[k];
 	}
 
@@ -167,10 +166,8 @@ namespace ParaFROST {
 	{
 		int high = size - 1;
 		// divide & conquer to power-of-2 segments
-#pragma unroll
 		for (int s = 1; s < size; s <<= 1) {
 			int ds = s << 1;
-#pragma unroll
 			for (int i = 0; i < high; i += ds) {
 				int mid = i + s - 1;
 				int to = MIN(i + ds - 1, high);

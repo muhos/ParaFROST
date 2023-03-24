@@ -88,7 +88,6 @@ bool Solver::parser()
 						proof.init(sp, vorg);
 				}
 			}
-			else if (!toClause(in_c, org, str)) return false;
 			else if (opts.parseincr_en) {
 				incremental = true;
 				uint32 v = 0, s = 0;
@@ -98,6 +97,7 @@ bool Solver::parser()
 				}
 				if (!itoClause(in_c, org)) return false;
 			}
+			else if (!toClause(in_c, org, str)) return false;
 		}
 #if defined(__linux__) || defined(__CYGWIN__)
 		if (munmap(buffer, fsz) != 0) PFLOGE("cannot clean input file %s mapping", formula.path.c_str());
@@ -170,7 +170,6 @@ bool Solver::parser()
 		// now read clauses
 		while ((ch = formula.get()) != EOF) {
 			if (isSpace(ch)) continue;
-			else if (!toClause(in_c, org, ch)) return false;
 			else if (opts.parseincr_en) {
 				incremental = true;
 				uint32 v = 0, s = 0;
@@ -180,6 +179,7 @@ bool Solver::parser()
 				}
 				if (!itoClause(in_c, org)) return false;
 			}
+			else if (!toClause(in_c, org, ch)) return false;
 		}
 	}
 	assert(stats.clauses.original == orgs.size());
@@ -231,18 +231,22 @@ bool Solver::toClause(Lits_t& c, Lits_t& org, char*& str)
 		if (opts.proof_en) proof.deleteClause(org);
 	}
 	else {
-		if (org.empty()) { 
-			if (opts.proof_en) proof.addEmpty();
+		int newsize = c.size();
+		if (!newsize) {
+			learnEmpty();
 			PFLOG2(1, " Found empty clause");
 			return false; 
 		}
-		int newsize = c.size();
-		if (newsize == 1) {
+		else if (newsize == 1) {
 			const uint32 unit = *c;
 			CHECKLIT(unit);
 			LIT_ST val = sp->value[unit];
 			if (UNASSIGNED(val)) enqueueUnit(unit), formula.units++;
-			else if (!val) return false;
+			else if (!val) {
+				learnEmpty();
+				PFLOG2(1, "  Found conflicting unit");
+				return false;
+			}
 		}
 		else if (orgs.size() + 1 > inf.nOrgCls) PFLOGE("too many clauses");
 		else if (newsize) {
@@ -292,18 +296,22 @@ bool Solver::toClause(Lits_t& c, Lits_t& org, int& ch)
 		if (opts.proof_en) proof.deleteClause(org);
 	}
 	else {
-		if (org.empty()) {
-			if (opts.proof_en) proof.addEmpty();
+		int newsize = c.size();
+		if (!newsize) {
+			learnEmpty();
 			PFLOG2(1, "  Found empty clause");
 			return false;
 		}
-		int newsize = c.size();
-		if (newsize == 1) {
+		else if (newsize == 1) {
 			const uint32 unit = *c;
 			CHECKLIT(unit);
 			LIT_ST val = sp->value[unit];
 			if (UNASSIGNED(val)) enqueueUnit(unit), formula.units++;
-			else if (!val) return false;
+			else if (!val) {
+				learnEmpty();
+				PFLOG2(1, "  Found conflicting unit");
+				return false;
+			}
 		}
 		else if (orgs.size() + 1 > inf.nOrgCls) PFLOGE("too many clauses");
 		else if (newsize) {

@@ -82,7 +82,7 @@ Solver::Solver(const string& formulaStr) :
 		PFLENDING(2, 5, "disabled");
 	}
 	PFLRULER('-', RULELEN);
-	if (!parser() || BCP()) { learnEmpty(), killSolver(); }
+	if (!parser() || BCP()) { assert(cnfstate == UNSAT), killSolver(); }
 	if (opts.parseonly_en) killSolver();
 	if (opts.sigma_en || opts.sigma_live_en) { optSimp(), createStreams(); }
 }
@@ -175,6 +175,10 @@ void Solver::initLimits()
 void Solver::solve()
 {
 	FAULT_DETECTOR;
+	if (incremental) {
+		PFLOG0("Use isolve in incremental mode");
+		return;
+	}
 	timer.start();
 	initLimits();
 	if (verbose == 1) printTable();

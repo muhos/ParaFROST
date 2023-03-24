@@ -138,6 +138,10 @@ void Solver::initLimits()
 void Solver::solve()
 {
 	FAULT_DETECTOR;
+	if (incremental) {
+		PFLOG0("Use isolve in incremental mode");
+		return;
+	}
 	timer.start();
 	initLimits();
 	if (verbose == 1) printTable();

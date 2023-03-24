@@ -64,9 +64,11 @@ void Solver::iassume(Lits_t& assumptions)
 {
 	assert(inf.maxVar);
 	assert(stats.clauses.original);
-	if (assumptions.empty()) return;
-	PFLOGN2(2, " Adding %d assumptions..", assumptions.size());
-	this->assumptions.reserve(assumptions.size());
+	int assumed = assumptions.size();
+	if (!assumed) return;
+	stats.decisions.assumed += uint64(assumed);
+	PFLOGN2(2, " Adding %d assumptions..", assumed);
+	this->assumptions.reserve(assumed);
 	forall_clause(assumptions, k) {
 		const uint32 a = *k;
 		CHECKLIT(a);

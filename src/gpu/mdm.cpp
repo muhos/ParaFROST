@@ -159,7 +159,6 @@ void Solver::MDMInit()
 				if (valid(wt[dec]) && depFreeze(wt[dec], cand)) {
 					enqueueDecision(dec);
 					sp->seen[cand] = 1;
-					stats.decisions.massumed++;
 				}
 			}
 			else if (!val) {
@@ -235,7 +234,6 @@ void Solver::MDM()
 				if (valid(wt[dec]) && depFreeze(wt[dec], cand)) {
 					enqueueDecision(dec);
 					sp->seen[cand] = 1;
-					stats.decisions.massumed++;
 				}
 			}
 			else if (!val) {

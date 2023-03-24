@@ -86,7 +86,6 @@ namespace ParaFROST {
 			SCLAUSE& c = (*cnf)[r];
 			if (c.original() || c.learnt()) {
 				OT& ot = *ot_ptr;
-#pragma unroll
 				forall_clause(c, lit) {
 					ot[*lit].insert(r);
 				}

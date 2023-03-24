@@ -48,7 +48,7 @@ namespace ParaFROST {
 		struct { uint64 probed, failed, removed; } transitive;
 		struct { uint64 calls, clauses, literals; } shrink;
 		struct { uint32 calls, vmtf, vsids, walks; } mdm;
-		struct { uint64 single, multiple, massumed; } decisions;
+		struct { uint64 single, multiple, assumed; } decisions;
 		struct { uint64 calls, binaries, hyperunary; } debinary;
 		struct { uint64 calls, rounds, failed, probed; } probe;
 		struct { uint64 resolutions, resolvents, reduced; } binary;

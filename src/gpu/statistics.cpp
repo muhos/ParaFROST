@@ -139,6 +139,7 @@ void Solver::report()
 		PFLOG1(" %s Subsumed              : %s%-16lld%s", CREPORT, CREPORTVAL, stats.subsume.subsumed, CNORMAL);
 		PFLOG1(" %s Strengthened          : %s%-16lld%s", CREPORT, CREPORTVAL, stats.subsume.strengthened, CNORMAL);
 		PFLOG1(" %sSearch decisions       : %s%-16lld%s", CREPORT, CREPORTVAL, stats.decisions.single, CNORMAL);
+		PFLOG1(" %s Assumptions           : %s%-16lld%s", CREPORT, CREPORTVAL, stats.decisions.assumed, CNORMAL);
 		PFLOG1(" %s Propagations          : %s%-16lld%s", CREPORT, CREPORTVAL, stats.searchprops, CNORMAL);
 		PFLOG1(" %s Ticks                 : %s%-16lld%s", CREPORT, CREPORTVAL, stats.searchticks, CNORMAL);
 		PFLOG1(" %sMappings               : %s%-10d%s", CREPORT, CREPORTVAL, stats.mappings, CNORMAL);
@@ -147,7 +148,6 @@ void Solver::report()
 		PFLOG1(" %s VMTF uses             : %s%-10d%s", CREPORT, CREPORTVAL, stats.mdm.vmtf, CNORMAL);
 		PFLOG1(" %s VSIDS uses            : %s%-10d%s", CREPORT, CREPORTVAL, stats.mdm.vsids, CNORMAL);
 		PFLOG1(" %s All decisions         : %s%-16lld%s", CREPORT, CREPORTVAL, stats.decisions.multiple, CNORMAL);
-		PFLOG1(" %s Assumed decisions     : %s%-16lld%s", CREPORT, CREPORTVAL, stats.decisions.massumed, CNORMAL);
 		PFLOG1(" %s Last-made decisions   : %s%-10d%s", CREPORT, CREPORTVAL, last.mdm.decisions, CNORMAL);
 		PFLOG1(" %sVivification checks    : %s%-16lld%s", CREPORT, CREPORTVAL, stats.vivify.checks, CNORMAL);
 		PFLOG1(" %s Vivified              : %s%-16lld%s", CREPORT, CREPORTVAL, stats.vivify.vivified, CNORMAL);
