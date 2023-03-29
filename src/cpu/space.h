@@ -113,7 +113,9 @@ namespace ParaFROST {
 				value[p] = src->value[p];
 				value[n] = src->value[n];
 				level[v] = src->level[v];
+				source[v] = src->source[v];
 				vstate[v] = src->vstate[v];
+				psaved[v] = src->psaved[v];
 			}
 		}
 		void	printStates	() {

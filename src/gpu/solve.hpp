@@ -845,8 +845,9 @@ namespace ParaFROST {
 		//          Incremental Solving             //
 		//==========================================//
 	protected:
-		Vec<LIT_ST>		ifrozen, ivalue, imarks;
+		Vec<LIT_ST>		ifrozen, ivalue, iphase, imarks;
 		Vec<VSTATE>		ivstate;
+		Vec<C_REF>		isource;
 		Vec1D			ilevel;
 		Lits_t			assumptions, iconflict;
 	public:

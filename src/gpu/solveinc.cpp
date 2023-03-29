@@ -83,7 +83,6 @@ void Solver::iallocSpace()
 	model.lits[0] = 0;
 	model.init(vorg);
 	SP* newSP = new SP(inf.maxVar + 1);
-	newSP->initSaved(opts.polarity);
 	newSP->copyFrom(sp);
 	delete sp;
 	sp = newSP;
@@ -91,6 +90,8 @@ void Solver::iallocSpace()
 		proof.init(sp, vorg);
 	ilevel.clear(true);
 	ivalue.clear(true);
+	iphase.clear(true);
+	isource.clear(true);
 	ivstate.clear(true);
 	PFLDONE(2, 5);
 	PFLMEMCALL(this, 2);

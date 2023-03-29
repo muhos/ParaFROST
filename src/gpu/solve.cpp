@@ -176,7 +176,8 @@ void Solver::solve()
 {
 	FAULT_DETECTOR;
 	if (incremental) {
-		PFLOG0("Use isolve in incremental mode");
+		PFLOG0("");
+		PFLOGW("isolve is not used in incremental mode");
 		return;
 	}
 	timer.start();

@@ -54,6 +54,8 @@ uint32 Solver::iadd()
 	bumps.expand(v + 1, 0);
 	activity.expand(v + 1, 0.0);
 	ilevel.expand(v + 1, UNDEFINED);
+	iphase.expand(v + 1, opts.polarity);
+	isource.expand(v + 1, NOREF);
 	ifrozen.expand(v + 1, 0);
 	ivstate.expand(v + 1), ivstate[v] = VSTATE();
 	model.maxVar = v;
@@ -69,7 +71,9 @@ uint32 Solver::iadd()
 	}
 	sp->value = ivalue;
 	sp->level = ilevel;
+	sp->source = isource;
 	sp->vstate = ivstate;
+	sp->psaved = iphase;
 	return v;
 }
 
