@@ -71,8 +71,24 @@ void Solver::map(const bool& sigmified)
 	vmap.mapOrgs(model.lits);
 	// map assumptions & frozen
 	assert(iconflict.empty());
-	if (assumptions.size()) vmap.mapOrgs(assumptions);
-	if (ifrozen.size()) vmap.mapShrinkVars(ifrozen);
+	if (assumptions.size()) {
+		// unfreeze unmapped
+		forall_clause(assumptions, k) {
+			const uint32 a = *k;
+			CHECKLIT(a);
+			assert(ifrozen[ABS(a)]);
+			ifrozen[ABS(a)] = 0;
+		}
+		// map assumptions
+		vmap.mapOrgs(assumptions);
+		// freeze mapped
+		forall_clause(assumptions, k) {
+			const uint32 a = *k;
+			CHECKLIT(a);
+			assert(!ifrozen[ABS(a)]);
+			ifrozen[ABS(a)] = 1;
+		}
+	}
 	// map transitive start literal
 	vmap.mapTransitive(last.transitive.literals);
 	// map clauses and watch tables

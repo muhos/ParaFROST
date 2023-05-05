@@ -23,8 +23,6 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 namespace ParaFROST {
 
-	#define MDM_ASSUME (opts.mdmassume_en && assumptions.size())
-
 	#define mdm_prefetch(VALUES,STATES,FROZEN,TAIL) \
 		const LIT_ST* VALUES = sp->value;				\
 		const VSTATE* STATES = sp->vstate;				\

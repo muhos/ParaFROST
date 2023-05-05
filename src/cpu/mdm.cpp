@@ -23,7 +23,7 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 using namespace ParaFROST;
 
-inline bool	Solver::verifyMDM() 
+inline bool	Solver::verifyMDM()
 {
 	for (uint32 i = sp->propagated; i < trail.size(); i++) {
 		uint32 v = ABS(trail[i]);
@@ -55,10 +55,10 @@ inline bool Solver::valid(const LIT_ST* values, WL& ws)
 	forall_watches(ws, i) {
 		const WATCH w = *i;
 		// clause satisfied
-		if (values[w.imp] > 0) continue; 
+		if (values[w.imp] > 0) continue;
 		// if 'w.imp' not satisfied then it's an implication of 'cand'
-		if (w.binary()) 
-			return false; 
+		if (w.binary())
+			return false;
 		// there cannot be falsified literal as watched,
 		// so validating starts from 'c + 2'
 		CLAUSE& c = cm[w.ref];
@@ -72,7 +72,7 @@ inline bool Solver::valid(const LIT_ST* values, WL& ws)
 			else if (val) satisfied = true;
 			k++;
 		}
-		if (!satisfied && !unAssigned) 
+		if (!satisfied && !unAssigned)
 			return false;
 	}
 	return true;
@@ -107,7 +107,7 @@ inline bool Solver::depFreeze(const uint32& cand, const LIT_ST* values, LIT_ST* 
 	return true;
 }
 
-inline void Solver::MDMAssume(const LIT_ST* values, LIT_ST* frozen, uint32*& tail)
+inline void Solver::MDMAssume(const LIT_ST* values, LIT_ST* frozen, uint32*& tail, bool& skip)
 {
 	assert(sp->stacktail == sp->tmpstack);
 	int level = DL();
@@ -119,9 +119,13 @@ inline void Solver::MDMAssume(const LIT_ST* values, LIT_ST* frozen, uint32*& tai
 		const LIT_ST val = values[a];
 		if (UNASSIGNED(val)) {
 			level++;
-			mdm_assign(cand, a);
+			if (!depFreeze(cand, values, frozen, tail, wt[a]))
+				skip = true;
+			enqueueDecision(a);
+			sp->seen[cand] = 1;
 		}
-		else if (!val) {
+		else if (val) incDL(), level = DL();
+		else {
 			ianalyze(FLIP(a));
 			cnfstate = UNSAT;
 			clearMDM();
@@ -148,19 +152,23 @@ void Solver::MDMInit()
 		walk();
 	}
 
-	eligible_initial; 
+	eligible_initial;
 
 	mdm_prefetch(values, states, frozen, tail);
 
-	if (MDM_ASSUME)
-		MDMAssume(values, frozen, tail);
+	bool skip = false;
+	if (assumptions.size())
+		MDMAssume(values, frozen, tail, skip);
 
-	forall_vector(uint32, eligible, evar) {
-		const uint32 cand = *evar;
-		CHECKVAR(cand);
-		if (frozen[cand] || states[cand].state || iassumed(cand)) continue;
-		const uint32 dec = V2DEC(cand, sp->psaved[cand]);
-		mdm_assign(cand, dec);
+	if (!skip) {
+		forall_vector(uint32, eligible, evar) {
+			const uint32 cand = *evar;
+			CHECKVAR(cand);
+			if (frozen[cand] || states[cand].state || iassumed(cand))
+				continue;
+			const uint32 dec = V2DEC(cand, sp->psaved[cand]);
+			mdm_assign(cand, dec);
+		}
 	}
 
 	mdm_update;
@@ -200,21 +208,24 @@ void Solver::MDM()
 
 	mdm_prefetch(values, states, frozen, tail);
 
-	if (MDM_ASSUME)
-		MDMAssume(values, frozen, tail);
+	bool skip = false;
+	if (assumptions.size())
+		MDMAssume(values, frozen, tail, skip);
 
-	const bool targeting = useTarget();
-	forall_vector(uint32, eligible, evar) {
-		const uint32 cand = *evar;
-		CHECKVAR(cand);
-		if (frozen[cand] || states[cand].state || iassumed(cand)) continue;
-		uint32 dec = makeAssign(cand, targeting);
-		mdm_assign(cand, dec);
+	if (!skip) {
+		const bool targeting = useTarget();
+		forall_vector(uint32, eligible, evar) {
+			const uint32 cand = *evar;
+			CHECKVAR(cand);
+			if (frozen[cand] || states[cand].state || iassumed(cand)) continue;
+			uint32 dec = makeAssign(cand, targeting);
+			mdm_assign(cand, dec);
+		}
 	}
 
 	mdm_update;
 
-	if (opts.mdm_vsids_pumps || opts.mdm_vmtf_pumps) 
+	if (opts.mdm_vsids_pumps || opts.mdm_vmtf_pumps)
 		pumpFrozen();
 
 	clearMDM();

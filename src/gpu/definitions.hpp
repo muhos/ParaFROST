@@ -171,7 +171,7 @@ namespace ParaFROST {
 	inline double	ratio			(const double& x, const double& y) { return y ? x / y : 0; }
 	inline uint64	ratio			(const uint64& x, const uint64& y) { return y ? x / y : 0; }
 	inline double	percent			(const double& x, const double& y) { return ratio(100 * x, y); }
-	inline int		l2i				(const uint32& lit) { CHECKLIT(lit); return SIGN(lit) ? -int(ABS(lit)) : int(ABS(lit)); }
+	inline int		l2i				(const uint32& lit) { return SIGN(lit) ? -int(ABS(lit)) : int(ABS(lit)); }
 	inline uint32	maxInactive		() { return inf.maxMelted + inf.maxFrozen + inf.maxSubstituted; }
 	inline uint32	maxActive		() { assert(inf.maxVar >= maxInactive()); return inf.maxVar - maxInactive(); }
 	

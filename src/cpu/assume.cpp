@@ -74,13 +74,18 @@ void Solver::iassume(Lits_t& assumptions)
 	this->assumptions.reserve(assumptions.size());
 	forall_clause(assumptions, k) {
 		const uint32 a = *k, v = ABS(a);
-		CHECKLIT(a);
 		assert(!ieliminated(v));
-		assert(!ifrozen[v]);
-		ifrozen[ABS(a)] = 1;
-		this->assumptions.push(a);
+		uint32 mlit = imap(v);
+		if (a != mlit && SIGN(a))
+			mlit = FLIP(mlit);
+		CHECKLIT(mlit);
+		const uint32 mvar = ABS(mlit);
+		assert(!ifrozen[mvar]);
+		ifrozen[mvar] = 1;
+		this->assumptions.push(mlit);
+		PFLOG2(4, "  assuming %d after mapping original assumption %d", l2i(mlit), l2i(a));
 	}
-	PFLDONE(2, 5);
+	PFLDONE(2, 3);
 }
 
 #if defined(__linux__) || defined(__CYGWIN__)
@@ -103,6 +108,7 @@ void Solver::iunassume()
 	cnfstate = UNSOLVED_M;
 	PFLDONE(2, 5);
 	backtrack();
+	iconflict.clear();
 }
 
 void Solver::idecide()
@@ -140,7 +146,6 @@ void Solver::idecide()
 
 void Solver::ianalyze(const uint32& failed)
 {
-	assert(cnfstate);
 	assert(vorg);
 	PFLOG2(3, " Analyzing conflict on failed assumption (%d):", l2i(failed));
 	PFLTRAIL(this, 3);
