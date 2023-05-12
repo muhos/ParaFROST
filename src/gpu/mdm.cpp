@@ -91,7 +91,6 @@ inline bool Solver::depFreeze(WL& ws, const uint32& cand)
 	forall_watches(ws, i) {
 		const WATCH w = *i;
 		if (isTrue(w.imp)) continue;
-		assert(!w.binary());
 		CLAUSE& c = cm[w.ref];
 		uint32 othervar = ABS(c[0]) ^ ABS(c[1]) ^ cand;
 		if (sp->seen[othervar]) return false;

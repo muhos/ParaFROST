@@ -83,7 +83,6 @@ inline bool Solver::depFreeze(const uint32& cand, const LIT_ST* values, LIT_ST* 
 	forall_watches(ws, i) {
 		const WATCH w = *i;
 		if (values[w.imp] > 0) continue;
-		assert(!w.binary());
 		CLAUSE& c = cm[w.ref];
 		uint32* lits = c.data();
 		uint32 othervar = ABS(lits[0]) ^ ABS(lits[1]) ^ cand;

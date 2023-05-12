@@ -218,7 +218,17 @@ void Solver::sigmifying()
 	last.shrink.removed = stats.shrunken;
 	if (ereCls > inf.nClauses) stats.sigma.ere.removed += ereCls - inf.nClauses;
 	if (inf.maxFrozen > sp->simplified) stats.units.forced += inf.maxFrozen - sp->simplified;
-	if (!inf.unassigned || !inf.nClauses) { cnfstate = SAT; printStats(1, 's', CGREEN); return; }
+	if (!inf.unassigned || !inf.nClauses) { 
+		PFLOG2(2, " All clauses removed");
+		cnfstate = SAT;
+		stats.clauses.original = 0;
+		stats.clauses.learnt = 0;
+		stats.literals.original = 0;
+		stats.literals.learnt = 0;
+		cnfstate = SAT; 
+		printStats(1, 's', CGREEN); 
+		return;
+	}
 	if (canMap()) map(true);
 	else newBeginning();
 	rebuildWT(opts.sigma_priorbins);
