@@ -80,7 +80,6 @@ void Solver::iassume(Lits_t& assumptions)
 			mlit = FLIP(mlit);
 		CHECKLIT(mlit);
 		const uint32 mvar = ABS(mlit);
-		assert(!ifrozen[mvar]);
 		ifrozen[mvar] = 1;
 		this->assumptions.push(mlit);
 		PFLOG2(4, "  assuming %d after mapping original assumption %d", l2i(mlit), l2i(a));

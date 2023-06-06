@@ -142,14 +142,17 @@ void Solver::MDMInit()
 	assert(sp->propagated == trail.size());
 	assert(conflict == NOREF);
 
-	stats.mdm.calls++;
-
-	PFLOG2(2, " MDM %d: electing decisions at decaying round %d..", stats.mdm.calls, last.mdm.rounds);
-
 	if (opts.mdm_walk_en) {
 		stats.mdm.walks++;
 		walk();
 	}
+
+	// check if formula is solved by walk strategy
+	if (!UNSOLVED(cnfstate)) return;
+
+	stats.mdm.calls++;
+
+	PFLOG2(2, " MDM %d: electing decisions at decaying round %d..", stats.mdm.calls, last.mdm.rounds);
 
 	eligible_initial;
 
@@ -203,6 +206,12 @@ void Solver::MDM()
 	if (opts.mdm_walk_en && !DL() && firstround) {
 		stats.mdm.walks++;
 		walk();
+	}
+
+	// check if formula is solved by walk strategy
+	if (!UNSOLVED(cnfstate)) {
+		eligible.clear();
+		return;
 	}
 
 	mdm_prefetch(values, states, frozen, tail);
