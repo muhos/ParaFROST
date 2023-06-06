@@ -95,7 +95,7 @@ namespace ParaFROST {
 		bool	vsids_en, vsidsonly_en;
 		bool	probe_en, probehbr_en, probe_sleep_en;
 		bool	model_en, modelprint_en, modelverify_en;
-		bool	mdm_walk_en, mdm_mcv_en, mdmassume_en, mdmvsidsonly_en;
+		bool	mdm_walk_en, mdm_mcv_en, mdmvsidsonly_en;
 		//==========================================//
 		//             Simplifier options           //
 		//==========================================//

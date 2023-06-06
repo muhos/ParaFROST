@@ -56,6 +56,10 @@ bool Solver::parser()
 #endif
 		in_c.reserve(INIT_CAP);
 		org.reserve(INIT_CAP);
+		// Initially 'inf' is reset but if parser() is called again
+		// by an incremental solving procedure, then 'inf' has to be
+		// manually reset
+		RESETSTRUCT(&inf); 
 		char* eof = str + fsz;
 		while (str < eof) {
 			eatWS(str);

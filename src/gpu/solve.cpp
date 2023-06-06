@@ -74,7 +74,7 @@ Solver::Solver(const string& formulaStr) :
 		opts.sigma_en = opts.sigma_live_en = false;
 	}
 	else cumm.init(_gfree, _gpenalty);
-	PFLOG2(2, "advicing GPU driver about memory preferences..");
+	PFLOGN2(2, "advising GPU driver about memory preferences..");
 	if (cumm.checkMemAdvice()) {
 		PFLENDING(2, 5, "enabled");
 	}

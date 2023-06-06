@@ -100,6 +100,11 @@ void Solver::iallocSpace()
 void Solver::isolve(Lits_t& assumptions)
 {
 	FAULT_DETECTOR;
+	if (!stats.clauses.original) {
+		assert(orgs.empty());
+		PFLOGW("Formula is already SATISFIABLE by elimination");
+		return;
+	}
 	timer.start();
 	iallocSpace();
 	iunassume();

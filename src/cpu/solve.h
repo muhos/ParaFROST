@@ -102,7 +102,7 @@ namespace ParaFROST {
 		inline void		moveWatches			(WL&, CMM&);
 		inline uint32	minReachable		(WL&, DFS*, const DFS&);
 		inline bool		depFreeze			(const uint32& cand, const LIT_ST* values, LIT_ST* frozen, uint32*& stack, WL& ws);
-		inline void		MDMAssume			(const LIT_ST* values, LIT_ST* frozen, uint32*& tail);
+		inline void		MDMAssume			(const LIT_ST* values, LIT_ST* frozen, uint32*& tail, bool& skip);
 		inline bool		valid				(const LIT_ST* values, WL& ws);
 		inline void		recycleWL			(const uint32&);
 		inline bool		findBinary			(uint32, uint32);
