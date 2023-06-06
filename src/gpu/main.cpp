@@ -59,12 +59,23 @@ int main(int argc, char **argv)
 		if (opt_timeout > 0) set_timeout(opt_timeout);
 		if (opt_memoryout > 0) set_memoryout(opt_memoryout);
 		signal_handler(handler_mercy_interrupt, handler_mercy_timeout);
-		parafrost->solve();
-		if (!quiet_en) PFLOG0("");
+		Lits_t assumptions;
+		parafrost->isolve(assumptions);
+		delete parafrost;
+		parafrost = new Solver(formula);
+		solver = parafrost;
+		assumptions.push(V2L(1));
+		parafrost->isolve(assumptions);
+		delete parafrost;
+		parafrost = new Solver(formula);
+		solver = parafrost;
+		assumptions.pop();
+		assumptions.push(NEG(V2L(1)));
+		parafrost->isolve(assumptions);
 		PFLOGN2(1, " Cleaning up..");
 		solver = NULL;
 		delete parafrost;
-		PFLDONE(1, 5);
+		PFLDONE(1, 2);
 		if (!quiet_en) PFLRULER('-', RULELEN);
 		return EXIT_SUCCESS;
 	}

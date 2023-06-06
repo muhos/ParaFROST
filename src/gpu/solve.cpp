@@ -34,6 +34,13 @@ namespace ParaFROST {
 
 using namespace ParaFROST;
 
+
+Solver::~Solver() 
+{ 
+	PFPRINT(2, 5, "\n");
+	masterFree();
+}
+
 Solver::Solver(const string& formulaStr) :
 	formula(formulaStr)
 	, sp(NULL)

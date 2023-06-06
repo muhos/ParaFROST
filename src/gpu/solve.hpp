@@ -645,7 +645,7 @@ namespace ParaFROST {
 		void			map					(WT&);
 		void			map					(const bool& sigmified = false);
 						Solver				(const string&);
-						~Solver				() { }
+						~Solver				();
 		//==========================================//
 		//                Simplifier                //
 		//==========================================//

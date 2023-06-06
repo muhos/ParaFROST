@@ -341,7 +341,7 @@ void cuMM::mirrorCNF(CNF*& hcnf)
 
 void cuMM::freeVars()
 {
-	PFLOGN2(2, " Freeing up fixed unified memory..");
+	PFLOGN2(2, "  freeing up fixed unified memory..");
 	FREE(varsPool);
 	d_units = NULL;
 	PFLENDING(2, 5, "(remaining: %lld)", cap);
@@ -349,7 +349,7 @@ void cuMM::freeVars()
 
 void cuMM::freeCNF()
 {
-	PFLOGN2(2, " Freeing up CNF unified memory..");
+	PFLOGN2(2, "  freeing up CNF unified memory..");
 	FREE(cnfPool);
 	d_cnf_mem = NULL, d_refs_mem = NULL;
 	PFLENDING(2, 5, "(remaining: %lld)", cap);
@@ -357,14 +357,14 @@ void cuMM::freeCNF()
 
 void cuMM::freeOT()
 {
-	PFLOGN2(2, " Freeing up OT unified memory..");
+	PFLOGN2(2, "  freeing up occurrence table unified memory..");
 	FREE(otPool);
 	PFLENDING(2, 5, "(remaining: %lld)", cap);
 }
 
 void cuMM::freeFixed()
 {
-	PFLOGN2(2, " Freeing up device memory..");
+	PFLOGN2(2, "  freeing up histogram and auxiliary memory..");
 	if (auxPool.mem) {
 		DFREE(auxPool);
 		d_scatter = NULL, d_stencil = NULL;
@@ -384,19 +384,23 @@ void cuMM::freeFixed()
 
 void cuMM::freePinned()
 {
+	PFLOGN2(2, "  freeing up pinned memory..");
 	if (pinnedPool.mem) {
 		CHECK(cudaFreeHost(pinnedPool.mem)), pinnedPool.mem = NULL;
 		pinnedPool.cap = 0;
 		pinned_cnf = NULL;
 	}
+	PFLENDING(2, 5, "(remaining: %lld)", pinnedPool.cap);
 }
 
 void cuMM::breakMirror()
 {
+	PFLOGN2(2, "  freeing up CNF host memory..");
 	if (hcnfPool.mem) {
 		std::free(hcnfPool.mem), hcnfPool.mem = NULL;
 		hcnfPool.cap = 0;
 	}
+	PFLENDING(2, 5, "(remaining: %lld)", hcnfPool.cap);
 }
 
 bool cuMM::checkMemAdvice()

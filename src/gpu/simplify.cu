@@ -245,6 +245,7 @@ void Solver::sigmifying()
 
 void Solver::masterFree()
 {
+	PFLOG2(2, " Freeing up GPU memory..");
 	syncAll();
 	cacher.destroy();
 	cumm.freeFixed();

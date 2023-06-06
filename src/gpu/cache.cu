@@ -24,6 +24,7 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 using namespace ParaFROST;
 
 void CACHER::destroy() {
+	PFLOGN2(2, "  freeing up GPU cacher memory..");
 	for (free_cache_t::iterator i = free_cache.begin(); i != free_cache.end(); i++) {
 		if (cudaFree(i->second) != cudaSuccess) {
 			PFLOGEN("cannot deallocate cached free memory block %p", i->second);
@@ -40,6 +41,7 @@ void CACHER::destroy() {
 	free_cache.clear();
 	alloc_cache.clear();
 	used = 0;
+	PFLENDING(2, 5, "(remaining: %lld)", used);
 }
 
 void* CACHER::allocate(size_t size) {
