@@ -71,7 +71,6 @@ BOOL_OPT opt_modelprint_en("modelprint", "print model on stdout", false);
 BOOL_OPT opt_modelverify_en("modelverify", "verify model on input formula", false);
 BOOL_OPT opt_mdmlcv_en("mdmlcv", "use least-constrained variables to make multiple decisions", false);
 BOOL_OPT opt_mdmwalk_en("mdmwalk", "enable walk within an initial mdm round", true);
-BOOL_OPT opt_mdmassume_en("mdmassume", "choose multiple decisions based on given assumptions (incremental mode)", false);
 BOOL_OPT opt_report_en("report", "allow performance report on stdout", true);
 BOOL_OPT opt_rephase_en("rephase", "enable variable rephasing", true);
 BOOL_OPT opt_reduce_en("reduce", "enable learnt database reduction", true);
@@ -187,7 +186,6 @@ void OPTION::init()
 	minimize_min		= opt_minimize_min;
 	minimize_lbd		= opt_minimize_lbd;
 	minimize_depth		= opt_minimize_depth;
-	mdmassume_en		= opt_mdmassume_en;
 	mdm_mcv_en			= !opt_mdmlcv_en;
 	mdm_walk_en			= opt_mdmwalk_en;
 	mdm_vsids_pumps		= opt_mdm_vsidspumps;

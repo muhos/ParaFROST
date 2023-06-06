@@ -152,7 +152,7 @@ void Solver::MDMInit()
 
 	mdm_prefetch(values, states, frozen, tail);
 
-	if (MDM_ASSUME)
+	if (assumptions.size())
 		MDMAssume(values, frozen, tail);
 
 	forall_vector(uint32, eligible, evar) {
@@ -200,7 +200,7 @@ void Solver::MDM()
 
 	mdm_prefetch(values, states, frozen, tail);
 
-	if (MDM_ASSUME)
+	if (assumptions.size())
 		MDMAssume(values, frozen, tail);
 
 	const bool targeting = useTarget();

@@ -134,17 +134,19 @@ void Solver::MDMInit()
 	assert(sp->propagated == trail.size());
 	assert(conflict == NOREF);
 	assert(UNSOLVED(cnfstate));
-	stats.mdm.calls++;
-	PFLOG2(2, " MDM %d: electing decisions at decaying round %d..", stats.mdm.calls, last.mdm.rounds);
 	if (opts.mdm_walk_en) {
 		stats.mdm.walks++;
 		walk();
 	}
+	// check if formula is solved by walk strategy
+	if (!UNSOLVED(cnfstate)) return;
+	stats.mdm.calls++;
+	PFLOG2(2, " MDM %d: electing decisions at decaying round %d..", stats.mdm.calls, last.mdm.rounds);
 	eligible.resize(inf.maxVar);
 	occurs.resize(inf.maxVar + 1);
 	varOrder(); // initial variable ordering
 	sp->stacktail = sp->tmpstack;
-	if (opts.mdmassume_en && assumptions.size()) {
+	if (assumptions.size()) {
 		assert(sp->stacktail == sp->tmpstack);
 		int level = DL();
 		while (level < assumptions.size()) {
@@ -218,8 +220,13 @@ void Solver::MDM()
 		stats.mdm.walks++;
 		walk();
 	}
+	// check if formula is solved by walk strategy
+	if (!UNSOLVED(cnfstate)) {
+		eligible.clear();
+		return;
+	}
 	sp->stacktail = sp->tmpstack;
-	if (opts.mdmassume_en && assumptions.size()) {
+	if (assumptions.size()) {
 		assert(sp->stacktail == sp->tmpstack);
 		int level = DL();
 		while (level < assumptions.size()) {
