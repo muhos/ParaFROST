@@ -148,6 +148,9 @@ namespace ParaFROST {
 #pragma GCC diagnostic pop
 #endif
 
+	// Wrapper for memory reset kernel
+	void memSetAsync(addr_t, const Byte&, const size_t&);
+
 }
 
 #endif

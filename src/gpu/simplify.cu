@@ -141,7 +141,7 @@ void Solver::awaken()
 	initDevVorg(cuhist); // load device pointers to constant memory
 	prepareCNFAsync(cnf, streams[0]);
 	if (opts.proof_en) 
-		cuMemSetAsync(cuhist.d_lbyte, 0, inf.nDualVars);
+		memSetAsync(cuhist.d_lbyte, 0, inf.nDualVars);
 	assert(vorg.size() == inf.maxVar + 1);
 	cuhist.fetchVars(vorg, streams[1]);
 	if (opts.proof_en) {
