@@ -55,9 +55,6 @@ To build a CPU-only version of the solver, run `./install.sh -c`.<br>
 ## Debug and Testing
 Add `-t` argument with the install command to enable assertions or `-d` to collect debugging information for both the CPU and GPU solvers.<br>
 
-The solver has a complete artifact for performance evaluation and comparisons with CaDiCaL solver.<br>
-More information can be found in: https://gears.win.tue.nl/software/parafrost <br>
-
 # Usage
 The solver can be used via the command `parafrost [<option> ...][<infile>.<cnf>][<option> ...]`.<br>
 For more options, type `parafrost -h` or `parafrost --helpmore`.
