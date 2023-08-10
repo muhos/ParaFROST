@@ -3,7 +3,7 @@
 # ParaFROST
 ParaFROST stands for Parallel Formal Reasoning about SaTisfiability. 
 It is a parallel SAT solver with GPU-accelerated inprocessing capable of harnessing NVIDIA CUDA-enabled GPUs in applying modern inprocessing tecnhiques in parallel. 
-The CDCL search is built from scratch with various optimisations based on CaDiCaL heuristics (see our paper in [TACAS'21](https://gears.win.tue.nl/papers/parafrost_gpu.pdf)).
+The CDCL search is built from scratch with various optimisations based on CaDiCaL heuristics (see our paper in [FMSD'23](https://link.springer.com/article/10.1007/s10703-023-00432-z)).
 The inprocessing engine extends our previous work in SIGmA simplifier with new data structures, parallel garbage collection and more.
 
 # Install
