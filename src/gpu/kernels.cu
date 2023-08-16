@@ -764,16 +764,6 @@ namespace ParaFROST {
 		syncAll();
 	}
 
-	void cuMemSetAsync(addr_t mem, const Byte& val, const size_t& size)
-	{
-		OPTIMIZEBLOCKS(uint32(size), BLOCK1D);
-		memset_k<Byte> << <nBlocks, BLOCK1D >> > (mem, val, size);
-		if (gopts.sync_always) {
-			LOGERR("CUDA memory set failed");
-			syncAll();
-		}
-	}
-
 	void prepareCNFAsync(CNF* cnf, const cudaStream_t& _s)
 	{
 		assert(inf.nClauses);

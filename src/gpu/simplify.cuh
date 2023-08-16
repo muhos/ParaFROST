@@ -40,7 +40,6 @@ namespace ParaFROST {
 	void initDevOpts(const cuOptions&);
 	void initDevVorg(const cuHist&);
 	void mapFrozenAsync(VARS*, const uint32&);
-	void cuMemSetAsync(addr_t, const Byte&, const size_t&);
 	void copyIf(uint32*, CNF*);
 	void copyIfAsync(uint32*, CNF*);
 	void calcScores(VARS*, uint32*);
