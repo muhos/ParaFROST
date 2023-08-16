@@ -23,30 +23,30 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 #include "watch.h"
 
 namespace ParaFROST {
-	
-	typedef Vec<C_REF> BCNF;
-	typedef Vec<WATCH, int> WL;
-	typedef Vec<WL> WT;
-	typedef Vec<uint32, int> BOL;
-	typedef Vec<C_REF, int> WOL;
-	
-	struct CSIZE {
-		C_REF ref;
-		uint32 size;
-		CSIZE() {}
-		CSIZE(const C_REF& _r, const uint32& _s) : ref(_r), size(_s) {}
-	};
 
-	struct DFS {
-		uint32 idx, min;
-		DFS() : idx(0), min(0) { }
-	};
+typedef Vec<C_REF> BCNF;
+typedef Vec<WATCH, int> WL;
+typedef Vec<WL> WT;
+typedef Vec<uint32, int> BOL;
+typedef Vec<C_REF, int> WOL;
 
-	#define forall_bol(BLIST, PTR) \
-		for (uint32* PTR = BLIST, *END = BLIST.end(); PTR != END; PTR++)
+struct CSIZE {
+  C_REF ref;
+  uint32 size;
+  CSIZE() {}
+  CSIZE(const C_REF& _r, const uint32& _s) : ref(_r), size(_s) {}
+};
 
-	#define forall_wol(WLIST, PTR) \
-		for (C_REF* PTR = WLIST, *END = WLIST.end(); PTR != END; PTR++)
-}
+struct DFS {
+  uint32 idx, min;
+  DFS() : idx(0), min(0) {}
+};
+
+#define forall_bol(BLIST, PTR) \
+  for (uint32* PTR = BLIST, *END = BLIST.end(); PTR != END; PTR++)
+
+#define forall_wol(WLIST, PTR) \
+  for (C_REF* PTR = WLIST, *END = WLIST.end(); PTR != END; PTR++)
+} // namespace ParaFROST
 
 #endif

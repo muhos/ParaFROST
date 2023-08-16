@@ -16,96 +16,94 @@ You should have received a copy of the GNU General Public License
 along with this program.  If not, see <https://www.gnu.org/licenses/>.
 **********************************************************************************/
 
-#include "solve.hpp" 
+#include "solve.hpp"
 
 using namespace ParaFROST;
 
-inline bool Solver::isBinary(const C_REF& r, uint32& first, uint32& second)
-{
-	assert(!DL());
-	CLAUSE& c = cm[r];
-	assert(!c.deleted());
-	first = 0, second = 0;
-	forall_clause(c, k) {
-		const uint32 lit = *k;
-		CHECKLIT(lit);
-		const LIT_ST val = sp->value[lit];
-		if (UNASSIGNED(val)) {
-			if (second) return false; // not binary
-			if (first) second = lit;
-			else first = lit;
-		}
-		else if (val) {
-			// satisfied
-			removeClause(c, r);
-			return false;
-		}
-	}
-	if (!second) return false; // all falsified except 'first'
-	return true;
+inline bool Solver::isBinary(const C_REF& r, uint32& first, uint32& second) {
+    assert(!DL());
+    CLAUSE& c = cm[r];
+    assert(!c.deleted());
+    first = 0, second = 0;
+    forall_clause(c, k) {
+        const uint32 lit = *k;
+        CHECKLIT(lit);
+        const LIT_ST val = sp->value[lit];
+        if (UNASSIGNED(val)) {
+            if (second) return false; // not binary
+            if (first)
+                second = lit;
+            else
+                first = lit;
+        } else if (val) {
+            // satisfied
+            removeClause(c, r);
+            return false;
+        }
+    }
+    if (!second) return false; // all falsified except 'first'
+    return true;
 }
 
-inline void	Solver::resetoccurs()
-{
-	forall_vector(OCCUR, occurs, o) {
-		o->ps = o->ns = 0;
-	}
+inline void Solver::resetoccurs() {
+    forall_vector(OCCUR, occurs, o) {
+        o->ps = o->ns = 0;
+    }
 }
 
-inline void	Solver::countoccurs(CLAUSE& c)
-{
-	assert(!c.deleted());
-	forall_clause(c, k) {
-		const uint32 lit = *k;
-		CHECKLIT(lit);
-		if (SIGN(lit)) occurs[ABS(lit)].ns++;
-		else occurs[ABS(lit)].ps++;
-	}
+inline void Solver::countoccurs(CLAUSE& c) {
+    assert(!c.deleted());
+    forall_clause(c, k) {
+        const uint32 lit = *k;
+        CHECKLIT(lit);
+        if (SIGN(lit))
+            occurs[ABS(lit)].ns++;
+        else
+            occurs[ABS(lit)].ps++;
+    }
 }
 
-void Solver::histClause(CLAUSE& c)
-{
-	assert(!c.deleted());
-	forall_clause(c, k) {
-		CHECKLIT(*k);
-		vhist[*k]++;
-	}
+void Solver::histClause(CLAUSE& c) {
+    assert(!c.deleted());
+    forall_clause(c, k) {
+        CHECKLIT(*k);
+        vhist[*k]++;
+    }
 }
 
-void Solver::histBins(BCNF& cnf)
-{
-	forall_cnf(cnf, i) {
-		const C_REF r = *i;
-		if (cm.deleted(r)) continue;
-		uint32 a, b;
-		if (isBinary(r, a, b)) {
-			CHECKLIT(a), CHECKLIT(b);
-			vhist[a]++;
-			vhist[b]++;
-		}
-	}
+void Solver::histBins(BCNF& cnf) {
+    forall_cnf(cnf, i) {
+        const C_REF r = *i;
+        if (cm.deleted(r)) continue;
+        uint32 a, b;
+        if (isBinary(r, a, b)) {
+            CHECKLIT(a), CHECKLIT(b);
+            vhist[a]++;
+            vhist[b]++;
+        }
+    }
 }
 
 void Solver::histCNF(BCNF& cnf, const bool& reset) {
-	if (cnf.empty()) return;
-	if (reset) resetoccurs();
-	forall_cnf(cnf, i) {
-		const C_REF ref = *i;
-		if (cm.deleted(ref)) continue;
-		countoccurs(cm[*i]);
-	}
+    if (cnf.empty()) return;
+    if (reset) resetoccurs();
+    forall_cnf(cnf, i) {
+        const C_REF ref = *i;
+        if (cm.deleted(ref)) continue;
+        countoccurs(cm[*i]);
+    }
 }
 
 void Solver::histCNFFlat(BCNF& cnf, const bool& reset) {
-	if (cnf.empty()) return;
-	if (reset) {
-		forall_vector(uint32, vhist, h) { 
-			*h = 0;
-		}
-	}
-	forall_cnf(cnf, i) {
-		const C_REF ref = *i;
-		if (cm.deleted(ref)) continue;
-		histClause(cm[*i]);
-	}
+    if (cnf.empty()) return;
+    if (reset) {
+        forall_vector(uint32, vhist, h) {
+            *h = 0;
+        }
+    }
+    forall_cnf(cnf, i) {
+        const C_REF ref = *i;
+        if (cm.deleted(ref)) continue;
+        histClause(cm[*i]);
+    }
 }

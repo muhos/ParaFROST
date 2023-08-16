@@ -19,54 +19,56 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 #ifndef __MODEL_
 #define __MODEL_
 
-#include "vector.h"
 #include "definitions.h"
+#include "vector.h"
 
 namespace ParaFROST {
 
-	struct MODEL {
-		Vec<LIT_ST> value, marks;
-		uVec1D lits, resolved;
-		LIT_ST* orgvalues;
-		uint32 *vorg, maxVar, orgVars, orgClauses, orgLiterals;
-		bool extended, verified;
-		MODEL() :
-			orgvalues(NULL)
-			, vorg(NULL), maxVar(0), orgVars(0), orgClauses(0), orgLiterals(0)
-			, extended(false), verified(true)
-		{}
-		~MODEL() {
-			maxVar = 0;
-			extended = false;
-			verified = true;
-			lits.clear(true);
-			marks.clear(true);
-			value.clear(true);
-			resolved.clear(true);
-		}
-		void			init			(uint32*);
-		void			print			();
-		void			printResolved	();
-		void			printValues		();
-		void			printClause		(const Lits_t&, const bool&);
-		void			extend			(LIT_ST*);
-		void			verify			(const string&);
-		bool			verify			(char*& clause);
-		inline bool		satisfied		(const uint32& orglit) const;
-		inline uint32	size			()					const { return extended ? value.size() - 1 : 0; }
-		inline int		lit2int			(const uint32& lit) const { return SIGN(lit) ? -int(ABS(lit)) : int(ABS(lit)); }
-		inline LIT_ST	operator[]		(const uint32& v)	const { assert(v && v < value.size()); return value[v]; }
-		inline LIT_ST&	operator[]		(const uint32& v)		  { assert(v && v < value.size()); return value[v]; }
+struct MODEL {
+  Vec<LIT_ST> value, marks;
+  uVec1D lits, resolved;
+  LIT_ST* orgvalues;
+  uint32 *vorg, maxVar, orgVars, orgClauses, orgLiterals;
+  bool extended, verified;
+  MODEL() : orgvalues(NULL), vorg(NULL), maxVar(0), orgVars(0), orgClauses(0), orgLiterals(0), extended(false), verified(true) {}
+  ~MODEL() {
+    maxVar = 0;
+    extended = false;
+    verified = true;
+    lits.clear(true);
+    marks.clear(true);
+    value.clear(true);
+    resolved.clear(true);
+  }
+  void init(uint32*);
+  void print();
+  void printResolved();
+  void printValues();
+  void printClause(const Lits_t&, const bool&);
+  void extend(LIT_ST*);
+  void verify(const string&);
+  bool verify(char*& clause);
+  inline bool satisfied(const uint32& orglit) const;
+  inline uint32 size() const { return extended ? value.size() - 1 : 0; }
+  inline int lit2int(const uint32& lit) const { return SIGN(lit) ? -int(ABS(lit)) : int(ABS(lit)); }
+  inline LIT_ST operator[](const uint32& v) const {
+    assert(v && v < value.size());
+    return value[v];
+  }
+  inline LIT_ST& operator[](const uint32& v) {
+    assert(v && v < value.size());
+    return value[v];
+  }
 
-		void			saveWitness		(const uint32& witness);
-		void			saveLiteral		(const uint32& lit);
-		void			saveBinary		(const uint32& witness, const uint32& other);
-		void			saveClause		(uint32* lits, const int& size, const uint32& witlit);
+  void saveWitness(const uint32& witness);
+  void saveLiteral(const uint32& lit);
+  void saveBinary(const uint32& witness, const uint32& other);
+  void saveClause(uint32* lits, const int& size, const uint32& witlit);
 
-		#define	breakmodel(X, LEN) if (X > 1 && X < maxVar - 2 && X % LEN == 0) { PRINT("\nv "); }
+#define breakmodel(X, LEN) \
+  if (X > 1 && X < maxVar - 2 && X % LEN == 0) { PRINT("\nv "); }
+};
 
-	};
-
-}
+} // namespace ParaFROST
 
 #endif

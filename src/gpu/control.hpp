@@ -19,34 +19,34 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 #ifndef __CONTROL_
 #define __CONTROL_
 
+#include "datatypes.hpp"
 #include "definitions.hpp"
 #include "dimacs.hpp"
-#include "datatypes.hpp"
 
 namespace ParaFROST {
 
-	void	forceFPU				();
-	int64	sysMemUsed				();
-	int64	getAvailSysMem			();
-	void	getBuildInfo			();
-	void	getCPUInfo				(uint64& _free);
-	int		getGPUInfo				(size_t& _free, size_t& _penalty);
-	void	signal_handler			(void h_intr(int), void h_timeout(int) = NULL);
-	void	set_timeout				(int);
-	void	set_memoryout			(int);
-	void	handler_terminate		(int);
-	void	handler_mercy_interrupt	(int);
-	void	handler_mercy_timeout	(int);
-	void	segmentation_fault		(int);
-	void	illegal_code			(int);
-	void	arithmetic_error		(int);
+void forceFPU();
+int64 sysMemUsed();
+int64 getAvailSysMem();
+void getBuildInfo();
+void getCPUInfo(uint64& _free);
+int getGPUInfo(size_t& _free, size_t& _penalty);
+void signal_handler(void h_intr(int), void h_timeout(int) = NULL);
+void set_timeout(int);
+void set_memoryout(int);
+void handler_terminate(int);
+void handler_mercy_interrupt(int);
+void handler_mercy_timeout(int);
+void segmentation_fault(int);
+void illegal_code(int);
+void arithmetic_error(int);
 
-	#define FAULT_DETECTOR \
-	{ \
-		signal(SIGSEGV, segmentation_fault); \
-		signal(SIGILL, illegal_code); \
-		signal(SIGFPE, arithmetic_error); \
-	}
-}
+#define FAULT_DETECTOR                       \
+    {                                        \
+        signal(SIGSEGV, segmentation_fault); \
+        signal(SIGILL, illegal_code);        \
+        signal(SIGFPE, arithmetic_error);    \
+    }
+} // namespace ParaFROST
 
-#endif 
+#endif

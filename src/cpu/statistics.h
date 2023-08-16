@@ -19,73 +19,118 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 #ifndef __STATS_
 #define __STATS_
 
-#include "datatypes.h"
 #include <cassert>
 #include <cstring>
+#include "datatypes.h"
 
 namespace ParaFROST {
 
-	struct BVESTATS { uint64 pures, resolutions, inverters, andors, ites, xors, aliens; };
+struct BVESTATS {
+  uint64 pures, resolutions, inverters, andors, ites, xors, aliens;
+};
 
-	struct SUBSTATS { uint64 subsumed, strengthened; };
+struct SUBSTATS {
+  uint64 subsumed, strengthened;
+};
 
-	struct ERESTATS { uint64 tried, orgs, learnts; };
+struct ERESTATS {
+  uint64 tried, orgs, learnts;
+};
 
-	struct SIGMASTATS {
-		uint32 calls;
-		BVESTATS bve;
-		SUBSTATS sub;
-		ERESTATS ere;
-		struct { uint64 variables, clauses; int64 literals; } all;
-	};
+struct SIGMASTATS {
+  uint32 calls;
+  BVESTATS bve;
+  SUBSTATS sub;
+  ERESTATS ere;
+  struct {
+    uint64 variables, clauses;
+    int64 literals;
+  } all;
+};
 
-	struct STATS {
-		uint64 sysmem;
-		uint64 reuses;
-		uint64 reduces;
-		uint64 subtried;
-		int64 shrunken;
-		struct { uint64 ticks; } mode;
-		struct { uint64 hard, soft; } recycle;
-		struct { uint64 all, stable; } restart;
-		struct { uint64 before, after; } minimize;
-		struct { uint32 learnt, forced; } units;
-		struct { uint64 original, learnt; } clauses, literals;
-		struct { uint64 chrono, nonchrono; } backtrack;
-		struct { uint64 calls, eliminated; } autarky;
-		struct { uint64 probed, failed, removed; } transitive;
-		struct { uint64 calls, clauses, literals; } shrink;
-		struct { uint32 calls, vmtf, vsids, walks; } mdm;
-		struct { uint64 single, multiple, massumed; } decisions;
-		struct { uint64 calls, binaries, hyperunary; } debinary;
-		struct { uint64 calls, rounds, failed, probed; } probe;
-		struct { uint64 resolutions, resolvents, reduced; } binary;
-		struct { uint64 all, random, best, inv, org, flip; } rephase;
-		struct { uint64 calls, checks, minimum, flipped, improved; } walk;
-		struct { uint64 calls, scc, variables, hyperunary, clauses; } decompose;
-		struct {
-			uint64 checks, calls;
-			uint64 resolutions, binaries, ternaries, reduced;
-		} ternary;
-		struct {
-			uint64 checks, leftovers, calls;
-			uint64 subsumed, strengthened, learntfly;
-			uint64 subsumedfly, strengthenedfly;
-		} subsume;
-		struct {
-			uint64 assumed, reused;
-			uint64 checks, vivified, implied, subsumed, strengthened;
-		} vivify;
-		SIGMASTATS sigma;
-		uint64 searchprops, searchticks, probeticks, transitiveticks;
-		uint64 marker;
-		uint64 conflicts;
-		uint64 stablemodes;
-		uint64 unstablemodes;
-		uint32 mappings;
+struct STATS {
+  uint64 sysmem;
+  uint64 reuses;
+  uint64 reduces;
+  uint64 subtried;
+  int64 shrunken;
+  struct {
+    uint64 ticks;
+  } mode;
+  struct {
+    uint64 hard, soft;
+  } recycle;
+  struct {
+    uint64 all, stable;
+  } restart;
+  struct {
+    uint64 before, after;
+  } minimize;
+  struct {
+    uint32 learnt, forced;
+  } units;
+  struct {
+    uint64 original, learnt;
+  } clauses, literals;
+  struct {
+    uint64 chrono, nonchrono;
+  } backtrack;
+  struct {
+    uint64 calls, eliminated;
+  } autarky;
+  struct {
+    uint64 probed, failed, removed;
+  } transitive;
+  struct {
+    uint64 calls, clauses, literals;
+  } shrink;
+  struct {
+    uint32 calls, vmtf, vsids, walks;
+  } mdm;
+  struct {
+    uint64 single, multiple, massumed;
+  } decisions;
+  struct {
+    uint64 calls, binaries, hyperunary;
+  } debinary;
+  struct {
+    uint64 calls, rounds, failed, probed;
+  } probe;
+  struct {
+    uint64 resolutions, resolvents, reduced;
+  } binary;
+  struct {
+    uint64 all, random, best, inv, org, flip;
+  } rephase;
+  struct {
+    uint64 calls, checks, minimum, flipped, improved;
+  } walk;
+  struct {
+    uint64 calls, scc, variables, hyperunary, clauses;
+  } decompose;
+  struct {
+    uint64 checks, calls;
+    uint64 resolutions, binaries, ternaries, reduced;
+  } ternary;
+  struct {
+    uint64 checks, leftovers, calls;
+    uint64 subsumed, strengthened, learntfly;
+    uint64 subsumedfly, strengthenedfly;
+  } subsume;
+  struct {
+    uint64 assumed, reused;
+    uint64 checks, vivified, implied, subsumed, strengthened;
+  } vivify;
+  SIGMASTATS sigma;
+  uint64 searchprops, searchticks, probeticks, transitiveticks;
+  uint64 marker;
+  uint64 conflicts;
+  uint64 stablemodes;
+  uint64 unstablemodes;
+  uint32 mappings;
 
-		STATS() { RESETSTRUCT(this); }
-	};
-}
+  STATS() { RESETSTRUCT(this); }
+};
+} // namespace ParaFROST
 
 #endif

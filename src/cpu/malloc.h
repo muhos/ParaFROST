@@ -19,58 +19,58 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 #ifndef __RALLOC_
 #define __RALLOC_
 
-#include "datatypes.h"
-#include "logging.h"
 #include <cstdlib>
 #include <cstring>
+#include "datatypes.h"
+#include "logging.h"
 
 namespace ParaFROST {
 
-	class MEMOUTEXCEPTION {};
+class MEMOUTEXCEPTION {};
 
-	template <class T>
-	T* pfmalloc(size_t numElements) {
-		if (!numElements) PFLOGE("catched zero-memory size at %s", __func__);
-		T* _mem = (T*)std::malloc(numElements * sizeof(T));
-		if (_mem == NULL) throw MEMOUTEXCEPTION();
-		return _mem;
-	}
+template <class T>
+T* pfmalloc(size_t numElements) {
+  if (!numElements) PFLOGE("catched zero-memory size at %s", __func__);
+  T* _mem = (T*)std::malloc(numElements * sizeof(T));
+  if (_mem == NULL) throw MEMOUTEXCEPTION();
+  return _mem;
+}
 
-	template <class T>
-	T* pfcalloc(size_t numElements) {
-		if (!numElements) PFLOGE("catched zero-memory size at %s", __func__);
-		T* _mem = (T*)std::calloc(numElements, sizeof(T));
-		if (_mem == NULL) throw MEMOUTEXCEPTION();
-		return _mem;
-	}
+template <class T>
+T* pfcalloc(size_t numElements) {
+  if (!numElements) PFLOGE("catched zero-memory size at %s", __func__);
+  T* _mem = (T*)std::calloc(numElements, sizeof(T));
+  if (_mem == NULL) throw MEMOUTEXCEPTION();
+  return _mem;
+}
 
 #if defined(__linux__) || defined(__CYGWIN__)
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wclass-memaccess"
 #endif
 
-	template <class T>
-	void pfralloc(T*& mem, size_t bytes) {
-		if (!bytes) PFLOGE("catched zero-memory size at %s", __func__);
-		T* _mem = (T*)std::realloc(mem, bytes);
-		if (_mem == NULL) throw MEMOUTEXCEPTION();
-		mem = _mem;
-	}
+template <class T>
+void pfralloc(T*& mem, size_t bytes) {
+  if (!bytes) PFLOGE("catched zero-memory size at %s", __func__);
+  T* _mem = (T*)std::realloc(mem, bytes);
+  if (_mem == NULL) throw MEMOUTEXCEPTION();
+  mem = _mem;
+}
 
-	template <class T>
-	void pfshrinkAlloc(T*& mem, size_t bytes) {
-		if (!bytes) PFLOGE("catched zero-memory size at %s", __func__);
-		T* _mem = NULL;
-		_mem = (T*)std::realloc(_mem, bytes);
-		if (_mem == NULL) throw MEMOUTEXCEPTION();
-		std::memcpy(_mem, mem, bytes);
-		std::free(mem);
-		mem = _mem;
-	}
+template <class T>
+void pfshrinkAlloc(T*& mem, size_t bytes) {
+  if (!bytes) PFLOGE("catched zero-memory size at %s", __func__);
+  T* _mem = NULL;
+  _mem = (T*)std::realloc(_mem, bytes);
+  if (_mem == NULL) throw MEMOUTEXCEPTION();
+  std::memcpy(_mem, mem, bytes);
+  std::free(mem);
+  mem = _mem;
+}
 
 #if defined(__linux__) || defined(__CYGWIN__)
 #pragma GCC diagnostic pop
 #endif
-}
+} // namespace ParaFROST
 
 #endif

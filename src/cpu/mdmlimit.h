@@ -21,16 +21,16 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 namespace SeqFROST {
 
-	#define mdm_update \
-	{ \
-		last.mdm.decisions = trail.size() - sp->propagated; \
-		last.mdm.unassigned = inf.maxVar - last.mdm.decisions; \
-		last.mdm.rounds--; \
-		stats.decisions.multiple += last.mdm.decisions; \
-		PFLOG2(2, " MDM %d: %d decisions are elected (%.2f%%)", \
-			stats.mdm.calls, last.mdm.decisions, percent(last.mdm.decisions, maxActive())); \
-	}
+#define mdm_update                                                                         \
+  {                                                                                        \
+    last.mdm.decisions = trail.size() - sp->propagated;                                    \
+    last.mdm.unassigned = inf.maxVar - last.mdm.decisions;                                 \
+    last.mdm.rounds--;                                                                     \
+    stats.decisions.multiple += last.mdm.decisions;                                        \
+    PFLOG2(2, " MDM %d: %d decisions are elected (%.2f%%)",                                \
+           stats.mdm.calls, last.mdm.decisions, percent(last.mdm.decisions, maxActive())); \
+  }
 
-}
+} // namespace SeqFROST
 
 #endif

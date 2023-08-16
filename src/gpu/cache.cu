@@ -16,80 +16,81 @@ You should have received a copy of the GNU General Public License
 along with this program.  If not, see <https://www.gnu.org/licenses/>.
 **********************************************************************************/
 
-#include <cuda_runtime.h>
 #include <cassert>
+#include <cuda_runtime.h>
 #include "cache.cuh"
 #include "logging.hpp"
 
 using namespace ParaFROST;
 
 void CACHER::destroy() {
-	PFLOGN2(2, "  freeing up GPU cacher memory..");
-	for (free_cache_t::iterator i = free_cache.begin(); i != free_cache.end(); i++) {
-		if (cudaFree(i->second) != cudaSuccess) {
-			PFLOGEN("cannot deallocate cached free memory block %p", i->second);
-			throw CACHEMEMOUT();
-		}
-		i->second = NULL;
-	}
-	for (alloc_cache_t::iterator i = alloc_cache.begin(); i != alloc_cache.end(); i++) {
-		if (cudaFree(i->first) != cudaSuccess) {
-			PFLOGEN("cannot deallocate cached memory block %p", i->first);
-			throw CACHEMEMOUT();
-		}
-	}
-	free_cache.clear();
-	alloc_cache.clear();
-	used = 0;
-	PFLENDING(2, 5, "(remaining: %lld)", used);
+    PFLOGN2(2, "  freeing up GPU cacher memory..");
+    for (free_cache_t::iterator i = free_cache.begin(); i != free_cache.end(); i++) {
+        if (cudaFree(i->second) != cudaSuccess) {
+            PFLOGEN("cannot deallocate cached free memory block %p", i->second);
+            throw CACHEMEMOUT();
+        }
+        i->second = NULL;
+    }
+    for (alloc_cache_t::iterator i = alloc_cache.begin(); i != alloc_cache.end(); i++) {
+        if (cudaFree(i->first) != cudaSuccess) {
+            PFLOGEN("cannot deallocate cached memory block %p", i->first);
+            throw CACHEMEMOUT();
+        }
+    }
+    free_cache.clear();
+    alloc_cache.clear();
+    used = 0;
+    PFLENDING(2, 5, "(remaining: %lld)", used);
 }
 
 void* CACHER::allocate(size_t size) {
-	if (!size) 
-		return NULL;
-	void* p = NULL;
-	free_cache_t::iterator free_block = free_cache.lower_bound(size);
-	// found free block
-	if (free_block != free_cache.end()) {
-		p = free_block->second;
-		size = free_block->first;
-		free_cache.erase(free_block);
-	}
-	// no free blocks, allocate new one
-	else {
-		if (cudaMalloc((void**)&p, size) != cudaSuccess) {
-			PFLOGEN("cannot allocate new memory block via cache allocator");
-			throw CACHEMEMOUT();
-		}
-		used += size;
-	}
-	assert(p);
-	alloc_cache.insert(std::make_pair(p, size)); // cache new block
-	return p;
+    if (!size)
+        return NULL;
+    void* p = NULL;
+    free_cache_t::iterator free_block = free_cache.lower_bound(size);
+    // found free block
+    if (free_block != free_cache.end()) {
+        p = free_block->second;
+        size = free_block->first;
+        free_cache.erase(free_block);
+    }
+    // no free blocks, allocate new one
+    else {
+        if (cudaMalloc((void**)&p, size) != cudaSuccess) {
+            PFLOGEN("cannot allocate new memory block via cache allocator");
+            throw CACHEMEMOUT();
+        }
+        used += size;
+    }
+    assert(p);
+    alloc_cache.insert(std::make_pair(p, size)); // cache new block
+    return p;
 }
 
 void CACHER::deallocate(void* p) {
-	alloc_cache_t::iterator allocated_block = alloc_cache.find(p);
-	if (allocated_block == alloc_cache.end()) {
-		PFLOGEN("memory block %p is not allocated via cache allocator", p);
-		throw CACHEMEMOUT();
-	}
-	const size_t size = allocated_block->second;
-	alloc_cache.erase(allocated_block);
-	free_cache.insert(std::make_pair(size, p)); // cache free block
+    alloc_cache_t::iterator allocated_block = alloc_cache.find(p);
+    if (allocated_block == alloc_cache.end()) {
+        PFLOGEN("memory block %p is not allocated via cache allocator", p);
+        throw CACHEMEMOUT();
+    }
+    const size_t size = allocated_block->second;
+    alloc_cache.erase(allocated_block);
+    free_cache.insert(std::make_pair(size, p)); // cache free block
 }
 
 void CACHER::deallocate(void* p, const size_t bound) {
-	alloc_cache_t::iterator allocated_block = alloc_cache.find(p);
-	if (allocated_block == alloc_cache.end()) {
-		PFLOGEN("memory block %p is not allocated via cache allocator", p);
-		throw CACHEMEMOUT();
-	}
-	const size_t size = allocated_block->second;
-	alloc_cache.erase(allocated_block);
-	if (size < bound) free_cache.insert(std::make_pair(size, p)); // cache free block
-	else { // deallocate free block
-		if (cudaFree(p) != cudaSuccess) throw CACHEMEMOUT();
-		used -= size;
-	}
+    alloc_cache_t::iterator allocated_block = alloc_cache.find(p);
+    if (allocated_block == alloc_cache.end()) {
+        PFLOGEN("memory block %p is not allocated via cache allocator", p);
+        throw CACHEMEMOUT();
+    }
+    const size_t size = allocated_block->second;
+    alloc_cache.erase(allocated_block);
+    if (size < bound)
+        free_cache.insert(std::make_pair(size, p)); // cache free block
+    else {                                          // deallocate free block
+        if (cudaFree(p) != cudaSuccess) throw CACHEMEMOUT();
+        used -= size;
+    }
 }

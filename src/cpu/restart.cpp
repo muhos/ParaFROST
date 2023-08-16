@@ -19,60 +19,59 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 #include "solve.h"
 using namespace ParaFROST;
 
-bool Solver::canRestart()
-{
-	if (!DL()) return false;
-	if (stats.conflicts < limit.restart.conflicts) return false;
-	vibrate();
-	if (stable) return lubyrest;
-	return lbdrest.restart(stable);
+bool Solver::canRestart() {
+  if (!DL()) return false;
+  if (stats.conflicts < limit.restart.conflicts) return false;
+  vibrate();
+  if (stable) return lubyrest;
+  return lbdrest.restart(stable);
 }
 
-void Solver::restart()
-{
-	assert(sp->propagated == trail.size());
-	assert(conflict == NOREF);
-	assert(UNSOLVED(cnfstate));
-	stats.restart.all++;
-	backtrack(reuse());
-	if (stable) stats.restart.stable++;
-	else updateUnstableLimit();
+void Solver::restart() {
+  assert(sp->propagated == trail.size());
+  assert(conflict == NOREF);
+  assert(UNSOLVED(cnfstate));
+  stats.restart.all++;
+  backtrack(reuse());
+  if (stable)
+    stats.restart.stable++;
+  else
+    updateUnstableLimit();
 }
 
-void Solver::updateUnstableLimit()
-{
-	assert(!stable);
-	uint64 increase = opts.restart_inc - 1;
-	increase += logn(stats.restart.all);
-	limit.restart.conflicts = stats.conflicts + increase;
+void Solver::updateUnstableLimit() {
+  assert(!stable);
+  uint64 increase = opts.restart_inc - 1;
+  increase += logn(stats.restart.all);
+  limit.restart.conflicts = stats.conflicts + increase;
 }
 
-int Solver::reuse() 
-{
-	bool stable = vsidsEnabled();
-	uint32 cand = stable ? nextVSIDS() : nextVMFQ();
-	assert(cand);
-	int currLevel = DL(), target = 0;
-	if (stable) {
-		VSIDS_CMP hcmp(activity);
-		while (target < currLevel) {
-			uint32 pivot = dlevels[target + 1];
-			if (hcmp(cand, ABS(trail[pivot])))
-				target++;
-			else break;
-		}
-	}
-	else {
-		uint64 candBump = bumps[cand];
-		while (target < currLevel) {
-			uint32 pivot = dlevels[target + 1];
-			if (candBump < bumps[ABS(trail[pivot])])
-				target++;
-			else break;
-		}
-	}
-	if (target) stats.reuses++;
-	return target;
+int Solver::reuse() {
+  bool stable = vsidsEnabled();
+  uint32 cand = stable ? nextVSIDS() : nextVMFQ();
+  assert(cand);
+  int currLevel = DL(), target = 0;
+  if (stable) {
+    VSIDS_CMP hcmp(activity);
+    while (target < currLevel) {
+      uint32 pivot = dlevels[target + 1];
+      if (hcmp(cand, ABS(trail[pivot])))
+        target++;
+      else
+        break;
+    }
+  } else {
+    uint64 candBump = bumps[cand];
+    while (target < currLevel) {
+      uint32 pivot = dlevels[target + 1];
+      if (candBump < bumps[ABS(trail[pivot])])
+        target++;
+      else
+        break;
+    }
+  }
+  if (target) stats.reuses++;
+  return target;
 }
 
 #if defined(_WIN32)
@@ -80,22 +79,23 @@ int Solver::reuse()
 #pragma warning(disable : 4146)
 #endif
 
-void LUBYREST::update()
-{
-	if (!period || restart) return;
-	assert(countdown > 0);
-	if (--countdown) return;
-	if ((u & -u) == v) u++, v = 1;
-	else v <<= 1;
-	assert(v);
-	assert((UINT64_MAX / v) >= period);
-	countdown = v * period;
-	restart = true;
-	// reset if limit is reached
-	if (limited && countdown > limit) {
-		u = v = 1;
-		countdown = period;
-	}
+void LUBYREST::update() {
+  if (!period || restart) return;
+  assert(countdown > 0);
+  if (--countdown) return;
+  if ((u & -u) == v)
+    u++, v = 1;
+  else
+    v <<= 1;
+  assert(v);
+  assert((UINT64_MAX / v) >= period);
+  countdown = v * period;
+  restart = true;
+  // reset if limit is reached
+  if (limited && countdown > limit) {
+    u = v = 1;
+    countdown = period;
+  }
 }
 
 #if defined(_WIN32)

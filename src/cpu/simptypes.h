@@ -20,18 +20,17 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 #define __SIMP_TYPES_
 
 #include "datatypes.h"
-#include "vector.h"
 #include "sclause.h"
+#include "vector.h"
 
 namespace ParaFROST {
 
-	typedef Vec<S_REF, int> OL;
-	typedef Vec<OL> OT;
-	typedef Vec<S_REF, size_t> SCNF;
+typedef Vec<S_REF, int> OL;
+typedef Vec<OL> OT;
+typedef Vec<S_REF, size_t> SCNF;
 
-
-	#define forall_occurs(LIST, PTR) \
-		for (S_REF* PTR = LIST, *END = LIST.end(); PTR != END; PTR++)
-}
+#define forall_occurs(LIST, PTR) \
+  for (S_REF* PTR = LIST, *END = LIST.end(); PTR != END; PTR++)
+} // namespace ParaFROST
 
 #endif

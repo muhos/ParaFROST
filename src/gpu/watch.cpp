@@ -20,8 +20,7 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 using namespace ParaFROST;
 
-void Solver::attachBins(BCNF& src, const bool& hasElim)
-{
+void Solver::attachBins(BCNF& src, const bool& hasElim) {
     assert(!wt.empty());
     if (hasElim) {
         const VSTATE* states = sp->vstate;
@@ -34,13 +33,11 @@ void Solver::attachBins(BCNF& src, const bool& hasElim)
                 if (MELTED(states[ABS(c[0])].state)
                     || MELTED(states[ABS(c[1])].state)) {
                     removeClause(c, r);
-                }
-                else 
+                } else
                     attachWatch(r, c);
             }
         }
-    }
-    else {
+    } else {
         forall_cnf(src, i) {
             const C_REF r = *i;
             if (cm.deleted(r)) continue;
@@ -51,8 +48,7 @@ void Solver::attachBins(BCNF& src, const bool& hasElim)
     }
 }
 
-void Solver::attachNonBins(BCNF& src, const bool& hasElim)
-{
+void Solver::attachNonBins(BCNF& src, const bool& hasElim) {
     assert(!wt.empty());
     if (hasElim) {
         const VSTATE* states = sp->vstate;
@@ -70,15 +66,14 @@ void Solver::attachNonBins(BCNF& src, const bool& hasElim)
                     break;
                 }
             }
-			if (removed)
-				removeClause(c, r);
+            if (removed)
+                removeClause(c, r);
             else {
                 sortClause(c);
                 attachWatch(r, c);
             }
         }
-    }
-    else {
+    } else {
         forall_cnf(src, i) {
             const C_REF r = *i;
             if (cm.deleted(r)) continue;
@@ -91,8 +86,7 @@ void Solver::attachNonBins(BCNF& src, const bool& hasElim)
     }
 }
 
-void Solver::attachClauses(BCNF& src, const bool& hasElim)
-{
+void Solver::attachClauses(BCNF& src, const bool& hasElim) {
     assert(!wt.empty());
     if (hasElim) {
         const VSTATE* states = sp->vstate;
@@ -116,8 +110,7 @@ void Solver::attachClauses(BCNF& src, const bool& hasElim)
                 attachWatch(r, c);
             }
         }
-    }
-    else {
+    } else {
         forall_cnf(src, i) {
             const C_REF r = *i;
             if (cm.deleted(r)) continue;
@@ -129,38 +122,36 @@ void Solver::attachClauses(BCNF& src, const bool& hasElim)
     }
 }
 
-void Solver::rebuildWT(const CL_ST& code)
-{
+void Solver::rebuildWT(const CL_ST& code) {
     wt.resize(inf.nDualVars);
     if (PRIORALLBINS(code)) {
         if (PRIORLEARNTBINS(code)) {
             attachBins(learnts);
             attachBins(orgs);
-        }
-        else {
+        } else {
             attachBins(orgs);
             attachBins(learnts);
         }
         attachNonBins(orgs);
         attachNonBins(learnts);
-    }
-    else {
+    } else {
         attachClauses(orgs);
         attachClauses(learnts);
     }
 }
 
-void Solver::sortWT()
-{
+void Solver::sortWT() {
     WL saved;
     forall_literal(lit) {
         assert(saved.empty());
         WL& ws = wt[lit];
-        WATCH *j = ws;
+        WATCH* j = ws;
         forall_watches(ws, i) {
             const WATCH w = *i;
-            if (w.binary()) *j++ = w;
-            else saved.push(w);
+            if (w.binary())
+                *j++ = w;
+            else
+                saved.push(w);
         }
         ws.resize(int(j - ws));
         forall_watches(saved, i) { ws.push(*i); }
@@ -169,44 +160,41 @@ void Solver::sortWT()
     saved.clear(true);
 }
 
-void Solver::detachClauses(const bool& keepbinaries)
-{
+void Solver::detachClauses(const bool& keepbinaries) {
     forall_literal(lit) {
         WL& ws = wt[lit];
         WATCH* j = ws;
         forall_watches(ws, i) {
             const WATCH w = *i;
-            if (keepbinaries && w.binary()) 
+            if (keepbinaries && w.binary())
                 *j++ = w;
         }
         ws.resize(int(j - ws));
     }
 }
 
-void Solver::binarizeWT(const bool& keeplearnts)
-{
+void Solver::binarizeWT(const bool& keeplearnts) {
     assert(!DL());
     const LIT_ST* values = sp->value;
     forall_literal(lit) {
-		const LIT_ST litval = values[lit];
-		WL& ws = wt[FLIP(lit)];
-		WATCH* j = ws;
-		forall_watches(ws, i) {
-			const WATCH w = *i;
-			if (w.binary()) {
+        const LIT_ST litval = values[lit];
+        WL& ws = wt[FLIP(lit)];
+        WATCH* j = ws;
+        forall_watches(ws, i) {
+            const WATCH w = *i;
+            if (w.binary()) {
                 const C_REF ref = w.ref;
                 if (cm.deleted(ref)) continue;
-				const uint32 imp = w.imp;
+                const uint32 imp = w.imp;
                 if (litval > 0 || values[imp] > 0) {
                     if (lit < imp)
                         removeClause(cm[ref], ref);
-                }
-                else {
+                } else {
                     if (cm[ref].original() || keeplearnts)
-                        *j++ = w;                
+                        *j++ = w;
                 }
-			}
-		}
-		ws.resize(int(j - ws));
+            }
+        }
+        ws.resize(int(j - ws));
     }
 }

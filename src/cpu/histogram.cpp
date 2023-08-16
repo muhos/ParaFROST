@@ -16,81 +16,78 @@ You should have received a copy of the GNU General Public License
 along with this program.  If not, see <https://www.gnu.org/licenses/>.
 **********************************************************************************/
 
-#include "solve.h" 
 #include "histogram.h"
+#include "solve.h"
 
 using namespace ParaFROST;
 
-inline bool Solver::isBinary(const C_REF& r, uint32& first, uint32& second)
-{
-	assert(!DL());
-	CLAUSE& c = cm[r];
-	assert(!c.deleted());
-	first = 0, second = 0;
-	forall_clause(c, k) {
-		const uint32 lit = *k;
-		CHECKLIT(lit);
-		const LIT_ST val = sp->value[lit];
-		if (UNASSIGNED(val)) {
-			if (second) return false; // not binary
-			if (first) second = lit;
-			else first = lit;
-		}
-		else if (val) {
-			// satisfied
-			removeClause(c, r);
-			return false;
-		}
-	}
-	if (!second) return false; // all falsified except 'first'
-	return true;
+inline bool Solver::isBinary(const C_REF& r, uint32& first, uint32& second) {
+  assert(!DL());
+  CLAUSE& c = cm[r];
+  assert(!c.deleted());
+  first = 0, second = 0;
+  forall_clause(c, k) {
+    const uint32 lit = *k;
+    CHECKLIT(lit);
+    const LIT_ST val = sp->value[lit];
+    if (UNASSIGNED(val)) {
+      if (second) return false; // not binary
+      if (first)
+        second = lit;
+      else
+        first = lit;
+    } else if (val) {
+      // satisfied
+      removeClause(c, r);
+      return false;
+    }
+  }
+  if (!second) return false; // all falsified except 'first'
+  return true;
 }
 
-void Solver::histBins(BCNF& cnf)
-{
-	forall_cnf(cnf, i) {
-		const C_REF r = *i;
-		if (cm.deleted(r)) continue;
-		uint32 a, b;
-		if (isBinary(r, a, b)) {
-			CHECKLIT(a), CHECKLIT(b);
-			vhist[a]++;
-			vhist[b]++;
-		}
-	}
+void Solver::histBins(BCNF& cnf) {
+  forall_cnf(cnf, i) {
+    const C_REF r = *i;
+    if (cm.deleted(r)) continue;
+    uint32 a, b;
+    if (isBinary(r, a, b)) {
+      CHECKLIT(a), CHECKLIT(b);
+      vhist[a]++;
+      vhist[b]++;
+    }
+  }
 }
 
-void Solver::histCNF(BCNF& cnf, const bool& reset) 
-{
-	if (cnf.empty()) return;
+void Solver::histCNF(BCNF& cnf, const bool& reset) {
+  if (cnf.empty()) return;
 
-	OCCUR* occs = occurs.data();
+  OCCUR* occs = occurs.data();
 
-	const bool* deleted = cm.stencil.data();
+  const bool* deleted = cm.stencil.data();
 
-	if (reset) 
-		memset(occs, 0, occurs.size() * sizeof(OCCUR));
+  if (reset)
+    memset(occs, 0, occurs.size() * sizeof(OCCUR));
 
-	forall_cnf(cnf, i) {
-		const C_REF ref = *i;
-		if (deleted[ref]) continue;
-		CLAUSE& c = cm[ref];
-		count_occurs(c, occs);
-	}
+  forall_cnf(cnf, i) {
+    const C_REF ref = *i;
+    if (deleted[ref]) continue;
+    CLAUSE& c = cm[ref];
+    count_occurs(c, occs);
+  }
 }
 
-void Solver::histSimp(SCNF& cnf, const bool& reset) 
-{
-	if (cnf.empty()) return;
+void Solver::histSimp(SCNF& cnf, const bool& reset) {
+  if (cnf.empty()) return;
 
-	OCCUR* occs = occurs.data();
+  OCCUR* occs = occurs.data();
 
-	if (reset) 
-		memset(occs, 0, occurs.size() * sizeof(OCCUR));
+  if (reset)
+    memset(occs, 0, occurs.size() * sizeof(OCCUR));
 
-	forall_vector(S_REF, scnf, i) {
-		SCLAUSE& c = **i;
-		if (c.deleted()) continue;
-		count_occurs(c, occs);
-	}
+  forall_vector(S_REF, scnf, i) {
+    SCLAUSE& c = **i;
+    if (c.deleted()) continue;
+    count_occurs(c, occs);
+  }
 }

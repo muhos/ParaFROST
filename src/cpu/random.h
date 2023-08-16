@@ -24,30 +24,33 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 namespace ParaFROST {
 
-    class RANDOM {
-        uint32 _seed_;
+class RANDOM {
+  uint32 _seed_;
 
-    public:
-                      RANDOM          () : _seed_(1) {}
-                      RANDOM          (const uint32& seed) : _seed_(seed) { assert(_seed_); }
-        inline void   init            (const uint32& seed) { _seed_ = seed; assert(_seed_); }
-        inline uint32 seed            () const { return _seed_; }
-        inline uint32 irand           () {
-            _seed_ ^= _seed_ << 13;
-            _seed_ ^= _seed_ >> 17;
-            _seed_ ^= _seed_ << 5;
-            return _seed_;
-        }
-        inline double drand           () {
-            return irand() * 2.328306e-10;
-        }
-        inline bool   brand           () {
-            const double fraction = drand();
-            assert(fraction >= 0 && fraction < 1);
-            return uint32(2 * fraction);
-        }
-    };
+public:
+  RANDOM() : _seed_(1) {}
+  RANDOM(const uint32& seed) : _seed_(seed) { assert(_seed_); }
+  inline void init(const uint32& seed) {
+    _seed_ = seed;
+    assert(_seed_);
+  }
+  inline uint32 seed() const { return _seed_; }
+  inline uint32 irand() {
+    _seed_ ^= _seed_ << 13;
+    _seed_ ^= _seed_ >> 17;
+    _seed_ ^= _seed_ << 5;
+    return _seed_;
+  }
+  inline double drand() {
+    return irand() * 2.328306e-10;
+  }
+  inline bool brand() {
+    const double fraction = drand();
+    assert(fraction >= 0 && fraction < 1);
+    return uint32(2 * fraction);
+  }
+};
 
-}
+} // namespace ParaFROST
 
 #endif

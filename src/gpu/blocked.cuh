@@ -23,54 +23,58 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 namespace ParaFROST {
 
-	_PFROST_D_ void blocked_x(
-		const uint32& x,
-		CNF& cnf, 
-		OL& poss,
-		OL& negs,
-		cuVecU* resolved, 
-		cuVecB* proof,
-		uint32* sh_c)
-	{
+_PFROST_D_ void blocked_x(
+    const uint32& x,
+    CNF& cnf,
+    OL& poss,
+    OL& negs,
+    cuVecU* resolved,
+    cuVecB* proof,
+    uint32* sh_c) {
 #pragma unroll
-		forall_occurs(negs, i) { // start with negs
-			SCLAUSE& ci = cnf[*i];
-			if (ci.deleted() || ci.learnt()) continue;
-			bool allTautology = true;
-			int c_size = ci.size();
-			if (c_size <= SH_MAX_BCE_IN) { // use shared memory 
-				ci.shareTo(sh_c);
+    forall_occurs(negs, i) { // start with negs
+        SCLAUSE& ci = cnf[*i];
+        if (ci.deleted() || ci.learnt()) continue;
+        bool allTautology = true;
+        int c_size = ci.size();
+        if (c_size <= SH_MAX_BCE_IN) { // use shared memory
+            ci.shareTo(sh_c);
 #pragma unroll
-				forall_occurs(poss, j) { // block with poss
-					SCLAUSE& cj = cnf[*j];
-					if (cj.deleted() || cj.learnt()) continue;
-					if (!isTautology(x, cj, sh_c, c_size)) { allTautology = false; break; }
-				}
-			}
-			else { // use global memory
+            forall_occurs(poss, j) { // block with poss
+                SCLAUSE& cj = cnf[*j];
+                if (cj.deleted() || cj.learnt()) continue;
+                if (!isTautology(x, cj, sh_c, c_size)) {
+                    allTautology = false;
+                    break;
+                }
+            }
+        } else { // use global memory
 #pragma unroll
-				forall_occurs(poss, j) { // block with poss
-					SCLAUSE& cj = cnf[*j];
-					if (cj.deleted() || cj.learnt()) continue;
-					if (!isTautology(x, ci, cj)) { allTautology = false; break; }
-				}
-			}
-			if (allTautology) {
-				const int size = ci.size() + 1;
-				assert(size > 2);
-				uint32* saved = resolved->jump(size);
-				saveClause(saved, ci, NEG(V2L(x)));
-				if (proof) {
-					uint32 bytes = 0;
-					countProofBytes(ci, bytes);
-					addr_t pdata = proof->jump(bytes);
-					saveProofClause(pdata, ci, PROOF_DELETED);
-				}
-				ci.markDeleted();
-			}
-		}
-	}
+            forall_occurs(poss, j) { // block with poss
+                SCLAUSE& cj = cnf[*j];
+                if (cj.deleted() || cj.learnt()) continue;
+                if (!isTautology(x, ci, cj)) {
+                    allTautology = false;
+                    break;
+                }
+            }
+        }
+        if (allTautology) {
+            const int size = ci.size() + 1;
+            assert(size > 2);
+            uint32* saved = resolved->jump(size);
+            saveClause(saved, ci, NEG(V2L(x)));
+            if (proof) {
+                uint32 bytes = 0;
+                countProofBytes(ci, bytes);
+                addr_t pdata = proof->jump(bytes);
+                saveProofClause(pdata, ci, PROOF_DELETED);
+            }
+            ci.markDeleted();
+        }
+    }
+}
 
-} 
+} // namespace ParaFROST
 
 #endif

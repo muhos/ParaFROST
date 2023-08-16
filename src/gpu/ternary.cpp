@@ -19,15 +19,14 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 #include "solve.hpp"
 using namespace ParaFROST;
 
-inline bool SCORS_CMP::operator () (const uint32& a, const uint32& b) const {
+inline bool SCORS_CMP::operator()(const uint32& a, const uint32& b) const {
     const double as = solver->livescore(a), bs = solver->livescore(b);
     if (as < bs) return true;
     if (as > bs) return false;
     return a > b;
 }
 
-inline bool Solver::findBinary(uint32 first, uint32 second) 
-{
+inline bool Solver::findBinary(uint32 first, uint32 second) {
     assert(wot.size());
     assert(active(first));
     assert(active(second));
@@ -46,8 +45,7 @@ inline bool Solver::findBinary(uint32 first, uint32 second)
     return false;
 }
 
-inline bool Solver::findTernary(uint32 first, uint32 second, uint32 third)
-{
+inline bool Solver::findTernary(uint32 first, uint32 second, uint32 third) {
     assert(wot.size());
     assert(active(first));
     assert(active(second));
@@ -67,20 +65,17 @@ inline bool Solver::findTernary(uint32 first, uint32 second, uint32 third)
             CHECKLIT(other);
             if (other == second) return true;
             if (other == third) return true;
-        }
-        else {
+        } else {
             assert(c.size() == 3);
             stats.ternary.checks++;
             const uint32 x = c[0], y = c[1], z = c[2];
             if (x == first) {
                 if (y == second && z == third) return true;
                 if (z == second && y == third) return true;
-            }
-            else if (y == first) {
+            } else if (y == first) {
                 if (x == second && z == third) return true;
                 if (z == second && x == third) return true;
-            }
-            else if (z == first) {
+            } else if (z == first) {
                 if (x == second && y == third) return true;
                 if (y == second && x == third) return true;
             }
@@ -89,8 +84,7 @@ inline bool Solver::findTernary(uint32 first, uint32 second, uint32 third)
     return findBinary(second, third);
 }
 
-bool Solver::hyper3Resolve(CLAUSE& pos, CLAUSE& neg, const uint32& p)
-{
+bool Solver::hyper3Resolve(CLAUSE& pos, CLAUSE& neg, const uint32& p) {
     CHECKLIT(p);
     assert(pos.size() == 3), assert(neg.size() == 3);
     assert(learntC.empty());
@@ -109,14 +103,14 @@ bool Solver::hyper3Resolve(CLAUSE& pos, CLAUSE& neg, const uint32& p)
     forall_clause(neg, k) {
         const uint32 lit = *k;
         assert(unassigned(lit));
-        if (NEQUAL(lit, n)) { 
+        if (NEQUAL(lit, n)) {
             const uint32 mask1 = NEQUAL(lit, first);
             if (mask1 == NEG_SIGN) return false;
             const uint32 mask2 = NEQUAL(lit, second);
             if (mask2 == NEG_SIGN) return false;
             if (mask1 && mask2) { // unique
                 third = lit;
-                learntC.push(lit); 
+                learntC.push(lit);
             }
         }
     }
@@ -127,10 +121,9 @@ bool Solver::hyper3Resolve(CLAUSE& pos, CLAUSE& neg, const uint32& p)
     return true;
 }
 
-void Solver::ternaryResolve(const uint32& p, const uint64& limit) 
-{
+void Solver::ternaryResolve(const uint32& p, const uint64& limit) {
     CHECKLIT(p);
-    WOL& poss = wot[p], &negs = wot[NEG(p)];
+    WOL &poss = wot[p], &negs = wot[NEG(p)];
     for (int i = 0; i < poss.size(); i++) {
         if (stats.ternary.checks > limit) break;
         const C_REF pref = poss[i];
@@ -152,8 +145,7 @@ void Solver::ternaryResolve(const uint32& p, const uint64& limit)
                 if (size == 3) {
                     learnt = true;
                     stats.ternary.ternaries++;
-                }
-                else {
+                } else {
                     assert(size == 2);
                     learnt = pos->learnt() && neg.learnt();
                     PFLOG2(4, "  hyper ternary resolvent subsumes resolved clauses");
@@ -171,8 +163,7 @@ void Solver::ternaryResolve(const uint32& p, const uint64& limit)
     }
 }
 
-void Solver::scheduleTernary(LIT_ST* use)
-{
+void Solver::scheduleTernary(LIT_ST* use) {
     assert(vschedule.empty());
     VSTATE* states = sp->vstate;
     forall_variables(v) {
@@ -181,20 +172,17 @@ void Solver::scheduleTernary(LIT_ST* use)
         if (use[p] && use[n]) vschedule.insert(v);
     }
     PFLOG2(2, " Ternary %lld: scheduled %d variables %.2f%%",
-        stats.ternary.calls, vschedule.size(), percent(vschedule.size(), maxActive()));
+           stats.ternary.calls, vschedule.size(), percent(vschedule.size(), maxActive()));
 }
 
-void Solver::attachTernary(BCNF& cnf, LIT_ST* use)
-{
+void Solver::attachTernary(BCNF& cnf, LIT_ST* use) {
     LIT_ST* value = sp->value;
     forall_cnf(cnf, i) {
         const C_REF ref = *i;
         if (cm.deleted(ref)) continue;
         CLAUSE& c = cm[ref];
         const int size = c.size();
-        if (size <= 3 &&
-            UNASSIGNED(value[c[0]]) &&
-            UNASSIGNED(value[c[1]])) {
+        if (size <= 3 && UNASSIGNED(value[c[0]]) && UNASSIGNED(value[c[1]])) {
             if (size == 2)
                 attachBinary(ref, c);
             else if (UNASSIGNED(value[c[2]])) {
@@ -206,8 +194,7 @@ void Solver::attachTernary(BCNF& cnf, LIT_ST* use)
     }
 }
 
-void Solver::ternarying(const uint64& resolvents_limit, const uint64& checks_limit)
-{
+void Solver::ternarying(const uint64& resolvents_limit, const uint64& checks_limit) {
     uint32 scheduled = vschedule.size();
     while (!vschedule.empty()) {
         if (stats.ternary.checks > checks_limit) break;
@@ -219,11 +206,10 @@ void Solver::ternarying(const uint64& resolvents_limit, const uint64& checks_lim
     }
     uint32 processed = scheduled - vschedule.size();
     PFLOG2(2, " Ternary %lld: processed %d candidates %.2f%%",
-        stats.ternary.calls, processed, percent(processed, vschedule.size()));
+           stats.ternary.calls, processed, percent(processed, vschedule.size()));
 }
 
-void Solver::ternary()
-{
+void Solver::ternary() {
     if (!cnfstate) return;
     if (interrupted()) return;
     if (!canTernary()) return;
@@ -252,14 +238,13 @@ void Solver::ternary()
     if (retrail()) PFLOG2(2, " Propagation after ternary proved a contradiction");
     const int64 subsumed = numClauses + last.ternary.resolvents - maxClauses();
     PFLOG2(2, " Ternary %lld: added %lld resolvents %.2f%% and subsumed %lld clauses %.2f%%",
-        stats.ternary.calls, last.ternary.resolvents, percent((double)last.ternary.resolvents, (double)numClauses),
-        subsumed, percent(subsumed, numClauses));
+           stats.ternary.calls, last.ternary.resolvents, percent((double)last.ternary.resolvents, (double)numClauses),
+           subsumed, percent(subsumed, numClauses));
     UPDATE_SLEEPER(this, ternary, last.ternary.resolvents);
     printStats(last.ternary.resolvents, 'h', CVIOLET1);
     last.ternary.resolvents = 0;
 }
 
-bool Solver::canTernary()
-{
+bool Solver::canTernary() {
     return opts.ternary_en && (uint64(maxClauses() << 1) < (stats.searchticks + opts.ternary_min_eff));
 }

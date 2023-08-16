@@ -23,21 +23,21 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 namespace ParaFROST {
 
-	#define mdm_prefetch(VALUES,STATES,FROZEN,TAIL) \
-		const LIT_ST* VALUES = sp->value;				\
-		const VSTATE* STATES = sp->vstate;				\
-		LIT_ST* FROZEN = sp->frozen;					\
-		sp->stacktail = sp->tmpstack;					\
-		uint32*& TAIL = sp->stacktail;					\
+#define mdm_prefetch(VALUES, STATES, FROZEN, TAIL) \
+  const LIT_ST* VALUES = sp->value;                \
+  const VSTATE* STATES = sp->vstate;               \
+  LIT_ST* FROZEN = sp->frozen;                     \
+  sp->stacktail = sp->tmpstack;                    \
+  uint32*& TAIL = sp->stacktail;
 
-	#define mdm_assign(CAND,DEC) \
-		assert(CAND == ABS(DEC)); \
-		WL& ws = wt[DEC]; \
-		if (valid(values, ws) && depFreeze(CAND, values, frozen, tail, ws)) { \
-			enqueueDecision(DEC); \
-			sp->seen[CAND] = 1; \
-		} \
+#define mdm_assign(CAND, DEC)                                           \
+  assert(CAND == ABS(DEC));                                             \
+  WL& ws = wt[DEC];                                                     \
+  if (valid(values, ws) && depFreeze(CAND, values, frozen, tail, ws)) { \
+    enqueueDecision(DEC);                                               \
+    sp->seen[CAND] = 1;                                                 \
+  }
 
-}
+} // namespace ParaFROST
 
 #endif

@@ -19,50 +19,40 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 #ifndef __GPU_PROOF_
 #define __GPU_PROOF_
 
-#include "proof.hpp"
 #include "memory.cuh"
+#include "proof.hpp"
 
 namespace ParaFROST {
 
-	class cuMM;
-	class PROOF;
+class cuMM;
+class PROOF;
 
-	class cuPROOF {
+class cuPROOF {
 
-		cuMM&	cumm;
-		PROOF&	proof;
+    cuMM& cumm;
+    PROOF& proof;
 
-		cuPool  hostPool, devicePool;
-		cuVecB  *hostStream, *deviceStream;
-		cuVecB  header;
-		size_t  deviceAdded, bytesWritten;
-		bool	enabled;
+    cuPool hostPool, devicePool;
+    cuVecB *hostStream, *deviceStream;
+    cuVecB header;
+    size_t deviceAdded, bytesWritten;
+    bool enabled;
 
-	public:
+  public:
+    cuPROOF(cuMM& _cumm, PROOF& _proof) : cumm(_cumm), proof(_proof), hostPool({ NULL, 0 }), devicePool({ NULL, 0 }), hostStream(NULL), deviceStream(NULL), deviceAdded(0), bytesWritten(0), enabled(false) {}
 
-		cuPROOF(cuMM& _cumm, PROOF& _proof) :
-			cumm(_cumm), proof(_proof)
-			, hostPool({NULL, 0})
-			, devicePool({NULL, 0})
-			, hostStream(NULL)
-			, deviceStream(NULL)
-			, deviceAdded(0)
-			, bytesWritten(0)
-			, enabled(false)
-		{}
+    inline size_t gpuClauses() const { return deviceAdded; }
+    inline size_t gpuBytes() const { return bytesWritten; }
+    inline cuVecB* gpuStream() { return deviceStream; }
 
-		inline size_t	gpuClauses	() const { return deviceAdded; }
-		inline size_t	gpuBytes	() const { return bytesWritten; }
-		inline cuVecB*	gpuStream	() { return deviceStream; }	
+    void destroy();
+    void writeClause(addr_t&);
+    void cacheProof(const cudaStream_t&);
+    void writeProof(const cudaStream_t&);
+    bool alloc(const uint32&);
+    uint32 count(const uint32*, const uint32&);
+};
 
-		void	destroy			();
-		void	writeClause		(addr_t&);
-		void	cacheProof		(const cudaStream_t&);
-		void	writeProof		(const cudaStream_t&);
-		bool	alloc			(const uint32&);
-		uint32	count			(const uint32*, const uint32&);
-	};
-
-} 
+} // namespace ParaFROST
 
 #endif
