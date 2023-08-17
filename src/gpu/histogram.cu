@@ -19,32 +19,34 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 #include "solve.hpp"
 using namespace ParaFROST;
 
-uint32* Solver::flattenCNF(const uint32& numLits) {
-    assert(numLits);
-    uint32* literals = cumm.resizeLits(numLits);
-    if (flattened || !literals) return literals;
-    PFLOGN2(2, " Copying survived literals..");
-    copyIfAsync(literals, cnf);
-    PFLENDING(2, 5, "(%d copied)", numLits);
-    flattened = true;
-    return literals;
+uint32* Solver::flattenCNF(const uint32& numLits)
+{
+	assert(numLits);
+	uint32* literals = cumm.resizeLits(numLits);
+	if (flattened || !literals) return literals;
+	PFLOGN2(2, " Copying survived literals..");
+	copyIfAsync(literals, cnf);
+	PFLENDING(2, 5, "(%d copied)", numLits);
+	flattened = true;
+	return literals;
 }
 
-void Solver::histSimp(const uint32& numLits) {
-    PFLOGN2(2, " Computing histogram on %d elements..", numLits);
-    assert(numLits);
-    cuLits& culits = cumm.literals();
-    assert(culits.size >= numLits);
-    t_iptr& thrust_lits = culits.thrust_lits;
-    t_iptr& thrust_hist = cuhist.thrust_hist;
-    sync(); // sync 'flattenCNF'
-    if (gopts.profile_gpu) cutimer->start();
-    cacher.insert(cumm.scatter(), cumm.scatterCap());
-    thrust::sort(thrust::cuda::par(tca), thrust_lits, thrust_lits + numLits);
-    thrust::counting_iterator<size_t> search_begin(0);
-    thrust::upper_bound(thrust::cuda::par(tca), thrust_lits, thrust_lits + numLits, search_begin, search_begin + inf.nDualVars, thrust_hist);
-    thrust::adjacent_difference(thrust::cuda::par(tca), thrust_hist, thrust_hist + inf.nDualVars, thrust_hist);
-    cacher.erase(cumm.scatterCap());
-    if (gopts.profile_gpu) cutimer->stop(), cutimer->vo += cutimer->gpuTime();
-    PFLDONE(2, 5);
+void Solver::histSimp(const uint32& numLits)
+{
+	PFLOGN2(2, " Computing histogram on %d elements..", numLits);
+	assert(numLits);
+	cuLits& culits = cumm.literals();
+	assert(culits.size >= numLits);
+	t_iptr& thrust_lits = culits.thrust_lits;
+	t_iptr& thrust_hist = cuhist.thrust_hist;
+	sync(); // sync 'flattenCNF'
+	if (gopts.profile_gpu) cutimer->start();
+	cacher.insert(cumm.scatter(), cumm.scatterCap());
+	thrust::sort(thrust::cuda::par(tca), thrust_lits, thrust_lits + numLits);
+	thrust::counting_iterator<size_t> search_begin(0);
+	thrust::upper_bound(thrust::cuda::par(tca), thrust_lits, thrust_lits + numLits, search_begin, search_begin + inf.nDualVars, thrust_hist);
+	thrust::adjacent_difference(thrust::cuda::par(tca), thrust_hist, thrust_hist + inf.nDualVars, thrust_hist);
+	cacher.erase(cumm.scatterCap());
+	if (gopts.profile_gpu) cutimer->stop(), cutimer->vo += cutimer->gpuTime();
+	PFLDONE(2, 5);
 }

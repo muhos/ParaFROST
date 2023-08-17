@@ -19,31 +19,29 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 #ifndef __GL_WARP_
 #define __GL_WARP_
 
-#include "datatypes.hpp"
 #include "definitions.cuh"
+#include "datatypes.hpp"
 
 namespace ParaFROST {
 
 #define FULLWARP 0xFFFFFFFFU
 
-_PFROST_IN_D_ void laneId(uint32& id) {
-    asm("mov.u32 %0, %%laneid;"
-        : "=r"(id));
-}
+	_PFROST_IN_D_ void laneId(uint32& id) {
+		asm("mov.u32 %0, %%laneid;" : "=r"(id));
+	}
 
-_PFROST_IN_D_ void laneMask_lt(uint32& lanemask) {
-    asm("mov.u32 %0, %%lanemask_lt;"
-        : "=r"(lanemask));
-}
+	_PFROST_IN_D_ void laneMask_lt(uint32& lanemask) {
+		asm("mov.u32 %0, %%lanemask_lt;" : "=r"(lanemask));
+	}
 
-_PFROST_IN_D_ uint32 blockWarpId() {
-    return threadIdx.x >> 5;
-}
+	_PFROST_IN_D_ uint32 blockWarpId() {
+		return threadIdx.x >> 5;
+	}
 
-_PFROST_IN_D_ uint32 blockWarps() {
-    return blockDim.x >> 5;
-}
+	_PFROST_IN_D_ uint32 blockWarps() {
+		return blockDim.x >> 5;
+	}
 
-} // namespace ParaFROST
+}
 
 #endif

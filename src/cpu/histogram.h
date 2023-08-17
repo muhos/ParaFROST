@@ -20,36 +20,34 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 namespace ParaFROST {
 
-#define hist_score(V, OCCURS) (OCCURS + V)->ps*(OCCURS + V)->ns
+	#define hist_score(V,OCCURS) (OCCURS + V)->ps * (OCCURS + V)->ns
 
-#define hist_clause(C, HIST) \
-  {                          \
-    forall_clause(C, k) {    \
-      HIST[*k]++;            \
-    }                        \
-  }
+	#define hist_clause(C,HIST) \
+	{ \
+		forall_clause(C, k) { \
+			HIST[*k]++; \
+		} \
+	}
 
-#define write_scores(VARS, SCORES, OCCURS) \
-  uint32* SCORES = sp->tmpstack;           \
-  OCCUR* OCCURS = occurs.data();           \
-  uint32* VARS = eligible.data();          \
-  {                                        \
-    forall_variables(v) {                  \
-      VARS[v - 1] = v;                     \
-      SCORES[v] = hist_score(v, OCCURS);   \
-    }                                      \
-  }
+	#define write_scores(VARS,SCORES,OCCURS) \
+	uint32* SCORES = sp->tmpstack; \
+	OCCUR* OCCURS = occurs.data(); \
+	uint32* VARS = eligible.data(); \
+	{ \
+		forall_variables(v) { \
+			VARS[v - 1] = v; \
+			SCORES[v] = hist_score(v, OCCURS); \
+		} \
+	}
 
-#define count_occurs(C, OCCURS)    \
-  {                                \
-    forall_clause(C, k) {          \
-      const uint32 lit = *k;       \
-      CHECKLIT(lit);               \
-      if (SIGN(lit))               \
-        (OCCURS + ABS(lit))->ns++; \
-      else                         \
-        (OCCURS + ABS(lit))->ps++; \
-    }                              \
-  }
+	#define count_occurs(C,OCCURS) \
+	{ \
+		forall_clause(C, k) { \
+			const uint32 lit = *k; \
+			CHECKLIT(lit); \
+			if (SIGN(lit)) (OCCURS + ABS(lit))->ns++; \
+			else (OCCURS + ABS(lit))->ps++; \
+		} \
+	}
 
-} // namespace ParaFROST
+}

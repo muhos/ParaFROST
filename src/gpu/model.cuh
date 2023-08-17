@@ -23,33 +23,35 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 namespace ParaFROST {
 
-#define MODEL_DBG 0
+	#define MODEL_DBG 0
 
-_PFROST_D_ void saveWitness(uint32*& saved, const uint32& witness) {
-    ORIGINIZELIT(orgWitness, witness);
-    *saved++ = orgWitness;
-    *saved++ = 1;
-}
+	_PFROST_D_ void	saveWitness(uint32*& saved, const uint32& witness)
+	{
+		ORIGINIZELIT(orgWitness, witness);
+		*saved++ = orgWitness;
+		*saved++ = 1;
+	}
 
-_PFROST_D_ void saveClause(uint32*& saved, SCLAUSE& c, const uint32& witlit) {
-    uint32 *first = saved, *witness = NULL;
-    assert(c.original());
-    forall_clause(c, k) {
-        const uint32 lit = *k;
-        if (lit == witlit) {
-            witness = saved;
-        }
-        ORIGINIZELIT(orgLit, lit);
-        *saved++ = orgLit;
-    }
-    assert(witness >= first);
-    if (witness != first)
-        devSwap(*first, *witness);
-    else
-        assert(*witness == *first);
-    *saved++ = c.size();
-}
+	_PFROST_D_ void	saveClause(uint32*& saved, SCLAUSE& c, const uint32& witlit)
+	{
+		uint32* first = saved, * witness = NULL;
+		assert(c.original());
+		forall_clause(c, k) {
+			const uint32 lit = *k;
+			if (lit == witlit) {
+				witness = saved;
+			}
+			ORIGINIZELIT(orgLit, lit);
+			*saved++ = orgLit;
+		}
+		assert(witness >= first);
+		if (witness != first)
+			devSwap(*first, *witness);
+		else
+			assert(*witness == *first);
+		*saved++ = c.size();
+	}
 
-} // namespace ParaFROST
+} 
 
 #endif

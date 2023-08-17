@@ -24,365 +24,302 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 namespace ParaFROST {
 
-// global
-bool parseArguments(int& argc, char** argv);
-void printUsage(int argc, char** argv, bool verbose = false);
+	// global
+	bool parseArguments(int& argc, char** argv);
+	void printUsage(int  argc, char** argv, bool verbose = false);
 
-class ARG;
-extern Vec<ARG*, int> options;
+	class ARG;
+	extern Vec<ARG*, int> options;
 
-class ARG {
-protected:
-  arg_t arg, text, type;
-  bool parsed;
-  struct ARG_CMP {
-    bool operator()(const ARG* x, const ARG* y) {
-      int type_t = strcmp(x->type, y->type);
-      return type_t < 0 || (type_t == 0 && strcmp(x->arg, y->arg) < 0);
-    }
-  };
-  ARG() {
-    arg = "";
-    text = "";
-    type = "";
-    parsed = false;
-  }
-  ARG(arg_t a, arg_t x, arg_t t) {
-    arg = a;
-    text = x;
-    type = t;
-    parsed = false;
-    insert(this);
-  }
+	class ARG
+	{
+	protected:
+		arg_t arg, text, type;
+		bool parsed;
+		struct ARG_CMP {
+			bool operator()(const ARG* x, const ARG* y) {
+				int type_t = strcmp(x->type, y->type);
+				return type_t < 0 || (type_t == 0 && strcmp(x->arg, y->arg) < 0);
+			}
+		};
+		ARG() { arg = ""; text = ""; type = ""; parsed = false; }
+		ARG(arg_t a, arg_t x, arg_t t) {
+			arg = a; text = x; type = t; parsed = false;
+			insert(this);
+		}
+	public:
+		// global
+		friend bool parseArguments(int& argc, char** argv);
+		friend void printUsage(int  argc, char** argv, bool verbose);
+		// derived methods
+		virtual ~ARG() {}
+		virtual bool parse(arg_t input) = 0;
+		virtual void help(bool verbose = false) = 0;
+		virtual void printArgument() = 0;
+		// local
+		void insert(ARG*);
+		bool isParsed() { return parsed; }
+	};
+	
+	struct INT32R {
+		int h, t;
+		INT32R() { h = UNDEFINED; t = UNDEFINED; }
+		INT32R(int h, int t) { this->h = h; this->t = t; }
+	};
 
-public:
-  // global
-  friend bool parseArguments(int& argc, char** argv);
-  friend void printUsage(int argc, char** argv, bool verbose);
-  // derived methods
-  virtual ~ARG() {}
-  virtual bool parse(arg_t input) = 0;
-  virtual void help(bool verbose = false) = 0;
-  virtual void printArgument() = 0;
-  // local
-  void insert(ARG*);
-  bool isParsed() { return parsed; }
-};
+	struct INT64R {
+		int64 h, t;
+		INT64R() { h = UNDEFINED; t = UNDEFINED; }
+		INT64R(int64 h, int64 t) { this->h = h; this->t = t; }
+	};
 
-struct INT32R {
-  int h, t;
-  INT32R() {
-    h = UNDEFINED;
-    t = UNDEFINED;
-  }
-  INT32R(int h, int t) {
-    this->h = h;
-    this->t = t;
-  }
-};
+	struct FP64R {
+		double h, t;
+		FP64R() { h = 0.0; t = 0.0; }
+		FP64R(double h, double t) { this->h = h; this->t = t; }
+	};
 
-struct INT64R {
-  int64 h, t;
-  INT64R() {
-    h = UNDEFINED;
-    t = UNDEFINED;
-  }
-  INT64R(int64 h, int64 t) {
-    this->h = h;
-    this->t = t;
-  }
-};
+	class INT_OPT : public ARG
+	{
+	protected:
+		INT32R r;
+		int val;
 
-struct FP64R {
-  double h, t;
-  FP64R() {
-    h = 0.0;
-    t = 0.0;
-  }
-  FP64R(double h, double t) {
-    this->h = h;
-    this->t = t;
-  }
-};
+	public:
 
-class INT_OPT : public ARG {
-protected:
-  INT32R r;
-  int val;
+		INT_OPT(arg_t a, arg_t x, int val = 0, INT32R r = INT32R(INT32_MIN, INT32_MAX))
+			: ARG(a, x, "<int>"), r(r), val(val) {}
 
-public:
-  INT_OPT(arg_t a, arg_t x, int val = 0, INT32R r = INT32R(INT32_MIN, INT32_MAX))
-    : ARG(a, x, "<int>"), r(r), val(val) {}
+		INT_OPT(arg_t a, arg_t x, double val = 0, INT32R r = INT32R(INT32_MIN, INT32_MAX))
+			: ARG(a, x, "<int>"), r(r), val(int(val)) {}
 
-  INT_OPT(arg_t a, arg_t x, double val = 0, INT32R r = INT32R(INT32_MIN, INT32_MAX))
-    : ARG(a, x, "<int>"), r(r), val(int(val)) {}
+		operator int(void) const { return val; }
+		operator int& (void) { return val; }
+		INT_OPT& operator= (int x) { val = x; return *this; }
 
-  operator int(void) const { return val; }
-  operator int&(void) { return val; }
-  INT_OPT& operator=(int x) {
-    val = x;
-    return *this;
-  }
+		virtual bool parse(arg_t input) {
+			arg_t strVal = input;
+			if (!eq(strVal, "--") || !eq(strVal, arg) || !eq(strVal, "="))
+				return false;
+			char* end;
+			int tmpVal = strtol(strVal, &end, 10);
+			if (end == NULL)
+				return false;
+			else if (tmpVal > r.t)
+				PFLOGE("maximum value exceeded for option \"%s\".", arg);
+			else if (tmpVal < r.h)
+				PFLOGE("minimum value exceeded for option \"%s\".", arg);
+			val = tmpVal;
+			parsed = true;
+			return true;
+		}
 
-  virtual bool parse(arg_t input) {
-    arg_t strVal = input;
-    if (!eq(strVal, "--") || !eq(strVal, arg) || !eq(strVal, "="))
-      return false;
-    char* end;
-    int tmpVal = strtol(strVal, &end, 10);
-    if (end == NULL)
-      return false;
-    else if (tmpVal > r.t)
-      PFLOGE("maximum value exceeded for option \"%s\".", arg);
-    else if (tmpVal < r.h)
-      PFLOGE("minimum value exceeded for option \"%s\".", arg);
-    val = tmpVal;
-    parsed = true;
-    return true;
-  }
+		virtual void help(bool verbose = false) {
+			PFLOGN1("  %s--%-20s = %-8s [", CHELP, arg, type);
+			if (r.h == INT32_MIN) { PRINT("%-8s", "-I32"); }
+			else { PRINT("%-8d", r.h); }
+			PRINT(" .. ");
+			if (r.t == INT32_MAX) { PRINT("%8s", "+I32"); }
+			else { PRINT("%8d", r.t); }
+			if (val == INT32_MAX) { PRINT("]%s (%sdefault: %s%10s%s)\n", CNORMAL, CARGDEFAULT, CARGVALUE, "+I32", CNORMAL); }
+			else { PRINT("]%s (%sdefault: %s%10d%s)\n", CNORMAL, CARGDEFAULT, CARGVALUE, val, CNORMAL); }
+			if (verbose) {
+				PFLOG1("   %s", text);
+				PFLOG0("");
+			}
+		}
+		virtual void printArgument() { 
+			PRINT(" %s%s%s<%d>%s", CARGDEFAULT, arg, CARGVALUE, val, CNORMAL);
+		}
+	};
 
-  virtual void help(bool verbose = false) {
-    PFLOGN1("  %s--%-20s = %-8s [", CHELP, arg, type);
-    if (r.h == INT32_MIN) {
-      PRINT("%-8s", "-I32");
-    } else {
-      PRINT("%-8d", r.h);
-    }
-    PRINT(" .. ");
-    if (r.t == INT32_MAX) {
-      PRINT("%8s", "+I32");
-    } else {
-      PRINT("%8d", r.t);
-    }
-    if (val == INT32_MAX) {
-      PRINT("]%s (%sdefault: %s%10s%s)\n", CNORMAL, CARGDEFAULT, CARGVALUE, "+I32", CNORMAL);
-    } else {
-      PRINT("]%s (%sdefault: %s%10d%s)\n", CNORMAL, CARGDEFAULT, CARGVALUE, val, CNORMAL);
-    }
-    if (verbose) {
-      PFLOG1("   %s", text);
-      PFLOG0("");
-    }
-  }
-  virtual void printArgument() {
-    PRINT(" %s%s%s<%d>%s", CARGDEFAULT, arg, CARGVALUE, val, CNORMAL);
-  }
-};
+	class INT64_OPT : public ARG
+	{
+	protected:
+		INT64R r;
+		int64  val;
 
-class INT64_OPT : public ARG {
-protected:
-  INT64R r;
-  int64 val;
+	public:
 
-public:
-  INT64_OPT(arg_t a, arg_t x, int64 val = 0LL, INT64R r = INT64R(INT64_MIN, INT64_MAX))
-    : ARG(a, x, "<int64>"), r(r), val(val) {}
+		INT64_OPT(arg_t a, arg_t x, int64 val = 0LL, INT64R r = INT64R(INT64_MIN, INT64_MAX))
+			: ARG(a, x, "<int64>"), r(r), val(val) {}
 
-  operator int64(void) const { return val; }
-  operator int64&(void) { return val; }
-  INT64_OPT& operator=(int64 x) {
-    val = x;
-    return *this;
-  }
+		operator int64 (void) const { return val; }
+		operator int64& (void) { return val; }
+		INT64_OPT& operator= (int64 x) { val = x; return *this; }
 
-  virtual bool parse(arg_t input) {
-    arg_t strVal = input;
+		virtual bool parse(arg_t input) {
+			arg_t strVal = input;
 
-    if (!eq(strVal, "--") || !eq(strVal, arg) || !eq(strVal, "="))
-      return false;
+			if (!eq(strVal, "--") || !eq(strVal, arg) || !eq(strVal, "="))
+				return false;
 
-    char* end;
-    int64 tmpVal = strtoll(strVal, &end, 10);
+			char* end;
+			int64 tmpVal = strtoll(strVal, &end, 10);
 
-    if (end == NULL)
-      return false;
-    else if (tmpVal > r.t)
-      PFLOGE("maximum value exceeded for option \"%s\".", arg);
-    else if (tmpVal < r.h)
-      PFLOGE("minimum value exceeded for option \"%s\".", arg);
-    val = tmpVal;
-    parsed = true;
-    return true;
-  }
+			if (end == NULL)
+				return false;
+			else if (tmpVal > r.t)
+				PFLOGE("maximum value exceeded for option \"%s\".", arg);
+			else if (tmpVal < r.h)
+				PFLOGE("minimum value exceeded for option \"%s\".", arg);
+			val = tmpVal;
+			parsed = true;
+			return true;
+		}
 
-  virtual void help(bool verbose = false) {
-    PFLOGN1("  %s--%-20s = %-8s [", CHELP, arg, type);
-    if (r.h == INT64_MIN) {
-      PRINT("%-8s", "-I64");
-    } else {
-      PRINT("%-8lld", r.h);
-    }
-    PRINT(" .. ");
-    if (r.t == INT64_MAX) {
-      PRINT("%8s", "+I64");
-    } else {
-      PRINT("%8lld", r.t);
-    }
-    if (val == INT64_MAX) {
-      PRINT("]%s (%sdefault: %s%10s%s)\n", CNORMAL, CARGDEFAULT, CARGVALUE, "+I64", CNORMAL);
-    } else {
-      PRINT("]%s (%sdefault: %s%10lld%s)\n", CNORMAL, CARGDEFAULT, CARGVALUE, val, CNORMAL);
-    }
-    if (verbose) {
-      PFLOG1("   %s", text);
-      PFLOG0("");
-    }
-  }
-  virtual void printArgument() {
-    PRINT(" %s%s%s<%lld>%s", CARGDEFAULT, arg, CARGVALUE, val, CNORMAL);
-  }
-};
+		virtual void help(bool verbose = false) {
+			PFLOGN1("  %s--%-20s = %-8s [", CHELP, arg, type);
+			if (r.h == INT64_MIN) { PRINT("%-8s", "-I64"); }
+			else { PRINT("%-8lld", r.h); }
+			PRINT(" .. ");
+			if (r.t == INT64_MAX) { PRINT("%8s", "+I64"); }
+			else { PRINT("%8lld", r.t); }
+			if (val == INT64_MAX) { PRINT("]%s (%sdefault: %s%10s%s)\n", CNORMAL, CARGDEFAULT, CARGVALUE, "+I64", CNORMAL); }
+			else { PRINT("]%s (%sdefault: %s%10lld%s)\n", CNORMAL, CARGDEFAULT, CARGVALUE, val, CNORMAL); }
+			if (verbose) {
+				PFLOG1("   %s", text);
+				PFLOG0("");
+			}
+		}
+		virtual void printArgument() {
+			PRINT(" %s%s%s<%lld>%s", CARGDEFAULT, arg, CARGVALUE, val, CNORMAL);
+		}
+	};
 
-class DOUBLE_OPT : public ARG {
-  FP64R r;
-  double val;
+	class DOUBLE_OPT : public ARG
+	{
+		FP64R r;
+		double val;
 
-public:
-  DOUBLE_OPT(arg_t a, arg_t x, double val = 0.0, FP64R r = FP64R(-INFINITY, INFINITY))
-    : ARG(a, x, "<double>"), r(r), val(val) {}
+	public:
+		DOUBLE_OPT(arg_t a, arg_t x, double val = 0.0, FP64R r = FP64R(-INFINITY, INFINITY))
+			: ARG(a, x, "<double>"), r(r), val(val) {}
 
-  operator double(void) const { return val; }
-  operator double&(void) { return val; }
-  DOUBLE_OPT& operator=(double x) {
-    val = x;
-    return *this;
-  }
+		operator double(void) const { return val; }
+		operator double& (void) { return val; }
+		DOUBLE_OPT& operator=(double x) { val = x; return *this; }
 
-  virtual bool parse(arg_t input) {
-    arg_t strVal = input;
-    if (!eq(strVal, "--") || !eq(strVal, arg) || !eq(strVal, "="))
-      return false;
-    char* end;
-    double tmpVal = strtod(strVal, &end);
-    if (end == NULL)
-      return false;
-    else if (tmpVal > r.t)
-      PFLOGE("maximum value exceeded for option \"%s\".", arg);
-    else if (tmpVal < r.h)
-      PFLOGE("minimum value exceeded for option \"%s\".", arg);
-    val = tmpVal;
-    parsed = true;
-    return true;
-  }
+		virtual bool parse(arg_t input) {
+			arg_t strVal = input;
+			if (!eq(strVal, "--") || !eq(strVal, arg) || !eq(strVal, "="))
+				return false;
+			char* end;
+			double tmpVal = strtod(strVal, &end);
+			if (end == NULL)
+				return false;
+			else if (tmpVal > r.t)
+				PFLOGE("maximum value exceeded for option \"%s\".", arg);
+			else if (tmpVal < r.h)
+				PFLOGE("minimum value exceeded for option \"%s\".", arg);
+			val = tmpVal;
+			parsed = true;
+			return true;
+		}
 
-  virtual void help(bool verbose = false) {
-    PFLOGN1("  %s--%-20s = %-8s [", CHELP, arg, type);
-    if (r.h == -INFINITY) {
-      PRINT("%-8s", "-inf");
-    } else {
-      PRINT("%-8.2f", r.h);
-    }
-    PRINT(" .. ");
-    if (r.t == INFINITY) {
-      PRINT("%8s", "inf");
-    } else {
-      PRINT("%8.2f", r.t);
-    }
-    PRINT("]%s (%sdefault: %s%10.2e%s)\n", CNORMAL, CARGDEFAULT, CARGVALUE, val, CNORMAL);
-    if (verbose) {
-      PFLOG1("   %s", text);
-      PFLOG0("");
-    }
-  }
+		virtual void help(bool verbose = false) {
+			PFLOGN1("  %s--%-20s = %-8s [", CHELP, arg, type);
+			if (r.h == -INFINITY) { PRINT("%-8s", "-inf"); }
+			else { PRINT("%-8.2f", r.h); }
+			PRINT(" .. ");
+			if (r.t == INFINITY) { PRINT("%8s", "inf"); }
+			else { PRINT("%8.2f", r.t); }
+			PRINT("]%s (%sdefault: %s%10.2e%s)\n", CNORMAL, CARGDEFAULT, CARGVALUE, val, CNORMAL);
+			if (verbose) {
+				PFLOG1("   %s", text);
+				PFLOG0("");
+			}
+		}
 
-  virtual void printArgument() {
-    PRINT(" %s%s%s<%.2f>%s", CARGDEFAULT, arg, CARGVALUE, val, CNORMAL);
-  }
-};
+		virtual void printArgument() { 
+			PRINT(" %s%s%s<%.2f>%s", CARGDEFAULT, arg, CARGVALUE, val, CNORMAL);
+		}
+	};
 
-class STRING_OPT : public ARG {
-  arg_t val;
+	class STRING_OPT : public ARG
+	{
+		arg_t val;
 
-public:
-  STRING_OPT(arg_t a, arg_t x, arg_t val = NULL)
-    : ARG(a, x, "<string>"), val(val) {}
+	public:
+		STRING_OPT(arg_t a, arg_t x, arg_t val = NULL)
+			: ARG(a, x, "<string>"), val(val) {}
 
-  operator arg_t(void) const { return val; }
-  operator arg_t&(void) { return val; }
-  STRING_OPT& operator=(arg_t x) {
-    val = x;
-    return *this;
-  }
+		operator arg_t (void) const { return val; }
+		operator arg_t& (void) { return val; }
+		STRING_OPT& operator=(arg_t x) { val = x; return *this; }
 
-  size_t length() const {
-    assert(val != NULL);
-    return strlen(val);
-  }
+		size_t length() const { assert(val != NULL); return strlen(val); }
 
-  virtual bool parse(const char* input) {
-    arg_t strVal = input;
-    if (!eq(strVal, "--") || !eq(strVal, arg) || !eq(strVal, "="))
-      return false;
-    val = strVal;
-    parsed = true;
-    return true;
-  }
+		virtual bool parse(const char* input) {
+			arg_t strVal = input;
+			if (!eq(strVal, "--") || !eq(strVal, arg) || !eq(strVal, "="))
+				return false;
+			val = strVal;
+			parsed = true;
+			return true;
+		}
 
-  virtual void help(bool verbose = false) {
-    PFLOG1("  %s--%-20s = %8s%s  (%sdefault: %s%s%s)", CHELP, arg, type, CNORMAL, CARGDEFAULT, CARGVALUE, val, CNORMAL);
-    if (verbose) {
-      PFLOG1("   %s", text);
-      PFLOG0("");
-    }
-  }
+		virtual void help(bool verbose = false) {
+			PFLOG1("  %s--%-20s = %8s%s  (%sdefault: %s%s%s)", CHELP, arg, type, CNORMAL, CARGDEFAULT, CARGVALUE, val, CNORMAL);
+			if (verbose) {
+				PFLOG1("   %s", text);
+				PFLOG0("");
+			}
+		}
 
-  virtual void printArgument() {
-    PRINT(" %s%s%s<%s>%s", CARGDEFAULT, arg, CARGVALUE, val, CNORMAL);
-  }
-};
+		virtual void printArgument() { 
+			PRINT(" %s%s%s<%s>%s", CARGDEFAULT, arg, CARGVALUE, val, CNORMAL);
+		}
+	};
 
-class BOOL_OPT : public ARG {
-  bool val;
+	class BOOL_OPT : public ARG
+	{
+		bool val;
 
-public:
-  BOOL_OPT(arg_t a, arg_t x, bool val = false)
-    : ARG(a, x, "<bool>"), val(val) {}
+	public:
+		BOOL_OPT(arg_t a, arg_t x, bool val = false)
+			: ARG(a, x, "<bool>"), val(val) {}
 
-  operator bool(void) const { return val; }
-  operator bool&(void) { return val; }
-  BOOL_OPT& operator=(bool b) {
-    val = b;
-    return *this;
-  }
-  bool operator!() { return !val; }
+		operator bool(void) const { return val; }
+		operator bool& (void) { return val; }
+		BOOL_OPT& operator=(bool b) { val = b; return *this; }
+		bool operator!() { return !val; }
 
-  virtual bool parse(const char* input) {
-    arg_t strVal = input;
-    if (eq(strVal, "-")) {
-      bool bVal = !eq(strVal, "no-");
-      if (strcmp(strVal, arg) == 0) {
-        val = bVal;
-        parsed = true;
-        return true;
-      }
-    }
-    return false;
-  }
+		virtual bool parse(const char* input) {
+			arg_t strVal = input;
+			if (eq(strVal, "-")) {
+				bool bVal = !eq(strVal, "no-");
+				if (strcmp(strVal, arg) == 0) {
+					val = bVal;
+					parsed = true;
+					return true;
+				}
+			}
+			return false;
+		}
 
-  virtual void help(bool verbose = false) {
-    PFLOGN1("  %s-%-20s -no-%-20s%s", CHELP, arg, arg, CNORMAL);
-    PRINT("                 ");
-    if (val) {
-      PRINT("(%sdefault: %s%3s%s)\n", CARGDEFAULT, CARGON, "on", CNORMAL);
-    } else {
-      PRINT("(%sdefault: %s%3s%s)\n", CARGDEFAULT, CARGOFF, "off", CNORMAL);
-    }
-    if (verbose) {
-      PFLOG1("   %s", text);
-      PFLOG0("");
-    }
-  }
+		virtual void help(bool verbose = false) {
+			PFLOGN1("  %s-%-20s -no-%-20s%s", CHELP, arg, arg, CNORMAL);
+			PRINT("                 ");
+			if (val) { 
+				PRINT("(%sdefault: %s%3s%s)\n", CARGDEFAULT, CARGON, "on", CNORMAL);
+			}
+			else {
+				PRINT("(%sdefault: %s%3s%s)\n", CARGDEFAULT, CARGOFF, "off", CNORMAL);
+			}
+			if (verbose) {
+				PFLOG1("   %s", text);
+				PFLOG0("");
+			}
+		}
 
-  virtual void printArgument() {
-    PRINT(" %s%s:", CARGDEFAULT, arg);
-    if (val) {
-      PRINT("%son ", CARGON);
-    } else {
-      PRINT("%soff ", CARGOFF);
-    }
-    SETCOLOR(CNORMAL, stdout);
-  }
-};
-} // namespace ParaFROST
+		virtual void printArgument() { 
+			PRINT(" %s%s:", CARGDEFAULT, arg);
+			if (val) { PRINT("%son ", CARGON); }
+			else { PRINT("%soff ", CARGOFF); }
+			SETCOLOR(CNORMAL, stdout);
+		}
+	};
+}
 
 #endif

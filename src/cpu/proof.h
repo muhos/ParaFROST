@@ -19,66 +19,68 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 #ifndef __PROOF_
 #define __PROOF_
 
-#include "clause.h"
-#include "definitions.h"
-#include "logging.h"
-#include "simptypes.h"
-#include "space.h"
 #include "vector.h"
+#include "definitions.h"
+#include "clause.h"
+#include "simptypes.h"
+#include "logging.h"
+#include "space.h"
 
 namespace ParaFROST {
 
-class PROOF {
+	class PROOF {
 
-  FILE* proofFile;
-  SP* sp;
-  uint32* vars;
-  Lits_t clause, tmpclause;
-  size_t added;
-  bool nonbinary_en;
+		FILE* proofFile;
+		SP*		sp;
+		uint32*	vars;
+		Lits_t	clause, tmpclause;
+		size_t	added;
+		bool	nonbinary_en;
 
-  inline void write(const Byte&);
-  inline void write(const uint32*, const int&);
-  inline void binary(const uint32*, const int&);
-  inline void nonbinary(const uint32*, const int&);
-  inline void addline(const uint32*, const int&);
-  inline void delline(const uint32*, const int&);
-  inline int exists(uint32*, const int&);
-  inline int exists();
-  inline void addClause();
-  inline void deleteClause();
-  inline bool checkFile();
+		inline void		write		(const Byte&);
+		inline void		write		(const uint32*, const int&);
+		inline void		binary		(const uint32*, const int&);
+		inline void		nonbinary	(const uint32*, const int&);
+		inline void		addline		(const uint32*, const int&);
+		inline void		delline		(const uint32*, const int&);
+		inline int		exists		(uint32*, const int&);
+		inline int		exists		();
+		inline void		addClause	();
+		inline void		deleteClause();
+		inline bool		checkFile	();
+	
+	public:
 
-public:
-  PROOF();
-  ~PROOF();
+		PROOF	();
+		~PROOF	();
 
-  size_t numClauses() const { return added; }
-  void close();
-  void init(SP*);
-  void init(SP*, uint32*);
-  void handFile(arg_t path, const bool&);
-  void checkInput(arg_t input);
-  void addEmpty();
-  void addUnit(uint32);
-  void addClause(Lits_t&);
-  void addClause(CLAUSE&);
-  void addClause(SCLAUSE&);
-  void addResolvent(SCLAUSE&);
-  void deleteList(OL&);
-  void deleteClause(Lits_t&);
-  void deleteClause(CLAUSE&);
-  void deleteClause(SCLAUSE&);
-  void deleteClause(SCLAUSE&, const uint32& def, const uint32& other);
-  void shrinkClause(CLAUSE&);
-  void shrinkClause(CLAUSE&, const uint32&);
-  void shrinkClause(SCLAUSE&, const uint32&);
-  void resolve(const uint32&, OL&, OL&);
-  void resolve(const uint32&, SCLAUSE&, SCLAUSE&);
-  bool merge(const uint32&, SCLAUSE&, SCLAUSE&);
-  void printClause(const char*, const uint32*, const int&, const bool& map = false);
-};
+		size_t numClauses		() const { return added; }
+		void close				();
+		void init				(SP*);
+		void init				(SP*, uint32*);
+		void handFile			(arg_t path, const bool&);
+		void checkInput			(arg_t input);
+		void addEmpty			();
+		void addUnit			(uint32);
+		void addClause			(Lits_t&);
+		void addClause			(CLAUSE&);
+		void addClause			(SCLAUSE&);
+		void addResolvent		(SCLAUSE&);
+		void deleteList			(OL&);
+		void deleteClause		(Lits_t&);
+		void deleteClause		(CLAUSE&);
+		void deleteClause		(SCLAUSE&);
+		void deleteClause		(SCLAUSE&, const uint32& def, const uint32& other);
+		void shrinkClause		(CLAUSE&);
+		void shrinkClause		(CLAUSE&, const uint32&);
+		void shrinkClause		(SCLAUSE&, const uint32&);
+		void resolve			(const uint32&, OL&, OL&);
+		void resolve			(const uint32&, SCLAUSE&, SCLAUSE&);
+		bool merge				(const uint32&, SCLAUSE&, SCLAUSE&);
+		void printClause		(const char*, const uint32*, const int&, const bool& map = false);
 
-} // namespace ParaFROST
+	};
+
+}
 
 #endif

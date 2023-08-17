@@ -19,37 +19,38 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 #ifndef __SCALE_
 #define __SCALE_
 
-#include <cassert>
 #include <cmath>
+#include <cassert>
 #include "datatypes.hpp"
 
 namespace ParaFROST {
 
-inline uint64 linear(const uint64& n) { return n; }
-inline uint64 quadratic(const uint64& n) { return n * n; }
-inline uint64 logn(const uint64& n) { return (uint64)log10(n + 10); }
-inline uint64 nlogn(const uint64& n) { return n * logn(n); }
-inline uint64 nbylogn(const uint64& n) { return n / logn(n); }
-inline uint64 lognlogn(const uint64& n) {
-    double val = log10(n + 10);
-    return uint64(val * val);
-}
-inline uint64 lognlognlogn(const uint64& n) {
-    double val = log10(n + 10);
-    return uint64(val * val * val);
-}
-inline uint64 nlognlogn(const uint64& n) { return n * lognlogn(n); }
-inline uint64 nlognlognlogn(const uint64& n) { return n * lognlognlogn(n); }
-inline uint64 relscale(const uint64& n, const uint64& increase) {
-    const uint64 factor = logn(n);
-    assert(factor >= 1);
-    const uint64 dfactor = factor * factor;
-    assert(dfactor >= 1);
-    uint64 scaled = dfactor * increase;
-    assert(increase <= scaled);
-    return scaled;
+	inline uint64 linear	    (const uint64& n) { return n; }
+	inline uint64 quadratic	    (const uint64& n) { return n * n; }
+	inline uint64 logn		    (const uint64& n) { return (uint64)log10(n + 10); }
+	inline uint64 nlogn		    (const uint64& n) { return n * logn(n); }
+	inline uint64 nbylogn	    (const uint64& n) { return n / logn(n); }
+	inline uint64 lognlogn	    (const uint64& n) {
+		double val = log10(n + 10);
+		return uint64(val * val);
+	}
+	inline uint64 lognlognlogn  (const uint64& n) {
+		double val = log10(n + 10);
+		return uint64(val * val * val);
+	}
+	inline uint64 nlognlogn	    (const uint64& n) { return n * lognlogn(n); }
+	inline uint64 nlognlognlogn (const uint64& n) { return n * lognlognlogn(n); }
+	inline uint64 relscale	    (const uint64& n, const uint64& increase)
+	{
+		const uint64 factor = logn(n);
+		assert(factor >= 1);
+		const uint64 dfactor = factor * factor;
+		assert(dfactor >= 1);
+		uint64 scaled = dfactor * increase;
+		assert(increase <= scaled);
+		return scaled;
+	}
+
 }
 
-} // namespace ParaFROST
-
-#endif
+#endif 

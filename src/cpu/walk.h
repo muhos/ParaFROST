@@ -23,26 +23,26 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 namespace ParaFROST {
 
-struct CINFO {
-  uint32 size;
-  uint32 unsatidx;
-};
+	struct CINFO {
+		uint32 size;
+		uint32 unsatidx;
+	};
 
-struct WALK {
-  BCNF orgs;
-  uVec1D trail, unsat;
-  Vec<CINFO> cinfo;
-  Vec<double> scores;
-  LIT_ST* value;
-  uint64 limit;
-  uint32 initial, current;
-  uint32 minimum, flipped;
-  uint32 nclauses, best;
+	struct WALK {
+		BCNF orgs;
+		uVec1D trail, unsat;
+		Vec<CINFO> cinfo;
+		Vec<double> scores;
+		LIT_ST* value;
+		uint64 limit;
+		uint32 initial, current;
+		uint32 minimum, flipped;
+		uint32 nclauses, best;
 
-  WALK();
-  inline void destroy();
-};
+		            WALK    ();
+		inline void destroy ();
+	};
 
-} // namespace ParaFROST
+}
 
 #endif

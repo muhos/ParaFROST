@@ -23,27 +23,27 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 namespace ParaFROST {
 
-struct GOPTION {
-    GOPTION();
-    void init();
+	struct GOPTION {
+		GOPTION();
+		void init();
 
-    bool unified_access;
-    bool profile_gpu;
-    bool sync_always;
-    bool ve_atomic;
-    bool gc_gpu;
+		bool unified_access;
+		bool profile_gpu;
+		bool sync_always;
+		bool ve_atomic;
+		bool gc_gpu;
 
-    uint32 ve_min_threads;
-    uint32 sub_min_threads;
-    uint32 ere_min_threads;
+		uint32 ve_min_threads;
+		uint32 sub_min_threads;
+		uint32 ere_min_threads;
 
-    double ve_min_blocks;
-    double sub_min_blocks;
-    double ere_min_blocks;
-};
+		double ve_min_blocks;
+		double sub_min_blocks;
+		double ere_min_blocks;
+	};
 
-extern GOPTION gopts;
+	extern GOPTION gopts;
 
-} // namespace ParaFROST
+}
 
 #endif

@@ -19,32 +19,32 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 #ifndef __THRUST_MEMORY_
 #define __THRUST_MEMORY_
 
-#include <thrust/device_ptr.h>
 #include <thrust/system/cuda/vector.h>
-#include "cache.cuh"
+#include <thrust/device_ptr.h>
 #include "logging.hpp"
+#include "cache.cuh"
 
 namespace ParaFROST {
 
-/*****************************************************/
-/*  Usage:    Thrust cached memory allocator         */
-/*  Dependency: None                                 */
-/*****************************************************/
+	/*****************************************************/
+	/*  Usage:    Thrust cached memory allocator         */
+	/*  Dependency: None                                 */
+	/*****************************************************/
 
-class TCA {
+	class TCA {
 
-  public:
-    typedef char value_type;
+	public:
+		typedef char value_type;
 
-    char* allocate(size_t size) {
-        return (char*)cacher.allocate(size);
-    }
+		char* allocate(size_t size) {
+			return (char*)cacher.allocate(size);
+		}
 
-    void deallocate(char* p, size_t) {
-        cacher.deallocate(p);
-    }
-};
+		void deallocate(char* p, size_t) {
+			cacher.deallocate(p);
+		}
+	};
 
-} // namespace ParaFROST
+}
 
 #endif
