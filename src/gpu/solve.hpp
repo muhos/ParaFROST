@@ -180,7 +180,8 @@ namespace ParaFROST {
 			return ((stats.shrunken - last.shrink.removed) > (opts.sigma_min << 4));
 		}
 		inline bool		runningout			() const { 
-			return interrupted()
+			return interrupted() 
+				|| (termCallback && termCallback(termCallbackState))
 				|| (opts.boundsearch_en && (stats.conflicts >= opts.conflict_out || stats.decisions.single >= opts.decision_out));
 		}
 		inline void		rootify				() {
@@ -851,6 +852,10 @@ namespace ParaFROST {
 		Vec1D			ilevel;
 		Lits_t			assumptions, iconflict;
 	public:
+        void*			termCallbackState;
+        void*			learnCallbackState;
+        int*			learnCallbackBuffer;
+        int				learnCallbackLimit;
 		                Solver				();
 		void			iunassume           ();
 		void			iallocSpace         ();
@@ -873,6 +878,19 @@ namespace ParaFROST {
 			CHECKVAR(v);
 			return incremental && ifrozen[v];
 		}
+        int				(*termCallback)		(void* state);
+        void			(*learnCallback)	(void* state, int* clause);
+        void			setTermCallback		(void* state, int (*termCallback)(void*)) {
+            this->termCallbackState = state;
+            this->termCallback = termCallback;
+        }
+        void			setLearnCallback	(void* state, int maxlength, void (*learn)(void* state, int* clause)) {
+            this->learnCallbackState = state;
+            this->learnCallbackLimit = maxlength;
+            this->learnCallback = learn;
+            pfralloc<int>(this->learnCallbackBuffer, (maxlength + 1) * sizeof(int));
+        }
+
 
 		//==========================================//
 		//			       Printers                 //

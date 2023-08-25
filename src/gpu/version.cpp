@@ -62,6 +62,8 @@ namespace ParaFROST {
 
 	const char* version() { return VERSION; }
 
+	const char* signature() { return "parafrost-" VERSION; }
+
 	const char* compiler() 
 	{
 #ifdef _MSC_VER

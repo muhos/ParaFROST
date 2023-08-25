@@ -39,6 +39,7 @@ Solver::~Solver()
 { 
 	PFPRINT(2, 5, "\n");
 	masterFree();
+    std::free(this->learnCallbackBuffer);
 }
 
 Solver::Solver(const string& formulaStr) :
@@ -54,6 +55,9 @@ Solver::Solver(const string& formulaStr) :
 	, stable(false)
 	, probed(false)
 	, incremental(false)
+	, termCallback(NULL)
+	, learnCallbackBuffer(NULL)
+	, learnCallback(NULL)
 	, vars(NULL)
 	, ot(NULL)
 	, cnf(NULL)

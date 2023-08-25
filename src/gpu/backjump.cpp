@@ -59,7 +59,16 @@ C_REF Solver::backjump()
 	assert(trail.size());
 	const int jmplevel = where();
 	backtrack(jmplevel);
-	if (learntC.size() == 1) {
+    const int size = learntC.size();
+    if (learnCallback && size <= learnCallbackLimit) {
+        assert(learnCallbackBuffer);
+        for (int i = 0; i < size; i++) {
+            learnCallbackBuffer[i] = l2i(learntC[i]);
+        }
+        learnCallbackBuffer[size] = 0;
+        learnCallback(learnCallbackState, learnCallbackBuffer);
+    }
+    if (size == 1) {
 		enqueue(learntC[0]);
 		stats.units.learnt++;
 	}
