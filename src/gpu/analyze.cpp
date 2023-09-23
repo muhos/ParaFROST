@@ -1,6 +1,6 @@
 /***********************************************************************[analyze.cpp]
 Copyright(c) 2020, Muhammad Osama - Anton Wijs,
-Technische Universiteit Eindhoven (TU/e).
+Copyright(c) 2022-present, Muhammad Osama.
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
@@ -25,7 +25,7 @@ inline void	Solver::bumpReason(const uint32& lit)
 	assert(isFalse(lit));
 	const uint32 v = ABS(lit);
 	if (!sp->level[v] || ANALYZED(sp->seen[v])) return;
-	PFLOG2(4, "  bumping reason literal %d@%d", l2i(lit), sp->level[v]);
+	LOG2(4, "  bumping reason literal %d@%d", l2i(lit), sp->level[v]);
 	assert(!sp->seen[v]);
 	sp->seen[v] = ANALYZED_M;
 	analyzed.push(v);
@@ -105,7 +105,7 @@ bool Solver::chronoAnalyze()
 		}
 	}
 	assert(count);
-	PFLOG2(3, "  found %d literals on conflict level %d", count, conflictlevel);
+	LOG2(3, "  found %d literals on conflict level %d", count, conflictlevel);
 	if (!conflictlevel) { learnEmpty(); return false; }
 	const int size = c.size();
 	for (int i = 0; i < 2; i++) {
@@ -132,7 +132,7 @@ bool Solver::chronoAnalyze()
 		assert(forced > 1);
 		backtrack(conflictlevel - 1);
 		enqueueImp(forced, conflict);
-		PFLCLAUSE(3, cm[conflict], "  forced %d@%d in conflicting clause", l2i(forced), l2dl(forced));
+		LOGCLAUSE(3, cm[conflict], "  forced %d@%d in conflicting clause", l2i(forced), l2dl(forced));
 		conflict = NOREF;
 		return true;
 	}
@@ -146,8 +146,8 @@ void Solver::analyze()
 	assert(learntC.empty());
 	assert(analyzed.empty());
 	assert(lbdlevels.empty());
-	PFLOG2(3, " Analyzing conflict%s:", probed ? " during probing" : "");
-	PFLTRAIL(this, 4);
+	LOG2(3, " Analyzing conflict%s:", probed ? " during probing" : "");
+	LOGTRAIL(this, 4);
 	bool conflictchanged = true;
 	while (conflictchanged) {
 		stats.conflicts++;

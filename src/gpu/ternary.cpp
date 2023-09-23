@@ -1,6 +1,6 @@
 /***********************************************************************[ternary.cpp]
 Copyright(c) 2020, Muhammad Osama - Anton Wijs,
-Technische Universiteit Eindhoven (TU/e).
+Copyright(c) 2022-present, Muhammad Osama.
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
@@ -94,8 +94,8 @@ bool Solver::hyper3Resolve(CLAUSE& pos, CLAUSE& neg, const uint32& p)
     CHECKLIT(p);
     assert(pos.size() == 3), assert(neg.size() == 3);
     assert(learntC.empty());
-    PFLCLAUSE(4, pos, "  hyper ternary resolving %6d ", l2i(p));
-    PFLCLAUSE(4, neg, "  with\t\t\t    ");
+    LOGCLAUSE(4, pos, "  hyper ternary resolving %6d ", l2i(p));
+    LOGCLAUSE(4, neg, "  with\t\t\t    ");
     stats.ternary.resolutions++;
     forall_clause(pos, k) {
         const uint32 lit = *k;
@@ -156,7 +156,7 @@ void Solver::ternaryResolve(const uint32& p, const uint64& limit)
                 else {
                     assert(size == 2);
                     learnt = pos->learnt() && neg.learnt();
-                    PFLOG2(4, "  hyper ternary resolvent subsumes resolved clauses");
+                    LOG2(4, "  hyper ternary resolvent subsumes resolved clauses");
                     removeClause(*pos, pref);
                     removeClause(neg, nref);
                     stats.ternary.binaries++;
@@ -180,7 +180,7 @@ void Solver::scheduleTernary(LIT_ST* use)
         const uint32 p = V2L(v), n = NEG(p);
         if (use[p] && use[n]) vschedule.insert(v);
     }
-    PFLOG2(2, " Ternary %lld: scheduled %d variables %.2f%%",
+    LOG2(2, " Ternary %lld: scheduled %d variables %.2f%%",
         stats.ternary.calls, vschedule.size(), percent(vschedule.size(), maxActive()));
 }
 
@@ -218,7 +218,7 @@ void Solver::ternarying(const uint64& resolvents_limit, const uint64& checks_lim
         ternaryResolve(V2L(cand), checks_limit);
     }
     uint32 processed = scheduled - vschedule.size();
-    PFLOG2(2, " Ternary %lld: processed %d candidates %.2f%%",
+    LOG2(2, " Ternary %lld: processed %d candidates %.2f%%",
         stats.ternary.calls, processed, percent(processed, vschedule.size()));
 }
 
@@ -249,9 +249,9 @@ void Solver::ternary()
     wot.clear(true);
     vschedule.destroy();
     rebuildWT(opts.ternary_priorbins);
-    if (retrail()) PFLOG2(2, " Propagation after ternary proved a contradiction");
+    if (retrail()) LOG2(2, " Propagation after ternary proved a contradiction");
     const int64 subsumed = numClauses + last.ternary.resolvents - maxClauses();
-    PFLOG2(2, " Ternary %lld: added %lld resolvents %.2f%% and subsumed %lld clauses %.2f%%",
+    LOG2(2, " Ternary %lld: added %lld resolvents %.2f%% and subsumed %lld clauses %.2f%%",
         stats.ternary.calls, last.ternary.resolvents, percent((double)last.ternary.resolvents, (double)numClauses),
         subsumed, percent(subsumed, numClauses));
     UPDATE_SLEEPER(this, ternary, last.ternary.resolvents);

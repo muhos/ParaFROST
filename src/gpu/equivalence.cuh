@@ -1,6 +1,6 @@
 /***********************************************************************[equ.cuh]
 Copyright(c) 2020, Muhammad Osama - Anton Wijs,
-Technische Universiteit Eindhoven (TU/e).
+Copyright(c) 2022-present, Muhammad Osama.
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
@@ -16,8 +16,8 @@ You should have received a copy of the GNU General Public License
 along with this program.  If not, see <https://www.gnu.org/licenses/>.
 **********************************************************************************/
 
-#ifndef __EQU_
-#define __EQU_
+#ifndef __EQUIVALENCE_
+#define __EQUIVALENCE_
 
 #include "elimination.cuh"
 
@@ -34,15 +34,20 @@ namespace ParaFROST {
 		assert(dx > 1);
 		assert(def != dx);
 		assert(org.original());
-		int n = 0;
-		#pragma unroll
-		for (int i = 0; i < org.size(); i++) {
-			const uint32 lit = org[i];
-			if (lit == dx) org[n++] = def;
-			else if (NEQUAL(lit, def)) org[n++] = lit;
+
+		uint32* j = org;
+		forall_clause(org, i) {
+			const uint32 lit = *i;
+			if (lit == dx) 
+				*j++ = def;
+			else if (NEQUAL(lit, def)) 
+				*j++ = lit;
 		}
+		const int n = j - org;
 		org.resize(n);
-		if (n == 1) nUnits++;
+
+		if (n == 1)
+			nUnits++;
 		else {
 			devSort(org.data(), n);
 			calcSig(org);
@@ -51,6 +56,7 @@ namespace ParaFROST {
 
 	_PFROST_D_ void substitute_single(
 		const uint32& p, 
+		const uint32& n, 
 		const uint32& def,
 		CNF& cnf, 
 		OL& poss,
@@ -60,23 +66,28 @@ namespace ParaFROST {
 	{
 		assert(def > 1);
 		assert(!SIGN(p));
-		uint32 n = NEG(p), def_f = FLIP(def);
+		uint32 def_f = FLIP(def);
+
 		// substitute negatives 
 		uint32 nNegUnits = 0;
-		#pragma unroll
 		forall_occurs(negs, i) {
 			SCLAUSE& c = cnf[*i];
-			if (c.learnt() || c.molten() || c.has(def)) c.markDeleted(); // learnt or tautology
-			else substitute_single(n, def_f, c, nNegUnits);
+			if (c.learnt() || c.molten() || c.has(def)) 
+				c.markDeleted(); // learnt or tautology
+			else 
+				substitute_single(n, def_f, c, nNegUnits);
 		}
+
 		// substitute positives
 		uint32 nPosUnits = 0;
-		#pragma unroll
 		forall_occurs(poss, i) {
 			SCLAUSE& c = cnf[*i];
-			if (c.learnt() || c.molten() || c.has(def_f)) c.markDeleted(); // learnt or tautology
-			else substitute_single(p, def, c, nPosUnits);
+			if (c.learnt() || c.molten() || c.has(def_f))
+				c.markDeleted(); // learnt or tautology
+			else 
+				substitute_single(p, def, c, nPosUnits);
 		}
+
 		// add units
 		if (nPosUnits || nNegUnits) {
 			uint32* ustart = units->jump(nPosUnits + nNegUnits);
@@ -85,6 +96,7 @@ namespace ParaFROST {
 			if (nPosUnits) appendUnits(cnf, poss, udata);
 			assert(udata == ustart + nPosUnits + nNegUnits);
 		}
+
 		// add proof
 		if (proof) {
 			uint32 bytes = 0;
@@ -111,19 +123,30 @@ namespace ParaFROST {
 				c.melt(); // mark as gate clause
 				nImps++;
 			}
-			if (nImps > 1) return 0; // cannot be a single-input gate
+			if (nImps > 1) 
+				return 0; // cannot be a single-input gate
 		}
 		return imp;
 	}
 
-	_PFROST_D_ uint32 find_equ_gate(const uint32& p, CNF& cnf, OL& poss, OL& negs)
+	_PFROST_D_ uint32 find_equ_gate(const uint32& p, const uint32& n, CNF& cnf, OL& poss, OL& negs)
 	{
 		assert(p > 1);
-		assert(!SIGN(p));
+		assert(n == NEG(p));
+		assert(poss.size());
+		assert(negs.size());
+
+		if (cnf[*poss].size() > 2 ||
+			cnf[*negs].size() > 2) {
+			return 0;
+		}
+
 		assert(checkMolten(cnf, poss, negs));
-		uint32 first;
-		if (first = find_sfanin(p, cnf, poss)) {
-			uint32 second = NEG(p), def = first;
+
+		uint32 first = find_sfanin(p, cnf, poss);
+
+		if (first) {
+			uint32 second = n, def = first;
 			if (second < def) first = second, second = def;
 			assert(first < second);
 			forall_occurs(negs, i) {
@@ -139,7 +162,9 @@ namespace ParaFROST {
 				}
 			}
 		}
+
 		freezeBinaries(cnf, poss);
+
 		return 0;
 	}
 

@@ -1,6 +1,6 @@
 /***********************************************************************[walk.cpp]
 Copyright(c) 2020, Muhammad Osama - Anton Wijs,
-Technische Universiteit Eindhoven (TU/e).
+Copyright(c) 2022-present, Muhammad Osama.
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
@@ -88,7 +88,7 @@ void Solver::walk()
 		tracker.destroy();
 	bot.clear(true);
 	rebuildWT(opts.walk_priorbins);
-	if (retrail()) PFLOG2(2, " Propagation after walk proved a contradiction");
+	if (retrail()) LOG2(2, " Propagation after walk proved a contradiction");
 }
 
 void Solver::walkinit()
@@ -158,7 +158,7 @@ bool Solver::walkschedule()
 	}
 	tracker.initial = unsatclauses.size();
 	tracker.minimum = tracker.current = tracker.initial;
-	PFLOG2(2, " Walk %lld: found initial %d unsatisfied large clauses (%.2f%%)",
+	LOG2(2, " Walk %lld: found initial %d unsatisfied large clauses (%.2f%%)",
 		stats.walk.calls, tracker.initial, percent(tracker.initial, scheduled));
 	return true;
 }
@@ -167,14 +167,14 @@ void Solver::walkstop()
 {
 	assert(tracker.minimum <= tracker.initial);
 	if (tracker.minimum == tracker.initial) {
-		PFLOG2(2, " Walk %lld: no improvement as unsatisfied clauses did not change", stats.walk.calls);
+		LOG2(2, " Walk %lld: no improvement as unsatisfied clauses did not change", stats.walk.calls);
 		last.rephase.type = 0;
 	}
 	else {
 		if (tracker.best && NEQUAL(tracker.best, NOVAR))
 			saveTrail(tracker.value, false);
 		stats.walk.improved++;
-		PFLOG2(2, " Walk %lld: improved phases till %d unsatisfied clauses", stats.walk.calls, tracker.minimum);
+		LOG2(2, " Walk %lld: improved phases till %d unsatisfied clauses", stats.walk.calls, tracker.minimum);
 		last.rephase.type = WALKPHASE;
 		printStats(1, 'w', CCYAN);
 	}
@@ -222,7 +222,7 @@ uint32 Solver::promoteLit()
 		}
 	}
 	CHECKLIT(promoted);
-	PFLOG2(4, "  promoted literal %d with score %.6f", l2i(promoted), score);
+	LOG2(4, "  promoted literal %d with score %.6f", l2i(promoted), score);
 	tracker.scores.clear();
 	return promoted;
 }
@@ -267,7 +267,7 @@ uint32 Solver::ipromoteLit()
 		}
 	}
 	CHECKLIT(promoted);
-	PFLOG2(4, "  promoted literal %d with score %.6f", l2i(promoted), score);
+	LOG2(4, "  promoted literal %d with score %.6f", l2i(promoted), score);
 	tracker.scores.clear();
 	return promoted;
 }
@@ -276,7 +276,7 @@ void Solver::walkstep()
 {
 	tracker.flipped++;
 	const uint32 lit = assumptions.empty() ? promoteLit() : ipromoteLit();
-	PFLOG2(4, "  walking step %d by flipping promoted literal %d", tracker.flipped, l2i(lit));
+	LOG2(4, "  walking step %d by flipping promoted literal %d", tracker.flipped, l2i(lit));
 	LIT_ST* values = tracker.value;
 	const LIT_ST val = values[lit];
 	assert(!val);
@@ -312,7 +312,7 @@ void Solver::walkstep()
 			tracker.best = tracker.trail.size();
 		}
 	}
-	PFLOG2(4, "  remained %d unsatsified clauses after flipping", tracker.current);
+	LOG2(4, "  remained %d unsatsified clauses after flipping", tracker.current);
 }
 
 void Solver::walking()
@@ -327,7 +327,7 @@ void Solver::walking()
 	}
 	stats.walk.minimum = tracker.minimum;
 	stats.walk.flipped += tracker.flipped;
-	PFLOG2(2, " Walk %lld: got minimum %lld unsatisfied clauses after %d flips", stats.walk.calls, stats.walk.minimum, tracker.flipped);
+	LOG2(2, " Walk %lld: got minimum %lld unsatisfied clauses after %d flips", stats.walk.calls, stats.walk.minimum, tracker.flipped);
 }
 
 inline void Solver::walkassign()
@@ -349,7 +349,7 @@ inline void Solver::walkassign()
 			CHECKLIT(dec);
 			const LIT_ST orgval = orgvalues[dec];
 			if (!orgval || !values[dec]) {
-				PFLOG2(2, " Walk %lld: abort due to conflicting assumption %d", stats.walk.calls, l2i(dec));
+				LOG2(2, " Walk %lld: abort due to conflicting assumption %d", stats.walk.calls, l2i(dec));
 				ianalyze(FLIP(dec));
 				cnfstate = UNSAT;
 				return;
@@ -436,7 +436,7 @@ inline void Solver::breakClauses(const uint32& lit)
 	CHECKLIT(lit);
 	const uint32 negated = FLIP(lit);
 	assert(!tracker.value[negated]);
-	PFLOGN2(4, "   breaking satisfied clauses with negated literal %d..", l2i(negated));
+	LOGN2(4, "   breaking satisfied clauses with negated literal %d..", l2i(negated));
 	BOL& list = bot[negated];
 	uVec1D& unsatclauses = tracker.unsat;
 	Vec<CINFO>& cinfo = tracker.cinfo;
@@ -451,14 +451,14 @@ inline void Solver::breakClauses(const uint32& lit)
 			unsatclauses.push(infoidx);
 		}
 	}
-	PFLDONE(4, 5);
+	LOGDONE(4, 5);
 }
 
 inline void Solver::makeClauses(const uint32& lit)
 {
 	CHECKLIT(lit);
 	assert(tracker.value[lit] > 0);
-	PFLOGN2(4, "   reducing unsatisfied clauses with literal %d..", l2i(lit));
+	LOGN2(4, "   reducing unsatisfied clauses with literal %d..", l2i(lit));
 	BOL& list = bot[lit];
 	Vec<CINFO>& cinfo = tracker.cinfo;
 	uint64& checks = stats.walk.checks;
@@ -471,5 +471,5 @@ inline void Solver::makeClauses(const uint32& lit)
 		if (!info.size++ && popUnsat(infoidx, info.unsatidx, cinfo))
 			checks++;
 	}
-	PFLDONE(4, 5);
+	LOGDONE(4, 5);
 }

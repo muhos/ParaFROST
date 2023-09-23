@@ -1,6 +1,6 @@
 /***********************************************************************[backtrack.cpp]
 Copyright(c) 2020, Muhammad Osama - Anton Wijs,
-Technische Universiteit Eindhoven (TU/e).
+Copyright(c) 2022-present, Muhammad Osama.
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
@@ -43,14 +43,14 @@ inline void	Solver::cancelAssign(const uint32& lit) {
 	sp->value[lit] = UNDEFINED;
 	sp->value[FLIP(lit)] = UNDEFINED;
 	inf.unassigned++;
-	PFLOG2(4, "  literal %d@%d cancelled", l2i(lit), l2dl(lit));
+	LOG2(4, "  literal %d@%d cancelled", l2i(lit), l2dl(lit));
 }
 
 void Solver::backtrack(const int& jmplevel)
 {
 	if (DL() == jmplevel) return;
 	const uint32 pivot = jmplevel + 1;
-	PFLOG2(3, " Backtracking to level %d, at trail index %d", jmplevel, dlevels[pivot]);
+	LOG2(3, " Backtracking to level %d, at trail index %d", jmplevel, dlevels[pivot]);
 	savePhases();
 	const uint32 from = dlevels[pivot];
 	uint32* i = trail + from, *j = i, *end = trail.end();
@@ -75,7 +75,7 @@ void Solver::backtrack(const int& jmplevel)
 		}
 	}
 	const uint32 remained = uint32(j - trail);
-	PFLOG2(3, "  %d literals kept (%d are saved) and %zd are cancelled", remained, remained - from, end - j);
+	LOG2(3, "  %d literals kept (%d are saved) and %zd are cancelled", remained, remained - from, end - j);
 	trail.resize(remained);
 	if (sp->propagated > from) sp->propagated = from;
 	dlevels.resize(pivot);

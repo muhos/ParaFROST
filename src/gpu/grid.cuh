@@ -1,6 +1,6 @@
 /***********************************************************************[grid.cuh]
 Copyright(c) 2020, Muhammad Osama - Anton Wijs,
-Technische Universiteit Eindhoven (TU/e).
+Copyright(c) 2022-present, Muhammad Osama.
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
@@ -25,18 +25,18 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 namespace ParaFROST {
 
 	// x
-	typedef uint32 gridtype;
+	typedef uint32 grid_t;
 
-	#define global_bx		(gridtype)(blockDim.x * blockIdx.x)
-	#define global_bx_off	(gridtype)((blockDim.x << 1) * blockIdx.x)
-	#define global_tx		(gridtype)(global_bx + threadIdx.x)
-	#define global_tx_off	(gridtype)(global_bx_off + threadIdx.x)
-	#define stride_x        (gridtype)(blockDim.x * gridDim.x)
-	#define stride_x_off	(gridtype)((blockDim.x << 1) * gridDim.x)
+	#define global_bx		(grid_t)(blockDim.x * blockIdx.x)
+	#define global_bx_off	(grid_t)((blockDim.x << 1) * blockIdx.x)
+	#define global_tx		(grid_t)(global_bx + threadIdx.x)
+	#define global_tx_off	(grid_t)(global_bx_off + threadIdx.x)
+	#define stride_x        (grid_t)(blockDim.x * gridDim.x)
+	#define stride_x_off	(grid_t)((blockDim.x << 1) * gridDim.x)
 	// y
-	#define global_by		(gridtype)(blockDim.y * blockIdx.y)
-	#define global_ty		(gridtype)(global_by + threadIdx.y)
-	#define stride_y		(gridtype)(blockDim.y * gridDim.y)
+	#define global_by		(grid_t)(blockDim.y * blockIdx.y)
+	#define global_ty		(grid_t)(global_by + threadIdx.y)
+	#define stride_y		(grid_t)(blockDim.y * gridDim.y)
 
 
 	// macros for blocks calculation
@@ -47,51 +47,51 @@ namespace ParaFROST {
 			assert(DATALEN);                                                 \
 			assert(NTHREADS);                                                \
 			assert(maxGPUThreads);                                           \
-			const gridtype REALBLOCKS = ROUNDUPBLOCKS(DATALEN, NTHREADS);    \
-			const gridtype MAXBLOCKS = maxGPUThreads / NTHREADS;             \
-			const gridtype nBlocks = MIN(REALBLOCKS, MAXBLOCKS);             \
+			const grid_t REALBLOCKS = ROUNDUPBLOCKS(DATALEN, NTHREADS);    \
+			const grid_t MAXBLOCKS = maxGPUThreads / NTHREADS;             \
+			const grid_t nBlocks = MIN(REALBLOCKS, MAXBLOCKS);             \
 
 	#define OPTIMIZEBLOCKSELIM(NVARS, MAXTHREADS, MINOPTS)                   \
 			assert(NVARS);                                                   \
 			assert(MAXTHREADS);                                              \
 			assert(maxGPUThreads);                                           \
-			const gridtype MINTHREADS = MINOPTS ## _min_threads;		     \
-			gridtype nThreads = MAXTHREADS;								     \
-			gridtype realBlocks = ROUNDUPBLOCKS(NVARS, nThreads);            \
-			const gridtype MAXBLOCKS = maxGPUThreads / MAXTHREADS;           \
-			const gridtype MINBLOCKS =										 \
-				  gridtype(MAXBLOCKS * (MINOPTS ## _min_blocks));		     \
+			const grid_t MINTHREADS = MINOPTS ## _min_threads;		     \
+			grid_t nThreads = MAXTHREADS;								     \
+			grid_t realBlocks = ROUNDUPBLOCKS(NVARS, nThreads);            \
+			const grid_t MAXBLOCKS = maxGPUThreads / MAXTHREADS;           \
+			const grid_t MINBLOCKS =										 \
+				  grid_t(MAXBLOCKS * (MINOPTS ## _min_blocks));		     \
 			while (nThreads > MINTHREADS && realBlocks <= MINBLOCKS) {	     \
 				nThreads >>= 1;											     \
 				realBlocks = ROUNDUPBLOCKS(NVARS, nThreads);			     \
 			}															     \
-			const gridtype nBlocks = MIN(realBlocks, MAXBLOCKS);             \
+			const grid_t nBlocks = MIN(realBlocks, MAXBLOCKS);             \
 
 	#define OPTIMIZEBLOCKSERE(NVARS, BLOCK2D, MINOPTS)                       \
 			assert(NVARS);                                                   \
 			assert(BLOCK2D.x);                                               \
 			assert(BLOCK2D.y);                                               \
 			assert(maxGPUThreads);                                           \
-			const gridtype MINTHREADS = MINOPTS ## _min_threads;		     \
-			gridtype realBlocks = ROUNDUPBLOCKS(NVARS, BLOCK2D.y);		     \
-			const gridtype MAXBLOCKS = maxGPUThreads /					     \
+			const grid_t MINTHREADS = MINOPTS ## _min_threads;		     \
+			grid_t realBlocks = ROUNDUPBLOCKS(NVARS, BLOCK2D.y);		     \
+			const grid_t MAXBLOCKS = maxGPUThreads /					     \
 										(BLOCK2D.x * BLOCK2D.y);             \
-			const gridtype MINBLOCKS =										 \
-				  gridtype(MAXBLOCKS * (MINOPTS ## _min_blocks));		     \
+			const grid_t MINBLOCKS =										 \
+				  grid_t(MAXBLOCKS * (MINOPTS ## _min_blocks));		     \
 			while (BLOCK2D.y > MINTHREADS && realBlocks <= MINBLOCKS) {	     \
 				BLOCK2D.y >>= 1;											 \
 				realBlocks = ROUNDUPBLOCKS(NVARS, BLOCK2D.y);			     \
 			}																 \
-			const gridtype nBlocks = MIN(realBlocks, MAXBLOCKS);             \
+			const grid_t nBlocks = MIN(realBlocks, MAXBLOCKS);             \
 
 	#define OPTIMIZEBLOCKS2(DATALEN, NTHREADS)                               \
 			assert(DATALEN);                                                 \
 			assert(NTHREADS);                                                \
 			assert(maxGPUThreads);                                           \
-			const gridtype REALTHREADS = (NTHREADS) << 1;					 \
-			const gridtype REALBLOCKS = ROUNDUPBLOCKS(DATALEN, REALTHREADS); \
-			const gridtype MAXBLOCKS = maxGPUThreads / REALTHREADS;          \
-			const gridtype nBlocks = MIN(REALBLOCKS, MAXBLOCKS);             \
+			const grid_t REALTHREADS = (NTHREADS) << 1;					 \
+			const grid_t REALBLOCKS = ROUNDUPBLOCKS(DATALEN, REALTHREADS); \
+			const grid_t MAXBLOCKS = maxGPUThreads / REALTHREADS;          \
+			const grid_t nBlocks = MIN(REALBLOCKS, MAXBLOCKS);             \
 
 	// macros for shared memory calculation
     #define OPTIMIZESHARED(NTHREADS, MINCAP)                 \

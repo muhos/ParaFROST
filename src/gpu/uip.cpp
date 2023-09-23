@@ -1,6 +1,6 @@
 /***********************************************************************[uip.cpp]
 Copyright(c) 2020, Muhammad Osama - Anton Wijs,
-Technische Universiteit Eindhoven (TU/e).
+Copyright(c) 2022-present, Muhammad Osama.
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
@@ -51,7 +51,7 @@ inline void	Solver::bumpClause(CLAUSE& c)
 		if (new_lbd <= opts.lbd_tier1) c.set_keep(true);
 		else if (old_lbd > opts.lbd_tier2 && new_lbd <= opts.lbd_tier2) c.initTier2();
 		c.set_lbd(new_lbd);
-		PFLCLAUSE(4, c, "  bumping clause with lbd %d ", new_lbd);
+		LOGCLAUSE(4, c, "  bumping clause with lbd %d ", new_lbd);
 	}
 	else if (used && old_lbd <= opts.lbd_tier2) c.initTier2();
 }
@@ -87,7 +87,7 @@ inline bool Solver::analyzeReason(const C_REF& ref, const uint32& parent, int& t
 {
 	CHECKLIT(parent);
 	CLAUSE& reason = cm[ref];
-	PFLCLAUSE(4, reason, "  analyzing %d reason", l2i(parent));
+	LOGCLAUSE(4, reason, "  analyzing %d reason", l2i(parent));
 	sp->reasonsize = 1;
 	sp->conflictdepth++;
 	if (reason.binary()) 
@@ -114,7 +114,7 @@ inline bool Solver::analyzeReason(const C_REF& ref, const uint32& parent, int& t
 			CLAUSE& subsumed = cm[conflict];
 			assert(reason.size() <= subsumed.size());
 			if (reason.original() || subsumed.learnt()) {
-				PFLCLAUSE(4, subsumed, "  found subsumed conflict");
+				LOGCLAUSE(4, subsumed, "  found subsumed conflict");
 				removeClause(subsumed, conflict);
 				stats.subsume.subsumedfly++;
 			}
@@ -130,7 +130,7 @@ inline void Solver::strengthenOTF(CLAUSE& c, const C_REF& ref, const uint32& sel
 	CHECKLIT(self);
 	assert(c.size() > 2);
 	assert(c[0] == self || c[1] == self);
-	PFLOG2(4, "  parent(%d) is strengthening last reason clause", l2i(self));
+	LOG2(4, "  parent(%d) is strengthening last reason clause", l2i(self));
 	stats.subsume.strengthenedfly++;
 	const uint32 other = c[0] ^ c[1] ^ self;
 	c[0] = other, c[1] = self;
@@ -185,7 +185,7 @@ bool Solver::finduip()
 	int track = 0;
 	// analyze conflict
 	CLAUSE& c = cm[conflict];
-	PFLCLAUSE(4, c, "  analyzing conflict");
+	LOGCLAUSE(4, c, "  analyzing conflict");
 	if (c.binary()) {
 		analyzeLit(c[0], track, sp->conflictsize);
 		analyzeLit(c[1], track, sp->conflictsize);
@@ -224,10 +224,10 @@ bool Solver::finduip()
 	}
 	assert(learntC[0] == 0);
 	learntC[0] = FLIP(parent);
-	PFLLEARNT(this, 3);
+	LOGLEARNT(this, 3);
 	sp->learntLBD = (int)lbdlevels.size();
 	assert(sp->learntLBD >= 0);
 	assert(sp->learntLBD <= learntC.size());
-	PFLOG2(4, "  LBD of learnt clause = %d", sp->learntLBD);
+	LOG2(4, "  LBD of learnt clause = %d", sp->learntLBD);
 	return false;
 }

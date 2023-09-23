@@ -1,6 +1,6 @@
 ﻿/***********************************************************************[elimbcp.cu]
 Copyright(c) 2020, Muhammad Osama - Anton Wijs,
-Technische Universiteit Eindhoven (TU/e).
+Copyright(c) 2022-present, Muhammad Osama.
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
@@ -41,7 +41,7 @@ void Solver::createOTHost(HOT& hot)
 bool Solver::propFailed()
 {
 	if (vars->nUnits) {
-		syncAll(); // sync 'cacheCNF'
+		SYNCALL; // sync 'cacheCNF'
 		assert(reallocFailed());
 		assert(hcnf != NULL);
 		assert(inf.nClauses == hcnf->size());
@@ -60,7 +60,7 @@ bool Solver::propFailed()
 			else if (!val) return false; // early conflict detection
 		}
 		if (trail.size() == sp->propagated) vars->nUnits = nForced = 0; // duplicate units
-		else PFLOGN2(2, " Propagating pending forced units..");
+		else LOGN2(2, " Propagating pending forced units..");
 		int64 bclauses = inf.nClauses, bliterals = inf.nLiterals;
 		CNF& hcnf = *this->hcnf;
 		while (sp->propagated < trail.size()) { // propagate units
@@ -86,9 +86,9 @@ bool Solver::propFailed()
 				}
 			}
 		}
-		PFLDONE(2, 5);
+		LOGDONE(2, 5);
 		nForced = sp->propagated - nForced;
-		PFLREDALLHOST(this, 2, "BCP Reductions");
+		LOGREDALLHOST(this, 2, "BCP Reductions");
 		countAll(1);
 		inf.nClauses = inf.n_cls_after;
 		inf.nLiterals = inf.n_lits_after;
@@ -161,7 +161,7 @@ inline bool Solver::propClause(const LIT_ST* values, const uint32& lit, SCLAUSE&
 inline bool Solver::enqueueCached(const cudaStream_t& stream) {
 	if (vars->nUnits) {
 		nForced = sp->propagated;
-		sync(stream); // sync units copy
+		SYNC(stream); // sync units copy
 		assert(vars->cachedUnits != NULL);
 		LIT_ST* values = sp->value;
 		uint32* t = vars->cachedUnits + vars->nUnits;
@@ -173,17 +173,17 @@ inline bool Solver::enqueueCached(const cudaStream_t& stream) {
 			else if (!val) return false; // early conflict detection
 		}
 		if (trail.size() == sp->propagated) vars->nUnits = nForced = 0; // duplicate units
-		else PFLOGN2(2, " Propagating forced units..");
-		syncAll(); // sync ot creation
+		else LOGN2(2, " Propagating forced units..");
+		SYNCALL; // sync ot creation
 	}
 	return true;
 }
 
 inline void	Solver::cleanProped() {
 	if (vars->nUnits) {
-		PFLDONE(2, 5);
+		LOGDONE(2, 5);
 		nForced = sp->propagated - nForced;
-		PFLREDALL(this, 2, "BCP Reductions");
+		LOGREDALL(this, 2, "BCP Reductions");
 		nForced = 0, vars->tmpUnits.clear();
 		assert(vars->tmpUnits.data() == cumm.unitsdPtr());
 		if (!opts.sub_en) reduceOTAsync(cnf, ot, 0);

@@ -1,6 +1,6 @@
 /***********************************************************************[limit.hpp]
 Copyright(c) 2020, Muhammad Osama - Anton Wijs,
-Technische Universiteit Eindhoven (TU/e).
+Copyright(c) 2022-present, Muhammad Osama.
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
@@ -83,7 +83,7 @@ namespace ParaFROST {
 	  INC *= SCALING_FUNC( N ) + 1; \
 	  const uint64 SCALED = (SCALE_INCREASE) ? relscale(SOLVER->stats.clauses.original, INC ) : INC; \
 	  SOLVER->limit.OPTION = SOLVER->stats.conflicts + SCALED; \
-	  PFLOG2(2, "  %s limit increased to %lld conflicts by a weight %lld", __func__, SOLVER->limit.OPTION, INC); \
+	  LOG2(2, "  %s limit increased to %lld conflicts by a weight %lld", __func__, SOLVER->limit.OPTION, INC); \
 	} while (0)
 
 #define SET_BOUNDS(SOLVER, RESULT, OPTION, START, REFERENCE, SCALE) \
@@ -97,7 +97,7 @@ namespace ParaFROST {
 		if (INCREASE < MINIMUM) INCREASE = MINIMUM; \
 		if (INCREASE > MAXIMUM) INCREASE = MAXIMUM; \
 		RESULT += INCREASE; \
-		PFLOG2(2, "  %s efficiency bounds increased to %lld by a weight %lld", __func__, RESULT, INCREASE); \
+		LOG2(2, "  %s efficiency bounds increased to %lld by a weight %lld", __func__, RESULT, INCREASE); \
 	} while (0)
 
 #define SLEEPING(SMONITOR, ENABLED) \
@@ -106,7 +106,7 @@ namespace ParaFROST {
 	  MONITOR &monitor = SMONITOR; \
 	  assert (monitor.all <= monitor.now); \
 	  if (!monitor.all) break; \
-	  PFLOG2(2, "  %s still sleeping for %d time(s)", __func__, monitor.all); \
+	  LOG2(2, "  %s still sleeping for %d time(s)", __func__, monitor.all); \
 	  monitor.all--; \
 	  return; \
 	} while (0)
@@ -119,14 +119,14 @@ namespace ParaFROST {
 	  assert (monitor.all <= monitor.now); \
 	  if (SUCCESS) { \
 		if (monitor.now) { \
-		  PFLOG2(2, "  %s is waking up after %d passed", __func__, monitor.now); \
+		  LOG2(2, "  %s is waking up after %d passed", __func__, monitor.now); \
 		  monitor.now = monitor.all = 0; \
 		} else assert (!monitor.all); \
 	  } \
 	  else { \
 		if (monitor.now < PERIOD) { \
 		  monitor.now++; \
-		  PFLOG2(2, "  %s sleeping period is increased to %d", __func__, monitor.now); \
+		  LOG2(2, "  %s sleeping period is increased to %d", __func__, monitor.now); \
 		} else monitor.all = monitor.now; \
 	  } \
 	  assert (monitor.all <= monitor.now); \

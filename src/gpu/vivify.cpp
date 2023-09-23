@@ -1,6 +1,6 @@
 /***********************************************************************[vivify.cpp]
 Copyright(c) 2020, Muhammad Osama - Anton Wijs,
-Technische Universiteit Eindhoven (TU/e).
+Copyright(c) 2022-present, Muhammad Osama.
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
@@ -76,7 +76,7 @@ bool Solver::analyzeVivify(CLAUSE& cand, bool& original)
 	C_REF* sources = sp->source;
 	LIT_ST* values = sp->value, *seen = sp->seen;
 	assert(conf.size() > 1);
-	PFLCLAUSE(4, conf, "  analyzing conflict");
+	LOGCLAUSE(4, conf, "  analyzing conflict");
 	forall_clause(conf, k) {
 		const uint32 lit = *k, v = ABS(lit);
 		CHECKVAR(v);
@@ -111,7 +111,7 @@ bool Solver::analyzeVivify(CLAUSE& cand, bool& original)
 		const C_REF src = sources[v];
 		if (REASON(src)) {
 			CLAUSE& reason = cm[src];
-			PFLCLAUSE(4, reason, "  analyzing %d reason", l2i(lit));
+			LOGCLAUSE(4, reason, "  analyzing %d reason", l2i(lit));
 			if (reason.learnt()) conflictoriginality = false;
 			if (reason.binary()) {
 				const uint32 other = reason[0] ^ reason[1] ^ lit;
@@ -154,7 +154,7 @@ bool Solver::analyzeVivify(CLAUSE& cand, bool& original)
 			}
 		}
 		else {
-			PFLOG2(4, "  found decision %d", l2i(lit));
+			LOG2(4, "  found decision %d", l2i(lit));
 			learntC.push(flit);
 		}
 	}
@@ -168,18 +168,18 @@ bool Solver::learnVivify(CLAUSE& cand, const C_REF& cref, const int& nonFalse, c
 	assert(conflict < NOREF);
 	assert(nonFalse > 2);
 	assert(cand == cm[cref]);
-	PFLLEARNT(this, 3);
+	LOGLEARNT(this, 3);
 	const int learntsize = learntC.size();
 	assert(learntsize <= nonFalse);
 	bool success;
 	if (learntsize == 1) {
-		PFLOG2(4, "  candidate is strengthened by a unit");
+		LOG2(4, "  candidate is strengthened by a unit");
 		backtrack();
 		enqueueUnit(learntC[0]);
 		removeClause(cand, cref);
 		ignore = NOREF;
 		if (BCPVivify()) {
-			PFLOG2(2, "  propagating vivified unit proved a contradiction");
+			LOG2(2, "  propagating vivified unit proved a contradiction");
 			learnEmpty();
 		}
 #ifdef STATISTICS
@@ -188,7 +188,7 @@ bool Solver::learnVivify(CLAUSE& cand, const C_REF& cref, const int& nonFalse, c
 		success = true;
 	}
 	else if (learntsize < nonFalse) {
-		PFLOG2(4, "  candidate is strengthened");
+		LOG2(4, "  candidate is strengthened");
 		backtrack();
 		if (opts.proof_en) proof.addClause(learntC);
 		removeClause(cand, cref);
@@ -201,7 +201,7 @@ bool Solver::learnVivify(CLAUSE& cand, const C_REF& cref, const int& nonFalse, c
 	}
 	else if (original && cand.original()) {
 		assert(learntsize == nonFalse);
-		PFLOG2(4, "  candidate is subsumed");
+		LOG2(4, "  candidate is subsumed");
 		removeClause(cand, cref);
 #ifdef STATISTICS
 		stats.vivify.subsumed++;
@@ -221,7 +221,7 @@ bool Solver::vivifyClause(const C_REF& cref)
 	CLAUSE* candptr = cm.clause(cref);
 	assert(!candptr->deleted());
 	CLAUSE& candref = *candptr;
-	PFLCLAUSE(4, candref, "  trying to vivify candidate");
+	LOGCLAUSE(4, candref, "  trying to vivify candidate");
 	uint32* clause = sp->tmpstack;
 	int tail = 0;
 	LIT_ST* values = sp->value;
@@ -234,7 +234,7 @@ bool Solver::vivifyClause(const C_REF& cref)
 		}
 		else if (val) {
 			assert(!l2dl(lit));
-			PFLOG2(4, "  already satisfied by the root(%d)", l2i(lit));
+			LOG2(4, "  already satisfied by the root(%d)", l2i(lit));
 			removeClause(candref, cref);
 			return false;
 		}
@@ -256,7 +256,7 @@ bool Solver::vivifyClause(const C_REF& cref)
 				break;
 			}
 			unit = lit;
-			PFLOG2(4, "  found potential unit or decision %d", l2i(unit));
+			LOG2(4, "  found potential unit or decision %d", l2i(unit));
 		}
 	}
 	if (unit) {
@@ -264,17 +264,17 @@ bool Solver::vivifyClause(const C_REF& cref)
 		assert(l2dl(unit));
 		assert(isTrue(unit));
 		if (l2r(unit) == cref) {
-			PFLOG2(4, "  candidate is the reason of unit(%d)", l2i(unit));
+			LOG2(4, "  candidate is the reason of unit(%d)", l2i(unit));
 			const int level = l2dl(unit);
 			assert(level > 0);
-			PFLOG2(4, "  forced to backtrack to level %d", level - 1);
+			LOG2(4, "  forced to backtrack to level %d", level - 1);
 			backtrack(level - 1);
 		}
 	}
 	// begin vivification
 	stats.vivify.checks++;
 	Sort(clause, tail, HIST_MCV_CMP(vhist));
-	PFLSORTED(this, tail, 4);
+	LOGSORTED(this, tail, 4);
 	conflict = ignore = NOREF;
 	int level = 0;
 	bool success = false;
@@ -285,14 +285,14 @@ bool Solver::vivifyClause(const C_REF& cref)
 			const uint32 pivot = dlevels[level];
 			const uint32 decision = trail[pivot];
 			if (decision == flit) {
-				PFLOG2(4, "  reusing decision %d@%d", l2i(flit), level);
+				LOG2(4, "  reusing decision %d@%d", l2i(flit), level);
 #ifdef STATISTICS
 				stats.vivify.reused++;
 #endif
 				assert(isFalse(lit));
 				continue;
 			}
-			PFLOG2(4, "  forced to backtrack to decision level %d", level - 1);
+			LOG2(4, "  forced to backtrack to decision level %d", level - 1);
 			backtrack(level - 1);
 		}
 		const LIT_ST val = values[lit];
@@ -315,7 +315,7 @@ bool Solver::vivifyClause(const C_REF& cref)
 				CLAUSE& _candref = *candptr;
 				bool original = false;
 				if (analyzeVivify(_candref, original)) {
-					PFLOG2(4, "  candidate is subsumed by conflict/reason");
+					LOG2(4, "  candidate is subsumed by conflict/reason");
 					removeClause(_candref, cref);
 #ifdef STATISTICS
 					stats.vivify.subsumed++;
@@ -332,7 +332,7 @@ bool Solver::vivifyClause(const C_REF& cref)
 			assert(l2dl(lit));
 			assert(conflict == NOREF);
 			assert(analyzed.empty());
-			PFLOG2(4, "  candidate is a learnt implication already satisfied by %d", l2i(lit));
+			LOG2(4, "  candidate is a learnt implication already satisfied by %d", l2i(lit));
 			removeClause(*candptr, cref);
 #ifdef STATISTICS
 			stats.vivify.implied++;
@@ -351,10 +351,10 @@ void Solver::schedule2viv(BCNF& schedule, const bool& tier2, const bool& learnt)
 	else if (learnt) highlbd = opts.lbd_tier1;
 	uint32 prioritized = 0;
 	if (learnt) {
-		PFLOGN2(2, "  shrinking learnts before vivification..");
-		PFLEARNTINF(this, beforeCls, beforeLits);
+		LOGN2(2, "  shrinking learnts before vivification..");
+		CNFLEARNTINF(this, beforeCls, beforeLits);
 		shrinkTop(learnts);
-		PFLSHRINKLEARNT(this, 2, beforeCls, beforeLits);
+		LOGSHRINKLEARNT(this, 2, beforeCls, beforeLits);
 		for (CL_ST p = 0; p < 2; p++) {
 			const bool priority = p;
 			forall_cnf(learnts, i) {
@@ -374,10 +374,10 @@ void Solver::schedule2viv(BCNF& schedule, const bool& tier2, const bool& learnt)
 	}
 	else {
 		assert(!tier2);
-		PFLOGN2(2, "  shrinking originals before vivification..");
-		PFORGINF(this, beforeCls, beforeLits);
+		LOGN2(2, "  shrinking originals before vivification..");
+		CNFORGINF(this, beforeCls, beforeLits);
 		shrinkTop(orgs);
-		PFLSHRINKORG(this, 2, beforeCls, beforeLits);
+		LOGSHRINKORG(this, 2, beforeCls, beforeLits);
 		for (CL_ST p = 0; p < 2; p++) {
 			const bool priority = p;
 			forall_cnf(orgs, i) {
@@ -395,15 +395,15 @@ void Solver::schedule2viv(BCNF& schedule, const bool& tier2, const bool& learnt)
 	const uint32 scheduled = schedule.size();
 	const char* ctype = learnt ? (tier2 ? "learnt-tier2" : "learnt-tier1") : "original";
 	if (prioritized) {
-		PFLOG2(2, " Vivification %lld: scheduler prioritized %d %s clauses %.2f%%", 
+		LOG2(2, " Vivification %lld: scheduler prioritized %d %s clauses %.2f%%", 
 			stats.probe.calls, prioritized, ctype, percent(prioritized, scheduled));
 	}
 	else {
-		PFLOGN2(2, " Vivification %lld: scheduler prioritizing all %s clauses..", stats.probe.calls, ctype);
+		LOGN2(2, " Vivification %lld: scheduler prioritizing all %s clauses..", stats.probe.calls, ctype);
 		forall_cnf(schedule, i) { cm[*i].markVivify(); }
-		PFLDONE(2, 5);
+		LOGDONE(2, 5);
 	}
-	PFLOG2(2, " Vivification %lld: scheduled %d %s clauses %.2f%%",
+	LOG2(2, " Vivification %lld: scheduled %d %s clauses %.2f%%",
 		stats.probe.calls, scheduled, ctype, percent(scheduled, learnt ? learnts.size() : orgs.size()));
 }
 
@@ -425,7 +425,7 @@ void Solver::vivifying(const CL_ST& type)
 	if (tier2) {
 		const uint64 extra = (limit - stats.probeticks) << 1;
 		limit += extra;
-		PFLOG2(2, "  %s tier2 efficiency bounds increased to %lld by an extra weight %lld", __func__, limit, extra);
+		LOG2(2, "  %s tier2 efficiency bounds increased to %lld by an extra weight %lld", __func__, limit, extra);
 	}
 	uint32 vivified = 0, candidates = 0;
 	while (!schedule.empty()
@@ -444,7 +444,7 @@ void Solver::vivifying(const CL_ST& type)
 	schedule.clear(true);
 	if (cnfstate) backtrack();
 	stats.vivify.vivified += vivified;
-	PFLOG2(2, " Vivification %lld: vivified %d %s clauses %.2f%% per %d candidates",
+	LOG2(2, " Vivification %lld: vivified %d %s clauses %.2f%% per %d candidates",
 		stats.probe.calls, vivified, 
 		learnt ? (tier2 ? "learnt-tier2" : "learnt-tier1") : "original",
 		percent(vivified, candidates), candidates);

@@ -1,6 +1,6 @@
 /***********************************************************************[xor.cuh]
 Copyright(c) 2020, Muhammad Osama - Anton Wijs,
-Technische Universiteit Eindhoven (TU/e).
+Copyright(c) 2022-present, Muhammad Osama.
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
@@ -32,24 +32,25 @@ namespace ParaFROST {
 
 	_PFROST_D_ void freeze_arities(CNF& cnf, OL& list)
 	{
-		#pragma unroll
 		forall_occurs(list, i) {
 			SCLAUSE& c = cnf[*i];
-			if (c.size() > 2 && c.molten()) c.freeze();
+			if (c.size() > 2 && c.molten()) 
+				c.freeze();
 		}
 	}
 
 	_PFROST_D_ void freeze_arities(CNF& cnf, OL& me, OL& other)
 	{
-		freeze_arities(cnf, me);
-		freeze_arities(cnf, other);
-	}
-
-	_PFROST_D_ void shareXORClause(SCLAUSE& c, uint32* shared)
-	{
-		#pragma unroll
-		forall_clause(c, k)
-			*shared++ = *k;
+		forall_occurs(me, i) {
+			SCLAUSE& c = cnf[*i];
+			if (c.size() > 2 && c.molten()) 
+				c.freeze();
+		}
+		forall_occurs(other, i) {
+			SCLAUSE& c = cnf[*i];
+			if (c.size() > 2 && c.molten()) 
+				c.freeze();
+		}
 	}
 
 	_PFROST_D_ bool checkArity(SCLAUSE& c, uint32* literals, const int& size)
@@ -104,7 +105,8 @@ namespace ParaFROST {
 	}
 
 	_PFROST_D_ bool find_xor_gate(
-		const uint32& dx, 
+		const uint32& dx, OL& dx_list, 
+		const uint32& fx, OL& fx_list,
 		const uint32& nOrgCls,
 		CNF& cnf,
 		OT& ot, 
@@ -114,33 +116,52 @@ namespace ParaFROST {
 		uint32& nAddedLits)
 	{
 		assert(dx > 1);
-		const int xor_max_arity = dc_options[3];
-		const uint32 fx = FLIP(dx), v = ABS(dx);
+		assert(dx_list.size());
+		assert(fx_list.size());
+
+		if (cnf[dx_list.back()].size() == 2 ||
+			cnf[fx_list.back()].size() == 2)
+			return false;
+
+		const int maxarity = kOpts->xor_max_arity;
+
+		int arity = cnf[*dx_list].size() - 1;
+		if (arity > maxarity) return false;
+
 		assert(checkMolten(cnf, ot[dx], ot[fx]));
-		OL& itarget = ot[dx];
-		OL& otarget = ot[fx];
-		forall_occurs(itarget, i) {
+
+		const uint32 v = ABS(dx);
+
+		forall_occurs(dx_list, i) {
 			SCLAUSE& ci = cnf[*i];
 			if (ci.original()) {
 				const int size = ci.size();
 				const int arity = size - 1; // XOR arity
-				if (size < 3 || arity > xor_max_arity) continue;
+				if (size < 3 || arity > maxarity) continue;
+
 				// share to out_c
-				shareXORClause(ci, out_c);
+				uint32* shared = out_c;
+				forall_clause(ci, k)
+					*shared++ = *k;
+
 				// find arity clauses
 				uint32 parity = 0;
 				int itargets = (1 << arity);
 				while (--itargets && makeArity(cnf, ot, parity, out_c, size));
+
 				assert(parity < (1UL << size)); // overflow check
 				assert(itargets >= 0);
+
 				if (itargets)
-					freeze_arities(cnf, itarget, otarget);
+					freeze_arities(cnf, dx_list, fx_list);
 				else {
+
 					ci.melt();
+
 					// check resolvability
 					nElements = 0, nAddedCls = 0, nAddedLits = 0;
-					if (countSubstituted(v, nOrgCls, cnf, itarget, otarget, nElements, nAddedCls, nAddedLits)) {
-						freeze_arities(cnf, itarget, otarget);
+					if (countSubstituted(v, nOrgCls, cnf, dx_list, fx_list, nElements, nAddedCls, nAddedLits)) {
+						freeze_arities(cnf, dx_list, fx_list);
 						break;
 					}
 
@@ -151,18 +172,19 @@ namespace ParaFROST {
 						printf(" %d", ABS(out_c[k]));
 						if (k < arity - 1) printf(",");
 					}
-					printf(" ) found ==> added = %d, deleted = %d\n", nAddedCls, itarget.size() + otarget.size());
-					printGate(cnf, itarget, otarget);
+					printf(" ) found ==> added = %d, deleted = %d\n", nAddedCls, dx_list.size() + fx_list.size());
+					printGate(cnf, dx_list, fx_list);
 					#endif
 
 					return true;
 				}
 			} // ci-original block
-		} // itarget-for block
+		} // dx_list-for block
+
 		return false;
 	}
 
-} // parafrost namespace
+} 
 
 
 #endif

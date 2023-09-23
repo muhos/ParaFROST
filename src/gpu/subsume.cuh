@@ -1,6 +1,6 @@
 /***********************************************************************[subsume.cuh]
 Copyright(c) 2020, Muhammad Osama - Anton Wijs,
-Technische Universiteit Eindhoven (TU/e).
+Copyright(c) 2022-present, Muhammad Osama.
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
@@ -46,96 +46,172 @@ namespace ParaFROST {
 		return true;
 	}
 
-	_PFROST_D_ bool sub(SCLAUSE& sm, SCLAUSE& lr)
+	_PFROST_D_ bool sub(SCLAUSE& subsuming, SCLAUSE& subsumed)
 	{
-		assert(!sm.deleted());
-		assert(!lr.deleted());
-		assert(sm.size() > 1);
-		assert(lr.size() > 1);
-		assert(sm.size() <= lr.size());
-		int it1 = 0, it2 = 0, sub = 0;
-		const int sm_sz = sm.size(), lr_sz = lr.size();
-		while (it1 < sm_sz && it2 < lr_sz) {
-			const uint32 lit1 = sm[it1], lit2 = lr[it2];
-			if (lit1 < lit2) it1++;
-			else if (lit2 < lit1) it2++;
-			else { sub++; it1++; it2++; }
-		}
-		if (sub == sm_sz) return true;
-		return false;
-	}
-
-	_PFROST_D_ bool sub(SCLAUSE& sm, uint32* lr, const int& lr_sz)
-	{
-		assert(!sm.deleted());
-		assert(sm.size() > 1);
-		assert(lr_sz > 1);
-		assert(sm.size() <= lr_sz);
-		int it1 = 0, it2 = 0, sub = 0;
-		const int sm_sz = sm.size();
-		while (it1 < sm_sz && it2 < lr_sz) {
-			const uint32 lit1 = sm[it1], lit2 = lr[it2];
-			if (lit1 < lit2) it1++;
-			else if (lit2 < lit1) it2++;
-			else { sub++; it1++; it2++; }
-		}
-		if (sub == sm_sz) return true;
-		return false;
-	}
-
-	_PFROST_D_ bool selfsub(const uint32& x, const uint32& fx, SCLAUSE& sm, SCLAUSE& lr)
-	{
-		assert(!sm.deleted());
-		assert(!lr.deleted());
-		assert(sm.size() > 1);
-		assert(lr.size() > 1);
-		assert(sm.size() <= lr.size());
-		int it1 = 0, it2 = 0, sub = 0;
-		const int sm_sz = sm.size(), lr_sz = lr.size();
-		bool self = false;
-		while (it1 < sm_sz && it2 < lr_sz) {
-			const uint32 lit1 = sm[it1], lit2 = lr[it2];
-			if (lit1 == fx) it1++;
-			else if (lit2 == x) { self = true; it2++; }
-			else if (lit1 < lit2) it1++;
-			else if (lit2 < lit1) it2++;
-			else { sub++; it1++; it2++; }
-		}
-		if ((sub + 1) == sm_sz) {
-			if (self) return true;
+		assert(!subsuming.deleted());
+		assert(!subsumed.deleted());
+		assert(subsuming.size() > 1);
+		assert(subsumed.size() > 1);
+		assert(subsuming.size() <= subsumed.size());
+		const int size = subsuming.size();
+		uint32* d1 = subsuming.data(), * d2 = subsumed.data();
+		uint32* e1 = d1 + size;
+		uint32* e2 = subsumed.end();
+		int sub = 0;
+		while (d1 != e1 && d2 != e2) {
+			const uint32 lit1 = *d1, lit2 = *d2;
+			if (lit1 < lit2)
+				d1++;
+			else if (lit2 < lit1)
+				d2++;
 			else {
-				while (it2 < lr_sz) {
-					if (lr[it2] == x) return true;
-					it2++;
+				sub++;
+				d1++, d2++;
+			}
+		}
+		if (sub == size)
+			return true;
+		return false;
+	}
+
+	_PFROST_D_ bool sub(SCLAUSE& subsuming, uint32* subsumed, const int& subsumedsize)
+	{
+		assert(!subsuming.deleted());
+		assert(subsuming.size() > 1);
+		assert(subsumedsize > 1);
+		assert(subsuming.size() <= subsumedsize);
+		const int size = subsuming.size();
+		uint32* d1 = subsuming.data(), * d2 = subsumed;
+		uint32* e1 = d1 + size;
+		uint32* e2 = d2 + subsumedsize;
+		int sub = 0;
+		while (d1 != e1 && d2 != e2) {
+			const uint32 lit1 = *d1, lit2 = *d2;
+			if (lit1 < lit2)
+				d1++;
+			else if (lit2 < lit1)
+				d2++;
+			else {
+				sub++;
+				d1++, d2++;
+			}
+		}
+		if (sub == size)
+			return true;
+		return false;
+	}
+
+	_PFROST_D_ bool sub(uint32* subsuming, const int& size, SCLAUSE& subsumed)
+	{
+		assert(!subsumed.deleted());
+		assert(size > 1);
+		assert(subsumed.size() > 1);
+		assert(size <= subsumed.size());
+		uint32* d1 = subsuming, *d2 = subsumed.data();
+		uint32* e1 = d1 + size;
+		uint32* e2 = subsumed.end();
+		int sub = 0;
+		while (d1 != e1 && d2 != e2) {
+			const uint32 lit1 = *d1, lit2 = *d2;
+			if (lit1 < lit2)
+				d1++;
+			else if (lit2 < lit1)
+				d2++;
+			else {
+				sub++;
+				d1++, d2++;
+			}
+		}
+		if (sub == size)
+			return true;
+		return false;
+	}
+
+	_PFROST_D_ bool selfsub(const uint32& x, const uint32& fx, SCLAUSE& subsuming, SCLAUSE& subsumed)
+	{
+		assert(!subsuming.deleted());
+		assert(!subsumed.deleted());
+		assert(subsuming.size() > 1);
+		assert(subsumed.size() > 1);
+		assert(subsuming.size() <= subsumed.size());
+		const int size = subsuming.size();
+		uint32* d1 = subsuming.data();
+		uint32* d2 = subsumed.data();
+		uint32* e1 = d1 + size;
+		uint32* e2 = subsumed.end();
+		int sub = 0;
+		bool self = false;
+		while (d1 != e1 && d2 != e2) {
+			const uint32 lit1 = *d1;
+			const uint32 lit2 = *d2;
+			if (lit1 == fx)
+				d1++;
+			else if (lit2 == x) {
+				self = true;
+				d2++;
+			}
+			else if (lit1 < lit2)
+				d1++;
+			else if (lit2 < lit1)
+				d2++;
+			else {
+				sub++;
+				d1++, d2++;
+			}
+		}
+		if ((sub + 1) == size) {
+			if (self)
+				return true;
+			else {
+				while (d2 != e2) {
+					if (*d2 == x)
+						return true;
+					d2++;
 				}
 			}
 		}
 		return false;
 	}
 
-	_PFROST_D_ bool selfsub(const uint32& x, const uint32& fx, SCLAUSE& sm, uint32* lr, const int& lr_sz)
+	_PFROST_D_ bool selfsub(const uint32& x, const uint32& fx, SCLAUSE& subsuming, uint32* subsumed, const int& subsumedsize)
 	{
-		assert(!sm.deleted());
-		assert(sm.size() > 1);
-		assert(lr_sz > 1);
-		assert(sm.size() <= lr_sz);
-		int it1 = 0, it2 = 0, sub = 0;
-		const int sm_sz = sm.size();
+		assert(!subsuming.deleted());
+		assert(subsuming.size() > 1);
+		assert(subsumedsize > 1);
+		assert(subsuming.size() <= subsumedsize);
+		const int size = subsuming.size();
+		uint32* d1 = subsuming.data();
+		uint32* d2 = subsumed;
+		uint32* e1 = d1 + size;
+		uint32* e2 = d2 + subsumedsize;
+		int sub = 0;
 		bool self = false;
-		while (it1 < sm_sz && it2 < lr_sz) {
-			const uint32 lit1 = sm[it1], lit2 = lr[it2];
-			if (lit1 == fx) it1++;
-			else if (lit2 == x) { self = true; it2++; }
-			else if (lit1 < lit2) it1++;
-			else if (lit2 < lit1) it2++;
-			else { sub++; it1++; it2++; }
-		}
-		if ((sub + 1) == sm_sz) {
-			if (self) return true;
+		while (d1 != e1 && d2 != e2) {
+			const uint32 lit1 = *d1;
+			const uint32 lit2 = *d2;
+			if (lit1 == fx)
+				d1++;
+			else if (lit2 == x) {
+				self = true;
+				d2++;
+			}
+			else if (lit1 < lit2)
+				d1++;
+			else if (lit2 < lit1)
+				d2++;
 			else {
-				while (it2 < lr_sz) {
-					if (lr[it2] == x) return true;
-					it2++;
+				sub++;
+				d1++, d2++;
+			}
+		}
+		if ((sub + 1) == size) {
+			if (self)
+				return true;
+			else {
+				while (d2 != e2) {
+					if (*d2 == x)
+						return true;
+					d2++;
 				}
 			}
 		}
@@ -163,21 +239,30 @@ namespace ParaFROST {
 		assert(!c.deleted());
 		assert(c.size() > 1);
 		assert(self > 1);
+
+		const int size = c.size();
 		int n = 0;
-		for (int k = 0; k < c.size(); k++) {
+		for (int k = 0; k < size; k++) {
 			const uint32 lit = sh_c[k];
 			if (NEQUAL(lit, self)) {
-				c[n] = lit, sh_c[n] = lit;
+				c[n] = lit;
+				sh_c[n] = lit;
 				n++;
 			}
 		}
-		assert(n == c.size() - 1);
+
+		assert(n == size - 1);
 		assert(n <= SH_MAX_SUB_IN);
 		assert(c.hasZero() < 0);
 		assert(c.isSorted());
+
 		c.pop();
-		calcSig(c);
-		if (n > 1 && c.learnt()) bumpShrunken(c);
+
+		if (n > 1) {
+			calcSig(c);
+			if (c.learnt())
+				bumpShrunken(c);
+		}
 	}
 
 	_PFROST_D_ void strengthen(SCLAUSE& c, const uint32& self)
@@ -185,17 +270,24 @@ namespace ParaFROST {
 		assert(!c.deleted());
 		assert(c.size() > 1);
 		assert(self > 1);
-		int n = 0;
-		for (int k = 0; k < c.size(); k++) {
-			const uint32 lit = c[k];
-			if (NEQUAL(lit, self)) c[n++] = lit;
+
+		uint32* j = c;
+		forall_clause(c, k) {
+			const uint32 lit = *k;
+			if (NEQUAL(lit, self)) 
+				*j++ = lit;
 		}
-		assert(n == c.size() - 1);
+
 		assert(c.hasZero() < 0);
 		assert(c.isSorted());
+
 		c.pop();
-		calcSig(c);
-		if (n > 1 && c.learnt()) bumpShrunken(c);
+
+		if (c.size() > 1) {
+			calcSig(c);
+			if (c.learnt())
+				bumpShrunken(c);
+		}
 	}
 
 	_PFROST_D_ void updateOL(CNF& cnf, OL& ol)
@@ -217,7 +309,7 @@ namespace ParaFROST {
 			SCLAUSE& subsuming = cnf[*j];
 			if (subsuming.deleted()) continue;
 			if (cand.molten() && subsuming.size() > candsz) continue;
-			if (subsuming.size() > 1 && sub(subsuming.sig(), cand.sig()) && sub(subsuming, cand)) {
+			if (subsuming.size() > 1 && SUBSIG(subsuming.sig(), cand.sig()) && sub(subsuming, cand)) {
 				if (subsuming.learnt() && cand.original()) subsuming.set_status(ORIGINAL);
 				cand.markDeleted();
 				#if SS_DBG
@@ -237,7 +329,7 @@ namespace ParaFROST {
 			if (subsuming.deleted()) continue;
 			if (cand.molten() && subsuming.size() > candsz) continue;
 			assert(isCoherent(cand, sh_cand, candsz));
-			if (subsuming.size() > 1 && sub(subsuming.sig(), cand.sig()) && sub(subsuming, sh_cand, candsz)) {
+			if (subsuming.size() > 1 && SUBSIG(subsuming.sig(), cand.sig()) && sub(subsuming, sh_cand, candsz)) {
 				if (subsuming.learnt() && cand.original()) subsuming.set_status(ORIGINAL);
 				cand.markDeleted();
 				#if SS_DBG
@@ -306,79 +398,93 @@ namespace ParaFROST {
 		}
 	}
 
-	_PFROST_D_ void subsume_x(
-		const uint32& p,
-		CNF& cnf,
-		OL& poss, 
-		OL& negs, 
-		cuVecU* units, 
-		cuVecB* proof,
-		uint32* sh_c)
+	// kernels
+	__global__ void sub_k(
+		CNF* __restrict__ cnfptr,
+		OT* __restrict__ ot,
+		cuVecB* __restrict__ proof,
+		cuVecU* __restrict__ units,
+		const cuVecU* __restrict__ elected,
+		const Byte* __restrict__ eliminated)
 	{
-		assert(checkMolten(cnf, poss, negs));
-		const uint32 n = NEG(p);
-		uint32 nPosUnits = 0;
-		// positives vs negatives
-		forall_occurs(poss, i) {
-			SCLAUSE& pos = cnf[*i];
-			if (pos.size() > SUB_MAX_CL_SIZE) break;
-			if (pos.deleted()) continue;
-			if (pos.size() > SH_MAX_SUB_IN) { // use global memory 
-				selfsubsume(p, n, cnf, negs, pos, nPosUnits);
-				subsume(cnf, poss, i, pos);
+		grid_t tid = global_tx;
+		uint32* sh_cls = SharedMemory<uint32>();
+		while (tid < elected->size()) {
+			const uint32 x = (*elected)[tid];
+			assert(x);
+			assert(!ELIMINATED(eliminated[x]));
+			const uint32 p = V2L(x), n = NEG(p);
+			OL& poss = (*ot)[p];
+			OL& negs = (*ot)[n];
+			if (poss.size() <= kOpts->sub_max_occurs && negs.size() <= kOpts->sub_max_occurs) {
+				CNF cnf = *cnfptr;
+				assert(checkMolten(cnf, poss, negs));
+				const uint32 n = NEG(p);
+				uint32 nPosUnits = 0;
+				// positives vs negatives
+				forall_occurs(poss, i) {
+					SCLAUSE& pos = cnf[*i];
+					if (pos.size() > SUB_MAX_CL_SIZE) break;
+					if (pos.deleted()) continue;
+					if (pos.size() > SH_MAX_SUB_IN) { // use global memory 
+						selfsubsume(p, n, cnf, negs, pos, nPosUnits);
+						subsume(cnf, poss, i, pos);
+					}
+					else { // use shared memory
+						uint32* sh_pos = sh_cls + threadIdx.x * SH_MAX_SUB_IN;
+						pos.shareTo(sh_pos);
+						selfsubsume(p, n, cnf, negs, pos, sh_pos, nPosUnits);
+						subsume(cnf, poss, i, pos, sh_pos);
+					}
+				}
+				// negatives vs positives
+				uint32 nNegUnits = 0;
+				forall_occurs(negs, i) {
+					SCLAUSE& neg = cnf[*i];
+					if (neg.size() > SUB_MAX_CL_SIZE) break;
+					if (neg.deleted()) continue;
+					if (neg.size() > SH_MAX_SUB_IN) {
+						selfsubsume(n, p, cnf, poss, neg, nNegUnits);
+						subsume(cnf, negs, i, neg);
+					}
+					else { // use shared memory
+						uint32* sh_neg = sh_cls + threadIdx.x * SH_MAX_SUB_IN;
+						neg.shareTo(sh_neg);
+						selfsubsume(n, p, cnf, poss, neg, sh_neg, nNegUnits);
+						subsume(cnf, negs, i, neg, sh_neg);
+					}
+				}
+				// add units
+				if (nPosUnits || nNegUnits) {
+					uint32* ustart = units->jump(nPosUnits + nNegUnits);
+					uint32* udata = ustart;
+					if (nPosUnits) appendUnits(cnf, poss, udata);
+					if (nNegUnits) appendUnits(cnf, negs, udata);
+					assert(udata == ustart + nPosUnits + nNegUnits);
+				}
+				// add proof and filter the lists
+				if (proof) {
+					uint32 bytes = 0;
+					countProofSub(cnf, poss, bytes);
+					countProofSub(cnf, negs, bytes);
+					addr_t pstart = proof->jump(bytes);
+					addr_t pdata = pstart;
+					assert(pdata);
+					saveProof(cnf, poss, pdata);
+					saveProof(cnf, negs, pdata);
+					assert(pdata == pstart + bytes);
+				}
+				else {
+					updateOL(cnf, poss);
+					updateOL(cnf, negs);
+				}
+				assert(checkMolten(cnf, poss, negs));
+				assert(checkDeleted(cnf, poss, negs));
 			}
-			else { // use shared memory
-				uint32* sh_pos = sh_c;
-				pos.shareTo(sh_pos);
-				selfsubsume(p, n, cnf, negs, pos, sh_pos, nPosUnits);
-				subsume(cnf, poss, i, pos, sh_pos);
-			}
+			tid += stride_x;
 		}
-		// negatives vs positives
-		uint32 nNegUnits = 0;
-		forall_occurs(negs, i) {
-			SCLAUSE& neg = cnf[*i];
-			if (neg.size() > SUB_MAX_CL_SIZE) break;
-			if (neg.deleted()) continue;
-			if (neg.size() > SH_MAX_SUB_IN) {
-				selfsubsume(n, p, cnf, poss, neg, nNegUnits);
-				subsume(cnf, negs, i, neg);
-			}
-			else { // use shared memory
-				uint32* sh_neg = sh_c;
-				neg.shareTo(sh_neg);
-				selfsubsume(n, p, cnf, poss, neg, sh_neg, nNegUnits);
-				subsume(cnf, negs, i, neg, sh_neg);
-			}
-		}
-		// add units
-		if (nPosUnits || nNegUnits) {
-			uint32* ustart = units->jump(nPosUnits + nNegUnits);
-			uint32* udata = ustart;
-			if (nPosUnits) appendUnits(cnf, poss, udata);
-			if (nNegUnits) appendUnits(cnf, negs, udata);
-			assert(udata == ustart + nPosUnits + nNegUnits);
-		}
-		// add proof and filter the lists
-		if (proof) {
-			uint32 bytes = 0;
-			countProofSub(cnf, poss, bytes);
-			countProofSub(cnf, negs, bytes);
-			addr_t pstart = proof->jump(bytes);
-			addr_t pdata = pstart;
-			assert(pdata);
-			saveProof(cnf, poss, pdata);
-			saveProof(cnf, negs, pdata);
-			assert(pdata == pstart + bytes);
-		}
-		else {
-			updateOL(cnf, poss);
-			updateOL(cnf, negs);
-		}
-		assert(checkMolten(cnf, poss, negs));
-		assert(checkDeleted(cnf, poss, negs));
 	}
 
-} // parafrost namespace
+} 
 
 #endif

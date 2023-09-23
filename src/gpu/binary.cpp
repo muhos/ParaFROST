@@ -1,6 +1,6 @@
 /***********************************************************************[binary.cpp]
 Copyright(c) 2020, Muhammad Osama - Anton Wijs,
-Technische Universiteit Eindhoven (TU/e).
+Copyright(c) 2022-present, Muhammad Osama.
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
@@ -26,7 +26,7 @@ inline uint32 Solver::analyzeReason(const C_REF& ref, const uint32& lit)
 	int* levels = sp->level;
 	const uint32 fit = FLIP(lit);
 	CLAUSE& reason = cm[ref];
-	PFLCLAUSE(4, reason, "   checking %d reason", l2i(fit));
+	LOGCLAUSE(4, reason, "   checking %d reason", l2i(fit));
 	uint32 dom = 0;
 	forall_clause(reason, k) {
 		const uint32 other = *k, v = ABS(other);
@@ -56,7 +56,7 @@ uint32 Solver::hyper2Resolve(CLAUSE& c, const uint32& lit)
 	if (nonRoots < 2) return 0;
 	CHECKLIT(child);
 	assert(analyzed.empty());
-	PFLCLAUSE(4, c, "  Finding first dominator for %d via", l2i(child));
+	LOGCLAUSE(4, c, "  Finding first dominator for %d via", l2i(child));
 	stats.binary.resolutions++;
 	uint32 dom = child, vom = ABS(dom), prev = 0;
 	sp->seen[vom] = ANALYZED_M;
@@ -74,7 +74,7 @@ uint32 Solver::hyper2Resolve(CLAUSE& c, const uint32& lit)
 		analyzed.push(dom);
 		r = sp->source[vom];
 	}
-	PFLOG2(4, "   found dominator %d of child %d", dom ? l2i(dom) : l2i(prev), l2i(child));
+	LOG2(4, "   found dominator %d of child %d", dom ? l2i(dom) : l2i(prev), l2i(child));
 	const uint32 depth = analyzed.size();
 	uint32 reset = 0;
 	forall_clause(c, k) {
@@ -82,7 +82,7 @@ uint32 Solver::hyper2Resolve(CLAUSE& c, const uint32& lit)
 		CHECKLIT(q);
 		if (q == lit || q == child || !levels[ABS(q)]) continue;
 		assert(isFalse(q));
-		PFLOG2(4, "  Finding next dominator for %d:", l2i(q));
+		LOG2(4, "  Finding next dominator for %d:", l2i(q));
 		dom = q, vom = ABS(dom);
 		r = sp->source[vom];
 		while (!sp->seen[vom] && REASON(r)) {
@@ -94,7 +94,7 @@ uint32 Solver::hyper2Resolve(CLAUSE& c, const uint32& lit)
 			vom = ABS(dom);
 			r = sp->source[vom];
 		}
-		PFLOG2(4, "   found dominator %d of child %d", dom ? l2i(dom) : l2i(prev), l2i(q));
+		LOG2(4, "   found dominator %d of child %d", dom ? l2i(dom) : l2i(prev), l2i(q));
 		while (reset < depth) {
 			const uint32 a = analyzed[reset];
 			CHECKLIT(a);

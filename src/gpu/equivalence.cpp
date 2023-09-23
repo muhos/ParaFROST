@@ -1,6 +1,6 @@
 /***********************************************************************[els.cpp]
 Copyright(c) 2020, Muhammad Osama - Anton Wijs,
-Technische Universiteit Eindhoven (TU/e).
+Copyright(c) 2022-present, Muhammad Osama.
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
@@ -74,7 +74,7 @@ bool Solver::decompose()
 				if (parent_dfs.idx) { // all children of parent visited and min reachable found
 					litstack.pop(); 
 					uint32 new_min = minReachable(ws, dfs, parent_dfs); // find min. reachable from the children of 'parent'
-					PFLOG2(4, " dfs search of parent(%d) with index %d reached minimum %d", l2i(parent), parent_dfs.idx, new_min);
+					LOG2(4, " dfs search of parent(%d) with index %d reached minimum %d", l2i(parent), parent_dfs.idx, new_min);
 					if (parent_dfs.idx == new_min) { // start of SCC block
 						// find the smallest variable to represent this SCC 
 						uint32 other, size = 0, smallest = parent;
@@ -92,13 +92,13 @@ bool Solver::decompose()
 								size++;
 							}
 							else {
-								PFLOG2(2, " Conflict as both %d and its negation in the same SCC", l2i(parent));
+								LOG2(2, " Conflict as both %d and its negation in the same SCC", l2i(parent));
 								enqueueUnit(parent);
 								learnEmpty();
 							}
 						} while (cnfstate && NEQUAL(other, parent));
 						if (cnfstate) {
-							PFLOG2(4, " New SCC of size %d and smallest variable %d", size, l2i(smallest));
+							LOG2(4, " New SCC of size %d and smallest variable %d", size, l2i(smallest));
 							do {
 								assert(scc.size());
 								other = scc.back();
@@ -111,7 +111,7 @@ bool Solver::decompose()
 									smallests[other] = smallest;
 									if (NEQUAL(other, smallest)) {
 										substituted++;
-										PFLOG2(4, "literal %d in SCC substituted by the smallest %d", l2i(other), l2i(smallest));
+										LOG2(4, "literal %d in SCC substituted by the smallest %d", l2i(other), l2i(smallest));
 									}
 								}
 							} while (NEQUAL(other, parent));
@@ -126,7 +126,7 @@ bool Solver::decompose()
 					assert(dfs_idx < NOVAR);
 					parent_dfs.idx = parent_dfs.min = dfs_idx;
 					scc.push(parent);
-					PFLOG2(4, " traversing all implications of parent(%d) at index %u", l2i(parent), dfs_idx);
+					LOG2(4, " traversing all implications of parent(%d) at index %u", l2i(parent), dfs_idx);
 					forall_watches(ws, i) {
 						const WATCH w = *i;
 						if (!w.binary()) continue;
@@ -141,7 +141,7 @@ bool Solver::decompose()
 			}
 		}
 	}
-	PFLOG2(2, " Decomposition %lld: %d SCCs found, %d variables substituted (%.2f%%)", 
+	LOG2(2, " Decomposition %lld: %d SCCs found, %d variables substituted (%.2f%%)", 
 		stats.decompose.calls, sccs, substituted, percent(substituted, before));
 	stats.decompose.scc += sccs;
 	stats.decompose.variables += substituted;
@@ -165,7 +165,7 @@ bool Solver::decompose()
 	if (cnfstate) {
 		recycleWT(); // must be recycled before BCP
 		if (sp->propagated < trail.size() && BCP()) {
-			PFLOG2(2, " Propagation after substitution proved a contradiction");
+			LOG2(2, " Propagation after substitution proved a contradiction");
 			learnEmpty();
 		}
 		if (cnfstate) {
@@ -181,7 +181,7 @@ bool Solver::decompose()
 					assert(!MELTED(sp->vstate[othervar].state));
 					assert(!SUBSTITUTED(sp->vstate[othervar].state));
 					if (!sp->vstate[othervar].state) {
-						PFLOG2(4, " %d substituted to %d", v, othervar);
+						LOG2(4, " %d substituted to %d", v, othervar);
 						markSubstituted(v);
 					}
 					model.saveBinary(p, FLIP(other));
@@ -236,16 +236,16 @@ bool Solver::substitute(BCNF& cnf, uint32* smallests)
 			else if (val) satisfied = true;
 		}
 		if (satisfied) {
-			PFLCLAUSE(4, c, "  satisfied after substitution");
+			LOGCLAUSE(4, c, "  satisfied after substitution");
 			reduced.push(ref);
 			deleted++;
 		}
 		else if (learntC.empty()) {
-			PFLOG2(2, "  learnt empty clause during decomposition");
+			LOG2(2, "  learnt empty clause during decomposition");
 			learnEmpty();
 		}
 		else if (learntC.size() == 1) {
-			PFLOG2(4, "  found unit %d after substitution", l2i(learntC[0]));
+			LOG2(4, "  found unit %d after substitution", l2i(learntC[0]));
 			enqueueUnit(learntC[0]);
 			removeClause(c, ref);
 			units++;
@@ -258,7 +258,7 @@ bool Solver::substitute(BCNF& cnf, uint32* smallests)
 			removeClause(c, ref);
 			sp->learntLBD = c.lbd();
 			C_REF newref = newClause(learntC, c.learnt());
-			PFLCLAUSE(4, cm[newref], "  learnt after substitution");
+			LOGCLAUSE(4, cm[newref], "  learnt after substitution");
 			assert(cnf[last] == newref);
 			cnf[last] = ref;
 			cnf[i] = newref;
@@ -274,13 +274,13 @@ bool Solver::substitute(BCNF& cnf, uint32* smallests)
 			for (k = 2; k < learntC.size(); k++) c[k] = learntC[k];
 			int removed = csize - k;
 			if (removed) {
-				PFLOG2(4, "  only shrinking clause as watches did not change");
+				LOG2(4, "  only shrinking clause as watches did not change");
 				if (k == 2) binaries = true;
 				shrinkClause(c, removed);
 				if (c.original()) stats.shrunken += removed;
 			}
 			else if (keeping(c)) markSubsume(c);
-			PFLCLAUSE(4, c, "  substituted");
+			LOGCLAUSE(4, c, "  substituted");
 		}
 		unmarkLearnt();
 		learntC.clear();
@@ -288,7 +288,7 @@ bool Solver::substitute(BCNF& cnf, uint32* smallests)
 	deleted += units;
 	stats.decompose.hyperunary += units;
 	stats.decompose.clauses += deleted;
-	PFLOG2(2, " Decomposition %lld: %d of clauses replaced %.2f%%, producing %d deleted clauses %.2f%%",
+	LOG2(2, " Decomposition %lld: %d of clauses replaced %.2f%%, producing %d deleted clauses %.2f%%",
 		stats.decompose.calls, replaced, percent(replaced, cnfsize), deleted, percent(deleted, replaced));
 	return (units || binaries);
 }

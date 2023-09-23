@@ -1,6 +1,6 @@
 ﻿/***********************************************************************[recycle.cu]
 Copyright(c) 2020, Muhammad Osama - Anton Wijs,
-Technische Universiteit Eindhoven (TU/e).
+Copyright(c) 2022-present, Muhammad Osama.
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
@@ -16,14 +16,18 @@ You should have received a copy of the GNU General Public License
 along with this program.  If not, see <https://www.gnu.org/licenses/>.
 **********************************************************************************/
 
-#include "primitives.cuh"
+#include "timer.cuh"
 #include "memory.cuh"
 #include "options.cuh"
+#include "primitives.cuh"
+#include "definitions.hpp"
 #include <cub/device/device_scan.cuh>
 #include <cub/device/device_select.cuh>
+
 using namespace cub;
 
 namespace ParaFROST {
+
 	//=================================//
 	//	CNF Garbage Collection on GPU  //
 	//=================================//
@@ -33,7 +37,7 @@ namespace ParaFROST {
 		while (tid < src->size()) {
 			const SCLAUSE& c = src->clause(tid);
 			if (c.deleted()) stencil[tid] = 0, scatter[tid] = 0;
-			else stencil[tid] = 1, scatter[tid] = c.size() + dc_nbuckets;
+			else stencil[tid] = 1, scatter[tid] = c.size() + DC_NBUCKETS;
 			tid += stride_x;
 		}
 	}
@@ -52,48 +56,49 @@ namespace ParaFROST {
 		}
 	}
 
-	void cuMM::scatterCNF(CNF* src, S_REF* scatter, Byte* stencil)
-	{
-		assert(src);
-		assert(scatter);
-		assert(stencil);
-		assert(maxGPUThreads);
-		const uint32 old_size = pinned_cnf->size();
-		uint32 nThreads = BLOCK1D, maxBlocks = maxGPUThreads / nThreads;
-		uint32 nBlocks = MIN((old_size + nThreads - 1) / nThreads, maxBlocks);
-		scatter_k << <nBlocks, nThreads >> > (src, scatter, stencil);
-		if (gopts.sync_always) {
-			LOGERR("Scattering CNF failed");
-			sync();
-		}
-	}
-
 	void cuMM::compactCNF(CNF* src, CNF* dest)
 	{
+		if (gopts.profile_gpu) cutimer->start();
 		assert(src);
 		assert(dest);
+
 		const uint32 old_size = pinned_cnf->size();
+
 		assert(old_size <= nscatters);
-		assert(hc_nbuckets == sizeof(SCLAUSE) / sizeof(uint32));
-		PFLOG2(2, " Compacting simplified CNF (%d to %d) on GPU..", old_size, inf.nClauses);
-		const S_REF data_size = inf.nClauses * hc_nbuckets + inf.nLiterals;
+		assert(SCLAUSEBUCKETS == sizeof(SCLAUSE) / sizeof(uint32));
+
+		LOG2(2, " Compacting simplified CNF (%d to %d) on GPU..", old_size, inf.nClauses);
+
+		const S_REF data_size = REGIONBUCKETS(inf.nClauses, inf.nLiterals);
 		resizeCNFAsync(dest, data_size, inf.nClauses);
-		scatterCNF(src, d_scatter, d_stencil);
+
+		OPTIMIZEBLOCKS(old_size, BLOCK1D);
+		scatter_k << <nBlocks, BLOCK1D >> > (src, d_scatter, d_stencil);
+		if (gopts.sync_always) {
+			LASTERR("Scattering CNF failed");
+			SYNC(0);
+		}
+
 		size_t ebytes = 0, fbytes = 0;
 		DeviceScan::ExclusiveSum(NULL, ebytes, d_scatter, d_scatter, old_size);
 		uint32* tmp = resizeLits(ebytes);
 		if (!tmp) { throw MEMOUTEXCEPTION(); }
 		DeviceScan::ExclusiveSum(tmp, ebytes, d_scatter, d_scatter, old_size);
+
 		// *tmp will hold the new size, so tmp + 1 will be the start of the temporary array
 		DeviceSelect::Flagged(NULL, fbytes, d_scatter, d_stencil, d_refs_mem, tmp, old_size);
 		tmp = resizeLits(fbytes);
 		if (!tmp) { throw MEMOUTEXCEPTION(); }
 		DeviceSelect::Flagged(tmp + 1, fbytes, d_scatter, d_stencil, d_refs_mem, tmp, old_size);
-		OPTIMIZEBLOCKS(old_size, BLOCK1D);
+
 		compact_k << <nBlocks, BLOCK1D >> > (src, dest, d_scatter, d_stencil);
+
 		pinned_cnf->resize(data_size, inf.nClauses);
-		LOGERR("CNF compact failed");
-		sync();
+
+		LASTERR("CNF compact failed");
+		SYNC(0);
+
+		if (gopts.profile_gpu) cutimer->stop(), cutimer->gc += cutimer->gpuTime();
 	}
 
 }

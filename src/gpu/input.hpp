@@ -1,6 +1,6 @@
 /***********************************************************************[input.hpp]
 Copyright(c) 2020, Muhammad Osama - Anton Wijs,
-Technische Universiteit Eindhoven (TU/e).
+Copyright(c) 2022-present, Muhammad Osama.
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
@@ -106,16 +106,16 @@ namespace ParaFROST {
 			if (end == NULL)
 				return false;
 			else if (tmpVal > r.t)
-				PFLOGE("maximum value exceeded for option \"%s\".", arg);
+				LOGERROR("maximum value exceeded for option \"%s\".", arg);
 			else if (tmpVal < r.h)
-				PFLOGE("minimum value exceeded for option \"%s\".", arg);
+				LOGERROR("minimum value exceeded for option \"%s\".", arg);
 			val = tmpVal;
 			parsed = true;
 			return true;
 		}
 
 		virtual void help(bool verbose = false) {
-			PFLOGN1("  %s--%-20s = %-8s [", CHELP, arg, type);
+			LOGN1("  %s--%-20s = %-8s [", CHELP, arg, type);
 			if (r.h == INT32_MIN) fprintf(stdout, "%-8s", "-I32");
 			else fprintf(stdout, "%-8d", r.h);
 			fprintf(stdout, " .. ");
@@ -124,8 +124,8 @@ namespace ParaFROST {
 			if (val == INT32_MAX) fprintf(stdout, "]%s (%sdefault: %s%10s%s)\n", CNORMAL, CARGDEFAULT, CARGVALUE, "+I32", CNORMAL);
 			else fprintf(stdout, "]%s (%sdefault: %s%10d%s)\n", CNORMAL, CARGDEFAULT, CARGVALUE, val, CNORMAL);
 			if (verbose) {
-				PFLOG1("   %s", text);
-				PFLOG0("");
+				LOG1("   %s", text);
+				LOG0("");
 			}
 		}
 		virtual void printArgument() { 
@@ -160,16 +160,16 @@ namespace ParaFROST {
 			if (end == NULL)
 				return false;
 			else if (tmpVal > r.t)
-				PFLOGE("maximum value exceeded for option \"%s\".", arg);
+				LOGERROR("maximum value exceeded for option \"%s\".", arg);
 			else if (tmpVal < r.h)
-				PFLOGE("minimum value exceeded for option \"%s\".", arg);
+				LOGERROR("minimum value exceeded for option \"%s\".", arg);
 			val = tmpVal;
 			parsed = true;
 			return true;
 		}
 
 		virtual void help(bool verbose = false) {
-			PFLOGN1("  %s--%-20s = %-8s [", CHELP, arg, type);
+			LOGN1("  %s--%-20s = %-8s [", CHELP, arg, type);
 			if (r.h == INT64_MIN) fprintf(stdout, "%-8s", "-I64");
 			else fprintf(stdout, "%-8lld", r.h);
 			fprintf(stdout, " .. ");
@@ -178,8 +178,8 @@ namespace ParaFROST {
 			if (val == INT64_MAX) fprintf(stdout, "]%s (%sdefault: %s%10s%s)\n", CNORMAL, CARGDEFAULT, CARGVALUE, "+I64", CNORMAL);
 			else fprintf(stdout, "]%s (%sdefault: %s%10lld%s)\n", CNORMAL, CARGDEFAULT, CARGVALUE, val, CNORMAL);
 			if (verbose) {
-				PFLOG1("   %s", text);
-				PFLOG0("");
+				LOG1("   %s", text);
+				LOG0("");
 			}
 		}
 		virtual void printArgument() {
@@ -209,16 +209,16 @@ namespace ParaFROST {
 			if (end == NULL)
 				return false;
 			else if (tmpVal > r.t)
-				PFLOGE("maximum value exceeded for option \"%s\".", arg);
+				LOGERROR("maximum value exceeded for option \"%s\".", arg);
 			else if (tmpVal < r.h)
-				PFLOGE("minimum value exceeded for option \"%s\".", arg);
+				LOGERROR("minimum value exceeded for option \"%s\".", arg);
 			val = tmpVal;
 			parsed = true;
 			return true;
 		}
 
 		virtual void help(bool verbose = false) {
-			PFLOGN1("  %s--%-20s = %-8s [", CHELP, arg, type);
+			LOGN1("  %s--%-20s = %-8s [", CHELP, arg, type);
 			if (r.h == -INFINITY) fprintf(stdout, "%-8s", "-inf");
 			else fprintf(stdout, "%-8.2f", r.h);
 			fprintf(stdout, " .. ");
@@ -226,8 +226,8 @@ namespace ParaFROST {
 			else fprintf(stdout, "%8.2f", r.t);
 			fprintf(stdout, "]%s (%sdefault: %s%10.2e%s)\n", CNORMAL, CARGDEFAULT, CARGVALUE, val, CNORMAL);
 			if (verbose) {
-				PFLOG1("   %s", text);
-				PFLOG0("");
+				LOG1("   %s", text);
+				LOG0("");
 			}
 		}
 
@@ -260,10 +260,10 @@ namespace ParaFROST {
 		}
 
 		virtual void help(bool verbose = false) {
-			PFLOG1("  %s--%-20s = %8s%s  (%sdefault: %s%s%s)", CHELP, arg, type, CNORMAL, CARGDEFAULT, CARGVALUE, val, CNORMAL);
+			LOG1("  %s--%-20s = %8s%s  (%sdefault: %s%s%s)", CHELP, arg, type, CNORMAL, CARGDEFAULT, CARGVALUE, val, CNORMAL);
 			if (verbose) {
-				PFLOG1("   %s", text);
-				PFLOG0("");
+				LOG1("   %s", text);
+				LOG0("");
 			}
 		}
 
@@ -299,13 +299,13 @@ namespace ParaFROST {
 		}
 
 		virtual void help(bool verbose = false) {
-			PFLOGN1("  %s-%-20s -no-%-20s%s", CHELP, arg, arg, CNORMAL);
+			LOGN1("  %s-%-20s -no-%-20s%s", CHELP, arg, arg, CNORMAL);
 			fprintf(stdout, "                 ");
 			if (val) fprintf(stdout, "(%sdefault: %s%3s%s)\n", CARGDEFAULT, CARGON, "on", CNORMAL);
 			else fprintf(stdout, "(%sdefault: %s%3s%s)\n", CARGDEFAULT, CARGOFF, "off", CNORMAL);
 			if (verbose) {
-				PFLOG1("   %s", text);
-				PFLOG0("");
+				LOG1("   %s", text);
+				LOG0("");
 			}
 		}
 

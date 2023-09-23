@@ -1,6 +1,6 @@
 /***********************************************************************[mdmpump.cpp]
 Copyright(c) 2020, Muhammad Osama - Anton Wijs,
-Technische Universiteit Eindhoven (TU/e).
+Copyright(c) 2022-present, Muhammad Osama.
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
@@ -70,8 +70,8 @@ void Solver::pumpFrozen()
 {
 	if (!last.mdm.decisions) return;
 	assert(trail.size() > sp->propagated);
-	if (verbose == 4) PFLOG1(" Pumping frozen variables..");
-	else PFLOGN2(2, " Pumping frozen variables..");
+	if (verbose == 4) LOG1(" Pumping frozen variables..");
+	else LOGN2(2, " Pumping frozen variables..");
 	uint32* start = trail + sp->propagated;
 	if (vsidsEnabled() && opts.mdm_vsids_pumps) {
 		for (uint32* assign = trail.end() - 1; assign >= start; assign--)
@@ -93,6 +93,6 @@ void Solver::pumpFrozen()
 			opts.mdm_vmtf_pumps--;
 		}
 	}
-	PFLDONE(2, 4);
+	LOGDONE(2, 4);
 	if (verbose >= 3 && vsidsEnabled()) printHeap();
 }

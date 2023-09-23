@@ -1,6 +1,6 @@
 /***********************************************************************[decide.cpp]
 Copyright(c) 2020, Muhammad Osama - Anton Wijs,
-Technische Universiteit Eindhoven (TU/e).
+Copyright(c) 2022-present, Muhammad Osama.
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
@@ -31,7 +31,7 @@ uint32 Solver::nextVSIDS()
 		vsids.pop();
 	}
 	assert(cand);
-	PFLOG2(4, " Next heap choice %d, activity %e", cand, activity[cand]);
+	LOG2(4, " Next heap choice %d, activity %e", cand, activity[cand]);
 	return cand;
 }
 
@@ -46,7 +46,7 @@ uint32 Solver::nextVMFQ()
 		while (states[free].state || !UNASSIGNED(sp->value[V2L(free)]));
 		vmtf.update(free, bumps[free]);
 	}
-	PFLOG2(4, " Next queue choice %d, bumped %lld", free, bumps[free]);
+	LOG2(4, " Next queue choice %d, bumped %lld", free, bumps[free]);
 	return free;
 }
 

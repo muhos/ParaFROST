@@ -1,6 +1,6 @@
 /***********************************************************************[space.hpp]
 Copyright(c) 2020, Muhammad Osama - Anton Wijs,
-Technische Universiteit Eindhoven (TU/e).
+Copyright(c) 2022-present, Muhammad Osama.
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
@@ -39,7 +39,7 @@ namespace ParaFROST {
 
 		#define forall_space(X) for (uint32 X = 1; X < _sz; X++)
 		#define	breakline(X) if (X > 1 && X < _sz - 2 && X % 10 == 0) { \
-						PUTCH('\n'); PFLOGN0("\t\t"); }
+						PUTCH('\n'); LOGN0("\t\t"); }
 	public:
 		// arrays
 		int* level;
@@ -119,7 +119,7 @@ namespace ParaFROST {
 			}
 		}
 		void	printStates	() {
-			PFLOGN1(" States->[");
+			LOGN1(" States->[");
 			forall_space(v) {
 				PRINT("%5d:%d ", v, vstate[v].state);
 				breakline(v);
@@ -127,7 +127,7 @@ namespace ParaFROST {
 			putc(']', stdout), PUTCH('\n');
 		}
 		void	printValues	() {
-			PFLOGN1(" Values->[");
+			LOGN1(" Values->[");
 			forall_space(v) {
 				uint32 lit = V2L(v);
 				PRINT("%5d:%d ", l2i(lit), value[lit]);
@@ -136,7 +136,7 @@ namespace ParaFROST {
 			putc(']', stdout), PUTCH('\n');
 		}
 		void	printLevels	() {
-			PFLOGN1(" Levels->[");
+			LOGN1(" Levels->[");
 			forall_space(v) {
 				PRINT("%5d@%d ", v, level[v]);
 				breakline(v);

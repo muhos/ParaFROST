@@ -1,6 +1,6 @@
 /***********************************************************************[proof.cpp]
 Copyright(c) 2020, Muhammad Osama - Anton Wijs,
-Technische Universiteit Eindhoven (TU/e).
+Copyright(c) 2022-present, Muhammad Osama.
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
@@ -48,11 +48,11 @@ void PROOF::close()
 
 void PROOF::handFile(arg_t path, const bool& _nonbinary_en)
 {
-	PFLOGN2(1, " Handing over \"%s%s%s\" to the proof system..", CREPORTVAL, path, CNORMAL);
+	LOGN2(1, " Handing over \"%s%s%s\" to the proof system..", CREPORTVAL, path, CNORMAL);
 	proofFile = fopen(path, "w");
-	if (proofFile == NULL) PFLOGE("cannot open proof file %s", path);
+	if (proofFile == NULL) LOGERROR("cannot open proof file %s", path);
 	nonbinary_en = _nonbinary_en;
-	PFLENDING(1, 5, "(binary %s)", nonbinary_en ? "disabled" : "enabled");
+	LOGENDING(1, 5, "(binary %s)", nonbinary_en ? "disabled" : "enabled");
 }
 
 void PROOF::init(SP* _sp)
@@ -72,7 +72,7 @@ void PROOF::init(SP* _sp, uint32* vorg)
 bool PROOF::checkFile()
 {
 	if (proofFile == NULL) {
-		PFLOGEN("proof file is not opened or cannot be accessed");
+		LOGERRORN("proof file is not opened or cannot be accessed");
 		return false;
 	}
 	return true;
@@ -208,7 +208,7 @@ void PROOF::shrinkClause(CLAUSE& c)
 
 void PROOF::checkInput(arg_t input)
 {
-	PFLOGN2(1, " Handing test clause \"%s%s%s\" to the proof system..", CREPORTVAL, input, CNORMAL);
+	LOGN2(1, " Handing test clause \"%s%s%s\" to the proof system..", CREPORTVAL, input, CNORMAL);
 	while (*input) {
 		while (isspace(*input)) input++;
 		uint32 v = 0, s = 0;
@@ -222,19 +222,19 @@ void PROOF::checkInput(arg_t input)
 		}
 	}
 	Sort(tmpclause, LESS<uint32>());
-	PFLDONE(1, 5);
+	LOGDONE(1, 5);
 }
 
 void PROOF::printClause(const char* msg, const uint32* lits, const int& len, const bool& map)
 {
-	PFLOGN1(" Proof: %s clause(", msg);
+	LOGN1(" Proof: %s clause(", msg);
 	for (int i = 0; i < len; i++) {
 		int lit = int(ABS(lits[i]));
 		PRINT("%4d ", SIGN(lits[i]) ? -lit : lit);
 	}
 	PRINT(")\n");
 	if (map) {
-		PFLOGN1(" Proof: %s mapped clause(", msg);
+		LOGN1(" Proof: %s mapped clause(", msg);
 		for (int i = 0; i < len; i++) {
 			const uint32 lit = lits[i];
 			const uint32 mvar = vars[ABS(lit)];

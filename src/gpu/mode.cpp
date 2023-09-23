@@ -1,6 +1,6 @@
 /***********************************************************************[mode.cpp]
 Copyright(c) 2020, Muhammad Osama - Anton Wijs,
-Technische Universiteit Eindhoven (TU/e).
+Copyright(c) 2022-present, Muhammad Osama.
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
@@ -63,13 +63,13 @@ void Solver::updateModeLimit()
 		uint64 ticks = stats.searchticks - stats.mode.ticks;
 		ticks *= opts.stable_rate;
 		limit.mode.ticks = stats.searchticks + ticks;
-		PFLOG2(2, " Stable mode limit increased to %lld ticks", limit.mode.ticks);
+		LOG2(2, " Stable mode limit increased to %lld ticks", limit.mode.ticks);
 	}
 	else {
 		const uint64 scaled = quadratic(stats.stablemodes) + 1;
 		const uint64 increase = opts.mode_inc * scaled;
 		limit.mode.conflicts = stats.conflicts + increase;
-		PFLOG2(2, " Unstable mode limit increased to %lld conflicts", limit.mode.conflicts);
+		LOG2(2, " Unstable mode limit increased to %lld conflicts", limit.mode.conflicts);
 	}
 	last.rephase.type = 0;
 	stats.mode.ticks = stats.searchticks;

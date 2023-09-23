@@ -1,6 +1,6 @@
 /***********************************************************************[model.cpp]
 Copyright(c) 2020, Muhammad Osama - Anton Wijs,
-Technische Universiteit Eindhoven (TU/e).
+Copyright(c) 2022-present, Muhammad Osama.
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
@@ -29,7 +29,7 @@ void MODEL::printClause(const Lits_t& clause, const bool& printvalues)
 	}
 	PRINT(")%s\n", CNORMAL);
 	if (printvalues) {
-		PFLOGN1("\t\t\t%s original values(", CLOGGING);
+		LOGN1("\t\t\t%s original values(", CLOGGING);
 		for (int i = 0; i < clause.size(); i++) {
 			const uint32 orgvar = ABS(clause[i]);
 			CHECKVAR(orgvar);
@@ -37,7 +37,7 @@ void MODEL::printClause(const Lits_t& clause, const bool& printvalues)
 			PRINT("%-8d", orgvalues[mlit]);
 		}
 		PRINT(")%s\n", CNORMAL);
-		PFLOGN1("\t\t\t%s extended values(", CLOGGING);
+		LOGN1("\t\t\t%s extended values(", CLOGGING);
 		for (int i = 0; i < clause.size(); i++) {
 			PRINT("%-8d", value[ABS(clause[i])]);
 		}
@@ -47,7 +47,7 @@ void MODEL::printClause(const Lits_t& clause, const bool& printvalues)
 
 void MODEL::printValues()
 {
-	PFLOGN2(2, " %sAssigned(size = %d)->(", CLOGGING, maxVar);
+	LOGN2(2, " %sAssigned(size = %d)->(", CLOGGING, maxVar);
 	for (uint32 v = 1; v <= maxVar; v++)
 		PRINT("%d:%d  ", v, value[v]);
 	PRINT(")%s\n", CNORMAL);
@@ -55,7 +55,7 @@ void MODEL::printValues()
 
 void MODEL::printResolved()
 {
-	PFLOGN2(2, " %sResolved(size = %d)->(", CLOGGING, resolved.size());
+	LOGN2(2, " %sResolved(size = %d)->(", CLOGGING, resolved.size());
 	for (uint32 i = 0; i < resolved.size(); i++) {
 		const int r = resolved[i];
 		PRINT("%d  ", r);
@@ -66,16 +66,18 @@ void MODEL::printResolved()
 void MODEL::print()
 {
 	if (!extended) {
-		PFLOGEN("model is not extended yet");
+		LOGERRORN("model is not extended yet");
 		return;
 	}
+    SETCOLOR(CWHITE, stdout);
 	PRINT("v ");
 	for (uint32 v = 1; v <= maxVar; v++) {
 		PRINT("%c%d ", value[v] ? ' ' : '-', v);
 		breakmodel(v, 15);
 	}
 	PUTCH('\n');
-	if (!quiet_en) PFLOG0("");
+    SETCOLOR(CNORMAL, stdout);
+	if (!quiet_en) LOG0("");
 }
 
 void MODEL::init(uint32* _vorg)
@@ -84,21 +86,13 @@ void MODEL::init(uint32* _vorg)
 	vorg = _vorg;
 	if (!maxVar) {
 		assert(inf.maxVar);
-		PFLOG2(2, " Initially mapping original variables to literals..");
+		LOG2(2, " Initially mapping original variables to literals..");
 		maxVar = inf.maxVar;
 		lits.resize(maxVar + 1), lits[0] = 0;
 		forall_variables(v) {
 			lits[v] = V2L(v);
 		}
 	}
-}
-
-inline bool MODEL::satisfied(const uint32& orglit) const
-{
-	assert(orglit > 1);
-	const uint32 orgvar = ABS(orglit);
-	assert(orgvar < value.size());
-	return value[orgvar] == !SIGN(orglit);
 }
 
 void MODEL::extend(LIT_ST* currValue)
@@ -115,8 +109,8 @@ void MODEL::extend(LIT_ST* currValue)
 			updated++;
 		}
 	}
-	PFLOG2(2, " ");
-	PFLOG2(2, " Extending model updated %d mapped values", updated);
+	LOG2(2, " ");
+	LOG2(2, " Extending model updated %d mapped values", updated);
 	if (resolved.size()) {
 		const uint32 before = updated;
 		uint32* x = resolved.end() - 1, k;
@@ -125,7 +119,7 @@ void MODEL::extend(LIT_ST* currValue)
 				assert(*x);
 				bool unsat = true;
 				k = *x--;
-				if (k > 1) PFLOGN1(" Clause(size = %d)->( ", k);
+				if (k > 1) LOGN1(" Clause(size = %d)->( ", k);
 				for (; k > 1; k--, x--) {
 					PRINT("%d  ", lit2int(*x));
 					if (satisfied(*x)) {
@@ -159,35 +153,35 @@ void MODEL::extend(LIT_ST* currValue)
 				x -= k;
 			}
 		}
-		PFLOG2(2, " Extending model with eliminated variables updated %d values", updated - before);
+		LOG2(2, " Extending model with eliminated variables updated %d values", updated - before);
 	}
 	extended = true;
-	PFLOG2(2, " ");
+	LOG2(2, " ");
 }
 
 void MODEL::verify(const string& path) {
 	if (!extended) {
-		PFLOGEN("model is not extended yet");
+		LOGERRORN("model is not extended yet");
 		return;
 	}
-	PFLOG2(1, " ");
-	PFLOG2(1, " Verifying model on input formula..");
+	LOG2(1, " ");
+	LOG2(1, " Verifying model on input formula..");
 	struct stat st;
-	if (!canAccess(path.c_str(), st)) PFLOGE("cannot access the input file to verify model");
+	if (!canAccess(path.c_str(), st)) LOGERROR("cannot access the input file to verify model");
 	size_t fsz = st.st_size;
-	PFLOG2(1, "  parsing CNF file \"%s%s%s\" (size: %s%zd KB%s) to verify model",
+	LOG2(1, "  parsing CNF file \"%s%s%s\" (size: %s%zd KB%s) to verify model",
 		CREPORTVAL, path.c_str(), CNORMAL, CREPORTVAL, fsz / KBYTE, CNORMAL);
 	TIMER timer;
 	timer.start();
 #if defined(__linux__) || defined(__CYGWIN__)
 	int fd = open(path.c_str(), O_RDONLY, 0);
-	if (fd == -1) PFLOGE("cannot open input file");
+	if (fd == -1) LOGERROR("cannot open input file");
 	void* buffer = mmap(NULL, fsz, PROT_READ, MAP_PRIVATE, fd, 0);
 	char* str = (char*)buffer;
 #else
 	ifstream inputFile;
 	inputFile.open(path, ifstream::in);
-	if (!inputFile.is_open()) PFLOGE("cannot open input file to verify model");
+	if (!inputFile.is_open()) LOGERROR("cannot open input file to verify model");
 	char* buffer = pfcalloc<char>(fsz + 1), * str = buffer;
 	inputFile.read(buffer, fsz);
 	buffer[fsz] = '\0';
@@ -198,18 +192,18 @@ void MODEL::verify(const string& path) {
 		if (*str == '\0' || *str == '0' || *str == '%') break;
 		if (*str == 'c') eatLine(str);
 		else if (*str == 'p') {
-			if (!eq(str, "p cnf")) PFLOGE("header has wrong format");
+			if (!eq(str, "p cnf")) LOGERROR("header has wrong format");
 			uint32 sign = 0;
 			orgVars = toInteger(str, sign);
-			if (sign) PFLOGE("number of variables in header is negative");
-			if (orgVars == 0) PFLOGE("zero number of variables in header");
-			if (orgVars >= INT_MAX - 1) PFLOGE("number of variables not supported");
+			if (sign) LOGERROR("number of variables in header is negative");
+			if (orgVars == 0) LOGERROR("zero number of variables in header");
+			if (orgVars >= INT_MAX - 1) LOGERROR("number of variables not supported");
 			orgClauses = toInteger(str, sign);
-			if (sign) PFLOGE("number of clauses in header is negative");
-			if (orgClauses == 0) PFLOGE("zero number of clauses in header");
-			PFLOG2(1, "  found header %s%d %d%s", CREPORTVAL, orgVars, orgClauses, CNORMAL);
+			if (sign) LOGERROR("number of clauses in header is negative");
+			if (orgClauses == 0) LOGERROR("zero number of clauses in header");
+			LOG2(1, "  found header %s%d %d%s", CREPORTVAL, orgVars, orgClauses, CNORMAL);
 			if (orgVars != maxVar) {
-				PFLOGEN("variables in header inconsistent with model variables");
+				LOGERRORN("variables in header inconsistent with model variables");
 				verified = false;
 				break;
 			}
@@ -218,7 +212,7 @@ void MODEL::verify(const string& path) {
 		else if (!verify(str)) { verified = false; break; }
 	}
 #if defined(__linux__) || defined(__CYGWIN__)
-	if (munmap(buffer, fsz) != 0) PFLOGE("cannot clean input file %s mapping", path.c_str());
+	if (munmap(buffer, fsz) != 0) LOGERROR("cannot clean input file %s mapping", path.c_str());
 	close(fd);
 #else
 	delete[] buffer;
@@ -226,13 +220,13 @@ void MODEL::verify(const string& path) {
 #endif
 	timer.stop();
 	timer.parse = timer.cpuTime();
-	PFLOG2(1, "  checked %s%d Variables%s, %s%d Clauses%s, and %s%d Literals%s in %s%.2f seconds%s",
+	LOG2(1, "  checked %s%d Variables%s, %s%d Clauses%s, and %s%d Literals%s in %s%.2f seconds%s",
 		CREPORTVAL, orgVars, CNORMAL,
 		CREPORTVAL, orgClauses, CNORMAL,
 		CREPORTVAL, orgLiterals, CNORMAL,
 		CREPORTVAL, timer.parse, CNORMAL);
-	if (verified) PFLOG2(1, " model %sVERIFIED%s", CGREEN, CNORMAL);
-	else PFLOG2(1, " model %sNOT VERIFIED%s", CRED, CNORMAL);
+	if (verified) LOG2(1, " model %sVERIFIED%s", CGREEN, CNORMAL);
+	else LOG2(1, " model %sNOT VERIFIED%s", CRED, CNORMAL);
 }
 
 bool MODEL::verify(char*& str)
@@ -242,7 +236,7 @@ bool MODEL::verify(char*& str)
 	bool clauseSAT = false;
 	while ((v = toInteger(str, s)) != 0) {
 		if (v > orgVars) {
-			PFLOGEN("too many variables");
+			LOGERRORN("too many variables");
 			return false;
 		}
 		orgLiterals++;
@@ -270,11 +264,11 @@ bool MODEL::verify(char*& str)
 	}
 	if (clauseSAT) {
 		assert(saved);
-		PFLOGN2(4, "  found satisfied literal %-8d in clause", lit2int(saved));
+		LOGN2(4, "  found satisfied literal %-8d in clause", lit2int(saved));
 		if (verbose >= 4) printClause(org, false);
 	}
 	else {
-		PFLOGN2(1, "  no satisfied literals in clause\t");
+		LOGN2(1, "  no satisfied literals in clause\t");
 		if (verbose >= 1) printClause(org, true);
 	}
 	forall_clause(org, k) {

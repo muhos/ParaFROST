@@ -1,6 +1,6 @@
 /***********************************************************************[minimize.cpp]
 Copyright(c) 2020, Muhammad Osama - Anton Wijs,
-Technische Universiteit Eindhoven (TU/e).
+Copyright(c) 2022-present, Muhammad Osama.
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
@@ -73,7 +73,7 @@ void Solver::minimizebin()
 		learntC.shrink(nLitsRem);
 		sp->learntLBD = calcLBD();
 		assert(sp->learntLBD <= opts.lbd_tier2);
-		PFLOG2(4, " Learnt clause strengthened by %d binaries with new LBD of %d", nLitsRem, sp->learntLBD);
+		LOG2(4, " Learnt clause strengthened by %d binaries with new LBD of %d", nLitsRem, sp->learntLBD);
 	}
 }
 
@@ -89,7 +89,7 @@ bool Solver::minimize(const uint32& lit, const int& depth)
 	if (sp->vstate[litlevel].dlcount < 2) return false;
 	assert(REASON(r));
 	CLAUSE& c = cm[r];
-	PFLCLAUSE(4, c, "  checking %d reason", -l2i(lit));
+	LOGCLAUSE(4, c, "  checking %d reason", -l2i(lit));
 	bool gone = true;
 	uint32* cend = c.end();
 	for (uint32* k = c; gone && k != cend; k++) {
@@ -114,7 +114,7 @@ void Solver::minimize()
 			*j++ = lit;
 	}
 	int shrunken = int(end - j);
-	PFLOG2(4, " Learnt clause minimized by %d literals", shrunken);
+	LOG2(4, " Learnt clause minimized by %d literals", shrunken);
 	learntC.shrink(shrunken);
 	clearMinimized();
 }

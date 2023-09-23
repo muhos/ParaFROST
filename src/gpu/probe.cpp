@@ -1,6 +1,6 @@
 /***********************************************************************[probe.cpp]
 Copyright(c) 2020, Muhammad Osama - Anton Wijs,
-Technische Universiteit Eindhoven (TU/e).
+Copyright(c) 2022-present, Muhammad Osama.
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
@@ -61,11 +61,11 @@ void Solver::analyzeFailed(const uint32& failed)
 	assert(sp->value[failed] <= 0);
 	if (unassigned(failed)) {
 		const uint32 unit = FLIP(failed);
-		PFLOG2(3, "  found unassigned failed probe %d", l2i(unit));
+		LOG2(3, "  found unassigned failed probe %d", l2i(unit));
 		enqueueUnit(unit);
 	}
 	if (BCP()) {
-		PFLOG2(2, "  failed probe %d proved a contradiction", l2i(failed));
+		LOG2(2, "  failed probe %d proved a contradiction", l2i(failed));
 		learnEmpty();
 	}
 }
@@ -86,13 +86,13 @@ void Solver::scheduleProbes()
 		if (poss && negs) continue;
 		if (!poss && !negs) continue;
 		uint32 probe = negs ? p : n;
-		PFLOG2(4, "  scheduling probe %d with binary occurs %d", l2i(probe), vhist[FLIP(probe)]);
+		LOG2(4, "  scheduling probe %d with binary occurs %d", l2i(probe), vhist[FLIP(probe)]);
 		probes.push(probe);
 		assert(states[v].probe <= 1);
 		count[states[v].probe]++;
 	}
 	assert(probes.size() == count[0] + count[1]);
-	PFLOG2(2, "  scheduled %d (%d prioritized) probes %.2f%%", probes.size(), count[1], percent(probes.size(), maxActive()));
+	LOG2(2, "  scheduled %d (%d prioritized) probes %.2f%%", probes.size(), count[1], percent(probes.size(), maxActive()));
 }
 
 uint32 Solver::nextProbe() 
@@ -125,7 +125,7 @@ void Solver::FLE()
 			else Sort(probes, PROBE_QUEUE_CMP(states, bumps));
 		}
 		else {
-			PFLOG2(2, "  no candidates found to probe");
+			LOG2(2, "  no candidates found to probe");
 			break;
 		}
 		memset(vhist, 0, sizeof(uint32) * inf.nDualVars);
@@ -159,20 +159,20 @@ void Solver::FLE()
 		stats.probe.probed += currprobed;
 		stats.probe.failed += currfailed;
 		if (!cnfstate) {
-			PFLOG2(2, "  probing proved a contradiction");
+			LOG2(2, "  probing proved a contradiction");
 			break;
 		}
-		PFLOG2(2, " Probe round %lld: probed %d, finding %d failed literals and %lld hyper binary resolvents",
+		LOG2(2, " Probe round %lld: probed %d, finding %d failed literals and %lld hyper binary resolvents",
 			stats.probe.rounds, currprobed, currfailed, stats.binary.resolvents - old_hypers);
 		const uint32 remained = probes.size();
 		if (remained) {
-			PFLOG2(2, "  probing hit limit at round %d with %d remaining probes", round, remained);
+			LOG2(2, "  probing hit limit at round %d with %d remaining probes", round, remained);
 			bool prioritized = false;
 			for (uint32 i = 0; !prioritized && i < probes.size(); i++) {
 				if (markedProbe(probes[i])) prioritized = true;
 			}
 			if (!prioritized) {
-				PFLOG2(2, "  prioritizing remaining %d probes at round %d", remained, round);
+				LOG2(2, "  prioritizing remaining %d probes at round %d", remained, round);
 				while (!probes.empty()) {
 					const uint32 probe = probes.back();
 					CHECKLIT(probe);
@@ -214,8 +214,8 @@ void Solver::probe()
 	const uint32 after = maxActive();
 	const uint32 removed = before - after;
 	assert(removed >= 0);
-	if (removed) PFLOG2(2, " Probe call %lld removed %d variables %.2f%%", stats.probe.calls, removed, percent(removed, before));
-	else PFLOG2(2, " Probe %lld: did not remove any variables", stats.probe.calls);
+	if (removed) LOG2(2, " Probe call %lld removed %d variables %.2f%%", stats.probe.calls, removed, percent(removed, before));
+	else LOG2(2, " Probe %lld: did not remove any variables", stats.probe.calls);
 	INCREASE_LIMIT(this, probe, stats.probe.calls, nlogn, true);
 	last.probe.reduces = stats.reduces + 1;
 }

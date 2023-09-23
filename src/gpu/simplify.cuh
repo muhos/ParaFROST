@@ -1,6 +1,6 @@
 /***********************************************************************[simplify.cuh]
 Copyright(c) 2020, Muhammad Osama - Anton Wijs,
-Technische Universiteit Eindhoven (TU/e).
+Copyright(c) 2022-present, Muhammad Osama.
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
@@ -19,16 +19,23 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 #ifndef __GPU_SIMP_
 #define __GPU_SIMP_
 
+#include <cuda_runtime.h>
 #include <thrust/sort.h>
 #include <thrust/binary_search.h>
 #include <thrust/adjacent_difference.h>
 #include <thrust/iterator/counting_iterator.h>
-#include "options.cuh"
-#include "memory.cuh"
 #include "thrustalloc.cuh"
+#include "variables.cuh"
+#include "histogram.cuh"
+#include "options.cuh"
+#include "printer.cuh"
+#include "memory.cuh"
+#include "timer.cuh"
 #include "cache.cuh"
 #include "proof.cuh"
-#include "printer.cuh"
+#include "table.cuh"
+#include "key.cuh"
+#include "cnf.cuh"
 #include "vstate.hpp"
 
 namespace ParaFROST {
@@ -37,7 +44,7 @@ namespace ParaFROST {
 	//======================================================//
 	void printConstants();
 	void initSharedMem();
-	void initDevOpts(const cuOptions&);
+	void initDevOpts();
 	void initDevVorg(const cuHist&);
 	void mapFrozenAsync(VARS*, const uint32&);
 	void cuMemSetAsync(addr_t, const Byte&, const size_t&);
@@ -48,7 +55,6 @@ namespace ParaFROST {
 	void prepareCNFAsync(CNF*, const cudaStream_t&);
 	void createOTAsync(CNF*, OT*, const bool&);
 	void reduceOTAsync(CNF*, OT*, const bool&);
-	void sortOTAsync(CNF*, OT*, VARS*);
 	void veAsync(CNF*, OT*, VARS*, cudaStream_t*, cuVecB*, cuMM&, const cuHist&, const bool&);
 	void veResizeCNFAsync(CNF*, const cuHist&);
 	void subAsync(CNF*, OT*, VARS*, cuVecB*);

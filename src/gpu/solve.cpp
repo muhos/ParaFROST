@@ -1,6 +1,6 @@
 ﻿/***********************************************************************[solve.cpp]
 Copyright(c) 2020, Muhammad Osama - Anton Wijs,
-Technische Universiteit Eindhoven (TU/e).
+Copyright(c) 2022-present, Muhammad Osama.
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
@@ -28,8 +28,6 @@ namespace ParaFROST {
 	CACHER			cacher;
 	uint32			maxGPUThreads = 0;
 	size_t			maxGPUSharedMem = 0;
-	size_t			hc_bucket = sizeof(uint32);
-	size_t			hc_nbuckets = sizeof(SCLAUSE) / hc_bucket;
 }
 
 using namespace ParaFROST;
@@ -37,7 +35,6 @@ using namespace ParaFROST;
 
 Solver::~Solver() 
 { 
-	PFPRINT(2, 5, "\n");
 	masterFree();
     std::free(this->learnCallbackBuffer);
 }
@@ -55,9 +52,6 @@ Solver::Solver(const string& formulaStr) :
 	, stable(false)
 	, probed(false)
 	, incremental(false)
-	, termCallback(NULL)
-	, learnCallbackBuffer(NULL)
-	, learnCallback(NULL)
 	, vars(NULL)
 	, ot(NULL)
 	, cnf(NULL)
@@ -71,28 +65,32 @@ Solver::Solver(const string& formulaStr) :
 	, nForced(0)
 	, simpstate(AWAKEN_SUCC)
 	, devCount(0)
+	, termCallbackState(NULL)
+	, learnCallbackState(NULL)
+	, learnCallbackBuffer(NULL)
+	, termCallback(NULL)
+	, learnCallback(NULL)
 {
+    LOGHEADER(1, 5, "Build")
 	getCPUInfo(stats.sysmem);
 	getBuildInfo();
 	initSolver();
 	size_t _gfree = 0, _gpenalty = 0;
 	if (!(devCount = getGPUInfo(_gfree, _gpenalty))) {
-		PFLOGEN("no GPU(s) available that support CUDA");
+		LOGERRORN("no GPU(s) available that support CUDA");
 		killSolver();
 	}
 	if (_gfree <= 200 * MBYTE) {
-		PFLOGW("skipping GPU simplifier due to not enough GPU memory (free = %zd MB)", _gfree / MBYTE);
+		LOGWARNING("skipping GPU simplifier due to not enough GPU memory (free = %zd MB)", _gfree / MBYTE);
 		opts.sigma_en = opts.sigma_live_en = false;
 	}
 	else cumm.init(_gfree, _gpenalty);
-	PFLOGN2(2, "advising GPU driver about memory preferences..");
-	if (cumm.checkMemAdvice()) {
-		PFLENDING(2, 5, "enabled");
-	}
-	else {
-		PFLENDING(2, 5, "disabled");
-	}
-	PFLRULER('-', RULELEN);
+	
+	if (cumm.checkMemAdvice())
+        LOG2(2, " Enabled GPU driver memory advice");
+    else
+        LOG2(2, " Disabled GPU driver memory advice");
+    LOGHEADER(1, 5, "Parser")
 	if (!parser() || BCP()) { assert(cnfstate == UNSAT), killSolver(); }
 	if (opts.parseonly_en) killSolver();
 	if (opts.sigma_en || opts.sigma_live_en) { optSimp(), createStreams(); }
@@ -100,7 +98,7 @@ Solver::Solver(const string& formulaStr) :
 
 void Solver::allocSolver()
 {
-	PFLOGN2(2, " Allocating fixed memory for %d variables..", inf.maxVar);
+	LOGN2(2, " Allocating fixed memory for %d variables..", inf.maxVar);
 	assert(sizeof(LIT_ST) == 1);
 	assert(inf.maxVar);
 	assert(sp == NULL);
@@ -114,8 +112,8 @@ void Solver::allocSolver()
 	dlevels.reserve(inf.maxVar);
 	activity.resize(maxSize, 0.0);
 	bumps.resize(maxSize, 0);
-	PFLDONE(2, 5);
-	PFLMEMCALL(this, 2);
+	LOGDONE(2, 5);
+	LOGMEMCALL(this, 2);
 }
 
 void Solver::initSolver()
@@ -133,7 +131,7 @@ void Solver::initSolver()
 	if (opts.proof_en) {
 #ifdef _WIN32
 		if (!opts.proof_nonbinary_en) {
-			PFLOG2(1, " Disabling DRAT binary mode on Windows.");
+			LOG2(1, " Disabling DRAT binary mode on Windows.");
 			opts.proof_nonbinary_en = true;
 		}
 #endif
@@ -143,10 +141,10 @@ void Solver::initSolver()
 
 void Solver::initLimits() 
 {
-	PFLOG2(2, " Initializing solver limits..");
+	LOG2(2, " Initializing solver limits..");
 	formula.c2v = ratio(double(stats.clauses.original), double(inf.maxVar));
 	if (opts.ternary_en && formula.ternaries < 2) {
-		PFLOG2(2, "  Disabling hyper ternary resolution as no ternaries found");
+		LOG2(2, "  Disabling hyper ternary resolution as no ternaries found");
 		opts.ternary_en = false;
 	}
 	if (!last.vsids.inc && !last.vsids.booster) {
@@ -165,38 +163,38 @@ void Solver::initLimits()
 	lbdrest.reset();
 	stable = opts.stable_en && opts.vsidsonly_en;
 	if (stable) {
-		PFLOG2(2, "  VSIDS with initial stable mode is enabled");
+		LOG2(2, "  VSIDS with initial stable mode is enabled");
 		lubyrest.enable(opts.luby_inc, opts.luby_max);
 	}
 	else {
-		PFLOG2(2, "  VMFQ with initial unstable mode is enabled");
+		LOG2(2, "  VMFQ with initial unstable mode is enabled");
 		updateUnstableLimit();
 	}
 	if (opts.mdm_rounds) {
-		PFLOG2(2, "  Enabling MDM with %d rounds", opts.mdm_rounds);
+		LOG2(2, "  Enabling MDM with %d rounds", opts.mdm_rounds);
 		last.mdm.rounds = opts.mdm_rounds;
 	}
 	if (opts.seed) {
-		PFLOG2(2, "  Initial random seed is set to %d", opts.seed);
+		LOG2(2, "  Initial random seed is set to %d", opts.seed);
 		random.init(opts.seed);
 	}
-	PFLOG2(2, " Limits initialized successfully");
+	LOG2(2, " Limits initialized successfully");
 }
 
 void Solver::solve()
 {
 	FAULT_DETECTOR;
+    LOGHEADER(1, 5, "Search");
 	if (incremental) {
-		PFLOG0("");
-		PFLOGW("isolve is not used in incremental mode");
+		LOG0("");
+		LOGWARNING("isolve() is not used in incremental mode");
 		return;
 	}
 	timer.start();
 	initLimits();
 	if (verbose == 1) printTable();
-	if (canPreSigmify()) sigmify();
+	if (canPreSimplify()) simplify();
 	if (UNSOLVED(cnfstate)) {
-		PFLOG2(2, "-- CDCL search started..");
 		MDMInit();
 		while (UNSOLVED(cnfstate) && !runningout()) {
 			if (BCP()) analyze();
@@ -204,21 +202,20 @@ void Solver::solve()
 			else if (canReduce()) reduce();
 			else if (canRestart()) restart();
 			else if (canRephase()) rephase();
-			else if (canSigmify()) sigmify();
+			else if (canSigmify()) simplify();
 			else if (canProbe()) probe();
 			else if (canMMD()) MDM();
 			else decide();
 		}
-		PFLOG2(2, "-- CDCL search completed successfully");
 	}
 	timer.stop(), timer.solve += timer.cpuTime();
 	wrapup();
 }
 
 void Solver::wrapup() {
-	if (!quiet_en) { PFLRULER('-', RULELEN); PFLOG0(""); }
+    LOGHEADER(1, 5, "Result");
 	if (cnfstate == SAT) {
-		PFLOGS("SATISFIABLE");
+		LOGSAT("SATISFIABLE");
 		assert(sp != NULL && sp->value != NULL);
 		if (opts.model_en) {
 			model.extend(sp->value);
@@ -229,7 +226,7 @@ void Solver::wrapup() {
 			model.verify(formula.path);
 		}
 	}
-	else if (cnfstate == UNSAT) PFLOGS("UNSATISFIABLE");
-	else if (UNSOLVED(cnfstate)) PFLOGS("UNKNOWN");
+	else if (cnfstate == UNSAT) LOGSAT("UNSATISFIABLE");
+	else if (UNSOLVED(cnfstate)) LOGSAT("UNKNOWN");
 	if (opts.report_en) report();
 }

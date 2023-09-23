@@ -1,6 +1,6 @@
 /***********************************************************************[clause.cpp]
 Copyright(c) 2020, Muhammad Osama - Anton Wijs,
-Technische Universiteit Eindhoven (TU/e).
+Copyright(c) 2022-present, Muhammad Osama.
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
@@ -141,7 +141,7 @@ void Solver::newHyper3(const bool& learnt)
 	newClause(r, c, learnt);
 	if (learnt) c.markHyper();
 	attachClause(r, c);
-	PFLCLAUSE(4, c, "  added new hyper ternary resolvent");
+	LOGCLAUSE(4, c, "  added new hyper ternary resolvent");
 }
 
 inline LIT_ST Solver::sortClause(CLAUSE& c, const int& start, const int& size, const bool& satonly)

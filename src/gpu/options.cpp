@@ -1,6 +1,6 @@
 /***********************************************************************[options.cpp]
 Copyright(c) 2020, Muhammad Osama - Anton Wijs,
-Technische Universiteit Eindhoven (TU/e).
+Copyright(c) 2022-present, Muhammad Osama.
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
@@ -28,23 +28,16 @@ BOOL_OPT opt_ere_en("ere", "enable eager redundancy elimination", true);
 BOOL_OPT opt_sub_en("sub", "enable subsumption elimination", true);
 BOOL_OPT opt_solve_en("solve", "proceed with solving after simplifications", true);
 BOOL_OPT opt_ve_en("ve", "enable bounded variable elimination (BVE)", true);
-BOOL_OPT opt_ve_fun_en("vefun", "enable function table reasoning", true);
-BOOL_OPT opt_ve_lbound_en("velbound", "skip variables resulting in more literals than original", false);
-BOOL_OPT opt_ve_plus_en("ve+", "enable SUB then BVE round", true);
+BOOL_OPT opt_ve_plus_en("veextend", "enable subsumption elimination before variable elimination", true);
 
-INT_OPT opt_lcve_min("lcvemin", "minimum parallel variables to simplify", 2, INT32R(1, INT32_MAX));
-INT_OPT opt_lcve_max("lcvemax", "maximum occurrence list size to check in LCVE", 3e3, INT32R(1, INT32_MAX));
+INT_OPT opt_lcve_min_vars("electionsmin", "minimum elected variables to simplify", 2, INT32R(1, INT32_MAX));
+INT_OPT opt_lcve_max_occurs("electionsmax", "maximum occurrence list size to check in LCVE", 3e3, INT32R(1, INT32_MAX));
 INT_OPT opt_lcve_clause_max("lcveclausemax", "maximum clause size to check in LCVE", 3e4, INT32R(1, INT32_MAX));
-INT_OPT opt_ve_clause_max("veclausemax", "maximum resolvent size (0: no limit)", 100, INT32R(0, INT32_MAX));
-INT_OPT opt_ve_phase_min("vephasemin", "minimum removed literals to stop reductions", 500, INT32R(1, INT32_MAX));
+INT_OPT opt_lits_phase_min("eliminatedlitsmin", "minimum removed literals to stop reductions", 500, INT32R(1, INT32_MAX));
 INT_OPT opt_mu_pos("mupos", "set the positive freezing temperature in LCVE", 32, INT32R(10, INT32_MAX));
 INT_OPT opt_mu_neg("muneg", "set the negative freezing temperature in LCVE", 32, INT32R(10, INT32_MAX));
-INT_OPT opt_xor_max_arity("xormaxarity", "maximum XOR fanin size", 10, INT32R(2, 20));
-INT_OPT opt_sub_max_occurs("submax", "maximum occurrence list size to scan in SUB", 3e3, INT32R(100, INT32_MAX));
-INT_OPT opt_bce_max_occurs("bcemax", "maximum occurrence list size to scan in BCE", 3e3, INT32R(100, INT32_MAX));
-INT_OPT opt_ere_max_occurs("eremax", "maximum occurrence list size to scan in ERE", 3e3, INT32R(100, INT32_MAX));
 INT_OPT opt_phases("phases", "set the number of phases in to run reductions", 5, INT32R(0, INT32_MAX));
-INT_OPT opt_cnf_free("gcfreq", "set the frequency of CNF memory shrinkage on GPU", 2, INT32R(0, 5));
+INT_OPT opt_cnf_free("collectfreq", "set the frequency of CNF memory shrinkage on GPU", 2, INT32R(0, 5));
 INT_OPT opt_streams("nstreams", "number of GPU streams to be created", 6, INT32R(6, 32));
 DOUBLE_OPT opt_lits_mul("literalsmul", "initial literals multiplier", 1, FP64R(0, 4));
 
@@ -281,15 +274,12 @@ void OPTION::init()
 		all_en = opt_all_en;
 		aggr_cnf_sort = opt_aggr_cnf_sort;
 		bce_en = opt_bce_en;
-		bce_limit = opt_bce_max_occurs;
 		ere_en = opt_ere_en;
-		ere_limit = opt_ere_max_occurs;
 		sub_en = opt_sub_en;
-		sub_limit = opt_sub_max_occurs;
-		lcve_min = opt_lcve_min;
-		lcve_max = opt_lcve_max;
-		lcve_clause_limit = opt_lcve_clause_max;
-		lits_min = opt_ve_phase_min;
+		lcve_min_vars = opt_lcve_min_vars;
+		lcve_max_occurs = opt_lcve_max_occurs;
+		lcve_clause_max = opt_lcve_clause_max;
+		phase_lits_min = opt_lits_phase_min;
 		solve_en = opt_solve_en;
 		shrink_rate = opt_cnf_free;
 		mu_pos = opt_mu_pos;
@@ -297,10 +287,6 @@ void OPTION::init()
 		phases = opt_phases;
 		ve_plus_en = opt_ve_plus_en;
 		ve_en = opt_ve_en || ve_plus_en;
-		ve_fun_en = opt_ve_fun_en;
-		ve_lbound_en = opt_ve_lbound_en;
-		ve_clause_limit = opt_ve_clause_max;
-		xor_max_arity = opt_xor_max_arity;
 		if (all_en) ve_en = 1, ve_plus_en = 1, bce_en = 1, ere_en = 1;
 		if (!phases && (ve_en || sub_en || bce_en)) phases = 1; // at least 1 phase needed
 		if (phases && !(ve_en || sub_en || bce_en)) phases = 0;

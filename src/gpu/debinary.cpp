@@ -1,6 +1,6 @@
 /***********************************************************************[debins.cpp]
 Copyright(c) 2020, Muhammad Osama - Anton Wijs,
-Technische Universiteit Eindhoven (TU/e).
+Copyright(c) 2022-present, Muhammad Osama.
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
@@ -55,7 +55,7 @@ void Solver::debinary() {
 					break;
 				}
 				else { // found duplicate
-					PFLCLAUSE(4, c, "  found duplicated binary");
+					LOGCLAUSE(4, c, "  found duplicated binary");
 					if (c.original()) { // find learnt duplicate if exists
 						for (WATCH* k = ws; ; k++) {
 							assert(k != i);
@@ -88,6 +88,6 @@ void Solver::debinary() {
 	}
 	stats.debinary.hyperunary += units;
 	stats.debinary.binaries += subsumed;
-	PFLOG2(2, " Deduplicate %lld: removed %lld binaries, producing %lld hyper unaries", stats.debinary.calls, subsumed, units);
+	LOG2(2, " Deduplicate %lld: removed %lld binaries, producing %lld hyper unaries", stats.debinary.calls, subsumed, units);
 	printStats(units || subsumed, 'd', CVIOLET2);
 }

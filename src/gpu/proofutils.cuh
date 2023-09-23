@@ -1,6 +1,6 @@
 /***********************************************************************[proofutils.cuh]
 Copyright(c) 2021, Muhammad Osama - Anton Wijs,
-Technische Universiteit Eindhoven (TU/e).
+Copyright(c) 2022-present, Muhammad Osama.
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
@@ -19,6 +19,7 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 #ifndef __GPU_PROOFUTILS_
 #define __GPU_PROOFUTILS_
 
+#include "definitions.hpp"
 #include "primitives.cuh"
 #include "printer.cuh"
 
@@ -93,7 +94,7 @@ namespace ParaFROST {
 
 	_PFROST_D_ void countProofOrg(CNF& cnf, OL& ol, uint32& bytes)
 	{
-		assert(dc_ptrs->d_lbyte);
+		assert(DC_PTRS->d_lbyte);
 		#pragma unroll
 		forall_occurs(ol, i) {
 			SCLAUSE& c = cnf[*i];
@@ -104,7 +105,7 @@ namespace ParaFROST {
 
 	_PFROST_D_ void countProofSub(CNF& cnf, OL& ol, uint32& bytes)
 	{
-		assert(dc_ptrs->d_lbyte);
+		assert(DC_PTRS->d_lbyte);
 		#pragma unroll
 		forall_occurs(ol, i) {
 			SCLAUSE& c = cnf[*i];

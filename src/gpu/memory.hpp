@@ -1,6 +1,6 @@
 /***********************************************************************[memory.hpp]
 Copyright(c) 2020, Muhammad Osama - Anton Wijs,
-Technische Universiteit Eindhoven (TU/e).
+Copyright(c) 2022-present, Muhammad Osama.
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
@@ -42,25 +42,25 @@ namespace ParaFROST {
     protected:
         bool check(const S& d) const {
             if (d >= sz) {
-                PFLOGEN("memory index (%zd) violates memory boundary (%zd)", d, sz);
+                LOGERRORN("memory index (%zd) violates memory boundary (%zd)", d, sz);
                 return false;
             }
             return true;
         }
         bool check(const G_REF& d) const {
             if (d < _mem) {
-                PFLOGEN("memory access violation at location: %p, base address: %p", d, _mem);
+                LOGERRORN("memory access violation at location: %p, base address: %p", d, _mem);
                 return false;
             }
             if (d > (sz - 1) + _mem) {
-                PFLOGEN("memory access violation at location: %p, end address: %p", d, ((sz - 1) + _mem));
+                LOGERRORN("memory access violation at location: %p, end address: %p", d, ((sz - 1) + _mem));
                 return false;
             }
             return true;
         }
         bool checkSize(const S& newSz) const {
             if (sz != 0 && newSz <= sz) {
-                PFLOGEN("size overflow during memory allocation: (new = %zd, old = %zd)", newSz, sz);
+                LOGERRORN("size overflow during memory allocation: (new = %zd, old = %zd)", newSz, sz);
                 return false;
             }
             return true;
@@ -90,7 +90,7 @@ namespace ParaFROST {
             if (!init_cap) return;
             assert(_bucket);
             if (init_cap > maxCap) {
-                PFLOGEN("initial size exceeds maximum memory size: (max = %zd, size = %zd)", maxCap, init_cap);
+                LOGERRORN("initial size exceeds maximum memory size: (max = %zd, size = %zd)", maxCap, init_cap);
                 throw MEMOUTEXCEPTION();
             }
             cap = init_cap;

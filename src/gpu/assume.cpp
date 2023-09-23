@@ -1,6 +1,6 @@
 /***********************************************************************[assume.cpp]
 Copyright(c) 2020, Muhammad Osama - Anton Wijs,
-Technische Universiteit Eindhoven (TU/e).
+Copyright(c) 2022-present, Muhammad Osama.
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
@@ -22,7 +22,7 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 using namespace ParaFROST;
 
 inline void printOriginal(Lits_t& clause) {
-    PFLOGN0("  adding original clause( ");
+    LOGN0("  adding original clause( ");
     forall_clause(clause, k) {
         PRINT("%d  ", SIGN(*k) ? -int(ABS(*k)) : int(ABS(*k)));
     }
@@ -45,7 +45,7 @@ inline bool verifyMarkings(Vec<LIT_ST>& marks, Lits_t& clause) {
 uint32 Solver::iadd() {
     inf.unassigned++;
     const uint32 v = inf.orgVars = ++inf.maxVar;
-    PFLOG2(3, "  adding new variable %d (%d unassigned)..", v, inf.unassigned);
+    LOG2(3, "  adding new variable %d (%d unassigned)..", v, inf.unassigned);
     const uint32 lit = V2L(v);
     inf.nDualVars = lit + 2;
     wt.expand(lit + 2);
@@ -82,14 +82,14 @@ uint32 Solver::iadd() {
 bool Solver::itoClause(Lits_t& c, Lits_t& org) {
     if (org.empty()) {
         learnEmpty();
-        PFLOG2(2, "  original clause is empty.");
+        LOG2(2, "  original clause is empty.");
         return false;
     }
     assert(c.empty());
     assert(verifyMarkings(imarks, org));
     bool satisfied = false;
     if (verbose >= 3) printOriginal(org);
-    PFLOGN2(3, "  adding mapped clause  ( ");
+    LOGN2(3, "  adding mapped clause  ( ");
     forall_clause(org, k) {
         const uint32 orglit = *k;
         assert(orglit > 1 && orglit < NOVAR);
@@ -104,7 +104,7 @@ bool Solver::itoClause(Lits_t& c, Lits_t& org) {
             CHECKLIT(mlit);
             uint32 mvar = ABS(mlit);
             mlit = V2DEC(mvar, sign);
-            PFPRINT(3, 5, "%d  ", SIGN(mlit) ? -int(mvar) : int(mvar));
+            PRINT2(3, 5, "%d  ", SIGN(mlit) ? -int(mvar) : int(mvar));
             LIT_ST val = ivalue[mlit];
             if (UNASSIGNED(val))
                 c.push(mlit);
@@ -113,7 +113,7 @@ bool Solver::itoClause(Lits_t& c, Lits_t& org) {
         } else if (NEQUAL(marker, sign))
             satisfied = true; // tautology
     }
-    PFPRINT(3, 5, ")\n");
+    PRINT2(3, 5, ")\n");
     forall_clause(org, k) {
         const uint32 orglit = *k;
         assert(orglit > 1 && orglit < NOVAR);
@@ -125,7 +125,7 @@ bool Solver::itoClause(Lits_t& c, Lits_t& org) {
         int newsize = c.size();
         if (!newsize) {
             learnEmpty();
-            PFLOG2(2, "  original clause became empty after parsing.");
+            LOG2(2, "  original clause became empty after parsing.");
             return false;
         } else if (newsize == 1) {
             const uint32 unit = *c;
@@ -134,7 +134,7 @@ bool Solver::itoClause(Lits_t& c, Lits_t& org) {
             if (UNASSIGNED(val))
                 enqueueUnit(unit), formula.units++;
             else if (!val) {
-                PFLOG2(2, "  unit clause(%d) is conflicting.", l2i(unit));
+                LOG2(2, "  unit clause(%d) is conflicting.", l2i(unit));
                 return false;
             }
         } else if (newsize) {
@@ -151,7 +151,7 @@ bool Solver::itoClause(Lits_t& c, Lits_t& org) {
 #endif
                 newClause(c, false);
 
-            PFLCLAUSE(3, cm[newref], "  adding new clause");
+            LOGCLAUSE(3, cm[newref], "  adding new clause");
         }
         if (opts.proof_en && newsize < org.size()) {
             proof.addClause(c);
@@ -191,7 +191,7 @@ void Solver::ifreeze(const uint32& v)
 	CHECKLIT(mlit);
 	const uint32 mvar = ABS(mlit);
 	ifrozen[mvar] = 1;
-	PFLOG2(3, "  freezing original variable %d (mapped to %d)..", v, mvar);
+	LOG2(3, "  freezing original variable %d (mapped to %d)..", v, mvar);
 }
 
 void Solver::iunfreeze(const uint32& v)
@@ -200,7 +200,7 @@ void Solver::iunfreeze(const uint32& v)
 	CHECKLIT(mlit);
 	const uint32 mvar = ABS(mlit);
 	ifrozen[mvar] = 0;
-	PFLOG2(3, "  melting original variable %d (mapped to %d)..", v, mvar);
+	LOG2(3, "  melting original variable %d (mapped to %d)..", v, mvar);
 }
 
 void Solver::iassume(Lits_t& assumptions)
@@ -210,7 +210,7 @@ void Solver::iassume(Lits_t& assumptions)
 	int assumed = assumptions.size();
 	if (!assumed) return;
 	stats.decisions.assumed += uint64(assumed);
-	PFLOGN2(2, " Adding %d assumptions..", assumed);
+	LOGN2(2, " Adding %d assumptions..", assumed);
 	this->assumptions.reserve(assumed);
 	forall_clause(assumptions, k) {
 		const uint32 a = *k, v = ABS(a);
@@ -222,16 +222,16 @@ void Solver::iassume(Lits_t& assumptions)
 		const uint32 mvar = ABS(mlit);
 		ifrozen[mvar] = 1;
 		this->assumptions.push(mlit);
-		PFLOG2(4, "  assuming %d after mapping original assumption %d", l2i(mlit), l2i(a));
+		LOG2(4, "  assuming %d after mapping original assumption %d", l2i(mlit), l2i(a));
 	}
-	PFLDONE(2, 3);
+	LOGDONE(2, 3);
 }
 
 void Solver::iunassume()
 {
 	assert(inf.maxVar);
 	assert(stats.clauses.original);
-	PFLOGN2(2, " Resetting %d assumptions and solver state..", assumptions.size());
+	LOGN2(2, " Resetting %d assumptions and solver state..", assumptions.size());
 	if (assumptions.size()) {
 		forall_clause(assumptions, k) {
 			const uint32 a = *k;
@@ -241,7 +241,7 @@ void Solver::iunassume()
 		assumptions.clear(true);
 	}
 	cnfstate = UNSOLVED_M;
-	PFLDONE(2, 5);
+	LOGDONE(2, 5);
 	backtrack();
 	iconflict.clear();
 }
@@ -282,8 +282,8 @@ void Solver::idecide()
 void Solver::ianalyze(const uint32& failed)
 {
 	assert(vorg);
-	PFLOG2(3, " Analyzing conflict on failed assumption (%d):", l2i(failed));
-	PFLTRAIL(this, 3);
+	LOG2(3, " Analyzing conflict on failed assumption (%d):", l2i(failed));
+	LOGTRAIL(this, 3);
 	iconflict.clear();
 	iconflict.push(failed);
 	if (!DL()) return;
@@ -298,7 +298,7 @@ void Solver::ianalyze(const uint32& failed)
 			const C_REF r = sp->source[parentv];
 			if (REASON(r)) {
 				CLAUSE& c = cm[r];
-				PFLCLAUSE(4, c, "  analyzing %d reason", l2i(parent));
+				LOGCLAUSE(4, c, "  analyzing %d reason", l2i(parent));
 				forall_clause(c, k) {
 					const uint32 other = *k;
 					if (other == parent) continue;

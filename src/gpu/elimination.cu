@@ -1,6 +1,6 @@
 /***********************************************************************[elimination.cu]
 Copyright(c) 2020, Muhammad Osama - Anton Wijs,
-Technische Universiteit Eindhoven (TU/e).
+Copyright(c) 2022-present, Muhammad Osama.
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
@@ -26,11 +26,11 @@ void Solver::VE()
 {
 	if (opts.ve_en) {
 		if (interrupted()) killSolver();
-		PFLOG2(2, " Eliminating variables..");
+		LOG2(2, " Eliminating variables..");
 		inf.n_del_vars_after = 0;
 		veAsync(cnf, ot, vars, streams, cuproof.gpuStream(), cumm, cuhist, stats.sigma.calls > 1);
 		postVE();
-		PFLREDALL(this, 2, "BVE Reductions");
+		LOGREDALL(this, 2, "BVE Reductions");
 	}
 }
 
@@ -38,10 +38,10 @@ void Solver::postVE()
 {
 	size_t bytes = 0;
 	uint32* tmpmem = NULL;
-	DeviceSelect::If(NULL, bytes, vars->eligible, vars->pVarsData, tmpmem, vars->numPVs, COMPACT_VARS());
+	DeviceSelect::If(NULL, bytes, vars->eligible, vars->electedData, tmpmem, vars->numElected, COMPACT_VARS());
 	tmpmem = (uint32*) ((bytes > cumm.scatterCap()) ? cacher.allocate(bytes) : cumm.scatter());
 	if (!tmpmem) throw MEMOUTEXCEPTION();
-	DeviceSelect::If(tmpmem + 1, bytes,  vars->eligible, vars->pVarsData, vars->pVarsSize, vars->numPVs, COMPACT_VARS());
+	DeviceSelect::If(tmpmem + 1, bytes,  vars->eligible, vars->electedData, vars->electedSize, vars->numElected, COMPACT_VARS());
 	veResizeCNFAsync(cnf, cuhist);
 	if (bytes > cumm.scatterCap()) {
 		assert(tmpmem != (uint32*)cumm.scatter());
@@ -53,9 +53,9 @@ void Solver::SUB()
 {
 	if (opts.sub_en || opts.ve_plus_en) {
 		if (interrupted()) killSolver();
-		PFLOG2(2, " Eliminating (self)-subsumptions..");
+		LOG2(2, " Eliminating (self)-subsumptions..");
 		subAsync(cnf, ot, vars, cuproof.gpuStream());
-		PFLREDCL(this, 2, "SUB Reductions");
+		LOGREDCL(this, 2, "SUB Reductions");
 	}
 }
 
@@ -63,10 +63,10 @@ void Solver::BCE()
 {
 	if (opts.bce_en) {
 		if (interrupted()) killSolver();
-		if (!vars->numPVs) return;
-		PFLOG2(2, " Eliminating blocked clauses..");
+		if (!vars->numElected) return;
+		LOG2(2, " Eliminating blocked clauses..");
 		bceAsync(cnf, ot, vars, cuproof.gpuStream());
-		PFLREDCL(this, 2, "BCE Reductions");
+		LOGREDCL(this, 2, "BCE Reductions");
 	}
 }
 
@@ -74,12 +74,12 @@ void Solver::ERE()
 {
 	if (opts.ere_en) {
 		if (interrupted()) killSolver();
-		if (!vars->numPVs) return;
-		PFLOG2(2, " Eliminating redundances..");
+		if (!vars->numElected) return;
+		LOG2(2, " Eliminating redundances..");
 		ereCls = inf.nClauses;
 		cacheEliminated(streams[5]);
 		ereAsync(cnf, ot, vars, cuproof.gpuStream());
-		PFLREDCL(this, 2, "ERE Reductions");
+		LOGREDCL(this, 2, "ERE Reductions");
 		cuproof.cacheProof(0);
 		cuproof.writeProof(0);
 	}

@@ -1,6 +1,6 @@
 /***********************************************************************[backjump.cpp]
 Copyright(c) 2020, Muhammad Osama - Anton Wijs,
-Technische Universiteit Eindhoven (TU/e).
+Copyright(c) 2022-present, Muhammad Osama.
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
@@ -42,7 +42,7 @@ int Solver::where()
 		}
 		*maxPos = learntC[1];
 		learntC[1] = maxLit;
-		PFLLEARNT(this, 3);
+		LOGLEARNT(this, 3);
 	}
 	assert(level > jmplevel);
 	if (opts.chrono_en && level - jmplevel > opts.chrono_min) {

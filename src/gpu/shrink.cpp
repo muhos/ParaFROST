@@ -1,6 +1,6 @@
 /***********************************************************************[shrink.cpp]
 Copyright(c) 2020, Muhammad Osama - Anton Wijs,
-Technische Universiteit Eindhoven (TU/e).
+Copyright(c) 2022-present, Muhammad Osama.
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
@@ -31,7 +31,7 @@ void Solver::bumpShrunken(CLAUSE& c)
 	if (new_lbd <= opts.lbd_tier1) c.set_keep(1);
 	else if (old_lbd > opts.lbd_tier2 && new_lbd <= opts.lbd_tier2) c.initTier2();
 	c.set_lbd(new_lbd);
-	PFLCLAUSE(4, c, " Bumping shrunken clause with LBD %d ", new_lbd);
+	LOGCLAUSE(4, c, " Bumping shrunken clause with LBD %d ", new_lbd);
 }
 
 CL_ST Solver::rootedTop(CLAUSE& c)
@@ -127,7 +127,7 @@ bool Solver::shrink()
 {
 	if (sp->simplified >= inf.maxFrozen) return false;
 	sp->simplified = inf.maxFrozen;
-	PFLOGN2(2, " Shrinking all clauses..");
+	LOGN2(2, " Shrinking all clauses..");
 	assert(trail.size());
 	assert(conflict == NOREF);
 	assert(UNSOLVED(cnfstate));
@@ -142,9 +142,9 @@ bool Solver::shrink()
 	assert(orgs.size() == stats.clauses.original);
 	assert(learnts.size() == stats.clauses.learnt);
 #ifdef STATISTICS
-	PFLSHRINKALL(this, 2, beforeCls, beforeLits);
+	LOGSHRINKALL(this, 2, beforeCls, beforeLits);
 #else 
-	PFLDONE(2, 5);
+	LOGDONE(2, 5);
 #endif
 	return true;
 }
@@ -156,7 +156,7 @@ void Solver::shrinkTop(const bool& conditional)
 	assert(conflict == NOREF);
 	assert(UNSOLVED(cnfstate));
 	assert(sp->propagated == trail.size());
-	PFLOGN2(2, " Shrinking all clauses on top level..");
+	LOGN2(2, " Shrinking all clauses on top level..");
 	if (sp->simplified < inf.maxFrozen) sp->simplified = inf.maxFrozen;
 #ifdef STATISTICS
 	stats.shrink.calls++;
@@ -166,9 +166,9 @@ void Solver::shrinkTop(const bool& conditional)
 	assert(orgs.size() == stats.clauses.original);
 	assert(learnts.size() == stats.clauses.learnt);
 #ifdef STATISTICS
-	PFLSHRINKALL(this, 2, beforeCls, beforeLits);
+	LOGSHRINKALL(this, 2, beforeCls, beforeLits);
 #else 
-	PFLDONE(2, 5);
+	LOGDONE(2, 5);
 #endif
 }
 

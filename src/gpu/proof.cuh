@@ -1,6 +1,6 @@
 /***********************************************************************[proof.cuh]
 Copyright(c) 2021, Muhammad Osama - Anton Wijs,
-Technische Universiteit Eindhoven (TU/e).
+Copyright(c) 2022-present, Muhammad Osama.
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
@@ -21,6 +21,7 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 #include "proof.hpp"
 #include "memory.cuh"
+#include "vector.cuh"
 
 namespace ParaFROST {
 
@@ -42,8 +43,8 @@ namespace ParaFROST {
 
 		cuPROOF(cuMM& _cumm, PROOF& _proof) :
 			cumm(_cumm), proof(_proof)
-			, hostPool({NULL, 0})
-			, devicePool({NULL, 0})
+			, hostPool()
+			, devicePool()
 			, hostStream(NULL)
 			, deviceStream(NULL)
 			, deviceAdded(0)

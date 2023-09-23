@@ -1,6 +1,6 @@
 /***********************************************************************[args.cpp]
 Copyright(c) 2020, Muhammad Osama - Anton Wijs,
-Technische Universiteit Eindhoven (TU/e).
+Copyright(c) 2022-present, Muhammad Osama.
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
@@ -18,8 +18,8 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 #include "sort.hpp"
 #include "input.hpp"
+#include "banner.hpp"
 #include "control.hpp"
-#include "version.hpp"
 
 namespace ParaFROST {
 
@@ -27,33 +27,33 @@ namespace ParaFROST {
 
     void printUsage(int argc, char** argv, bool verbose)
     {
-        PFNAME("ParaFROST (Parallel Formal Reasoning On Satisfiability)", version());
-        PFAUTHORS("Muhammad Osama Mahmoud");
-        PFLOG0("");
+        LOGHEADER(0, 5, "Banner");
+        LOGFANCYBANNER(version());
+        LOGHEADER(0, 5, "Build");
         uint64 sysmem = 0;
         getCPUInfo(sysmem);
         getBuildInfo();
         size_t _gfree = 0, _gpenalty = 0;
         getGPUInfo(_gfree, _gpenalty);
-        PFLRULER('-', RULELEN);
-        PFLOG0("");
-        PFLOG1(" Usage: %sparafrost%s [<formula>.<cnf>][<option> ...]", CSOLVER, CNORMAL);
-        PFLOG0("");
+        LOGHEADER(0, 5, "Usage");
+        LOG0("");
+        LOG1(" %sparafrost%s [<formula>.<cnf>][<option> ...]", CSOLVER, CNORMAL);
+        LOG0("");
         OPTION_VEC& options = ARG::opts();
         Sort(options.data(), options.size(), ARG::ARG_CMP());
         arg_t prev_type = NULL;
-        PFLOG0("");
-        PFLOG1(" Options (simplification + solve):");
+        LOG0("");
+        LOG1(" Options (simplification + solve):");
         for (int i = 0; i < options.size(); i++) {
             if (options[i]->type != prev_type) fprintf(stdout, "c \n");
             options[i]->help(verbose);
             prev_type = options[i]->type;
         }
-        PFLOG0("");
-        PFLOG1("  %s-h or --help  print available options.%s", CHELP, CNORMAL);
-        PFLOG1("  %s--helpmore    print available options with verbose message.%s", CHELP, CNORMAL);
-        PFLOG0("");
-        PFLRULER('-', RULELEN);
+        LOG0("");
+        LOG1("  %s-h or --help  print available options.%s", CHELP, CNORMAL);
+        LOG1("  %s--helpmore    print available options with verbose message.%s", CHELP, CNORMAL);
+        LOG0("");
+        LOGRULER('-', RULELEN);
         exit(EXIT_SUCCESS);
     }
 
@@ -77,12 +77,12 @@ namespace ParaFROST {
         for (int i = 1 + ispath; i < argc; i++) {
             const size_t arglen = strlen(argv[i]);
             if (arglen == 1)
-                PFLOGE("unknown input \"%s\". Use '-h or --help' for help.", argv[i]);
+                LOGERROR("unknown input \"%s\". Use '-h or --help' for help.", argv[i]);
             else if (arglen > 1) {
                 const char* arg = argv[i];
                 int dashes = (arg[0] == '-') + (arg[1] == '-');
                 if (!dashes)
-                    PFLOGE("unknown input \"%s\". Use '-h or --help' for help.", argv[i]);
+                    LOGERROR("unknown input \"%s\". Use '-h or --help' for help.", argv[i]);
                 else if ((dashes & 1) && arg[1] == 'h')
                     printUsage(argc, argv);
                 if ((dashes & 2) && hasstr(arg, "help")) {
@@ -95,7 +95,7 @@ namespace ParaFROST {
                     int k = 0;
                     bool parsed = false;
                     while (k < options.size() && !(parsed = options[k++]->parse(argv[i])));
-                    if (!parsed)  PFLOGE("unknown input \"%s\". Use '-h or --help' for help.", argv[i]);
+                    if (!parsed)  LOGERROR("unknown input \"%s\". Use '-h or --help' for help.", argv[i]);
                     if (!ret && parsed) ret = true;
                 }
             }

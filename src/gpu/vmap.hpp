@@ -1,6 +1,6 @@
 /***********************************************************************[vmap.hpp]
 Copyright(c) 2020, Muhammad Osama - Anton Wijs,
-Technische Universiteit Eindhoven (TU/e).
+Copyright(c) 2022-present, Muhammad Osama.
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
@@ -71,7 +71,7 @@ namespace ParaFROST {
 				}
 			}
 			assert(newVars <= inf.maxVar);
-			PFLOG2(2, " Mapped %d to %d, first frozen/autartic literal \"%d\"", inf.maxVar, newVars,
+			LOG2(2, " Mapped %d to %d, first frozen/autartic literal \"%d\"", inf.maxVar, newVars,
 				firstDL0 ? (valFirstDL0 ? firstDL0 : -int(firstDL0)) : 0);
 		}
 		inline void			mapTransitive		(uint32& lit) {
@@ -119,7 +119,7 @@ namespace ParaFROST {
 				if (lit) {
 					CHECKLIT(lit);
 					*i = mapLit(lit);
-					PFLOG2(4, " Literal %d mapped to %d", l2i(lit), *i ? l2i(*i) : 0);
+					LOG2(4, " Literal %d mapped to %d", l2i(lit), *i ? l2i(*i) : 0);
 				}
 			}
 		}
@@ -129,7 +129,7 @@ namespace ParaFROST {
 				if (lit) {
 					CHECKLIT(lit);
 					*i = mapLit(lit);
-					PFLOG2(4, " Literal %d mapped to %d", l2i(lit), *i ? l2i(*i) : 0);
+					LOG2(4, " Literal %d mapped to %d", l2i(lit), *i ? l2i(*i) : 0);
 				}
 			}
 		}
@@ -174,26 +174,26 @@ namespace ParaFROST {
 		inline void			mapClause			(DEST& dest, SRC& src) {
 			assert(src.size() > 1);
 			assert(!src.deleted());
-			PFLCLAUSE(4, src, " Clause    ");
+			LOGCLAUSE(4, src, " Clause    ");
 			for (int i = 0; i < src.size(); i++) {
 				CHECKLIT(src[i]);
 				assert(UNASSIGNED(sp->value[src[i]]));
 				dest[i] = mapLit(src[i]);
 			}
-			PFLCLAUSE(4, dest, " mapped to ");
+			LOGCLAUSE(4, dest, " mapped to ");
 		}
 		template <class C>
 		inline void			mapClause			(C& c) {
 			assert(c.size() > 1);
 			assert(!c.deleted());
 			assert(!c.moved());
-			PFLCLAUSE(4, c, " Clause    ");
+			LOGCLAUSE(4, c, " Clause    ");
 			forall_clause(c, i) {
 				CHECKLIT(*i);
 				assert(UNASSIGNED(sp->value[*i]));
 				*i = mapLit(*i);
 			}
-			PFLCLAUSE(4, c, " mapped to ");
+			LOGCLAUSE(4, c, " mapped to ");
 		}
 		inline void			destroy				() {
 			sp = NULL, _mapped.clear(true);

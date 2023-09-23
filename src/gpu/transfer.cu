@@ -1,6 +1,6 @@
 /***********************************************************************[transfer.cu]
 Copyright(c) 2020, Muhammad Osama - Anton Wijs,
-Technische Universiteit Eindhoven (TU/e).
+Copyright(c) 2022-present, Muhammad Osama.
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
@@ -36,7 +36,7 @@ void Solver::reflectCNF(const cudaStream_t& s1, const cudaStream_t& s2)
 	S_REF len1 = hcnf->data().size - dataoff;
 	if (!len1) return;
 	uint32 len2 = hcnf->size() - csoff;
-	CHECK(cudaMemcpyAsync(cumm.cnfMem() + dataoff, hcnf->data().mem + dataoff, len1 * hc_bucket, cudaMemcpyHostToDevice, s1));
+	CHECK(cudaMemcpyAsync(cumm.cnfMem() + dataoff, hcnf->data().mem + dataoff, len1 * SBUCKETSIZE, cudaMemcpyHostToDevice, s1));
 	CHECK(cudaMemcpyAsync(cumm.refsMem() + csoff, hcnf->refsData() + csoff, len2 * sizeof(S_REF), cudaMemcpyHostToDevice, s2));
 	dataoff = hcnf->data().size, csoff = hcnf->size();
 }
@@ -52,12 +52,12 @@ void Solver::newBeginning()
 	assert(!hcnf->empty());
 	cm.init(hcnf->data().size);
 	if (!gopts.unified_access) {
-		sync(streams[0]), sync(streams[1]); // sync CNF caching
+		SYNC(streams[0]); SYNC(streams[1]); // sync CNF caching
 		if (gopts.profile_gpu) cutimer->stop(streams[1]), cutimer->io += cutimer->gpuTime();
 	}
 	cacheResolved(streams[2]);
 	writeBack();
-	syncAll();
+	SYNCALL;
 	if (gopts.unified_access) {
 		hcnf = NULL;
 		if (gopts.profile_gpu) cutimer->stop(), cutimer->io += cutimer->gpuTime();
@@ -72,8 +72,8 @@ void Solver::markEliminated(const cudaStream_t& _s)
 #if	defined(_DEBUG) || defined(DEBUG) || !defined(NDEBUG)
 	uint32 unassigned = inf.unassigned;
 #endif
-
-	sync(_s);
+	
+	SYNC(_s);
 
 	forall_variables(v) {
 		if (vars->cachedEliminated[v])
@@ -107,7 +107,7 @@ void Solver::cacheCNF(const cudaStream_t& s1, const cudaStream_t& s2)
 	// deleted clauses will be left (not compacted), 
 	// thus cnf->size() or hcnf->size() must always be used
 	if (interrupted()) killSolver();
-	if (simpstate == OTALLOC_FAIL) syncAll();
+	if (simpstate == OTALLOC_FAIL) SYNCALL;
 	cudaStream_t copystream;
 	if (gopts.unified_access) copystream = 0, hcnf = cnf;
 	else copystream = s2, cumm.mirrorCNF(hcnf);
@@ -134,7 +134,7 @@ void Solver::cacheCNF(const cudaStream_t& s1, const cudaStream_t& s2)
 	}
 	if (inf.nClauses) {
 		if (!gopts.unified_access) 
-			CHECK(cudaMemcpyAsync(hcnf->data().mem, cumm.cnfMem(), hcnf->data().size * hc_bucket, cudaMemcpyDeviceToHost, s2));
+			CHECK(cudaMemcpyAsync(hcnf->data().mem, cumm.cnfMem(), hcnf->data().size * SBUCKETSIZE, cudaMemcpyDeviceToHost, s2));
 		if (!reallocFailed() && opts.aggr_cnf_sort)
 			thrust::stable_sort(thrust::cuda::par(tca).on(s1), cumm.refsMem(), cumm.refsMem() + hcnf->size(), olist_cmp);
 		if (!gopts.unified_access) 
@@ -144,24 +144,24 @@ void Solver::cacheCNF(const cudaStream_t& s1, const cudaStream_t& s2)
 
 void Solver::cacheUnits(const cudaStream_t& stream) 
 {
-	sync(stream);
+	SYNC(stream);
 	if ((vars->nUnits = vars->tmpUnits.size()))
 		CHECK(cudaMemcpyAsync(vars->cachedUnits, cumm.unitsdPtr(), vars->nUnits * sizeof(uint32), cudaMemcpyDeviceToHost, stream));
-	if (gopts.sync_always) sync(stream);
+	if (gopts.sync_always) SYNC(stream);
 }
 
 void Solver::cacheEliminated(const cudaStream_t& stream)
 {
 	if (vars->isEliminatedCached) return;
 	CHECK(cudaMemcpyAsync(vars->cachedEliminated, vars->eliminated, inf.maxVar + 1, cudaMemcpyDeviceToHost, stream));
-	if (gopts.sync_always) sync(stream);
+	if (gopts.sync_always) SYNC(stream);
 	vars->isEliminatedCached = true;
 }
 
 void Solver::cacheNumUnits(const cudaStream_t& stream)
 {
 	CHECK(cudaMemcpyAsync(&vars->tmpUnits, vars->units, sizeof(cuVecU), cudaMemcpyDeviceToHost, stream));
-	if (gopts.sync_always) sync(stream);
+	if (gopts.sync_always) SYNC(stream);
 }
 
 void Solver::cacheResolved(const cudaStream_t& stream)
@@ -176,5 +176,5 @@ void Solver::cacheResolved(const cudaStream_t& stream)
 	model.resolved.resize(off + devSize);
 	uint32* start = model.resolved + off;
 	CHECK(cudaMemcpyAsync(start, devStart, devSize * sizeof(uint32), cudaMemcpyDeviceToHost, stream));
-	if (gopts.sync_always) sync(stream);
+	if (gopts.sync_always) SYNC(stream);
 }

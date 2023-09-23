@@ -1,6 +1,6 @@
 /***********************************************************************[elimination.cuh]
 Copyright(c) 2020, Muhammad Osama - Anton Wijs,
-Technische Universiteit Eindhoven (TU/e).
+Copyright(c) 2022-present, Muhammad Osama.
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
@@ -19,16 +19,25 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 #ifndef __GPU_PRIMITIVE_
 #define __GPU_PRIMITIVE_
 
+#include "key.cuh"
+#include "cnf.cuh"
 #include "grid.cuh"
+#include "vector.cuh"
+#include "shared.cuh"
 #include "atomics.cuh"
-#include "simptypes.cuh"
+#include "sclause.cuh"
+#include "options.cuh"
+#include "constants.cuh"
 
 namespace ParaFROST {
 
-	// saving nr. of 'SCLAUSE' buckets as constant
-	__constant__ uint32 dc_nbuckets = sizeof(SCLAUSE) / sizeof(uint32);
-
 	//=======================================================
+	
+	__constant__ KOptions kOpts[1];
+
+	// saving nr. of 'SCLAUSE' buckets as constant
+	__constant__ uint32 DC_NBUCKETS = SCLAUSEBUCKETS;
+
 	// constant device pointers (have to be used inside 
 	// kernels defined in kernels.cu since their first
 	// definition in a '.cu' file (symbol) was there
@@ -36,16 +45,16 @@ namespace ParaFROST {
 		uint32* d_vorg;
 		addr_t	d_lbyte;
 	};
-	__constant__ DCPTR dc_ptrs[1];
+	__constant__ DCPTR DC_PTRS[1];
 
 	#define ORIGINIZELIT(ORGLIT, LIT)							\
-		const uint32* VORGPTR = dc_ptrs->d_vorg;				\
+		const uint32* VORGPTR = DC_PTRS->d_vorg;				\
 		assert(VORGPTR);										\
 		assert(LIT > 1 && LIT < NOVAR);							\
 		uint32 ORGLIT = V2DEC(VORGPTR[ABS(LIT)], SIGN(LIT));	\
 		assert(ORGLIT > 1 && ORGLIT < NOVAR);					\
 
-	#define GETBYTECOUNT(LIT) dc_ptrs->d_lbyte[LIT]
+	#define GETBYTECOUNT(LIT) DC_PTRS->d_lbyte[LIT]
 	//=======================================================
 
 	template<class T, class CMP>
@@ -117,7 +126,7 @@ namespace ParaFROST {
 	_PFROST_D_ void devInsertionSort(T* data, const S& size, CMP cmp)
 	{
 		int i, j;
-#pragma unroll 5
+#pragma unroll
 		for (i = 1; i < size; i++) {
 			T tmp = data[i];
 			for (j = i; j > 0 && cmp(tmp, data[j - 1]); j--) data[j] = data[j - 1];
@@ -158,6 +167,7 @@ namespace ParaFROST {
 		}
 		while (i < size && i <= mid) aux[k++] = data[i++];
 		// copy sorted segment to input data
+#pragma unroll
 		for (k = from; k <= to; k++) data[k] = aux[k];
 	}
 
@@ -166,8 +176,10 @@ namespace ParaFROST {
 	{
 		int high = size - 1;
 		// divide & conquer to power-of-2 segments
+#pragma unroll
 		for (int s = 1; s < size; s <<= 1) {
 			int ds = s << 1;
+#pragma unroll
 			for (int i = 0; i < high; i += ds) {
 				int mid = i + s - 1;
 				int to = MIN(i + ds - 1, high);
@@ -280,7 +292,7 @@ namespace ParaFROST {
 	}
 
 	template<typename T>
-	_PFROST_IN_D_ void cuVec<T>::push(const T& val) 
+	_PFROST_IN_D_ void cuVec<T>::push(const T& val)
 	{
 		const uint32 idx = atomicAggInc(&sz);
 		assert(checkAtomicBound(idx, cap));
@@ -288,7 +300,7 @@ namespace ParaFROST {
 	}
 
 	template<typename T>
-	_PFROST_IN_D_ T* cuVec<T>::jump(const uint32& n) 
+	_PFROST_IN_D_ T* cuVec<T>::jump(const uint32& n)
 	{
 		const uint32 idx = atomicAdd(&sz, n);
 		assert(checkAtomicBound(idx, cap));
@@ -298,12 +310,11 @@ namespace ParaFROST {
 	_PFROST_IN_D_ S_REF* CNF::jump(S_REF& ref, const uint32& nCls, const uint32& nLits)
 	{
 		assert(nLits >= nCls);
-		const S_REF regionSize = nLits + dc_nbuckets * nCls;
+		const S_REF regionSize = nLits + DC_NBUCKETS * nCls;
 		ref = atomicAdd(&_data.size, regionSize);
 		assert(ref < _data.cap);
 		return _refs.jump(nCls);
 	}
-
 } 
 
 #endif

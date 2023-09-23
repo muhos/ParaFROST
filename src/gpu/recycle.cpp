@@ -1,6 +1,6 @@
 /***********************************************************************[recycle.cpp]
 Copyright(c) 2020, Muhammad Osama - Anton Wijs,
-Technische Universiteit Eindhoven (TU/e).
+Copyright(c) 2022-present, Muhammad Osama.
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
@@ -150,15 +150,15 @@ void Solver::recycle()
 	assert(UNSOLVED(cnfstate));
 	shrink();
 	if (canCollect()) {
-		PFLOGN2(2, " Recycling garbage..");
+		LOGN2(2, " Recycling garbage..");
 		stats.recycle.hard++;
 		assert(cm.size() >= cm.garbage());
 		const size_t bytes = cm.size() - cm.garbage();
 		CMM new_cm(bytes);
 		recycle(new_cm);
-		PFLGCMEM(2, cm, new_cm);
+		LOGGCMEM(2, cm, new_cm);
 		new_cm.migrateTo(cm);
-		PFLDONE(2, 5);
+		LOGDONE(2, 5);
 	}
 	else {
 		stats.recycle.soft++;

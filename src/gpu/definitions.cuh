@@ -1,6 +1,6 @@
 /***********************************************************************[definitions.cuh]
 Copyright(c) 2020, Muhammad Osama - Anton Wijs,
-Technische Universiteit Eindhoven (TU/e).
+Copyright(c) 2022-present, Muhammad Osama.
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
@@ -49,36 +49,36 @@ namespace ParaFROST {
 	#endif
 
 	#if	defined(_DEBUG) || defined(DEBUG) || !defined(NDEBUG)
-	#define LOGERR(MESSAGE)	\
+	#define LASTERR(MESSAGE)	\
 		do { \
 				cudaError_t ERR = cudaGetLastError(); \
 				if (cudaSuccess != ERR) { \
-					PFLOGEN("%s(%i): %s due to (%d) %s", __FILE__, __LINE__, MESSAGE, static_cast<int>(ERR), cudaGetErrorString(ERR)); \
+					LOGERRORN("%s(%i): %s due to (%d) %s", __FILE__, __LINE__, MESSAGE, static_cast<int>(ERR), cudaGetErrorString(ERR)); \
 					cudaDeviceReset(); \
 					exit(1); \
 				} \
 		} while(0)
 	#else
-	#define LOGERR(MESSAGE)	do { } while(0)
+	#define LASTERR(MESSAGE)	do { } while(0)
 	#endif
 
-	__forceinline__ void	CHECK(cudaError_t returncode)
-	{
 	#if	defined(_DEBUG) || defined(DEBUG) || !defined(NDEBUG)
-		if (returncode != cudaSuccess) {
-			PFLOGEN("CUDA runtime failure due to %s", cudaGetErrorString(returncode));
-			cudaDeviceReset();
-			exit(1);
-		}
+		#define CHECK(FUNCCALL) \
+			{ \
+				const cudaError_t returncode = FUNCCALL; \
+				if (returncode != cudaSuccess) { \
+					LOGERRORN("CUDA runtime failure due to %s", cudaGetErrorString(returncode)); \
+					cudaDeviceReset(); \
+					exit(1); \
+				} \
+			}
+	#else
+		#define CHECK(FUNCCALL) FUNCCALL
 	#endif
-	}
 
-	__forceinline__ void	sync(const cudaStream_t& stream = 0) 
-	{
-		CHECK(cudaStreamSynchronize(stream));
-	}
+	#define SYNC(STREAM) CHECK(cudaStreamSynchronize(STREAM));
 
-	#define syncAll() CHECK(cudaDeviceSynchronize());
+	#define SYNCALL CHECK(cudaDeviceSynchronize());
 
 }
 

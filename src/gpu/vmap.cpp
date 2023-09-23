@@ -1,6 +1,6 @@
 /***********************************************************************[vmap.cpp]
 Copyright(c) 2020, Muhammad Osama - Anton Wijs,
-Technische Universiteit Eindhoven (TU/e).
+Copyright(c) 2022-present, Muhammad Osama.
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
@@ -126,7 +126,7 @@ void Solver::map(const bool& sigmified)
 		if (!UNASSIGNED(sp->pbest[v])) last.rephase.best++;
 		if (!UNASSIGNED(sp->ptarget[v])) last.rephase.target++;
 	}
-	PFLOG2(2, " Variable mapping compressed %d to %d, saving %.2f KB of memory",
+	LOG2(2, " Variable mapping compressed %d to %d, saving %.2f KB of memory",
 		inf.maxVar, vmap.numVars(), double(abs(memBefore - sysMemUsed())) / KBYTE);
 	inf.maxVar = vmap.numVars();
 	inf.nDualVars = V2L(inf.maxVar + 1);

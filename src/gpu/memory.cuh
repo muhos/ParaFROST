@@ -1,6 +1,6 @@
 /***********************************************************************[memory.cuh]
 Copyright(c) 2020, Muhammad Osama - Anton Wijs,
-Technische Universiteit Eindhoven (TU/e).
+Copyright(c) 2022-present, Muhammad Osama.
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
@@ -19,7 +19,11 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 #ifndef __CU_MEMORY_
 #define __CU_MEMORY_
 
-#include "simptypes.cuh"
+#include "cnf.cuh"
+#include "table.cuh"
+#include "constants.cuh"
+#include "variables.cuh"
+#include "histogram.cuh"
 
 namespace ParaFROST {
 	/*****************************************************/
@@ -31,6 +35,19 @@ namespace ParaFROST {
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wclass-memaccess"
 #endif
+
+	struct cuPool {
+		addr_t mem;
+		size_t cap;
+		cuPool() : mem(NULL), cap(0) {}
+	};
+
+	struct cuLits {
+		uint32* mem;
+		t_iptr  thrust_lits;
+		size_t  size, cap;
+		cuLits() : mem(NULL), size(0), cap(0) {}
+	};
 
 	class cuMM {
 
@@ -53,8 +70,8 @@ namespace ParaFROST {
 
 		inline bool		hasUnifiedMem	(const size_t& min_cap, const char* name) {
 			const int64 used = cap + min_cap;
-			PFLOG2(2, " Allocating GPU unified memory for %s (used/free = %.3f/%lld MB)", name, double(used) / MBYTE, _free / MBYTE);
-			if (used >= _free) { PFLOGW("not enough memory for %s (current = %lld MB) -> skip GPU simplifier", name, used / MBYTE); return false; }
+			LOG2(2, " Allocating GPU unified memory for %s (used/free = %.3f/%lld MB)", name, double(used) / MBYTE, _free / MBYTE);
+			if (used >= _free) { LOGWARNING("not enough memory for %s (current = %lld MB) -> skip GPU simplifier", name, used / MBYTE); return false; }
 			_free -= used;
 			cap = used;
 			assert(_free >= 0);
@@ -64,8 +81,8 @@ namespace ParaFROST {
 		}
 		inline bool		hasDeviceMem	(const size_t& min_cap, const char* name) {
 			const int64 used = dcap + min_cap;
-			PFLOG2(2, " Allocating GPU-only memory for %s (used/free = %.3f/%lld MB)", name, double(used) / MBYTE, _free / MBYTE);
-			if (used >= _free) { PFLOGW("not enough memory for %s (current = %lld MB) -> skip GPU simplifier", name, used / MBYTE); return false; }
+			LOG2(2, " Allocating GPU-only memory for %s (used/free = %.3f/%lld MB)", name, double(used) / MBYTE, _free / MBYTE);
+			if (used >= _free) { LOGWARNING("not enough memory for %s (current = %lld MB) -> skip GPU simplifier", name, used / MBYTE); return false; }
 			_free -= used;
 			dcap = used;
 			assert(_free >= 0);
@@ -127,6 +144,34 @@ namespace ParaFROST {
 		}
 		inline void		cacheCNFPtr		(const CNF* d_cnf, const cudaStream_t& _s = 0) {
 			CHECK(cudaMemcpyAsync(pinned_cnf, d_cnf, sizeof(CNF), cudaMemcpyDeviceToHost, _s));
+		}
+		inline void		prefetchCNF2D	(const cudaStream_t& _s = 0) {
+			#if !defined(_WIN32)
+			if (devProp.major > 5) {
+				LOGN2(2, " Prefetching CNF to global memory..");
+				CHECK(cudaMemAdvise(cnfPool.mem, cnfPool.cap, cudaMemAdviseSetPreferredLocation, MASTER_GPU));
+				CHECK(cudaMemPrefetchAsync(cnfPool.mem, cnfPool.cap, MASTER_GPU, _s));
+				LOGDONE(2, 5);
+			}
+			#endif	
+		}
+		inline void		prefetchCNF2H	(const cudaStream_t& _s = 0) {
+			#if !defined(_WIN32)
+			if (devProp.major > 5) {
+				LOGN2(2, " Prefetching CNF to system memory..");
+				CHECK(cudaMemPrefetchAsync(cnfPool.mem, cnfPool.cap, cudaCpuDeviceId, _s));
+				LOGDONE(2, 5);
+			}
+			#endif	
+		}
+		inline void		prefetchOT2H	(const cudaStream_t& _s = 0) {
+			#if !defined(_WIN32)
+			if (devProp.major > 5) {
+				LOGN2(2, " Prefetching OT to system memory..");
+				CHECK(cudaMemPrefetchAsync(otPool.mem, otPool.cap, cudaCpuDeviceId, _s));
+				LOGDONE(2, 5);
+			}
+			#endif	
 		}
 		void	        resizeCNFAsync	(CNF*, const S_REF&, const uint32&);
 		bool			resizeCNF		(CNF*&, const size_t&, const size_t&);

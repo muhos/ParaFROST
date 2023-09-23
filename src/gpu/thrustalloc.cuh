@@ -1,6 +1,6 @@
 /***********************************************************************[thrustalloc.cuh]
 Copyright(c) 2020, Muhammad Osama - Anton Wijs,
-Technische Universiteit Eindhoven (TU/e).
+Copyright(c) 2022-present, Muhammad Osama.
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
@@ -19,6 +19,7 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 #ifndef __THRUST_MEMORY_
 #define __THRUST_MEMORY_
 
+#include <cuda_runtime.h>
 #include <thrust/system/cuda/vector.h>
 #include <thrust/device_ptr.h>
 #include "logging.hpp"

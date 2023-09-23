@@ -1,6 +1,6 @@
 /***********************************************************************[simptypes.cuh]
 Copyright(c) 2020, Muhammad Osama - Anton Wijs,
-Technische Universiteit Eindhoven (TU/e).
+Copyright(c) 2022-present, Muhammad Osama.
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
@@ -262,13 +262,13 @@ namespace ParaFROST {
 			assert(_data.cap);
 			assert(_data.size == 0);
 			assert(_refs.empty());
-			PFLOGN2(2, " Compacting simplified CNF (%d to %d) on CPU..", src->size(), inf.nClauses);
+			LOGN2(2, " Compacting simplified CNF (%d to %d) on CPU..", src->size(), inf.nClauses);
 			for (uint32 i = 0; i < src->size(); i++) {
 				SCLAUSE& s = src->clause(i);
 				if (s.learnt() || s.original())
 					newClause(s);
 			}
-			PFLDONE(2, 5);
+			LOGDONE(2, 5);
 		}
 		_PFROST_IN_D_			S_REF*		jump	(S_REF&, const uint32&, const uint32&);
 	};
@@ -303,12 +303,12 @@ namespace ParaFROST {
 			for (uint32 v = 1; v <= inf.maxVar; v++) {
 				uint32 p = V2L(v), n = NEG(p);
 				if (_lists[p].size() > _lists[p].capacity()) {
-					PFLOGEN("list(%d) size exceeded allocated capacity (cap: %d, sz: %d):",
+					LOGERRORN("list(%d) size exceeded allocated capacity (cap: %d, sz: %d):",
 						v, _lists[v].capacity(), _lists[v].size());
 					return false;
 				}
 				if (_lists[n].size() > _lists[n].capacity()) {
-					PFLOGEN("list(%d) size exceeded allocated capacity (cap: %d, sz: %d):",
+					LOGERRORN("list(%d) size exceeded allocated capacity (cap: %d, sz: %d):",
 						v, _lists[v].capacity(), _lists[v].size());
 					return false;
 				}

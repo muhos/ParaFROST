@@ -1,6 +1,6 @@
 /***********************************************************************[subsume.cpp]
 Copyright(c) 2020, Muhammad Osama - Anton Wijs,
-Technische Universiteit Eindhoven (TU/e).
+Copyright(c) 2022-present, Muhammad Osama.
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
@@ -134,14 +134,14 @@ inline CL_ST Solver::subsumeClause(CLAUSE& c, const C_REF& cref)
 	unmarkLits(c);
 	if (!s) return 0;
 	if (self) {
-		PFLCLAUSE(3, c, "  candidate ");
-		PFLCLAUSE(3, (*s), "  strengthened by ");
+		LOGCLAUSE(3, c, "  candidate ");
+		LOGCLAUSE(3, (*s), "  strengthened by ");
 		strengthen(c, FLIP(self));
 		return -1;
 	}
 	else {
-		PFLCLAUSE(3, c, "  candidate ");
-		PFLCLAUSE(3, (*s), "  subsumed by ");
+		LOGCLAUSE(3, c, "  candidate ");
+		LOGCLAUSE(3, (*s), "  subsumed by ");
 		removeSubsumed(c, cref, s);
 		return 1;
 	}
@@ -203,7 +203,7 @@ bool Solver::subsumeAll()
 			if (c.size() > 2) c.markSubsume();
 		}
 	}
-	PFLOG2(2, " Scheduled %d (%.2f %%) clauses for subsumption", scheduled.size(), percent((double)scheduled.size(), (double)maxClauses()));
+	LOG2(2, " Scheduled %d (%.2f %%) clauses for subsumption", scheduled.size(), percent((double)scheduled.size(), (double)maxClauses()));
 	wot.resize(inf.nDualVars);
 	bot.resize(inf.nDualVars);
 	for (CSIZE* i = scheduled; i != scheduled.end(); i++) {
@@ -213,7 +213,7 @@ bool Solver::subsumeAll()
 		const C_REF r = i->ref;
 		CLAUSE& c = cm[r];
 		assert(!c.deleted());
-		PFLCLAUSE(4, c, "  subsuming ");
+		LOGCLAUSE(4, c, "  subsuming ");
 		if (c.size() > 2 && c.subsume()) {
 			c.initSubsume();
 			CL_ST st = subsumeClause(c, r);
@@ -249,7 +249,7 @@ bool Solver::subsumeAll()
 		}
 	}
 ending:
-	PFLOG2(2, " Subsume %lld: removed %lld and strengthened %lld clauses", stats.subsume.calls, subsumed, strengthened);
+	LOG2(2, " Subsume %lld: removed %lld and strengthened %lld clauses", stats.subsume.calls, subsumed, strengthened);
 	if (scheduled.size() == checked) sp->clearSubsume();
 	forall_cnf(shrunken, i) { markSubsume(cm[*i]); }
 	shrunken.clear(true), scheduled.clear(true), vhist.clear(true);
@@ -270,7 +270,7 @@ void Solver::subsume()
 	bool success = subsumeAll();
 	rebuildWT(opts.subsume_priorbins);
 	filterOrg();
-	if (retrail()) PFLOG2(2, " Propagation after subsume proved a contradiction");
+	if (retrail()) LOG2(2, " Propagation after subsume proved a contradiction");
 	INCREASE_LIMIT(this, subsume, stats.subsume.calls, nlognlogn, true);
 	printStats(success, 'u', CORANGE1);
 }

@@ -1,6 +1,6 @@
 /***********************************************************************[constants.hpp]
 Copyright(c) 2020, Muhammad Osama - Anton Wijs,
-Technische Universiteit Eindhoven (TU/e).
+Copyright(c) 2022-present, Muhammad Osama.
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
@@ -25,9 +25,7 @@ extern bool quiet_en;
 extern int verbose;
 
 namespace ParaFROST {
-	//=======================================//
-	//      Solver Parameters & Macros    //
-	//=======================================//
+
 	#define MBYTE			0x00100000
 	#define KBYTE			0x00000400
 	#define GBYTE			0x40000000
@@ -49,7 +47,7 @@ namespace ParaFROST {
 	#define PROOF_DELETED	100 // 'd'
 	#define UNSOLVED(x)		((x) & UNSOLVED_M)
 	#define RESETSTATE(x)	(x = UNSOLVED_M)
-	//======== DANGER ZONE =========
+
 	#define NEG_SIGN		0x00000001
 	#define HASH_MASK		0x0000001F
 	#define MAX_DLC			0x00000003
@@ -97,7 +95,8 @@ namespace ParaFROST {
 	#define NEQUAL(x,y)		((x) ^ (y))
 	#define MIN(x,y)		((x) < (y) ? (x) : (y))
 	#define MAX(x,y)		((x) > (y) ? (x) : (y))
-	//==============================
+	#define RESETSTRUCT(MEMPTR) \
+		memset(MEMPTR, 0, sizeof(*MEMPTR));
 	
 }
 

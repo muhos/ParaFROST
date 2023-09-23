@@ -1,6 +1,6 @@
 /***********************************************************************[printer.cpp]
 Copyright(c) 2020, Muhammad Osama - Anton Wijs,
-Technische Universiteit Eindhoven (TU/e).
+Copyright(c) 2022-present, Muhammad Osama.
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
@@ -22,33 +22,24 @@ using namespace ParaFROST;
 
 void Solver::printTable()
 {
-	const char* header = " Progress ";
-	size_t len = strlen(header);
-	if (RULELEN < len) PFLOGE("ruler length is smaller than the table title");
-	size_t gap = (RULELEN - strlen(header)) / 2;
-	PUTCH('c');
-	REPCH('-', gap);
-	PRINT("%s%s%s", CHEADER, header, CNORMAL);
-	REPCH('-', gap);
-	PUTCH('\n');
 	string h = "";
-	h = "              ORG                Conflicts   Restarts            Learnt           V(%)  C(%)";
-	if (RULELEN < h.size()) PFLOGE("ruler length is smaller than the table header");
+	h = "              ORG                Conflicts     Restarts            Learnt         V(%)  C(%)";
+	if (RULELEN < h.size()) LOGERROR("ruler length is smaller than the table header");
 	PUTCH('c');
 	PRINT("%s%s%s", CHEADER, h.c_str(), CNORMAL);
 	REPCH(' ', RULELEN - h.size());
 	PUTCH('\n');
-	h = "      V         C         L                                C          L     L/C";
+	h = "      V         C         L                                C          L       L/C";
 	if (RULELEN < h.size())
-		PFLOGE("ruler length is smaller than the table header");
+		LOGERROR("ruler length is smaller than the table header");
 	PUTCH('c');
 	PRINT("%s%s%s", CHEADER, h.c_str(), CNORMAL);
 	REPCH(' ', RULELEN - h.size());
 	PUTCH('\n');
-	solLine = "  %9d %9d %10d %10d %8d %9d %10d %6d  %3d%s %3d%s", solLineLen = 91;
+    LOGRULER('-', RULELEN);
+	solLine = " %9d %9d %10d %10d %8d %9d %10d %6d  %3d%s  %3d%s", solLineLen = 91;
 	if (RULELEN < solLineLen)
-		PFLOGE("ruler length is smaller than the progress line");
-	PFLRULER('-', RULELEN);
+		LOGERROR("ruler length is smaller than the progress line");
 }
 
 void Solver::printStats(const bool& _p, const Byte& _t, const char* _c)
@@ -58,7 +49,7 @@ void Solver::printStats(const bool& _p, const Byte& _t, const char* _c)
 		const int vr = (int)percent(maxActive(), inf.orgVars);
 		const int cr = (int)percent((double)stats.clauses.original, inf.nOrgCls);
 		solLine[0] = _t;
-		PFLOGN0("");
+		LOGN0("");
 		SETCOLOR(_c, stdout);
 		PRINT(solLine.c_str(),
 			maxActive(), stats.clauses.original, stats.literals.original,
@@ -84,7 +75,7 @@ void Solver::printVars(const uint32* arr, const uint32& size, const LIT_ST& type
 			PRINT("%4d", arr[i] + 1);
 		}
 		PRINT("  ");
-		if (i && i < size - 1 && i % 10 == 0) { PUTCH('\n'); PFLOGN0("\t\t\t"); }
+		if (i && i < size - 1 && i % 10 == 0) { PUTCH('\n'); LOGN0("\t\t\t"); }
 	}
 	PUTCH(']');
 	PUTCH('\n');
@@ -101,20 +92,20 @@ void Solver::printClause(const Lits_t& c)
 void Solver::printTrail(const uint32& off)
 {
 	if (trail.empty()) return;
-	PFLOGN1(" Trail (size = %d)->[", trail.size());
+	LOGN1(" Trail (size = %d)->[", trail.size());
 	for (uint32 i = off; i < trail.size(); i++) {
 		PRINT("%4d@%-4d", l2i(trail[i]), l2dl(trail[i]));
-		if (i && i < trail.size() - 1 && i % 8 == 0) { PUTCH('\n'); PFLOGN0("\t\t\t"); }
+		if (i && i < trail.size() - 1 && i % 8 == 0) { PUTCH('\n'); LOGN0("\t\t\t"); }
 	}
 	PUTCH(']'); PUTCH('\n');
 }
 
 void Solver::printCNF(const BCNF& cnf, const int& off)
 {
-	PFLOG1("\tHost CNF(size = %d)", cnf.size());
+	LOG1("\tHost CNF(size = %d)", cnf.size());
 	for (uint32 i = off; i < cnf.size(); i++) {
 		if (cm[cnf[i]].size()) {
-			PFLCLAUSE(1, cm[cnf[i]], " C(%d)->", i);
+			LOGCLAUSE(1, cm[cnf[i]], " C(%d)->", i);
 		}
 	}
 }
@@ -122,14 +113,14 @@ void Solver::printCNF(const BCNF& cnf, const int& off)
 void Solver::printOL(const OL& list, const bool& host) {
 	CNF* cs = host ? hcnf : cnf;
 	for (uint32 i = 0; i < list.size(); i++) {
-		PFLOGN1(" C(%lld)->", uint64(list[i]));
+		LOGN1(" C(%lld)->", uint64(list[i]));
 		(*cs)[list[i]].print();
 	}
 }
 
 void Solver::printOL(const uint32& lit, const bool& host) {
 	if ((*ot)[lit].size() == 0) return;
-	PFLOG1(" List(%d):", l2i(lit));
+	LOG1(" List(%d):", l2i(lit));
 	printOL((*ot)[lit], host);
 }
 
@@ -137,10 +128,10 @@ void Solver::printWL(const uint32& lit, const bool& bin)
 {
 	CHECKLIT(lit);
 	const WL& ws = wt[lit];
-	if (ws.size()) PFLOG1("  list(%d):", -l2i(lit));
+	if (ws.size()) LOG1("  list(%d):", -l2i(lit));
 	for (int i = 0; i < ws.size(); i++) {
 		if (!ws[i].binary() && bin) continue;
-		PFLCLAUSE(1, cm[ws[i].ref], "  %sW(r: %-4zd, sz: %-4d, i: %-4d)->%s",
+		LOGCLAUSE(1, cm[ws[i].ref], "  %sW(r: %-4zd, sz: %-4d, i: %-4d)->%s",
 			CLOGGING, ws[i].ref, ws[i].size, l2i(ws[i].imp), CNORMAL);
 	}
 }
@@ -149,7 +140,7 @@ void Solver::printWL(const WL& ws, const bool& bin)
 {
 	for (int i = 0; i < ws.size(); i++) {
 		if (!ws[i].binary() && bin) continue;
-		PFLCLAUSE(1, cm[ws[i].ref], "  %sW(r: %-4zd, sz: %-4d, i: %-4d)->%s",
+		LOGCLAUSE(1, cm[ws[i].ref], "  %sW(r: %-4zd, sz: %-4d, i: %-4d)->%s",
 			CLOGGING, ws[i].ref, ws[i].size, l2i(ws[i].imp), CNORMAL);
 	}
 }
@@ -170,16 +161,16 @@ void Solver::printBinaries(const uint32& v)
 
 void Solver::printWT()
 {
-	PFLOG0(" Watches:");
+	LOG0(" Watches:");
 	for (uint32 lit = 2; lit < wt.size(); lit++)
 		printWL(lit);
 }
 
 void Solver::printHeap()
 {
-	PFLOG1(" Heap (size = %d):", vsids.size());
+	LOG1(" Heap (size = %d):", vsids.size());
 	for (uint32 i = 0; i < vsids.size(); i++)
-		PFLOG1(" h(%d)->(v: %d, a: %g)", i, vsids[i], activity[vsids[i]]);
+		LOG1(" h(%d)->(v: %d, a: %g)", i, vsids[i], activity[vsids[i]]);
 }
 
 void Solver::printSource()
@@ -189,13 +180,13 @@ void Solver::printSource()
 		uint32 v = ABS(trail[i]);
 		C_REF r = sp->source[v];
 		if (REASON(r))
-			PFLCLAUSE(1, cm[r], " Source(v:%d, r:%zd)->", v, r);
+			LOGCLAUSE(1, cm[r], " Source(v:%d, r:%zd)->", v, r);
 	}
 }
 
 void Solver::printLearnt()
 {
-	PFLOGN1(" %sLearnt(", CCONFLICT);
+	LOGN1(" %sLearnt(", CCONFLICT);
 	for (int i = 0; i < learntC.size(); i++)
 		PRINT("%d@%-6d", l2i(learntC[i]), l2dl(learntC[i]));
 	PRINT(")%s\n", CNORMAL);
@@ -205,7 +196,7 @@ void Solver::printSortedStack(const int& tail)
 {
 	if (!tail) return;
 	if (vhist.empty()) return;
-	PFLOGN1("  %ssorted(", CMAGENTA);
+	LOGN1("  %ssorted(", CMAGENTA);
 	for (int i = 0; i < tail; i++) {
 		const uint32 lit = sp->tmpstack[i];
 		PRINT("%d:%-4d", l2i(lit), vhist[lit]);

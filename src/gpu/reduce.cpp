@@ -1,6 +1,6 @@
 /***********************************************************************[reduce.cpp]
 Copyright(c) 2020, Muhammad Osama - Anton Wijs,
-Technische Universiteit Eindhoven (TU/e).
+Copyright(c) 2022-present, Muhammad Osama.
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
@@ -37,7 +37,7 @@ bool Solver::chronoHasRoot() {
 		uint32 lit = trail[i];
 		assert(!unassigned(lit));
 		if (!l2dl(lit)) {
-			PFLOG2(2, " Found root unit(%d) due to chronological backtracking", l2i(lit));
+			LOG2(2, " Found root unit(%d) due to chronological backtracking", l2i(lit));
 			backtrack();
 			if (BCP()) { learnEmpty(); return false; }
 			return true;
@@ -101,7 +101,7 @@ void Solver::reduceLearnts()
 	const C_REF rsize = reduced.size();
 	if (rsize) {
 		C_REF pivot = opts.reduce_perc * rsize;
-		PFLOGN2(2, " Reducing learnt database up to (%zd clauses)..", pivot);
+		LOGN2(2, " Reducing learnt database up to (%zd clauses)..", pivot);
 		end = reduced.end();
 		C_REF* head = reduced.data();
 		std::stable_sort(head, end, LEARNT_CMP(cm));
@@ -123,6 +123,6 @@ void Solver::reduceLearnts()
 			if (c.size() > limit.keptsize) limit.keptsize = c.size();
 		}
 		reduced.clear();
-		PFLENDING(2, 5, "(kept lbd: %d, size: %d)", limit.keptlbd, limit.keptsize);
+		LOGENDING(2, 5, "(kept lbd: %d, size: %d)", limit.keptlbd, limit.keptsize);
 	}
 }

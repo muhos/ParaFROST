@@ -1,6 +1,6 @@
 /***********************************************************************[function.cuh]
 Copyright(c) 2021, Muhammad Osama - Anton Wijs,
-Technische Universiteit Eindhoven (TU/e).
+Copyright(c) 2022-present, Muhammad Osama.
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
@@ -16,8 +16,8 @@ You should have received a copy of the GNU General Public License
 along with this program.  If not, see <https://www.gnu.org/licenses/>.
 **********************************************************************************/
 
-#ifndef __GPU_FUN_
-#define __GPU_FUN_
+#ifndef __FUN_
+#define __FUN_
 
 #include "elimination.cuh"
 
@@ -32,34 +32,38 @@ namespace ParaFROST {
 	  0xff00ff00ff00ff00ULL, 0xffff0000ffff0000ULL, 0xffffffff00000000ULL,
 	};
 
-	typedef uint64 Fun[FUNTABLEN];
-
+	constexpr int	 MAXFUNVAR = 12;
+	constexpr uint32 FUNTABLEN = 64;
 	constexpr uint64 ALLONES = ~0ULL;
+
+	typedef uint64 Fun[FUNTABLEN];
 
 	_PFROST_D_ void falsefun(Fun f)
 	{
 		#pragma unroll
-		for (int i = 0; i < FUNTABLEN; i++)
+		for (uint32 i = 0; i < FUNTABLEN; ++i)
 			f[i] = 0ULL;
 	}
 
 	_PFROST_D_ void truefun(Fun f)
 	{
 		#pragma unroll
-		for (int i = 0; i < FUNTABLEN; i++)
+		for (uint32 i = 0; i < FUNTABLEN; ++i)
 			f[i] = ALLONES;
 	}
 
 	_PFROST_D_ bool isfalsefun(const Fun f)
 	{
-		for (int i = 0; i < FUNTABLEN; i++)
+		#pragma unroll
+		for (uint32 i = 0; i < FUNTABLEN; ++i)
 			if (f[i]) return false;
 		return true;
 	}
 
 	_PFROST_D_ bool istruefun(const Fun f)
 	{
-		for (int i = 0; i < FUNTABLEN; i++)
+		#pragma unroll
+		for (uint32 i = 0; i < FUNTABLEN; ++i)
 			if (f[i] != ALLONES) return false;
 		return true;
 	}
@@ -67,21 +71,21 @@ namespace ParaFROST {
 	_PFROST_D_ void orfun(Fun a, const Fun b)
 	{
 		#pragma unroll
-		for (int i = 0; i < FUNTABLEN; i++)
+		for (uint32 i = 0; i < FUNTABLEN; ++i)
 			a[i] |= b[i];
 	}
 
 	_PFROST_D_ void andfun(Fun a, const Fun b)
 	{
 		#pragma unroll
-		for (int i = 0; i < FUNTABLEN; i++)
+		for (uint32 i = 0; i < FUNTABLEN; ++i)
 			a[i] &= b[i];
 	}
 
 	_PFROST_D_ void copyfun(Fun a, const Fun b)
 	{
 		#pragma unroll
-		for (int i = 0; i < FUNTABLEN; i++)
+		for (uint32 i = 0; i < FUNTABLEN; ++i)
 			a[i] = b[i];
 	}
 
@@ -92,7 +96,7 @@ namespace ParaFROST {
 			uint64 val = MAGICCONSTS[v];
 			if (sign) val = ~val;
 			#pragma unroll
-			for (int i = 0; i < FUNTABLEN; i++)
+			for (uint32 i = 0; i < FUNTABLEN; ++i)
 				f[i] |= val;
 		}
 		else {
@@ -100,7 +104,7 @@ namespace ParaFROST {
 			int j = 0;
 			int sv = 1 << (v - 6);
 			#pragma unroll
-			for (int i = 0; i < FUNTABLEN; i++) {
+			for (uint32 i = 0; i < FUNTABLEN; ++i) {
 				f[i] |= val;
 				if (++j >= sv) {
 					val = ~val;
@@ -110,13 +114,15 @@ namespace ParaFROST {
 		}
 	}
 
-	_PFROST_D_ bool buildfuntab(
+	_PFROST_D_ bool buildfuntab
+	(
 		const uint32& lit,
 		const uint32* varcore,
 		CNF& cnf,
 		OT& ot, 
 		Fun cls, // shared memory
-		Fun f)
+		Fun f    // local memory
+	)
 	{
 		assert(lit > 1);
 		truefun(f);
@@ -151,11 +157,11 @@ namespace ParaFROST {
 		const OL& ol, 
 		CNF& cnf, 
 		Fun cls, // shared memory
-		Fun fun, 
+		Fun fun, // local memory
 		bool& core)
 	{
 		assert(lit > 1);
-		for (int j = 0; j < tail; j++) {
+		for (int j = 0; j < tail; ++j) {
 			SCLAUSE& c = cnf[ol[j]];
 			if (c.learnt()) continue;
 			assert(!c.deleted());
@@ -181,7 +187,8 @@ namespace ParaFROST {
 	_PFROST_D_ uint64 collapsefun(const Fun b, const Fun c)
 	{
 		uint64 allzero = 0;
-		for (int i = 0; i < FUNTABLEN; i++)
+		#pragma unroll
+		for (uint32 i = 0; i < FUNTABLEN; ++i)
 			allzero |= (b[i] & c[i]);
 		return allzero;
 	}
@@ -200,9 +207,9 @@ namespace ParaFROST {
 		assert(!nElements);
 		assert(!nAddedCls);
 		assert(!nAddedLits);
-		const int rlimit = dc_options[4];
+		const int rlimit = kOpts->ve_clause_max;
 		// check if proof bytes has to be calculated
-		if (dc_options[6]) {
+		if (kOpts->proof_en) {
 			uint32 proofBytes = 0;
 			forall_occurs(me, i) {
 				SCLAUSE& ci = cnf[*i];
@@ -221,8 +228,10 @@ namespace ParaFROST {
 					}
 				}
 			}
+
 			// GUARD for compressed proof size and #units
 			if (nElements > ADDEDCLS_MAX || proofBytes > ADDEDPROOF_MAX) return true;
+
 			nElements = ENCODEPROOFINFO(nElements, proofBytes);
 
 			#if FUN_DBG
@@ -248,20 +257,24 @@ namespace ParaFROST {
 				}
 			}
 		}
+
 		// GUARD for compressed variable limits
 		if (nAddedCls > ADDEDCLS_MAX || nAddedLits > ADDEDLITS_MAX) return true;
+
 		// check bound on literals
-		if (dc_options[5]) {
+		if (kOpts->ve_lbound_en) {
 			uint32 nLitsBefore = 0;
 			countLitsBefore(cnf, me, nLitsBefore);
 			countLitsBefore(cnf, other, nLitsBefore);
 			if (nAddedLits > nLitsBefore) return true;
 		}
+
 		return false;
-		}
+	}
 
 	_PFROST_D_ bool find_fun_gate(
 		const uint32& p,
+		const uint32& n,
 		const uint32& nOrgCls,
 		const uint32* varcore,
 		CNF& cnf, 
@@ -273,9 +286,10 @@ namespace ParaFROST {
 	{
 		assert(p > 1);
 		assert(varcore);
-		const uint32 n = NEG(p);
 		assert(checkMolten(cnf, ot[p], ot[n]));
+
 		uint64* cls = (uint64*)shmem;
+
 		Fun pos, neg;
 		if (buildfuntab(p, varcore, cnf, ot, cls, pos) && buildfuntab(n, varcore, cnf, ot, cls, neg)) {
 			if (!collapsefun(pos, neg)) {
@@ -285,12 +299,14 @@ namespace ParaFROST {
 				bool core = false;
 				for (int i = poss.size() - 1; i >= 0; i--) {
 					copyfun(fun, neg);
-					buildfuntab(p, varcore, i, poss, cnf, cls, fun, core);
+					if (cnf[poss[i]].original())
+						buildfuntab(p, varcore, i, poss, cnf, cls, fun, core);
 				}
 				OL& negs = ot[n];
 				for (int i = negs.size() - 1; i >= 0; i--) {
 					truefun(fun);
-					buildfuntab(n, varcore, i, negs, cnf, cls, fun, core);
+					if (cnf[negs[i]].original())
+						buildfuntab(n, varcore, i, negs, cnf, cls, fun, core);
 				}
 				// check resolvability
 				nElements = 0, nAddedCls = 0, nAddedLits = 0;
@@ -310,7 +326,7 @@ namespace ParaFROST {
 		return false;
 	}
 
-} // parafrost namespace
+} 
 
 
 #endif

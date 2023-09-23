@@ -1,6 +1,6 @@
 /***********************************************************************[memory.cu]
 Copyright(c) 2020, Muhammad Osama - Anton Wijs,
-Technische Universiteit Eindhoven (TU/e).
+Copyright(c) 2022-present, Muhammad Osama.
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
@@ -16,9 +16,10 @@ You should have received a copy of the GNU General Public License
 along with this program.  If not, see <https://www.gnu.org/licenses/>.
 **********************************************************************************/
 
-#include "primitives.cuh"
+#include "grid.cuh"
 #include "memory.cuh"
 #include "options.cuh"
+#include "definitions.hpp"
 #include <cub/device/device_scan.cuh>
 #include <cub/device/device_select.cuh>
 
@@ -28,13 +29,12 @@ using namespace ParaFROST;
 //=============================//
 //    CUDA memory management   //
 //=============================//
-const size_t hc_srsize = sizeof(S_REF);
-const size_t hc_scsize = sizeof(SCLAUSE);
-const size_t hc_otsize = sizeof(OT);
-const size_t hc_olsize = sizeof(OL);
-const size_t hc_cnfsize = sizeof(CNF);
-const size_t hc_varsize = sizeof(uint32);
-const size_t hc_cuvecsize = sizeof(cuVecU);
+constexpr size_t HC_SREFSIZE = sizeof(S_REF);
+constexpr size_t HC_OTSIZE	 = sizeof(OT);
+constexpr size_t HC_OLSIZE   = sizeof(OL);
+constexpr size_t HC_CNFSIZE  = sizeof(CNF);
+constexpr size_t HC_VARSIZE  = sizeof(uint32);
+constexpr size_t HC_VECSIZE  = sizeof(cuVecU);
 
 __global__ void resizeCNF_k(CNF* cnf, const S_REF d_size, const uint32 cs_size)
 {
@@ -58,15 +58,15 @@ void cuMM::resizeCNFAsync(CNF* dcnf, const S_REF& data_size, const uint32& cs_si
 	assert(cs_size);
 	resizeCNF_k << <1, 1 >> > (dcnf, data_size, cs_size);
 	if (gopts.sync_always) {
-		LOGERR("Resizing CNF failed");
-		sync();
+		LASTERR("Resizing CNF failed");
+		SYNC(0);
 	}
 }
 
 uint32* cuMM::resizeLits(const size_t& min_lits)
 {
 	assert(min_lits);
-	const size_t min_cap = min_lits * hc_varsize;
+	const size_t min_cap = min_lits * HC_VARSIZE;
 	if (litsPool.cap < min_cap) {
 		DFREE(litsPool);
 		assert(litsPool.mem == NULL);
@@ -82,9 +82,9 @@ uint32* cuMM::resizeLits(const size_t& min_lits)
 bool cuMM::allocHist(cuHist& cuhist, const bool& proofEnabled)
 {
 	assert(inf.nDualVars == V2L(inf.maxVar + 1ULL));
-	const size_t segBytes = inf.nDualVars * hc_srsize;
-	const size_t histBytes = inf.nDualVars * hc_varsize;
-	const size_t varsBytes = (inf.maxVar + 1) * hc_varsize;
+	const size_t segBytes = inf.nDualVars * HC_SREFSIZE;
+	const size_t histBytes = inf.nDualVars * HC_VARSIZE;
+	const size_t varsBytes = (inf.maxVar + 1) * HC_VARSIZE;
 	size_t min_cap = segBytes + histBytes + varsBytes;
 	if (proofEnabled) 
 		min_cap += inf.nDualVars;
@@ -118,23 +118,25 @@ bool cuMM::allocVars(VARS*& vars, const size_t& resolvedCap)
 	assert(vars == NULL);
 	assert(resolvedCap && resolvedCap < UINT32_MAX);
 	vars = new VARS();
-	const size_t uintVec_sz = inf.maxVar * hc_varsize;
+	const size_t uintVec_sz = inf.maxVar * HC_VARSIZE;
 	const size_t varsize = inf.maxVar + 1;
-	const size_t scores_sz = varsize * hc_varsize;
-	const size_t resolved_sz = resolvedCap * hc_varsize;
-	size_t min_cap = hc_cuvecsize * 3;                             // headers: (pVars + units + resolved) 
-	min_cap += uintVec_sz * 3 + scores_sz + resolved_sz + varsize; // data:    (pVars + units + eligible) + scores + resolved + eliminated
+	const size_t scores_sz = varsize * HC_VARSIZE;
+	const size_t resolved_sz = resolvedCap * HC_VARSIZE;
+	size_t min_cap = HC_VECSIZE * 3;                             // headers: (elected + units + resolved) 
+	min_cap += uintVec_sz * 3 + scores_sz + resolved_sz + varsize; // data:    (elected + units + eligible) + scores + resolved + eliminated
 	assert(min_cap);
 	if (!hasUnifiedMem(min_cap, "Fixed")) return false;
 	CHECK(cudaMallocManaged((void**)&varsPool.mem, min_cap));
+	CHECK(cudaMemsetAsync(varsPool.mem, 0, min_cap));
 	addr_t ea = varsPool.mem, end = ea + min_cap;
-	vars->pVars = (cuVecU*)ea, ea += hc_cuvecsize;
-	vars->units = (cuVecU*)ea, ea += hc_cuvecsize;
-	vars->resolved = (cuVecU*)ea, ea += hc_cuvecsize;
+	vars->elected = (cuVecU*)ea, ea += HC_VECSIZE;
+	vars->units = (cuVecU*)ea, ea += HC_VECSIZE;
+	vars->resolved = (cuVecU*)ea, ea += HC_VECSIZE;
 	uint32* uintPtr = (uint32*)ea;
-	vars->pVars->alloc(uintPtr, inf.maxVar), uintPtr += inf.maxVar, d_units = uintPtr;
-	vars->pVarsData = vars->pVars->data();
-	vars->pVarsSize = vars->pVars->sizeptr();
+	vars->electedData = uintPtr;
+	vars->electedSize = (uint32*)(vars->elected + sizeof(uint32*));
+	SYNCALL; // sync. cudaMemsetAsync
+	vars->elected->alloc(uintPtr, inf.maxVar), uintPtr += inf.maxVar, d_units = uintPtr;
 	vars->units->alloc(uintPtr, inf.maxVar), uintPtr += inf.maxVar;
 	vars->eligible = uintPtr, uintPtr += inf.maxVar;
 	vars->scores = uintPtr, uintPtr += varsize;
@@ -144,11 +146,11 @@ bool cuMM::allocVars(VARS*& vars, const size_t& resolvedCap)
 	assert(bytePtr == end);
 	varsPool.cap = min_cap;
 	if (isMemAdviseSafe) {
-		PFLOGN2(2, " Advising GPU driver to favor global over system memory in %s call..", __func__);
-		addr_t tmpPtr = ea + uintVec_sz; // skip pVars
+		LOGN2(2, " Advising GPU driver to favor global over system memory in %s call..", __func__);
+		addr_t tmpPtr = ea + uintVec_sz; // skip elected
 		CHECK(cudaMemAdvise(tmpPtr, end - tmpPtr, cudaMemAdviseSetPreferredLocation, MASTER_GPU));
 		CHECK(cudaMemPrefetchAsync(tmpPtr, end - tmpPtr, MASTER_GPU));
-		PFLDONE(2, 5);
+		LOGDONE(2, 5);
 	}
 	return true;
 }
@@ -158,9 +160,9 @@ bool cuMM::allocPinned(VARS* vars, cuHist& cuhist)
 	assert(vars);
 	assert(inf.nDualVars == V2L(inf.maxVar + 1ULL));
 	const size_t elimBytes = inf.maxVar + 1;
-	const size_t unitBytes = inf.maxVar * hc_varsize;
-	const size_t histBytes = inf.nDualVars * hc_varsize;
-	size_t min_cap = hc_cnfsize + elimBytes + unitBytes + histBytes;
+	const size_t unitBytes = inf.maxVar * HC_VARSIZE;
+	const size_t histBytes = inf.nDualVars * HC_VARSIZE;
+	size_t min_cap = HC_CNFSIZE + elimBytes + unitBytes + histBytes;
 	assert(min_cap);
 	if (pinnedPool.cap) {
 		assert(pinnedPool.mem);
@@ -171,15 +173,15 @@ bool cuMM::allocPinned(VARS* vars, cuHist& cuhist)
 	assert(pinnedPool.mem == NULL);
 	cudaError_t retVal = cudaHostAlloc((void**)&pinnedPool.mem, min_cap, cudaHostAllocDefault);
 	if (retVal != cudaSuccess || retVal == cudaErrorMemoryAllocation) {
-		PFLOGW("CUDA runtime failure due to %s", cudaGetErrorString(retVal));
+		LOGWARNING("Pinned memory allocation failure due to %s", cudaGetErrorString(retVal));
 		return false;
 	}
 	addr_t ea = pinnedPool.mem;
-	pinned_cnf = (CNF*)ea, ea += hc_cnfsize;
+	pinned_cnf = (CNF*)ea, ea += HC_CNFSIZE;
 	cuhist.h_hist = (uint32*)ea, ea += histBytes;
 	vars->cachedUnits = (uint32*)ea, ea += unitBytes;
 	vars->cachedEliminated = ea, ea += elimBytes;
-	assert(ea == (pinnedPool.mem + min_cap));
+    assert(ea == pinnedPool.mem + min_cap);
 	pinnedPool.cap = min_cap;
 	return true;
 }
@@ -187,7 +189,7 @@ bool cuMM::allocPinned(VARS* vars, cuHist& cuhist)
 bool cuMM::allocAux(const size_t& clsCap)
 {
 	assert(clsCap && clsCap <= UINT32_MAX);
-	const size_t scatterBytes = clsCap * hc_srsize;
+	const size_t scatterBytes = clsCap * HC_SREFSIZE;
 	const size_t min_cap = scatterBytes + clsCap;
 	assert(min_cap);
 	if (auxPool.cap < min_cap) {
@@ -208,10 +210,10 @@ bool cuMM::resizeCNF(CNF*& cnf, const size_t& clsCap, const size_t& litsCap)
 	assert(clsCap && clsCap <= UINT32_MAX);
 	assert(litsCap && litsCap <= UINT32_MAX);
 	assert(litsCap >= clsCap);
-	const size_t csBytes = clsCap * hc_srsize;
-	const size_t dataBytes = clsCap * hc_scsize + litsCap * hc_bucket;
-	assert(dataBytes % hc_bucket == 0);
-	const size_t min_cap = hc_cnfsize + dataBytes + csBytes;
+	const size_t csBytes = clsCap * HC_SREFSIZE;
+	const size_t dataBytes = clsCap * SCLAUSESIZE + litsCap * SBUCKETSIZE;
+	assert(dataBytes % SBUCKETSIZE == 0);
+	const size_t min_cap = HC_CNFSIZE + dataBytes + csBytes;
 	assert(min_cap);
 	if (cnfPool.cap == 0) {
 		assert(cnf == NULL);
@@ -219,12 +221,12 @@ bool cuMM::resizeCNF(CNF*& cnf, const size_t& clsCap, const size_t& litsCap)
 		if (!hasUnifiedMem(min_cap, "CNF")) return false;
 		CHECK(cudaMallocManaged((void**)&cnfPool.mem, min_cap));
 		if (isMemAdviseSafe) {
-			PFLOGN2(2, " Advising GPU driver to favor global over system memory in %s call..", __func__);
+			LOGN2(2, " Advising GPU driver to favor global over system memory in %s call..", __func__);
 			CHECK(cudaMemAdvise(cnfPool.mem, min_cap, cudaMemAdviseSetPreferredLocation, MASTER_GPU));
-			PFLDONE(2, 5);
+			LOGDONE(2, 5);
 		}
 		cnf = (CNF*)cnfPool.mem;
-		const S_REF data_cap = S_REF(dataBytes / hc_bucket);
+		const S_REF data_cap = S_REF(dataBytes / SBUCKETSIZE);
 		new (cnf) CNF(data_cap, uint32(clsCap));
 		d_cnf_mem = cnf->data().mem, d_refs_mem = cnf->refsData();
 		cnfPool.cap = min_cap;
@@ -236,24 +238,19 @@ bool cuMM::resizeCNF(CNF*& cnf, const size_t& clsCap, const size_t& litsCap)
 		cacheCNFPtr(cnf);
 		addr_t newMem = NULL;
 		CHECK(cudaMallocManaged((void**)&newMem, min_cap));
-		sync();
+		SYNC(0);
 		if (isMemAdviseSafe) {
-			PFLOGN2(2, " Advising GPU driver to favor global over system memory in %s call..", __func__);
+			LOGN2(2, " Advising GPU driver to favor global over system memory in %s call..", __func__);
 			CHECK(cudaMemAdvise(newMem, min_cap, cudaMemAdviseSetPreferredLocation, MASTER_GPU));
 			CHECK(cudaMemPrefetchAsync(newMem, min_cap, MASTER_GPU));
-			PFLDONE(2, 5);
+			LOGDONE(2, 5);
 		}
 		CNF* tmp_cnf = (CNF*)newMem;
-		const S_REF data_cap = S_REF(dataBytes / hc_bucket);
+		const S_REF data_cap = S_REF(dataBytes / SBUCKETSIZE);
 		new (tmp_cnf) CNF(data_cap, uint32(clsCap));
-		d_cnf_mem = tmp_cnf->data().mem, d_refs_mem = tmp_cnf->refsData();
-		if (gopts.profile_gpu) cutimer->start();
-		if (gopts.gc_gpu) compactCNF(cnf, tmp_cnf);
-		else {
-			sync(), tmp_cnf->copyFrom(cnf);
-			pinned_cnf->resize(tmp_cnf->data().size, tmp_cnf->size());
-		}
-		if (gopts.profile_gpu) cutimer->stop(), cutimer->gc += cutimer->gpuTime();
+		d_cnf_mem = tmp_cnf->data().mem;
+		d_refs_mem = tmp_cnf->refsData();
+		compactCNF(cnf, tmp_cnf);
 		FREE(cnfPool);
 		cnfPool.mem = newMem;
 		cnfPool.cap = min_cap;
@@ -273,7 +270,7 @@ bool cuMM::resizeOTAsync(OT*& ot, const size_t& min_lits, const cudaStream_t& _s
 	DeviceScan::ExclusiveSum(NULL, ebytes, d_hist, d_segs, inf.nDualVars, _s);
 	DeviceScan::ExclusiveSum(tmp, ebytes, d_hist, d_segs, inf.nDualVars, _s);
 	OPTIMIZEBLOCKS(inf.nDualVars, BLOCK1D);
-	const size_t min_cap = hc_otsize + inf.nDualVars * hc_olsize + min_lits * hc_srsize;
+	const size_t min_cap = HC_OTSIZE + inf.nDualVars * HC_OLSIZE + min_lits * HC_SREFSIZE;
 	assert(min_cap);
 	if (otPool.cap < min_cap) { // realloc
 		FREE(otPool);
@@ -281,14 +278,14 @@ bool cuMM::resizeOTAsync(OT*& ot, const size_t& min_lits, const cudaStream_t& _s
 		if (!hasUnifiedMem(min_cap, "OT")) return false;
 		CHECK(cudaMallocManaged((void**)&otPool.mem, min_cap));
 		if (isMemAdviseSafe) {
-			PFLOGN2(2, " Advising GPU driver to favor global over system memory in %s call..", __func__);
+			LOGN2(2, " Advising GPU driver to favor global over system memory in %s call..", __func__);
 			CHECK(cudaMemAdvise(otPool.mem, min_cap, cudaMemAdviseSetPreferredLocation, MASTER_GPU));
 			CHECK(cudaMemPrefetchAsync(otPool.mem, min_cap, MASTER_GPU, _s));
-			PFLDONE(2, 5);
+			LOGDONE(2, 5);
 		}
 		ot = (OT*)otPool.mem;
-		LOGERR("Exclusively scanning histogram failed");
-		sync(_s); // needed for calling the next constructor on host
+		LASTERR("Exclusively scanning histogram failed");
+		SYNC(_s); // needed for calling the next constructor on host
 		new (ot) OT(inf.nDualVars);
 		d_occurs = ot->data();
 		assignListPtrs << <nBlocks, BLOCK1D, 0, _s >> > (ot, d_hist, d_segs, inf.nDualVars);
@@ -297,8 +294,8 @@ bool cuMM::resizeOTAsync(OT*& ot, const size_t& min_lits, const cudaStream_t& _s
 	else
 		assignListPtrs << <nBlocks, BLOCK1D, 0, _s >> > (ot, d_hist, d_segs, inf.nDualVars);
 	if (gopts.sync_always) {
-		LOGERR("Occurrence lists allocation failed");
-		sync(_s);
+		LASTERR("Occurrence lists allocation failed");
+		SYNC(_s);
 	}
 	return true;
 }
@@ -308,17 +305,17 @@ void cuMM::createMirror(CNF*& hcnf, const size_t& clsCap, const size_t& litsCap)
 	assert(clsCap && clsCap <= UINT32_MAX);
 	assert(litsCap && litsCap <= UINT32_MAX);
 	assert(litsCap >= clsCap);
-	const size_t csBytes = clsCap * hc_srsize;
-	const size_t dataBytes = clsCap * hc_scsize + litsCap * hc_bucket;
-	assert(dataBytes % hc_bucket == 0);
-	const size_t min_cap = hc_cnfsize + dataBytes + csBytes;
+	const size_t csBytes = clsCap * HC_SREFSIZE;
+	const size_t dataBytes = clsCap * SCLAUSESIZE + litsCap * SBUCKETSIZE;
+	assert(dataBytes % SBUCKETSIZE == 0);
+	const size_t min_cap = HC_CNFSIZE + dataBytes + csBytes;
 	assert(min_cap);
 	if (hcnfPool.cap < min_cap) {
 		hcnfPool.cap = min_cap;
 		pfralloc(hcnfPool.mem, hcnfPool.cap);
 		hcnf = (CNF*)hcnfPool.mem;
 	}
-	const S_REF data_cap = S_REF(dataBytes / hc_bucket);
+	const S_REF data_cap = S_REF(dataBytes / SBUCKETSIZE);
 	new (hcnf) CNF(data_cap, uint32(clsCap));
 }
 
@@ -326,10 +323,10 @@ void cuMM::mirrorCNF(CNF*& hcnf)
 {
 	assert(cnfPool.cap);
 	assert(cnfPool.mem);
-	CHECK(cudaMemcpy(hcnf, cnfPool.mem, hc_cnfsize, cudaMemcpyDeviceToHost));
-	const size_t csBytes = hcnf->size() * hc_srsize;
-	const size_t dataBytes = hcnf->data().size * hc_bucket;
-	const size_t min_cap = hc_cnfsize + dataBytes + csBytes;
+	CHECK(cudaMemcpy(hcnf, cnfPool.mem, HC_CNFSIZE, cudaMemcpyDeviceToHost));
+	const size_t csBytes = hcnf->size() * HC_SREFSIZE;
+	const size_t dataBytes = hcnf->data().size * SBUCKETSIZE;
+	const size_t min_cap = HC_CNFSIZE + dataBytes + csBytes;
 	assert(min_cap <= cnfPool.cap);
 	if (hcnfPool.cap < min_cap) {
 		hcnfPool.cap = min_cap;
@@ -341,30 +338,30 @@ void cuMM::mirrorCNF(CNF*& hcnf)
 
 void cuMM::freeVars()
 {
-	PFLOGN2(2, "  freeing up fixed unified memory..");
+	LOGN2(2, "  freeing up fixed unified memory..");
 	FREE(varsPool);
 	d_units = NULL;
-	PFLENDING(2, 5, "(remaining: %lld)", cap);
+	LOGENDING(2, 5, "(remaining: %lld)", cap);
 }
 
 void cuMM::freeCNF()
 {
-	PFLOGN2(2, "  freeing up CNF unified memory..");
+	LOGN2(2, "  freeing up CNF unified memory..");
 	FREE(cnfPool);
 	d_cnf_mem = NULL, d_refs_mem = NULL;
-	PFLENDING(2, 5, "(remaining: %lld)", cap);
+	LOGENDING(2, 5, "(remaining: %lld)", cap);
 }
 
 void cuMM::freeOT()
 {
-	PFLOGN2(2, "  freeing up occurrence table unified memory..");
+	LOGN2(2, "  freeing up occurrence table unified memory..");
 	FREE(otPool);
-	PFLENDING(2, 5, "(remaining: %lld)", cap);
+	LOGENDING(2, 5, "(remaining: %lld)", cap);
 }
 
 void cuMM::freeFixed()
 {
-	PFLOGN2(2, "  freeing up histogram and auxiliary memory..");
+	LOGN2(2, "  freeing up histogram and auxiliary memory..");
 	if (auxPool.mem) {
 		DFREE(auxPool);
 		d_scatter = NULL, d_stencil = NULL;
@@ -378,29 +375,31 @@ void cuMM::freeFixed()
 		DFREE(litsPool);
 		litsPool.size = 0;
 	}
-	PFLENDING(2, 5, "(remaining: %lld)", dcap);
 	dcap = 0;
+    LOGDONE(2, 5);
 }
 
 void cuMM::freePinned()
 {
-	PFLOGN2(2, "  freeing up pinned memory..");
+	LOGN2(2, "  freeing up pinned memory..");
 	if (pinnedPool.mem) {
-		CHECK(cudaFreeHost(pinnedPool.mem)), pinnedPool.mem = NULL;
+		CHECK(cudaFreeHost(pinnedPool.mem));
+		pinnedPool.mem = NULL;
 		pinnedPool.cap = 0;
 		pinned_cnf = NULL;
 	}
-	PFLENDING(2, 5, "(remaining: %lld)", pinnedPool.cap);
+    LOGDONE(2, 5);
 }
 
 void cuMM::breakMirror()
 {
-	PFLOGN2(2, "  freeing up CNF host memory..");
+	LOGN2(2, "  freeing up CNF host memory..");
 	if (hcnfPool.mem) {
-		std::free(hcnfPool.mem), hcnfPool.mem = NULL;
+		std::free(hcnfPool.mem);
+		hcnfPool.mem = NULL;
 		hcnfPool.cap = 0;
 	}
-	PFLENDING(2, 5, "(remaining: %lld)", hcnfPool.cap);
+    LOGDONE(2, 5);
 }
 
 bool cuMM::checkMemAdvice()

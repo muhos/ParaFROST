@@ -1,6 +1,6 @@
 /***********************************************************************[mdm.cpp]
 Copyright(c) 2020, Muhammad Osama - Anton Wijs,
-Technische Universiteit Eindhoven (TU/e).
+Copyright(c) 2022-present, Muhammad Osama.
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
@@ -24,8 +24,8 @@ inline bool	Solver::verifyMDM()
 	for (uint32 i = sp->propagated; i < trail.size(); i++) {
 		uint32 v = ABS(trail[i]);
 		if (sp->frozen[v]) {
-			PFLOG0("");
-			PFLOGEN("decision(%d) is elected and frozen", v);
+			LOG0("");
+			LOGERRORN("decision(%d) is elected and frozen", v);
 			printWatched(v);
 			return false;
 		}
@@ -37,8 +37,8 @@ inline bool	Solver::verifySeen()
 {
 	for (uint32 v = 0; v <= inf.maxVar; v++) {
 		if (sp->seen[v]) {
-			PFLOG0("");
-			PFLOGEN("seen(%d) is not unseen", v);
+			LOG0("");
+			LOGERRORN("seen(%d) is not unseen", v);
 			printWatched(v);
 			return false;
 		}
@@ -140,7 +140,7 @@ void Solver::MDMInit()
 	// check if formula is solved by walk strategy
 	if (!UNSOLVED(cnfstate)) return;
 	stats.mdm.calls++;
-	PFLOG2(2, " MDM %d: electing decisions at decaying round %d..", stats.mdm.calls, last.mdm.rounds);
+	LOG2(2, " MDM %d: electing decisions at decaying round %d..", stats.mdm.calls, last.mdm.rounds);
 	eligible.resize(inf.maxVar);
 	occurs.resize(inf.maxVar + 1);
 	varOrder(); // initial variable ordering
@@ -192,7 +192,7 @@ void Solver::MDMInit()
 	last.mdm.unassigned = inf.maxVar - last.mdm.decisions;
 	last.mdm.rounds--;
 	stats.decisions.multiple += last.mdm.decisions;
-	PFLOG2(2, " MDM %d: %d decisions are elected (%.2f%%)",
+	LOG2(2, " MDM %d: %d decisions are elected (%.2f%%)",
 		stats.mdm.calls, last.mdm.decisions, percent(last.mdm.decisions, maxActive()));
 	if (opts.mdm_vsids_pumps || opts.mdm_vmtf_pumps) pumpFrozen();
 	clearMDM(), eligible.clear(true), occurs.clear(true);
@@ -211,7 +211,7 @@ void Solver::MDM()
 	assert(conflict == NOREF);
 	assert(UNSOLVED(cnfstate));
 	stats.mdm.calls++;
-	PFLOG2(2, " MDM %d: electing decisions at decaying round %d..", stats.mdm.calls, last.mdm.rounds);
+	LOG2(2, " MDM %d: electing decisions at decaying round %d..", stats.mdm.calls, last.mdm.rounds);
 	eligible.clear();
 	if (vsidsActive) 
 		eligibleVSIDS();
@@ -274,7 +274,7 @@ void Solver::MDM()
 	last.mdm.unassigned = inf.maxVar - last.mdm.decisions;
 	last.mdm.rounds--;
 	stats.decisions.multiple += last.mdm.decisions;
-	PFLOG2(2, " MDM %d: %d decisions are elected (%.2f%%)", 
+	LOG2(2, " MDM %d: %d decisions are elected (%.2f%%)", 
 		stats.mdm.calls, last.mdm.decisions, percent(last.mdm.decisions, maxActive()));
 	if (opts.mdm_vsids_pumps || opts.mdm_vmtf_pumps) pumpFrozen();
 	clearMDM();

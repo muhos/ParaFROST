@@ -1,6 +1,6 @@
 /***********************************************************************[malloc.hpp]
 Copyright(c) 2020, Muhammad Osama - Anton Wijs,
-Technische Universiteit Eindhoven (TU/e).
+Copyright(c) 2022-present, Muhammad Osama.
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
@@ -30,7 +30,7 @@ namespace ParaFROST {
 
 	template <class T>
 	T* pfmalloc(size_t numElements) {
-		if (!numElements) PFLOGE("catched zero-memory size at %s", __func__);
+		if (!numElements) LOGERROR("catched zero-memory size at %s", __func__);
 		T* _mem = (T*)std::malloc(numElements * sizeof(T));
 		if (_mem == NULL) throw MEMOUTEXCEPTION();
 		return _mem;
@@ -38,7 +38,7 @@ namespace ParaFROST {
 
 	template <class T>
 	T* pfcalloc(size_t numElements) {
-		if (!numElements) PFLOGE("catched zero-memory size at %s", __func__);
+		if (!numElements) LOGERROR("catched zero-memory size at %s", __func__);
 		T* _mem = (T*)std::calloc(numElements, sizeof(T));
 		if (_mem == NULL) throw MEMOUTEXCEPTION();
 		return _mem;
@@ -51,7 +51,7 @@ namespace ParaFROST {
 
 	template <class T>
 	void pfralloc(T*& mem, size_t bytes) {
-		if (!bytes) PFLOGE("catched zero-memory size at %s", __func__);
+		if (!bytes) LOGERROR("catched zero-memory size at %s", __func__);
 		T* _mem = (T*)std::realloc(mem, bytes);
 		if (_mem == NULL) throw MEMOUTEXCEPTION();
 		mem = _mem;
@@ -59,7 +59,7 @@ namespace ParaFROST {
 
 	template <class T>
 	void pfshrinkAlloc(T*& mem, size_t bytes) {
-		if (!bytes) PFLOGE("catched zero-memory size at %s", __func__);
+		if (!bytes) LOGERROR("catched zero-memory size at %s", __func__);
 		T* _mem = NULL;
 		_mem = (T*)std::realloc(_mem, bytes);
 		if (_mem == NULL) throw MEMOUTEXCEPTION();

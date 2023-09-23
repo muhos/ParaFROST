@@ -1,6 +1,6 @@
 /***********************************************************************[color.hpp]
 Copyright(c) 2020, Muhammad Osama - Anton Wijs,
-Technische Universiteit Eindhoven (TU/e).
+Copyright(c) 2022-present, Muhammad Osama.
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
@@ -71,14 +71,13 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 #else
 
 #define UNDERLINE	"\u001b[4m"
-#define CNORMAL     "\x1B[0m"
+#define CWHITE		"\x1B[0m"
 #define CRED        "\x1B[31m"
 #define CGREEN      "\x1B[32m"
 #define CYELLOW     "\x1B[33m"
 #define CBLUE       "\x1B[34m"
 #define CMAGENTA    "\x1B[35m"
 #define CCYAN       "\x1B[36m"
-#define CWHITE      "\x1B[37m"
 #define CLRED       "\x1B[91m"
 #define CLGREEN     "\x1B[92m"
 #define CLYELLOW    "\x1B[93m"
@@ -95,7 +94,6 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 #define CVIOLET3	"\x1B[38;5;164m"
 #define CVIOLET4	"\x1B[38;5;163m"
 #define CVIOLET5	"\x1B[38;5;125m"
-
 #define CORANGE0	"\x1B[38;5;203m"
 #define CORANGE1	"\x1B[38;5;202m"
 #define CMDM		"\x1B[38;5;221m"
@@ -114,6 +112,7 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 #define CARGVALUE	"\x1B[38;5;34m"
 #define CARGON		"\x1B[38;5;34m"
 #define CARGOFF		"\x1B[38;5;124m"
+#define CNORMAL		"\x1B[38;5;205m"
 
 #endif
 

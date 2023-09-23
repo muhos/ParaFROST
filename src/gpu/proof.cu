@@ -1,6 +1,6 @@
 /***********************************************************************[proof.cu]
 Copyright(c) 2021, Muhammad Osama - Anton Wijs,
-Technische Universiteit Eindhoven (TU/e).
+Copyright(c) 2022-present, Muhammad Osama.
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
@@ -17,8 +17,9 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 **********************************************************************************/
 
 #include "proof.cuh"
-#include "primitives.cuh"
+#include "timer.cuh"
 #include "options.cuh"
+#include "primitives.cuh"
 
 using namespace ParaFROST;
 
@@ -65,11 +66,11 @@ void cuPROOF::writeProof(const cudaStream_t& _s)
 {
 	if (!enabled) return;
 	if (hostStream->empty()) return;
-	sync(_s);
+	SYNC(_s);
 	assert(**hostStream == PROOF_ADDED || **hostStream == PROOF_DELETED);
 	assert(!hostStream->back());
 	size_t prevlines = deviceAdded;
-	PFLOGN2(2, " Writing GPU proof data..");
+	LOGN2(2, " Writing GPU proof data..");
 	Byte* byte = *hostStream;
 	Byte* end = hostStream->end();
 	if (proof.isNonBinary()) {
@@ -92,7 +93,7 @@ void cuPROOF::writeProof(const cudaStream_t& _s)
 		}
 	}
 	size_t lines = deviceAdded - prevlines;
-	PFLENDING(2, 5, "(%zd clauses, %d bytes)", lines, hostStream->size());
+	LOGENDING(2, 5, "(%zd clauses, %d bytes)", lines, hostStream->size());
 	bytesWritten += hostStream->size();
 	hostStream->clear();
 }
@@ -129,7 +130,8 @@ bool cuPROOF::alloc(const uint32& maxcap)
 		hostStream->alloc(ea, uint32(proof_cap)), ea += proof_cap;
 		assert(ea == hostPool.mem + min_cap);
 		hostPool.cap = min_cap;
-		sync(), header.clear(true);
+		SYNC(0); 
+		header.clear(true);
 	}
 	return true;
 }
@@ -149,15 +151,17 @@ void cuPROOF::cacheProof(const cudaStream_t& _s)
 	hostStream->resize(devSize);
 	if (gopts.profile_gpu) cutimer->start(_s);
 	CHECK(cudaMemcpyAsync(hostStream->data(), header.data(), devSize, cudaMemcpyDeviceToHost, _s));
-	if (gopts.sync_always) sync(_s);
+	if (gopts.sync_always) SYNC(_s);
 	if (gopts.profile_gpu) cutimer->stop(_s), cutimer->ve += cutimer->gpuTime();
 }
 
 void cuPROOF::destroy()
 {
-	PFLOGN2(2, " Freeing up proof host-device memory..");
+	LOGN2(2, " Freeing up proof host-device memory..");
 	cumm.DFREE(devicePool);
-	if (hostPool.mem) 
-		CHECK(cudaFreeHost(hostPool.mem)), hostPool.mem = NULL, hostPool.cap = 0;
-	PFLDONE(2, 5);
+	if (hostPool.mem) {
+		CHECK(cudaFreeHost(hostPool.mem));
+		hostPool.mem = NULL, hostPool.cap = 0;
+	}
+	LOGDONE(2, 5);
 }

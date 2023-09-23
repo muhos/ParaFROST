@@ -1,6 +1,6 @@
 /***********************************************************************[model.hpp]
 Copyright(c) 2020, Muhammad Osama - Anton Wijs,
-Technische Universiteit Eindhoven (TU/e).
+Copyright(c) 2022-present, Muhammad Osama.
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
@@ -56,7 +56,7 @@ namespace ParaFROST {
 		void			extend          (LIT_ST*);
 		void			verify          (const string&);
 		bool			verify          (char*& clause);
-		inline bool		satisfied       (const uint32& orglit)  const;
+		inline bool		satisfied		(const uint32& orglit) const { assert(orglit > 1 && ABS(orglit) < value.size()); return value[ABS(orglit)] == !SIGN(orglit); }
 		inline uint32	size            ()					const { return extended ? value.size() : 0; }
 		inline int		lit2int         (const uint32& lit) const { return SIGN(lit) ? -int(ABS(lit)) : int(ABS(lit)); }
 		inline LIT_ST	operator[]		(const uint32& v)	const { assert(v && v < value.size()); return value[v]; }

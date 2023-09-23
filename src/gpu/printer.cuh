@@ -1,6 +1,6 @@
 ﻿/***********************************************************************[printer.cuh]
 Copyright(c) 2020, Muhammad Osama - Anton Wijs,
-Technische Universiteit Eindhoven (TU/e).
+Copyright(c) 2022-present, Muhammad Osama.
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
@@ -16,10 +16,11 @@ You should have received a copy of the GNU General Public License
 along with this program.  If not, see <https://www.gnu.org/licenses/>.
 **********************************************************************************/
 
-#ifndef __CU_PRINTER_
-#define __CU_PRINTER_
+#ifndef __GPU_PRINTER_
+#define __GPU_PRINTER_
 
-#include "simptypes.cuh"
+#include "cnf.cuh"
+#include "table.cuh"
 
 namespace ParaFROST {
 
@@ -34,7 +35,7 @@ namespace ParaFROST {
 
 	_PFROST_H_D_ void pClauseSet(const CNF& cnf, const OT& ot, const uint32& v)
 	{
-		const OL& poss = ot[V2L(v)], &negs = ot[NEG(V2L(v))];
+		const OL& poss = ot[V2L(v)], & negs = ot[NEG(V2L(v))];
 		for (uint32 i = 0; i < poss.size(); i++) {
 			printf("c  "), cnf[poss[i]].print();
 		}

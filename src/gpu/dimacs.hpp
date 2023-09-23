@@ -1,6 +1,6 @@
 /***********************************************************************[dimacs.hpp]
 Copyright(c) 2020, Muhammad Osama - Anton Wijs,
-Technische Universiteit Eindhoven (TU/e).
+Copyright(c) 2022-present, Muhammad Osama.
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
@@ -68,7 +68,7 @@ namespace ParaFROST {
 				if (ch != 'c') break;
 				while ((ch = get()) != '\n')
 					if (ch == EOF)
-						PFLOGE("unexpected EOF in comment");
+						LOGERROR("unexpected EOF in comment");
 			}
 		}
 
@@ -82,7 +82,7 @@ namespace ParaFROST {
 			else if (ch == '+')
 				ch = get();
 			if (!isDigit(ch))
-				PFLOGE("expected a digit but ASCII(%d) is found", ch);
+				LOGERROR("expected a digit but ASCII(%d) is found", ch);
 			uint32 n = 0;
 			while (isDigit(ch)) {
 				n = n * 10 + (ch - 48);
@@ -102,7 +102,7 @@ namespace ParaFROST {
 		sign = 0;
 		if (*str == '-') sign = 1, str++;
 		else if (*str == '+') str++;
-		if (!isDigit(*str)) PFLOGE("expected a digit but ASCII(%d) is found", *str);
+		if (!isDigit(*str)) LOGERROR("expected a digit but ASCII(%d) is found", *str);
 		uint32 n = 0;
 		while (isDigit(*str)) n = n * 10 + (*str++ - '0');
 		return n;

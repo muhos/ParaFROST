@@ -1,6 +1,6 @@
 /***********************************************************************[autarky.cpp]
 Copyright(c) 2020, Muhammad Osama - Anton Wijs,
-Technische Universiteit Eindhoven (TU/e).
+Copyright(c) 2022-present, Muhammad Osama.
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
@@ -33,7 +33,7 @@ uint32 Solver::useAutarky(LIT_ST* autarkies)
 		uint32 lit = V2L(v);
 		const LIT_ST val = autarkies[lit];
 		if (UNASSIGNED(val)) continue;
-		PFLOG2(4, "  eliminating autarkic literal %d", l2i(lit));
+		LOG2(4, "  eliminating autarkic literal %d", l2i(lit));
 		markEliminated(ABS(lit));
 		sp->value[lit] = val;
 		sp->value[FLIP(lit)] = !val;
@@ -56,7 +56,7 @@ uint32 Solver::autarkReasoning(LIT_ST* autarkies)
 		const uint32 dec = V2DEC(v, pol);
 		autarkies[dec] = 1, autarkies[FLIP(dec)] = 0;
 		assigned++;
-		PFLOG2(4, "   autarky assigned %d", l2i(dec));
+		LOG2(4, "   autarky assigned %d", l2i(dec));
 	}
 	// test autarky on large clauses and deduct unassigned
 	forall_cnf(orgs, i) {
@@ -71,7 +71,7 @@ uint32 Solver::autarkReasoning(LIT_ST* autarkies)
 			if (!assigned) return 0;
 		}
 	}
-	PFLOG2(2, " Autarky %lld: initial large-clause autarky size is %d", stats.autarky.calls, assigned);
+	LOG2(2, " Autarky %lld: initial large-clause autarky size is %d", stats.autarky.calls, assigned);
 	// now propagate autarkies on binaries and leave out learnts
 	forall_literal(lit) {
 		if (inactive(lit)) continue;
@@ -109,7 +109,7 @@ uint32 Solver::autarkReasoning(LIT_ST* autarkies)
 		}
 		if (!assigned) return 0;
 	}
-	PFLOG2(2, " Autarky %lld: initial binary-clause autarky size is %d", stats.autarky.calls, assigned);
+	LOG2(2, " Autarky %lld: initial binary-clause autarky size is %d", stats.autarky.calls, assigned);
 	// now propagate autarkies on large clauses
 	forall_cnf(orgs, i) {
 		const C_REF ref = *i;
@@ -127,20 +127,20 @@ uint32 Solver::autarkReasoning(LIT_ST* autarkies)
 			forall_clause(c, k) {
 				const uint32 lit = *k;
 				if (UNASSIGNED(values[lit]) && autarkies[lit] > 0) {
-					PFLOG2(4, "   adding c(%zd) to watch list(%d)", ref, l2i(lit));
+					LOG2(4, "   adding c(%zd) to watch list(%d)", ref, l2i(lit));
 					wt[FLIP(lit)].push(WATCH(ref, c.size(), lit));
 				}
 			}
 		}
 	}
-	PFLOG2(2, " Autarky %lld: final autarky size is %d", stats.autarky.calls, assigned);
+	LOG2(2, " Autarky %lld: final autarky size is %d", stats.autarky.calls, assigned);
 	// eliminate autarkies
 	if (assigned) {
 		const uint32 eliminated = useAutarky(autarkies);
 		assert(eliminated == assigned);
 		stats.autarky.eliminated += eliminated;
 		inf.maxMelted += eliminated;
-		PFLOG2(2, " Autarky %lld: eliminated %d autarkic variables", stats.autarky.calls, eliminated);
+		LOG2(2, " Autarky %lld: eliminated %d autarkic variables", stats.autarky.calls, eliminated);
 		filterAutarky();
 	}
 	else
@@ -166,7 +166,7 @@ void Solver::autarky()
 	free(autarkies);
 	attachNonBins(orgs, true);
 	attachNonBins(learnts, true);
-	if (retrail()) PFLOG2(2, " Propagation after autarky proved a contradiction");
+	if (retrail()) LOG2(2, " Propagation after autarky proved a contradiction");
 	UPDATE_SLEEPER(this, autarky, eliminated);
 	printStats(eliminated, 'k', CCYAN);
 }
@@ -207,7 +207,7 @@ uint32 Solver::propAutarky(const LIT_ST* values, LIT_ST* autarkies)
 		analyzed.pop();
 		CHECKLIT(lit);
 		assert(UNASSIGNED(autarkies[lit]));
-		PFLOG2(4, "  propagating autarkic literal %d", l2i(lit));
+		LOG2(4, "  propagating autarkic literal %d", l2i(lit));
 		WL& ws = wt[FLIP(lit)];
 		WATCH* j = ws;
 		forall_watches(ws, i) {
@@ -244,7 +244,7 @@ inline void Solver::cancelAutark(const bool& add, const uint32& lit, LIT_ST* aut
 	assert(autarkies[flit] > 0);
 	autarkies[lit] = autarkies[flit] = UNDEFINED;
 	if (add) analyzed.push(flit);
-	PFLOG2(4, "   autarky %d cancelled", l2i(flit));
+	LOG2(4, "   autarky %d cancelled", l2i(flit));
 }
 
 inline uint32 Solver::propAutarkClause(const bool& add, const C_REF& ref, CLAUSE& c, const LIT_ST* values, LIT_ST* autarkies)
@@ -252,7 +252,7 @@ inline uint32 Solver::propAutarkClause(const bool& add, const C_REF& ref, CLAUSE
 	assert(c.size() > 2);
 	assert(c.original());
 	assert(!c.deleted());
-	PFLCLAUSE(4, c, "   autarky propagating clause");
+	LOGCLAUSE(4, c, "   autarky propagating clause");
 	bool satisfied = false, falsified = false;
 	forall_clause(c, k) {
 		const uint32 other = *k;

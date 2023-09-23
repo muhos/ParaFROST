@@ -1,6 +1,6 @@
 /***********************************************************************[solve.hpp]
 Copyright(c) 2020, Muhammad Osama - Anton Wijs,
-Technische Universiteit Eindhoven (TU/e).
+Copyright(c) 2022-present, Muhammad Osama.
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
@@ -37,15 +37,13 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 #include "solvertypes.hpp"
 
 namespace ParaFROST {
-
 	/*****************************************************/
-	/*  Name:     Solver                                 */
-	/*  Usage:    global handler of solver/simplifier    */
+	/*  Name:     Solver                              */
+	/*  Usage:    global handler for solver/simplifier   */
 	/*  Scope:    host only                              */
 	/*  Memory:   system memory                          */
 	/*****************************************************/
 	class Solver {
-
 	protected:
 		FORMULA			formula;
 		TIMER			timer;
@@ -151,7 +149,7 @@ namespace ParaFROST {
 		inline bool		vsidsOnly			() const { return (stable && opts.vsidsonly_en); }
 		inline bool		vsidsEnabled		() const { return (stable && opts.vsids_en); }
 		inline bool		varsEnough			() const { assert(trail.size() < inf.maxVar); return (inf.maxVar - trail.size()) > last.mdm.unassigned; }
-		inline bool		canPreSigmify		() const { return opts.sigma_en && stats.clauses.original; }
+		inline bool		canPreSimplify		() const { return opts.sigma_en && stats.clauses.original; }
 		inline bool		canRephase			() const { return opts.rephase_en && stats.conflicts > limit.rephase; }
 		inline bool		canReduce			() const { return opts.reduce_en && stats.clauses.learnt && stats.conflicts >= limit.reduce; }
 		inline bool		canCollect			() const { return cm.garbage() > (cm.size() * opts.gc_perc); }
@@ -180,7 +178,7 @@ namespace ParaFROST {
 			return ((stats.shrunken - last.shrink.removed) > (opts.sigma_min << 4));
 		}
 		inline bool		runningout			() const { 
-			return interrupted() 
+			return interrupted()
 				|| (termCallback && termCallback(termCallbackState))
 				|| (opts.boundsearch_en && (stats.conflicts >= opts.conflict_out || stats.decisions.single >= opts.decision_out));
 		}
@@ -212,22 +210,22 @@ namespace ParaFROST {
 			}
 		}
 		inline void		initQueue			() {
-			if (verbose == 4) PFLOG2(2, " Initializing VMFQ Queue with %d variables..", inf.maxVar);
-			else PFLOGN2(2, " Initializing VMFQ Queue with %d variables..", inf.maxVar);
+			if (verbose == 4) LOG2(2, " Initializing VMFQ Queue with %d variables..", inf.maxVar);
+			else LOGN2(2, " Initializing VMFQ Queue with %d variables..", inf.maxVar);
 			forall_variables(v) { vmtf.init(v), vmtf.update(v, (bumps[v] = ++bumped)); }
-			PFLDONE(2, 4);
+			LOGDONE(2, 4);
 		}
 		inline void		initHeap			() {
-			PFLOGN2(2, " Initializing VSIDS Heap with %d variables..", inf.maxVar);
+			LOGN2(2, " Initializing VSIDS Heap with %d variables..", inf.maxVar);
 			forall_variables(v) { vsids.insert(v); }
-			PFLDONE(2, 5);
+			LOGDONE(2, 5);
 		}
 		inline void		initVars			() {
-			PFLOGN2(2, " Initializing original variables array with %d variables..", inf.maxVar);
+			LOGN2(2, " Initializing original variables array with %d variables..", inf.maxVar);
 			vorg.resize(inf.maxVar + 1);
 			vorg[0] = 0;
 			forall_variables(v) { vorg[v] = v; }
-			PFLDONE(2, 5);
+			LOGDONE(2, 5);
 		}
 		inline void		updateQueue			()
 		{
@@ -281,8 +279,8 @@ namespace ParaFROST {
 		inline bool		verifyFrozen		() {
 			for (uint32 v = 0; v <= inf.maxVar; v++) {
 				if (sp->frozen[v]) {
-					PFLOG0("");
-					PFLOGEN("frozen(%d) is not melted", v);
+					LOG0("");
+					LOGERRORN("frozen(%d) is not melted", v);
 					printWatched(v);
 					return false;
 				}
@@ -394,7 +392,7 @@ namespace ParaFROST {
 			inf.unassigned--;
 			if (!level) learnUnit(lit, v);
 #ifdef LOGGING
-			PFLNEWLIT(this, 4, src, lit);
+			LOGNEWLIT(this, 4, src, lit);
 #endif
 			if (wt.size()) {
 				WL& ws = wt[lit];
@@ -420,7 +418,7 @@ namespace ParaFROST {
 			assert(inf.unassigned);
 			inf.unassigned--;
 #ifdef LOGGING
-			PFLNEWLIT(this, 3, NOREF, lit);
+			LOGNEWLIT(this, 3, NOREF, lit);
 #endif
 		}
 		inline void		enqueueImp			(const uint32& lit, const C_REF& src) {
@@ -484,7 +482,7 @@ namespace ParaFROST {
 			vmtf.toFront(v);
 			bumps[v] = ++bumped;
 #ifdef LOGGING
-			PFLOG2(4, " Variable %d moved to queue front & bumped to %lld", v, bumped);
+			LOG2(4, " Variable %d moved to queue front & bumped to %lld", v, bumped);
 #endif
 		}
 		inline uint32	prescore			(const uint32& v) {
@@ -659,27 +657,15 @@ namespace ParaFROST {
 		cuHist			cuhist;
 		cuPROOF			cuproof;
 		S_REF			dataoff;
-		uint32			csoff, mu_inc, ereCls;
+		uint32			csoff, multiplier, ereCls;
 		cudaStream_t	*streams;
 		COMPACT_CMP		compact_cmp;
 		OLIST_CMP		olist_cmp;
 		bool			mapped, compacted, flattened;
 		int				phase, nForced, simpstate, devCount;
-
+	
 	public:
-		cuOptions		cuopt;
 
-		//============= inline methods ==============//
-		inline bool		depFreeze			(const uint32&, OL&);
-		inline bool		propClause			(const LIT_ST*, const uint32&, SCLAUSE&);
-		inline bool		enqueueCached		(const cudaStream_t&);
-		inline bool		reallocOT			(const cudaStream_t& stream = 0);
-		inline bool		reallocCNF			();
-		inline void		writeBack			();
-		inline void		mapFrozen			();
-		inline void		cleanProped			();
-		inline void		cleanManaged		();
-		inline void		initSimplifier		();
 		inline void		enqueueDevUnit		(const uint32& lit) {
 			CHECKLIT(lit);
 			assert(active(lit));
@@ -693,21 +679,21 @@ namespace ParaFROST {
 			assert(inf.unassigned);
 			inf.unassigned--;
 #ifdef LOGGING
-			PFLNEWLIT(this, 3, NOREF, lit);
+			LOGNEWLIT(this, 3, NOREF, lit);
 #endif
 		}
 		inline bool		alldisabled         () {
-			return !opts.phases && !(opts.all_en || opts.ere_en);
+			return !opts.phases && !(opts.all_en | opts.ere_en);
 		}
 		inline bool		reallocFailed       () {
 			return (simpstate == OTALLOC_FAIL || simpstate == CNFALLOC_FAIL);
 		}
 		inline void		createStreams       () {
 			if (streams == NULL) {
-				PFLOGN2(2, " Allocating GPU streams..");
+				LOGN2(2, " Allocating GPU streams..");
 				streams = new cudaStream_t[opts.nstreams];
 				for (int i = 0; i < opts.nstreams; i++) cudaStreamCreate(streams + i);
-				PFLDONE(2, 5);
+				LOGDONE(2, 5);
 			}
 		}
 		inline void		destroyStreams      () {
@@ -717,8 +703,8 @@ namespace ParaFROST {
 			}
 		}
 		inline bool		verifyLCVE          () {
-			for (uint32 v = 0; v < vars->numPVs; v++)
-				if (sp->frozen[vars->pVars->at(v)])
+			for (uint32 v = 0; v < vars->numElected; v++)
+				if (sp->frozen[vars->elected->at(v)])
 					return false;
 			return true;
 		}
@@ -727,29 +713,29 @@ namespace ParaFROST {
 			int64 clsRemoved = int64(inf.nClauses) - inf.n_cls_after;
 			int64 litsRemoved = int64(inf.nLiterals) - inf.n_lits_after;
 			const char* header = "  %s%-10s  %-10s %-10s %-10s%s";
-			PFLOG1(header, CREPORT, " ", "Variables", "Clauses", "Literals", CNORMAL);
+			LOG1(header, CREPORT, " ", "Variables", "Clauses", "Literals", CNORMAL);
 			const char* rem = "  %s%-10s: %s%-9lld  %c%-8lld  %c%-8lld%s";
 			const char* sur = "  %s%-10s: %s%-9d  %-9d  %-9d%s";
-			PFLOG1(rem, CREPORT, "Removed", CREPORTVAL,
+			LOG1(rem, CREPORT, "Removed", CREPORTVAL,
 				-varsRemoved,
 				clsRemoved < 0 ? '+' : '-', abs(clsRemoved),
 				litsRemoved < 0 ? '+' : '-', abs(litsRemoved), CNORMAL);
-			PFLOG1(sur, CREPORT, "Survived", CREPORTVAL,
+			LOG1(sur, CREPORT, "Survived", CREPORTVAL,
 				maxActive(),
 				inf.n_cls_after,
 				inf.n_lits_after, CNORMAL);
 		}
 		inline uint32	updateNumElims		() {
-			const uint32 remainedPVs = vars->pVars->size();
-			assert(remainedPVs <= vars->numPVs);
-			inf.n_del_vars_after = vars->numPVs - remainedPVs;
+			const uint32 remainedPVs = *vars->electedSize;
+			assert(remainedPVs <= vars->numElected);
+			inf.n_del_vars_after = vars->numElected - remainedPVs;
 			return remainedPVs;
 		}
 		inline void		updateNumPVs		() {
 			uint32 remainedPVs = updateNumElims();
 			vars->nMelted += inf.n_del_vars_after;
-			vars->numPVs = remainedPVs;
-			PFLOG2(2, "  BVE eliminated %d variables while %d survived", inf.n_del_vars_after, vars->numPVs);
+			vars->numElected = remainedPVs;
+			LOG2(2, "  BVE eliminated %d variables while %d survived", inf.n_del_vars_after, vars->numElected);
 		}
 		inline void		countCls            (const bool& host = 0) {
 			if (host) {
@@ -791,17 +777,17 @@ namespace ParaFROST {
 			return (phase == opts.phases)
 				|| (simpstate == CNFALLOC_FAIL)
 				|| (!cr && !lr) 
-				|| (phase > 2 && lr <= opts.lits_min);
+				|| (phase > 2 && lr <= opts.phase_lits_min);
 		}
 		//===========================================//
 		void			optSimp             ();
 		void			varReorder          ();
 		void			newBeginning        ();
-		void			sigmifying          ();
-		void			sigmify             ();
+		void			simplifying          ();
+		void			simplify             ();
 		void			awaken              ();
 		bool			LCVE                ();
-		
+		void			sortOT				();
 		void			postVE              ();
 		void			VE                  ();
 		void			SUB                 ();
@@ -810,7 +796,7 @@ namespace ParaFROST {
 		bool			prop                ();
 		bool			propFailed          ();
 		void			masterFree          ();
-		void			segsortOTAsync		();
+		void			slavesFree          ();
 		void			createOTHost        (HOT&);
 		uint32*			flattenCNF          (const uint32&);
 		void			histSimp            (const uint32&);
@@ -822,7 +808,16 @@ namespace ParaFROST {
 		void			cacheEliminated     (const cudaStream_t&);
 		void			markEliminated		(const cudaStream_t&);
 		void			reflectCNF          (const cudaStream_t&, const cudaStream_t&);
-
+		inline bool		depFreeze           (OL& ol, LIT_ST* frozen, uint32*& tail, const uint32& cand, const uint32& pmax, const uint32& nmax);
+		inline bool		propClause          (const LIT_ST*, const uint32&, SCLAUSE&);
+		inline bool		enqueueCached       (const cudaStream_t&);
+		inline bool		reallocOT           (const cudaStream_t& stream = 0);
+		inline bool		reallocCNF          ();
+		inline void		writeBack           ();
+		inline void		mapFrozen			();
+		inline void		cleanProped         ();
+		inline void		cleanManaged        ();
+		inline void		initSimplifier      ();
 		//==========================================//
 		//             Local search                 //
 		//==========================================//
@@ -830,18 +825,19 @@ namespace ParaFROST {
 		inline void		saveTrail			(const LIT_ST*, const bool&);
 		inline void		saveAll				(const LIT_ST*);
 		inline uint32	breakValue			(const uint32&);
+		inline double	breakScore			(const uint32&);
 		inline void		makeClauses			(const uint32&);
 		inline void		breakClauses		(const uint32&);
 		inline void		walkassign			();
 		uint32			promoteLit			();
 		uint32			ipromoteLit			();
+		void			updateBest			();
 		bool			walkschedule		();
 		void			walkinit			();
 		void			walkstep			();
 		void			walkstop			();
 		void			walking				();
 		void			walk				();
-
 		//==========================================//
 		//          Incremental Solving             //
 		//==========================================//
@@ -852,7 +848,7 @@ namespace ParaFROST {
 		Vec1D			ilevel;
 		Lits_t			assumptions, iconflict;
 	public:
-        void*			termCallbackState;
+		void*			termCallbackState;
         void*			learnCallbackState;
         int*			learnCallbackBuffer;
         int				learnCallbackLimit;
@@ -878,7 +874,7 @@ namespace ParaFROST {
 			CHECKVAR(v);
 			return incremental && ifrozen[v];
 		}
-        int				(*termCallback)		(void* state);
+		int				(*termCallback)		(void* state);
         void			(*learnCallback)	(void* state, int* clause);
         void			setTermCallback		(void* state, int (*termCallback)(void*)) {
             this->termCallbackState = state;

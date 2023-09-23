@@ -1,6 +1,6 @@
 /***********************************************************************[options.hpp]
 Copyright(c) 2020, Muhammad Osama - Anton Wijs,
-Technische Universiteit Eindhoven (TU/e).
+Copyright(c) 2022-present, Muhammad Osama.
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
@@ -105,19 +105,16 @@ namespace ParaFROST {
 		bool	all_en;
 		bool	solve_en;
 		bool	aggr_cnf_sort;
-		bool	ve_en, ve_plus_en, ve_fun_en, ve_lbound_en;
+		bool	ve_en, ve_plus_en;
 		bool	sigma_en, sigma_live_en, sigma_sleep_en;
 		//------------------------------------------//
 		int		nstreams;
 		int		phases;
 		int		shrink_rate;
-		int		xor_max_arity;
-		int		ve_clause_limit;
-		int		lcve_clause_limit;
-		int		sub_limit, bce_limit, ere_limit;
+		int		lcve_clause_max;
 		//------------------------------------------//
-		uint32	lcve_min, lcve_max;
-		uint32	lits_min;
+		uint32	lcve_min_vars, lcve_max_occurs;
+		uint32	phase_lits_min;
 		uint32	mu_pos, mu_neg;
 		//------------------------------------------//
 		double lits_mul;

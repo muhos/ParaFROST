@@ -1,6 +1,6 @@
 /***********************************************************************[solve.cpp]
 Copyright(c) 2020, Muhammad Osama - Anton Wijs,
-Technische Universiteit Eindhoven (TU/e).
+Copyright(c) 2022-present, Muhammad Osama.
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
@@ -73,11 +73,11 @@ namespace ParaFROST {
 			getrlimit(RLIMIT_CPU, &limit);
 			if (limit.rlim_max == RLIM_INFINITY || (rlim_t)time_limit < limit.rlim_max) {
 				limit.rlim_cur = time_limit;
-				if (setrlimit(RLIMIT_CPU, &limit) == -1) PFLOGW("timeout cannot be set");
+				if (setrlimit(RLIMIT_CPU, &limit) == -1) LOGWARNING("timeout cannot be set");
 			}
 		}
 #elif defined(_WIN32)
-		PFLOGW("timeout not supported on Windows");
+		LOGWARNING("timeout not supported on Windows");
 #endif
 	}
 
@@ -90,7 +90,7 @@ namespace ParaFROST {
 			getrlimit64(RLIMIT_AS, &limit);
 			if (limit.rlim_max == RLIM_INFINITY || limitbytes < limit.rlim_max) {
 				limit.rlim_cur = limitbytes;
-				if (setrlimit64(RLIMIT_AS, &limit) == -1) PFLOGW("memoryout cannot be set");
+				if (setrlimit64(RLIMIT_AS, &limit) == -1) LOGWARNING("memoryout cannot be set");
 			}
 		}
 #elif defined(__CYGWIN__)
@@ -100,11 +100,11 @@ namespace ParaFROST {
 			getrlimit(RLIMIT_AS, &limit);
 			if (limit.rlim_max == RLIM_INFINITY || limitbytes < limit.rlim_max) {
 				limit.rlim_cur = limitbytes;
-				if (setrlimit(RLIMIT_AS, &limit) == -1) PFLOGW("memoryout cannot be set");
+				if (setrlimit(RLIMIT_AS, &limit) == -1) LOGWARNING("memoryout cannot be set");
 			}
 		}
 #elif defined(_WIN32)
-		PFLOGW("memoryout not supported on Windows");
+		LOGWARNING("memoryout not supported on Windows");
 #endif
 	}
 
@@ -113,30 +113,30 @@ namespace ParaFROST {
 #if defined(__linux__) && defined(_FPU_EXTENDED) && defined(_FPU_DOUBLE)
 		fpu_control_t cw = (_FPU_DEFAULT & ~_FPU_EXTENDED) | _FPU_DOUBLE;
 		_FPU_SETCW(cw);
-		PFLOG2(1, " Forced FPU to use %sdouble precision%s", CREPORTVAL, CNORMAL);
+		LOG2(1, " Forced FPU to use %sdouble precision%s", CREPORTVAL, CNORMAL);
 #endif 
 	}
 
 	void handler_terminate(int)
 	{
 		fflush(stdout);
-		PFLOG1("%s%s%s", CYELLOW, "INTERRUPTED", CNORMAL);
-		PFLOGS("UNKNOWN");
+		LOG1("%s%s%s", CYELLOW, "INTERRUPTED", CNORMAL);
+		LOGSAT("UNKNOWN");
 		_exit(EXIT_FAILURE);
 	}
 
 	void handler_mercy_interrupt(int)
 	{
 		fflush(stdout);
-		PFLOG1("%s%s%s", CYELLOW, "INTERRUPTED", CNORMAL);
+		LOG1("%s%s%s", CYELLOW, "INTERRUPTED", CNORMAL);
 		solver->interrupt();
 	}
 
 	void handler_mercy_timeout(int)
 	{
 		fflush(stdout);
-		PFLOG1("%s%s%s", CYELLOW, "TIME OUT", CNORMAL);
-		PFLOGS("UNKNOWN");
+		LOG1("%s%s%s", CYELLOW, "TIME OUT", CNORMAL);
+		LOGSAT("UNKNOWN");
 		solver->interrupt();
 	}
 
@@ -152,21 +152,21 @@ namespace ParaFROST {
 	void segmentation_fault(int)
 	{
 		fflush(stdout);
-		PFLOGEN("segmentation fault detected.");
+		LOGERRORN("segmentation fault detected.");
 		_exit(EXIT_FAILURE);
 	}
 
 	void illegal_code(int)
 	{
 		fflush(stdout);
-		PFLOGEN("illegal code detected.");
+		LOGERRORN("illegal code detected.");
 		_exit(EXIT_FAILURE);
 	}
 
 	void arithmetic_error(int)
 	{
 		fflush(stdout);
-		PFLOGEN("arithmetic flaw detected.");
+		LOGERRORN("arithmetic flaw detected.");
 		_exit(EXIT_FAILURE);
 	}
 
@@ -195,16 +195,16 @@ namespace ParaFROST {
 			else if (i == 0x80000004)
 				memcpy(cpuid + 32, CPUInfo, sizeof(CPUInfo));
 		}
-		PFLOG2(1, " Available CPU: %s%s%s", CREPORTVAL, cpuid, CNORMAL);
+		LOG2(1, " Available CPU: %s%s%s", CREPORTVAL, cpuid, CNORMAL);
 #endif
 		_free = getAvailSysMem();
-		PFLOG2(1, " Available system memory: %lld GB", _free / GBYTE);
+		LOG2(1, " Available system memory: %lld GB", _free / GBYTE);
 	}
 
 	void getBuildInfo()
 	{
-		PFLOG1(" Built on %s%s%s at %s%s%s", CREPORTVAL, osystem(), CNORMAL, CREPORTVAL, date(), CNORMAL);
-		PFLOG1("       using %s%s %s%s", CREPORTVAL, compiler(), compilemode(), CNORMAL);
+		LOG1(" Built on %s%s%s at %s%s%s", CREPORTVAL, osystem(), CNORMAL, CREPORTVAL, date(), CNORMAL);
+		LOG1("       using %s%s %s%s", CREPORTVAL, compiler(), compilemode(), CNORMAL);
 	}
 
 	inline
@@ -228,7 +228,7 @@ namespace ParaFROST {
 			}
 			index++;
 		}
-		PFLOGW("cannot map to cores/SM due to unknown SM");
+		LOGWARNING("cannot map to cores/SM due to unknown SM");
 		return -1;
 	}
 
@@ -239,7 +239,7 @@ namespace ParaFROST {
 		if (!devCount) return 0;
 		CHECK(cudaGetDeviceProperties(&devProp, MASTER_GPU));
 		assert(devProp.totalGlobalMem);
-		if (devProp.warpSize != 32) PFLOGE("GPU warp size not supported");
+		if (devProp.warpSize != 32) LOGERROR("GPU warp size not supported");
 #if defined(__linux__) || defined(__CYGWIN__) 
 		_penalty = 220 * MBYTE;
 #elif defined(_WIN32)
@@ -250,10 +250,10 @@ namespace ParaFROST {
 		maxGPUThreads = devProp.multiProcessorCount * devProp.maxThreadsPerMultiProcessor;
 		maxGPUSharedMem = devProp.sharedMemPerBlock - _shared_penalty;
 		if (!quiet_en) {
-			PFLOG1(" Available GPU: %d x %s%s @ %.2fGHz%s (compute cap: %d.%d)", devCount, CREPORTVAL, devProp.name, ratio((double)devProp.clockRate, 1e6), CNORMAL, devProp.major, devProp.minor);
+			LOG1(" Available GPU: %d x %s%s @ %.2fGHz%s (compute cap: %d.%d)", devCount, CREPORTVAL, devProp.name, ratio((double)devProp.clockRate, 1e6), CNORMAL, devProp.major, devProp.minor);
 			const int cores = SM2Cores(devProp.major, devProp.minor);
-			PFLOG1(" Available GPU Multiprocessors: %d MPs (%s cores/MP)", devProp.multiProcessorCount, (cores < 0 ? "unknown" : std::to_string(cores).c_str()));
-			PFLOG1(" Available Global memory: %zd GB", _free / GBYTE);
+			LOG1(" Available GPU Multiprocessors: %d MPs (%s cores/MP)", devProp.multiProcessorCount, (cores < 0 ? "unknown" : std::to_string(cores).c_str()));
+			LOG1(" Available Global memory: %zd GB", _free / GBYTE);
 		}
 		return devCount;
 	}
@@ -262,13 +262,13 @@ namespace ParaFROST {
 
 void ParaFROST::Solver::killSolver()
 {
-	syncAll();
+	SYNCALL;
 	wrapup();
-	PFLOG0("");
-	PFLOGN2(1, " Cleaning up..");
+	LOG0("");
+	LOGN2(1, " Cleaning up..");
 	this->~Solver();
 	solver = NULL;
-	PFLDONE(1, 5);
-	if (!quiet_en) PFLRULER('-', RULELEN);
+	LOGDONE(1, 5);
+	if (!quiet_en) LOGRULER('-', RULELEN);
 	exit(EXIT_SUCCESS);
 }

@@ -1,6 +1,6 @@
 ﻿/***********************************************************************[definitions.hpp]
 Copyright(c) 2020, Muhammad Osama - Anton Wijs,
-Technische Universiteit Eindhoven (TU/e).
+Copyright(c) 2022-present, Muhammad Osama.
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
@@ -63,12 +63,6 @@ using std::ifstream;
 
 namespace ParaFROST {
 
-	#define RESETSTRUCT(MEMPTR) \
-	{ \
-		assert(MEMPTR); \
-		memset(MEMPTR, 0, sizeof(*MEMPTR)); \
-	}
-
 	struct OCCUR { uint32 ps, ns; };
 	struct CNF_INFO {
 		uint32 orgVars, maxVar, maxFrozen, maxMelted, maxSubstituted, nDualVars, unassigned, n_del_vars_after;
@@ -100,7 +94,7 @@ namespace ParaFROST {
 	inline bool  _checkvar(const T VAR) {
 		const bool invariant = VAR <= 0 || VAR > inf.maxVar;
 		if (invariant)
-			PFLOGEN("invariant \"VAR > 0 && VAR <= inf.maxVar\" failed on variable (%lld), bound = %lld",
+			LOGERRORN("invariant \"VAR > 0 && VAR <= inf.maxVar\" failed on variable (%lld), bound = %lld",
 				int64(VAR), int64(inf.maxVar));
 		return !invariant;
 	}
@@ -108,7 +102,7 @@ namespace ParaFROST {
 	inline bool  _checklit(const T LIT) {
 		const bool invariant = LIT <= 1 || LIT >= inf.nDualVars;
 		if (invariant)
-			PFLOGEN("invariant \"LIT > 1 && LIT < inf.nDualVars\" failed on literal (%lld), bound = %lld",
+			LOGERRORN("invariant \"LIT > 1 && LIT < inf.nDualVars\" failed on literal (%lld), bound = %lld",
 				int64(LIT), int64(inf.nDualVars));
 		return !invariant;
 	}

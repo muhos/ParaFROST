@@ -1,6 +1,6 @@
 /***********************************************************************[modernalloc.cuh]
 Copyright(c) 2020, Muhammad Osama - Anton Wijs,
-Technische Universiteit Eindhoven (TU/e).
+Copyright(c) 2022-present, Muhammad Osama.
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
@@ -27,6 +27,8 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 constexpr size_t MAXMEMBLOCK = 10 * MBYTE;
 
+using namespace mgpu;
+
 namespace ParaFROST {
 
 	/*****************************************************/
@@ -34,38 +36,52 @@ namespace ParaFROST {
 	/*  Dependency: context_t                            */
 	/*****************************************************/
 
-	class MCA : public mgpu::context_t {
+	class MCA : public context_t {
 	protected:
 		cudaDeviceProp _props;
 		int _ptx_version;
 		cudaStream_t _stream;
 
+		template<int dummy_arg = 0>
+		void init() {
+			cudaFuncAttributes attr;
+			cudaError_t result = cudaFuncGetAttributes(&attr, dummy_k<0>);
+			if (cudaSuccess != result) throw cuda_exception_t(result);
+			_ptx_version = attr.ptxVersion;
+
+			int ord;
+			cudaGetDevice(&ord);
+			cudaGetDeviceProperties(&_props, ord);
+		}
+
 	public:
+		MCA(bool print_prop = true, cudaStream_t stream_ = 0) :
+			context_t(), _stream(stream_) {
 
-		MCA(cudaStream_t stream_ = 0) :
-			context_t()
-			, _ptx_version(0)
-			, _stream(stream_) { }
+			init();
+			if (print_prop) {
+				printf("%s\n", device_prop_string(_props).c_str());
+			}
+		}
 
-		void init();
-		virtual const cudaDeviceProp& props		() const { return _props; }
-		virtual int				ptx_version		() const { return _ptx_version; }
-		virtual cudaStream_t	stream			() { return _stream; }
-		virtual void*			alloc			(size_t size, mgpu::memory_space_t space) {
+		virtual const cudaDeviceProp& props	() const { return _props; }
+		virtual int				ptx_version	() const { return _ptx_version; }
+		virtual cudaStream_t	stream		() { return _stream; }
+		virtual void*			alloc		(size_t size, memory_space_t space) {
 			return cacher.allocate(size);
 		}
-		virtual void			free			(void* p, mgpu::memory_space_t space) {
+		virtual void			free		(void* p, memory_space_t space) {
 			cacher.deallocate(p, MAXMEMBLOCK);
 		}
-		virtual void			synchronize		() {
+		virtual void		synchronize		() {
 			cudaError_t result = _stream ?
 				cudaStreamSynchronize(_stream) :
 				cudaDeviceSynchronize();
-			if (cudaSuccess != result) throw mgpu::cuda_exception_t(result);
+			if (cudaSuccess != result) throw cuda_exception_t(result);
 		}
-		virtual cudaEvent_t		event			() { return NULL; }
-		virtual void			timer_begin		() {}
-		virtual double			timer_end		() { return 0; }
+		virtual cudaEvent_t event			() { return NULL; }
+		virtual void		timer_begin		() {}
+		virtual double		timer_end		() { return 0; }
 
 	};
 

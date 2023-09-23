@@ -1,6 +1,6 @@
 /***********************************************************************[bcp.cpp]
 Copyright(c) 2020, Muhammad Osama - Anton Wijs,
-Technische Universiteit Eindhoven (TU/e).
+Copyright(c) 2022-present, Muhammad Osama.
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
@@ -29,7 +29,7 @@ bool Solver::BCP()
 		const uint32 assign = trail[sp->propagated++], f_assign = FLIP(assign);
 		const int level = l2dl(assign);
 		CHECKLIT(assign);
-		PFLOG2(4, "  propagating %d@%d", l2i(assign), level);
+		LOG2(4, "  propagating %d@%d", l2i(assign), level);
 		WL& ws = wt[assign];
 		uint64 ticks = cacheLines(ws.size(), sizeof(WATCH));
 		WATCH* i = ws, *j = i, * wend = ws.end();
@@ -94,7 +94,7 @@ bool Solver::BCP()
 					else { // clause is conflicting
 						assert(!val);
 						assert(!otherVal);
-						PFLCONFLICT(this, 3, other);
+						LOGCONFLICT(this, 3, other);
 						conflict = ref;
 						break;
 					}
@@ -142,7 +142,7 @@ inline bool Solver::propbinary(const uint32& assign)
 	CHECKLIT(assign);
 	assert(DL() == 1);
 	const int level = l2dl(assign);
-	PFLOG2(4, "  propagating %d@%d in binaries", l2i(assign), level);
+	LOG2(4, "  propagating %d@%d in binaries", l2i(assign), level);
 	LIT_ST* values = sp->value;
 	WL& ws = wt[assign];
 	forall_watches(ws, i) {
@@ -168,7 +168,7 @@ inline bool Solver::proplarge(const uint32& assign, const bool& hyper)
 	const bool hbr = opts.probehbr_en && hyper;
 	const int level = l2dl(assign);
 	const uint32 f_assign = FLIP(assign);
-	PFLOG2(4, "  propagating %d@%d in large clauses", l2i(assign), level);
+	LOG2(4, "  propagating %d@%d in large clauses", l2i(assign), level);
 	LIT_ST* values = sp->value;
 	WL& ws = wt[assign];
 	uint64 ticks = cacheLines(ws.size(), sizeof(WATCH)) + 1;
@@ -232,7 +232,7 @@ inline bool Solver::proplarge(const uint32& assign, const bool& hyper)
 						const uint32 dom = hyper2Resolve(c, other);
 						if (dom) {
 							CHECKLIT(dom);
-							PFLOG2(4, "  adding hyper binary resolvent(%d %d)", l2i(dom), l2i(other));
+							LOG2(4, "  adding hyper binary resolvent(%d %d)", l2i(dom), l2i(other));
 							assert(learntC.empty());
 							learntC.push(dom);
 							learntC.push(other);
@@ -247,7 +247,7 @@ inline bool Solver::proplarge(const uint32& assign, const bool& hyper)
 				else {
 					assert(!val);
 					assert(!otherVal);
-					PFLCONFLICT(this, 3, other);
+					LOGCONFLICT(this, 3, other);
 					conflict = ref;
 					break;
 				}

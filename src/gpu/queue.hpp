@@ -1,6 +1,6 @@
 /***********************************************************************[queue.hpp]
 Copyright(c) 2020, Muhammad Osama - Anton Wijs,
-Technische Universiteit Eindhoven (TU/e).
+Copyright(c) 2022-present, Muhammad Osama.
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
@@ -95,7 +95,7 @@ namespace ParaFROST {
 		__forceinline void		update		(const uint32& v, const uint64& bump) { 
 			CHECKVAR(v);
 			_free = v, _bumped = bump;
-			PFLOG2(4, "  queue free updated to (v: %d, bump: %lld)", _free, _bumped); 
+			LOG2(4, "  queue free updated to (v: %d, bump: %lld)", _free, _bumped); 
 		}
 		__forceinline void		toFront		(const uint32& v) { CHECKVAR(v); outQue(v), inQue(v); }
 		__forceinline uint32	previous	(const uint32& v) { CHECKVAR(v); return links[v].prev; }
@@ -106,9 +106,9 @@ namespace ParaFROST {
 		__forceinline uint32	last		() { return _last; }
 		__forceinline uint64	bumped		() { return _bumped; }
 					  void		print		() {
-			PFLOG1(" Queue (first: %d, last: %d, free: %d, bumped: %lld):", _first, _last, _free, _bumped);
+			LOG1(" Queue (first: %d, last: %d, free: %d, bumped: %lld):", _first, _last, _free, _bumped);
 			for (uint32 i = 0; i < links.size(); i++) 
-				PFLOG1(" Q(%d)->(p: %d, n: %d)", i, links[i].prev, links[i].next);
+				LOG1(" Q(%d)->(p: %d, n: %d)", i, links[i].prev, links[i].next);
 		}
 	};
 
