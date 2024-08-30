@@ -1,4 +1,4 @@
-/***********************************************************************[solve.cpp]
+/***********************************************************************[solver.cpp]
 Copyright(c) 2020, Muhammad Osama - Anton Wijs,
 Copyright(c) 2022-present, Muhammad Osama.
 
@@ -16,7 +16,7 @@ You should have received a copy of the GNU General Public License
 along with this program.  If not, see <https://www.gnu.org/licenses/>.
 **********************************************************************************/
 
-#include "solve.hpp" 
+#include "solver.hpp" 
 #include "definitions.cuh"
 #include "version.hpp"
 
@@ -217,7 +217,8 @@ namespace ParaFROST {
 			{0x50, 128}, {0x52, 128}, {0x53, 128},
 			{0x60,  64}, {0x61, 128}, {0x62, 128},
 			{0x70,  64}, {0x72,  64}, {0x75,  64},
-			{0x80,  64}, {0x86, 128}, {0x87, 128},
+			{0x80,  64}, {0x86, 128}, {0x87, 128}, {0x89, 128},
+    		{0x90, 128},
 			{-1, -1}
 		};
 

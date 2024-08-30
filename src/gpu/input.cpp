@@ -37,7 +37,7 @@ namespace ParaFROST {
         getGPUInfo(_gfree, _gpenalty);
         LOGHEADER(0, 5, "Usage");
         LOG0("");
-        LOG1(" %sparafrost%s [<formula>.<cnf>][<option> ...]", CSOLVER, CNORMAL);
+        LOG1(" %sparafrost%s [ <cnf> ][ <option> ... ]", CSOLVER, CNORMAL);
         LOG0("");
         OPTION_VEC& options = ARG::opts();
         Sort(options.data(), options.size(), ARG::ARG_CMP());

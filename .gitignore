@@ -1,3 +1,4 @@
-install.log
+LOGINSTALL
 src/cpu/*.o
 src/gpu/*.o
+build

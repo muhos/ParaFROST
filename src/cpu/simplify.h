@@ -19,7 +19,7 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 #ifndef __SIMPLIFY_
 #define __SIMPLIFY_
 
-#include "solve.h" 
+#include "solver.h" 
 using namespace ParaFROST;
 
 #define RESOLUTION 1

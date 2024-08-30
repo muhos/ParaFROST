@@ -1,4 +1,4 @@
-/***********************************************************************[solve.hpp]
+/***********************************************************************[solver.hpp]
 Copyright(c) 2020, Muhammad Osama - Anton Wijs,
 Copyright(c) 2022-present, Muhammad Osama.
 

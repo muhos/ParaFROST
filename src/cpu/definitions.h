@@ -30,6 +30,7 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 #include <cstdio>
 #include <fstream>
 #include <climits>
+#include <cstdint>
 #include <cstdlib>
 #include <csignal>
 #include "logging.h"

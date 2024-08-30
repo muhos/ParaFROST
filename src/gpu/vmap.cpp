@@ -17,7 +17,7 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 **********************************************************************************/
 
 #include "control.hpp"
-#include "solve.hpp"
+#include "solver.hpp"
 
 using namespace ParaFROST;
 

@@ -29,7 +29,7 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 #include "control.hpp"
 #include "banner.hpp"
-#include "solve.hpp"
+#include "solver.hpp"
 
 using namespace ParaFROST;
 
@@ -43,7 +43,6 @@ int main(int argc, char **argv)
 	INT_OPT opt_timeout("timeout", "set the timeout in seconds", 0, INT32R(0, INT32_MAX));
 	INT_OPT opt_memoryout("memoryout", "set the memout in gigabytes", 0, INT32R(0, 256));
 	OPTION_VEC& options = ARG::opts();
-	if (argc == 1) LOGERROR("no input file specified");
 	try {
 		parseArguments(argc, argv);
 		quiet_en = opt_quiet_en, verbose = opt_verbose;
@@ -67,7 +66,7 @@ int main(int argc, char **argv)
 			}
 		}
 		signal_handler(handler_terminate);
-		string formula = argv[1];
+		string formula = argc > 1 ? argv[1] : "";
 		Solver* parafrost = new Solver(formula);
 		solver = parafrost;
 		if (opt_timeout > 0) set_timeout(opt_timeout);

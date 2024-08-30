@@ -1,4 +1,4 @@
-﻿/***********************************************************************[solve.cpp]
+﻿/***********************************************************************[solver.cpp]
 Copyright(c) 2020, Muhammad Osama - Anton Wijs,
 Technische Universiteit Eindhoven (TU/e).
 
@@ -16,7 +16,7 @@ You should have received a copy of the GNU General Public License
 along with this program.  If not, see <https://www.gnu.org/licenses/>.
 **********************************************************************************/
 
-#include "solve.h" 
+#include "solver.h" 
 #include "control.h"
 
 namespace ParaFROST {

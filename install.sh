@@ -134,7 +134,7 @@ fi
 pffinal () {
 if [ $noverb = 0 ] && [ $quiet = 0 ]; then
 	log ""
-	log "check '$1' directory for '$binary' and its library '$library'" 
+	log "check '$1' directory for 'bin/$binary' and its library 'lib/$library'" 
 	printf "+%${lineWidth}s+\n" |tr ' ' '-'
 fi
 }
@@ -197,6 +197,7 @@ if [[ "$clean" = "gpu" ]] || [[ "$clean" = "all" ]]; then
 	endline
 	ruler
 fi
+[ $cleanCPU = 1 ] && [ $cleanGPU = 1 ] && rm -rf build
 [ $cleanCPU = 1 ] || [ $cleanGPU = 1 ] && exit 0
 
 # operating system
@@ -310,7 +311,10 @@ sed -i "s/^LIB.*/LIB := $library/" $makefile
 
 log ""
 
-mkdir -p $builddir
+srcsolve=$srcdir/solver.h
+srccntrl=$srcdir/control.h
+
+mkdir -p $builddir/bin $builddir/lib $builddir/include
 
 cd $srcdir
 if [ $quiet = 0 ]; then make; else make >> $logfile; fi
@@ -321,8 +325,13 @@ if [ ! -f $srcdir/$binary ] || [ ! -f $srcdir/$library ]; then
 	error "could not install the solver due to previous errors"
 	error "check 'install.log' for more information"
 fi
-mv $srcdir/$binary $builddir
-mv $srcdir/$library $builddir
+
+mv $srcdir/$binary $builddir/bin
+mv $srcdir/$library $builddir/lib
+
+cp $gpubuild $builddir/include
+cp $srccntrl $builddir/include
+cp $srcsolve $builddir/include
 
 pffinal $builddir
 
@@ -444,7 +453,10 @@ sed -i "s/^LIB :=.*/LIB := $library/" $makefile
 
 log ""
 
-mkdir -p $builddir
+srcsolve=$srcdir/solver.hpp
+srccntrl=$srcdir/control.hpp
+
+mkdir -p $builddir/bin $builddir/lib $builddir/include
 
 cd $srcdir
 if [ $quiet = 0 ]; then make; else make >> $logfile; fi
@@ -455,8 +467,13 @@ if [ ! -f $srcdir/$binary ] || [ ! -f $srcdir/$library ]; then
 	error "could not install the solver due to previous errors"
 	error "check 'install.log' for more information"
 fi
-mv $srcdir/$binary $builddir
-mv $srcdir/$library $builddir
+
+mv $srcdir/$binary $builddir/bin
+mv $srcdir/$library $builddir/lib
+
+cp $gpubuild $builddir/include
+cp $srccntrl $builddir/include
+cp $srcsolve $builddir/include
 
 pffinal $builddir
 

@@ -26,28 +26,28 @@ To install either the CPU or the GPU solvers, use the `install.sh` script which 
        -l or --logging       enable logging (needed for verbosity level > 2)
        -s or --statistics    enable costly statistics (may impact runtime)
        -a or --all           enable all above flags except 'assert'
-	   --ncolors             disable colors in all solver outputs
+       --ncolors             disable colors in all solver outputs
        --clean=<target>      remove old installation of <cpu | gpu | all> solvers
        --standard=<n>        compile with <11 | 14 | 17> c++ standard
        --gextra="flags"      pass extra "flags" to the GPU compiler (nvcc)
-	   --cextra="flags"      pass extra "flags" to the CPU compiler (g++)
+       --cextra="flags"      pass extra "flags" to the CPU compiler (g++)
 
 
 ## GPU solver
 To build the GPU solver, make sure you have a CUDA-capable GPU with pre-installed NVIDIA driver and CUDA toolkit.
 
-For installing CUDA v12, run the following commands on a Ubuntu 22.04:<br>
+For installing CUDA v12.6, run the following commands on a Ubuntu 24.04:<br>
 
-`wget https://developer.download.nvidia.com/compute/cuda/repos/ubuntu2204/x86_64/cuda-keyring_1.0-1_all.deb`<br>
-`sudo dpkg -i cuda-keyring_1.0-1_all.deb`<br>
+`wget https://developer.download.nvidia.com/compute/cuda/repos/ubuntu2404/x86_64/cuda-keyring_1.1-1_all.deb`<br>
+`sudo dpkg -i cuda-keyring_1.1-1_all.deb`<br>
 `sudo apt-get update`<br>
-`sudo apt-get -y install cuda`<br>
+`sudo apt-get -y install cuda-toolkit-12-6`<br>
 
 The source code is also platform-compatible with Windows and WSL2. To install CUDA on those platforms, follow the
 installation guide in https://docs.nvidia.com/cuda/.
 
 Now the GPU solver is ready to install by running the install script via the command `./install.sh -g`. 
-The `parafrost` binary and the library `libparafrost.a` will be created by default in the build directory.<br>
+The `parafrost` binary, the library `libparafrost.a`, and the main include file `solver.hpp` will be created by default in the build directory.<br>
 
 ## CPU solver
 To build a CPU-only version of the solver, run `./install.sh -c`.<br>
@@ -61,3 +61,6 @@ For more options, type `parafrost -h` or `parafrost --helpmore`.
 
 # Incremental Solving
 ParaFROST supports incremental solving to `add`/`remove` variables or clauses incrementally while solving with assumptions if needed. A fully configurable interface to integrate ParaFROST with CBMC model checker is created here (https://github.com/muhos/gpu4bmc). A similar interface can be created to work with ParaFROST in any SAT-based bounded model checker.
+
+# Citation
+Please cite our latest paper [FMSD'23](https://link.springer.com/article/10.1007/s10703-023-00432-z) when using ParaFROST.

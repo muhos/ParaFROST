@@ -16,7 +16,7 @@ You should have received a copy of the GNU General Public License
 along with this program.  If not, see <https://www.gnu.org/licenses/>.
 **********************************************************************************/
 
-#include "solve.hpp"
+#include "solver.hpp"
 
 #if defined(_WIN32) && !defined(__CUDACC__)
 #define __CUDACC__

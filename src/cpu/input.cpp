@@ -35,7 +35,7 @@ namespace ParaFROST {
         getBuildInfo();
         PFLRULER('-', RULELEN);
         PFLOG0("");
-        PFLOG1(" Usage: %sparafrost%s [<formula>.<cnf>][<option> ...]", CSOLVER, CNORMAL);
+        PFLOG1(" Usage: %sparafrost%s [ <cnf> ][ <option> ... ]", CSOLVER, CNORMAL);
         PFLOG0("");
         Sort(options.data(), options.size(), ARG::ARG_CMP());
         arg_t prev_type = NULL;

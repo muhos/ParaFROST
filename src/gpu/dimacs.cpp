@@ -16,7 +16,7 @@ You should have received a copy of the GNU General Public License
 along with this program.  If not, see <https://www.gnu.org/licenses/>.
 **********************************************************************************/
 
-#include "solve.hpp"
+#include "solver.hpp"
 #include "dimacs.hpp"
 #include "control.hpp"
 
@@ -25,6 +25,12 @@ using namespace ParaFROST;
 #if defined(__GNUC__) && (__GNUC__ >= 8)
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wclass-memaccess"
+#endif
+
+#if defined(__linux__) || defined(__CYGWIN__)
+#define EOF_MSG "(exit: cntrl + D)"
+#elif defined(_WIN32)
+#define EOF_MSG "(exit: cntrl + Z)"
 #endif
 
 bool Solver::parser() 
@@ -39,7 +45,7 @@ bool Solver::parser()
 	else {
 		formula.size = st.st_size = 0;
 		formula.path.assign("stdin");
-		LOG2(1, " Reading DIMACS from \"%sstdin%s\"...", CREPORTVAL, CNORMAL);
+		LOG2(1, " Reading DIMACS from \"%sstdin%s\" " EOF_MSG "...", CREPORTVAL, CNORMAL);
 	}
 	timer.start();
 	Lits_t in_c, org;

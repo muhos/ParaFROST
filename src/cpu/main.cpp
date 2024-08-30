@@ -17,7 +17,7 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 **********************************************************************************/
 
 #include "control.h"
-#include "solve.h"
+#include "solver.h"
 #include "version.h"
 
 using namespace ParaFROST;
@@ -31,8 +31,8 @@ int main(int argc, char **argv)
 	BOOL_OPT opt_competition_en("competition", "engage SAT competition mode", false);
 	BOOL_OPT opt_quiet_en("quiet", "enable quiet mode, same as verbose=0", false);
 	INT_OPT opt_verbose("verbose", "set the verbosity", 1, INT32R(0, 4));
-	INT_OPT opt_timeout("timeout", "set out-of-time limit in seconds", 0, INT32R(0, INT32_MAX));
-	INT_OPT opt_memoryout("memoryout", "set out-of-memory limit in gigabytes", 0, INT32R(0, 256));
+	INT_OPT opt_timeout("timeout", "set timeout in seconds", 0, INT32R(0, INT32_MAX));
+	INT_OPT opt_memoryout("memoryout", "set memout in gigabytes", 0, INT32R(0, 256));
 	try {
 		bool parsed = parseArguments(argc, argv);
 		competition_en = opt_competition_en;
