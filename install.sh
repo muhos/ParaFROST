@@ -135,6 +135,7 @@ pffinal () {
 if [ $noverb = 0 ] && [ $quiet = 0 ]; then
 	log ""
 	log "check '$1' directory for 'bin/$binary' and its library 'lib/$library'" 
+	log "do not forget to include 'include/$2' when using solver API" 
 	printf "+%${lineWidth}s+\n" |tr ' ' '-'
 fi
 }
@@ -172,6 +173,11 @@ fi
 # banner
 pfbanner
 
+# version files
+vertemplate=templates/version.in
+cpubuild=src/cpu/version.h
+gpubuild=src/gpu/version.hpp
+
 # cleaning
 cleanCPU=0
 cleanGPU=0
@@ -183,6 +189,7 @@ if [[ "$clean" = "cpu" ]] || [[ "$clean" = "all" ]]; then
 	srcdir=src/cpu
 	rm -f $srcdir/Makefile
 	rm -f $srcdir/*.o $srcdir/$binary $srcdir/$library
+	cp $vertemplate $cpubuild
 	endline
 	ruler
 fi
@@ -194,6 +201,7 @@ if [[ "$clean" = "gpu" ]] || [[ "$clean" = "all" ]]; then
 	srcdir=src/gpu
 	rm -f $srcdir/Makefile
 	rm -f $srcdir/*.o $srcdir/*.cuo $srcdir/$binary $srcdir/$library
+	cp $vertemplate $gpubuild
 	endline
 	ruler
 fi
@@ -226,7 +234,6 @@ now=$(date)
 [ -z "$now" ] && error "cannot read the system date"
 
 # generate version header file without compiler verions (cpu/gpu specific)
-vertemplate=templates/version.in
 [ ! -f $vertemplate ] && error "cannot find '$vertemplate' template file"
 versionme () {
 	[ ! -f $2 ] && error "cannot find local '$2' header"
@@ -237,8 +244,6 @@ versionme () {
 	echo "#define OSYSTEM \"$HOST_OS\"" >> $2
 	echo "#define DATE \"$now\"" >> $2
 }
-cpubuild=src/cpu/version.h
-gpubuild=src/gpu/version.hpp
 if [ $icpu = 1 ] || [ $igpu = 1 ]; then 
 	cp $vertemplate $cpubuild; cp $vertemplate $gpubuild
 	logn "generating header 'version.hpp' from 'version.in'..."
@@ -311,9 +316,6 @@ sed -i "s/^LIB.*/LIB := $library/" $makefile
 
 log ""
 
-srcsolve=$srcdir/solver.h
-srccntrl=$srcdir/control.h
-
 mkdir -p $builddir/bin $builddir/lib $builddir/include
 
 cd $srcdir
@@ -329,11 +331,9 @@ fi
 mv $srcdir/$binary $builddir/bin
 mv $srcdir/$library $builddir/lib
 
-cp $gpubuild $builddir/include
-cp $srccntrl $builddir/include
-cp $srcsolve $builddir/include
+cp $srcdir/*.h $builddir/include
 
-pffinal $builddir
+pffinal $builddir "solver.h"
 
 fi # end of CPU installation block
 
@@ -453,9 +453,6 @@ sed -i "s/^LIB :=.*/LIB := $library/" $makefile
 
 log ""
 
-srcsolve=$srcdir/solver.hpp
-srccntrl=$srcdir/control.hpp
-
 mkdir -p $builddir/bin $builddir/lib $builddir/include
 
 cd $srcdir
@@ -471,10 +468,8 @@ fi
 mv $srcdir/$binary $builddir/bin
 mv $srcdir/$library $builddir/lib
 
-cp $gpubuild $builddir/include
-cp $srccntrl $builddir/include
-cp $srcsolve $builddir/include
+cp $srcdir/*.hpp $srcdir/*.cuh $builddir/include
 
-pffinal $builddir
+pffinal $builddir "solver.hpp"
 
 fi # end of GPU installation block

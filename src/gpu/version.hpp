@@ -26,7 +26,3 @@ namespace ParaFROST {
 	const char* date();
 
 }
-#define VERSION "3.4.1"
-#define OSYSTEM "linux omega 6.8.0-41-generic x86_64"
-#define DATE "Fri Aug 30 04:00:26 PM CEST 2024"
-#define COMPILER "g++ (Ubuntu 13.2.0-23ubuntu4) 13.2.0 + nvcc 12.6.20"

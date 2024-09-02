@@ -26,6 +26,3 @@ namespace ParaFROST {
 	const char* date();
 
 }
-#define VERSION "3.2.5"
-#define OSYSTEM "linux omega 6.8.0-41-generic x86_64"
-#define DATE "Fri Aug 30 04:00:26 PM CEST 2024"
