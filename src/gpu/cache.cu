@@ -25,11 +25,11 @@ using namespace ParaFROST;
 
 void CACHER::destroy() {
 	for (free_cache_t::iterator i = free_cache.begin(); i != free_cache.end(); i++) {
-		CACHEMEMCHECK(cudaFree(i->second));
+		if (i->second) CACHEMEMCHECK(cudaFree(i->second));
 		i->second = NULL;
 	}
 	for (alloc_cache_t::iterator i = alloc_cache.begin(); i != alloc_cache.end(); i++) {
-		CACHEMEMCHECK(cudaFree(i->first));
+		if (i->first) CACHEMEMCHECK(cudaFree(i->first));
 	}
 	free_cache.clear();
 	alloc_cache.clear();
@@ -49,7 +49,7 @@ void* CACHER::allocate(size_t size) {
 	}
 	// no free blocks, allocate new one
 	else {
-		CACHEMEMCHECK(cudaMalloc((void**)&p, size));
+		cudaMalloc((void**)&p, size);
 		used += size;
 	}
 	assert(p);
@@ -76,6 +76,7 @@ void CACHER::deallocate(void* p, const size_t bound) {
 	alloc_cache.erase(allocated_block);
 	if (size < bound) free_cache.insert(std::make_pair(size, p)); // cache free block
 	else { // deallocate free block
+		assert(p);
 		CACHEMEMCHECK(cudaFree(p));
 		used -= size;
 	}

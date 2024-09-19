@@ -258,6 +258,7 @@ void Solver::masterFree()
 {
 	LOG2(2, " Freeing up GPU memory..");
 	SYNCALL;
+	cacher.destroy();
 	cumm.freeFixed();
 	cumm.freePinned();
 	cleanManaged();

@@ -77,21 +77,29 @@ namespace ParaFROST {
 			const grid_t MAXBLOCKS = maxGPUThreads /					     \
 										(BLOCK2D.x * BLOCK2D.y);             \
 			const grid_t MINBLOCKS =										 \
-				  grid_t(MAXBLOCKS * (MINOPTS ## _min_blocks));		     \
+				  grid_t(MAXBLOCKS * (MINOPTS ## _min_blocks));		    	\
 			while (BLOCK2D.y > MINTHREADS && realBlocks <= MINBLOCKS) {	     \
 				BLOCK2D.y >>= 1;											 \
 				realBlocks = ROUNDUPBLOCKS(NVARS, BLOCK2D.y);			     \
 			}																 \
 			const grid_t nBlocks = MIN(realBlocks, MAXBLOCKS);             \
 
-	#define OPTIMIZEBLOCKS2(DATALEN, NTHREADS)                               \
-			assert(DATALEN);                                                 \
-			assert(NTHREADS);                                                \
-			assert(maxGPUThreads);                                           \
-			const grid_t REALTHREADS = (NTHREADS) << 1;					 \
-			const grid_t REALBLOCKS = ROUNDUPBLOCKS(DATALEN, REALTHREADS); \
-			const grid_t MAXBLOCKS = maxGPUThreads / REALTHREADS;          \
-			const grid_t nBlocks = MIN(REALBLOCKS, MAXBLOCKS);             \
+	#define OPTIMIZEBLOCKS2(DATALEN, NTHREADS)                               	\
+			assert(DATALEN);                                                 	\
+			assert(NTHREADS);                                                	\
+			assert(maxGPUThreads);                                           	\
+			grid_t nBlocks = MAXREDUCEBLOCKS + 1;								\
+			grid_t multiplier = 0;												\
+			uint32 blockSize = 0;                                      			\
+			while (MAXREDUCEBLOCKS < nBlocks && blockSize < 1024) {				\
+				blockSize = BLOCK1D << multiplier;								\
+				assert(blockSize);												\
+				const grid_t REALTHREADS = (blockSize) << 1;					\
+				const grid_t REALBLOCKS = ROUNDUPBLOCKS(DATALEN, REALTHREADS);   \
+				const grid_t MAXBLOCKS = maxGPUThreads / REALTHREADS;			\
+				nBlocks = MIN(REALBLOCKS, MAXBLOCKS); 							\
+				multiplier++;													\
+			}  																	\
 
 	// macros for shared memory calculation
     #define OPTIMIZESHARED(NTHREADS, MINCAP)                 \

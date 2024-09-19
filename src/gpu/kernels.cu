@@ -183,10 +183,10 @@ namespace ParaFROST {
 		enabled = true;
 		LOGN2(2, " Counting proof bytes..");
 		OPTIMIZEBLOCKS2(numLits, BLOCK1D);
-		OPTIMIZESHARED(BLOCK1D, sizeof(uint32));
+		OPTIMIZESHARED(blockSize, sizeof(uint32));
 		SYNCALL; // sync any pending kernels or transfers
 		if (gopts.profile_gpu) cutimer->start();
-		cnt_proof << <nBlocks, BLOCK1D, smemSize >> > (literals, numLits);
+		cnt_proof << <nBlocks, blockSize, smemSize >> > (literals, numLits);
 		LASTERR("Proof counting failed");
 		CHECK(cudaMemcpyFromSymbol(hostLBlocks, devLBlocks, nBlocks * sizeof(uint32)));
 		if (gopts.profile_gpu) cutimer->stop(), cutimer->ve += cutimer->gpuTime();
@@ -200,8 +200,8 @@ namespace ParaFROST {
 	{
 		const uint32 cnf_sz = inf.nClauses;
 		OPTIMIZEBLOCKS2(cnf_sz, BLOCK1D);
-		OPTIMIZESHARED(BLOCK1D, sizeof(uint32));
-		cnt_cls << <nBlocks, BLOCK1D, smemSize >> > (cnf);
+		OPTIMIZESHARED(blockSize, sizeof(uint32));
+		cnt_cls << <nBlocks, blockSize, smemSize >> > (cnf);
 		CHECK(cudaMemcpyFromSymbol(hostCBlocks, devCBlocks, nBlocks * sizeof(uint32)));
 		inf.n_cls_after = seqreduceBlocks(hostCBlocks, nBlocks);
 	}
@@ -210,8 +210,8 @@ namespace ParaFROST {
 	{
 		const uint32 cnf_sz = inf.nClauses;
 		OPTIMIZEBLOCKS2(cnf_sz, BLOCK1D);
-		OPTIMIZESHARED(BLOCK1D, sizeof(uint32));
-		cnt_lits << <nBlocks, BLOCK1D, smemSize >> > (cnf);
+		OPTIMIZESHARED(blockSize, sizeof(uint32));
+		cnt_lits << <nBlocks, blockSize, smemSize >> > (cnf);
 		CHECK(cudaMemcpyFromSymbol(hostLBlocks, devLBlocks, nBlocks * sizeof(uint32)));
 		inf.n_lits_after = seqreduceBlocks(hostLBlocks, nBlocks);
 	}
@@ -220,8 +220,8 @@ namespace ParaFROST {
 	{
 		const uint32 cnf_sz = inf.nClauses + (inf.nClauses >> 1);
 		OPTIMIZEBLOCKS2(cnf_sz, BLOCK1D);
-		OPTIMIZESHARED(BLOCK1D, sizeof(uint32) * 2);
-		cnt_cls_lits << <nBlocks, BLOCK1D, smemSize >> > (cnf);
+		OPTIMIZESHARED(blockSize, sizeof(uint32) * 2);
+		cnt_cls_lits << <nBlocks, blockSize, smemSize >> > (cnf);
 		CHECK(cudaMemcpyFromSymbol(hostCBlocks, devCBlocks, nBlocks * sizeof(uint32)));
 		CHECK(cudaMemcpyFromSymbol(hostLBlocks, devLBlocks, nBlocks * sizeof(uint32)));
 		seqreduceBlocks(hostCBlocks, hostLBlocks, nBlocks);

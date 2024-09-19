@@ -1,4 +1,11 @@
 LOGINSTALL
 src/cpu/*.o
 src/gpu/*.o
+src/gpu/*.cuo
+src/gpu/*.cnf
+src/cpu/*.cnf
+src/cpu/Makefile
+src/gpu/Makefile
 build
+.vscode
+*.cnf
