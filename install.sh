@@ -116,7 +116,7 @@ if [[ "$clean" != "" ]] && [[ "$clean" != "cpu" ]] && [[ "$clean" != "gpu" ]] &&
 	error "invalid clean target '$clean'"
 fi
 
-if [ ! $standard = 11 ] && [ ! $standard = 14 ] && [ ! $standard = 17 ]; then 
+if [ ! $standard = 14 ] && [ ! $standard = 17 ]; then 
 	error "invalid c++ standard '$standard'"
 fi
 

@@ -73,7 +73,7 @@ ALL_LDFLAGS += $(addprefix -Xlinker ,$(LDFLAGS))
 
 # gencode arguments
 
-SMS ?= 60 70 75
+SMS ?= 75
 ifeq ($(SMS),)
 $(error no SM architectures have been specified)
 endif
