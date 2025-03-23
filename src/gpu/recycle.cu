@@ -31,13 +31,17 @@ namespace ParaFROST {
 	//=================================//
 	//	CNF Garbage Collection on GPU  //
 	//=================================//
-	__global__ void scatter_k(const CNF* __restrict__ src, S_REF* __restrict__ scatter, addr_t __restrict__ stencil)
+	__global__ void scatter_k(const CNF* __restrict__ src, S_REF* __restrict__ scatter, addr_t __restrict__ stencil, const size_t max_size)
 	{
 		uint32 tid = global_tx;
 		while (tid < src->size()) {
 			const SCLAUSE& c = src->clause(tid);
-			if (c.deleted()) stencil[tid] = 0, scatter[tid] = 0;
-			else stencil[tid] = 1, scatter[tid] = c.size() + DC_NBUCKETS;
+			assert(tid < max_size);
+			if (c.deleted()) { stencil[tid] = 0, scatter[tid] = 0; }
+			else { 
+				stencil[tid] = 1, scatter[tid] = c.size() + DC_NBUCKETS;
+				assert(c.size() == scatter[tid] - DC_NBUCKETS);
+			}
 			tid += stride_x;
 		}
 	}
@@ -52,6 +56,7 @@ namespace ParaFROST {
 				assert(src->clause(tid).size() == dest->cref(new_r)->size());
 				assert(src->clause(tid).capacity() == dest->cref(new_r)->capacity());
 			}
+			else assert(src->clause(tid).deleted());
 			tid += stride_x;
 		}
 	}
@@ -73,7 +78,7 @@ namespace ParaFROST {
 		resizeCNFAsync(dest, data_size, inf.nClauses);
 
 		OPTIMIZEBLOCKS(old_size, BLOCK1D);
-		scatter_k << <nBlocks, BLOCK1D >> > (src, d_scatter, d_stencil);
+		scatter_k << <nBlocks, BLOCK1D >> > (src, d_scatter, d_stencil, nscatters);
 		if (gopts.sync_always) {
 			LASTERR("Scattering CNF failed");
 			SYNC(0);

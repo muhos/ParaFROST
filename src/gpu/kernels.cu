@@ -292,9 +292,13 @@ namespace ParaFROST {
 		VARS* vars,
 		cuVecB* proof,
 		uint32* ucnt,
+		const uint32& max_cnts,
 		uint32* type,
+		const uint32& max_types,
 		uint32* rpos,
+		const uint32& max_poss,
 		S_REF* rref,
+		const uint32& max_refs,
 		const bool& in)
 	{
 		LOGN2(2, "  resetting last eliminated ID to -1.. ");
@@ -306,11 +310,11 @@ namespace ParaFROST {
 		LOGENDING(2, 5, "(%d/%d ths, %d/%d bls) and %zd KB shared memory",
 			nThreads, BLVE1, nBlocks, MAXBLOCKS, smemSize / KBYTE);
 #if VE_DBG
-		if (in) in_ve_k_1 << <1, 1, smemSize >> > (cnf, ot, vars->elected, vars->eliminated, vars->units, vars->resolved, proof, vars->varcore, ucnt, type, rpos, rref);
-		else	   ve_k_1 << <1, 1, smemSize >> > (cnf, ot, vars->elected, vars->eliminated, vars->units, vars->resolved, proof, vars->varcore, ucnt, type, rpos, rref);
+		if (in) in_ve_k_1 << <1, 1, smemSize >> > (cnf, ot, vars->elected, vars->eliminated, vars->units, vars->resolved, proof, vars->varcore, ucnt, max_cnts, type, max_types, rpos, max_poss, rref, max_refs);
+		else	   ve_k_1 << <1, 1, smemSize >> > (cnf, ot, vars->elected, vars->eliminated, vars->units, vars->resolved, proof, vars->varcore, ucnt, max_cnts, type, max_types, rpos, max_poss, rref, max_refs);
 #else
-		if (in) in_ve_k_1 << <nBlocks, nThreads, smemSize >> > (cnf, ot, vars->elected, vars->eliminated, vars->units, vars->resolved, proof, vars->varcore, ucnt, type, rpos, rref);
-		else	   ve_k_1 << <nBlocks, nThreads, smemSize >> > (cnf, ot, vars->elected, vars->eliminated, vars->units, vars->resolved, proof, vars->varcore, ucnt, type, rpos, rref);
+		if (in) in_ve_k_1 << <nBlocks, nThreads, smemSize >> > (cnf, ot, vars->elected, vars->eliminated, vars->units, vars->resolved, proof, vars->varcore, ucnt, max_cnts, type, max_types, rpos, max_poss, rref, max_refs);
+		else	   ve_k_1 << <nBlocks, nThreads, smemSize >> > (cnf, ot, vars->elected, vars->eliminated, vars->units, vars->resolved, proof, vars->varcore, ucnt, max_cnts, type, max_types, rpos, max_poss, rref, max_refs);
 #endif
 		LASTERR("BVE Phase-1 failed");
 		SYNC(0);
@@ -383,12 +387,16 @@ namespace ParaFROST {
 		assert(ot);
 		assert(vars->numElected);
 		if (gopts.profile_gpu) cutimer->start();
+		const uint32 max_refs = inf.nDualVars;
+		const uint32 max_poss = inf.maxVar;
+		const uint32 max_types = inf.maxVar;
+		const uint32 max_cnts = inf.maxVar;
 		S_REF* rref = cuhist.d_segs;
 		uint32* type = cuhist.d_hist;
-		uint32* rpos = type + inf.maxVar;
-		uint32* ucnt = cumm.resizeLits(inf.maxVar);
+		uint32* rpos = type + max_types;
+		uint32* ucnt = cumm.resizeLits(max_cnts);
 		assert(ucnt); // inf.maxVar cannot be larger than nr. of literals
-		vePhase1(cnf, ot, vars, proof, ucnt, type, rpos, rref, in);
+		vePhase1(cnf, ot, vars, proof, ucnt, max_cnts, type, max_types, rpos, max_poss, rref, max_refs, in);
 		vePhase2(vars, rpos, rref, streams, cumm);
 		vePhase3(cnf, ot, vars, proof, ucnt, type, rpos, rref);
 		if (gopts.profile_gpu) cutimer->stop(), cutimer->ve += cutimer->gpuTime();

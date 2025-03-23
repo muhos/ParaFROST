@@ -42,7 +42,9 @@ void Solver::postVE()
 	tmpmem = (uint32*) ((bytes > cumm.scatterCap()) ? cacher.allocate(bytes) : cumm.scatter());
 	if (!tmpmem) throw MEMOUTEXCEPTION();
 	DeviceSelect::If(tmpmem + 1, bytes,  vars->eligible, vars->electedData, vars->electedSize, vars->numElected, COMPACT_VARS());
+
 	veResizeCNFAsync(cnf, cuhist);
+
 	if (bytes > cumm.scatterCap()) {
 		assert(tmpmem != (uint32*)cumm.scatter());
 		cacher.deallocate(tmpmem);

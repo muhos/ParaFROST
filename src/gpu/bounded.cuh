@@ -52,7 +52,7 @@ namespace ParaFROST {
 	#endif
 
 	#if VE_DBG
-		_PFROST_D_ void printResolvents(const uint32& addedPos, const S_REF& newref, const SCLAUSE& added) 
+		_PFROST_D_ void printResolvents(const uint32& addedPos, const S_REF& newref, const SCLAUSE* added) 
 		{
 			#if VE_DBG
 				printf("c  C(%d, r: %lld)->", addedPos - 1, newref - (added->size() + DC_NBUCKETS));
@@ -317,7 +317,6 @@ namespace ParaFROST {
 							Byte*   eliminated)
 	{
 		uint32 elimType = 0, nElements = 0, nAddedCls = 0, nAddedLits = 0;
-
 		/* pure-literal elimination */
 		if (!pOrgs || !nOrgs) {
 			toblivion(p, n, pOrgs, nOrgs, cnf, poss, negs, resolved);
@@ -338,6 +337,7 @@ namespace ParaFROST {
 				assert(nAddedCls <= ADDEDCLS_MAX);
 				assert(nAddedLits <= ADDEDLITS_MAX);
 				/* save elimination info. */
+				elimType = RES_MASK;
 				type[tid] = ENCODEVARINFO(elimType, nAddedCls, nAddedLits);
 				ucnt[tid] = nElements, rpos[tid] = nAddedCls, rref[tid] = nAddedLits + DC_NBUCKETS * nAddedCls;
 			}
@@ -419,9 +419,13 @@ namespace ParaFROST {
 		cuVecB* __restrict__ proof,
 		const uint32* __restrict__ varcore,
 		uint32* __restrict__ ucnt,
+		const uint32 max_cnts,
 		uint32* __restrict__ type,
+		const uint32 max_types,
 		uint32* __restrict__ rpos,
-		S_REF* __restrict__ rref)
+		const uint32 max_poss,
+		S_REF* __restrict__ rref,
+		const uint32 max_refs)
 	{
 		grid_t tid = global_tx;
 		uint32* outs = SharedMemory<uint32>();
@@ -456,9 +460,13 @@ namespace ParaFROST {
 		cuVecB* __restrict__ proof,
 		const uint32* __restrict__ varcore,
 		uint32* __restrict__ ucnt,
+		const uint32 max_cnts,
 		uint32* __restrict__ type,
+		const uint32 max_types,
 		uint32* __restrict__ rpos,
-		S_REF* __restrict__ rref)
+		const uint32 max_poss,
+		S_REF* __restrict__ rref,
+		const uint32 max_refs)
 	{
 		grid_t tid = global_tx;
 		uint32* outs = SharedMemory<uint32>();
@@ -473,6 +481,10 @@ namespace ParaFROST {
 			OL& poss = ot[p], & negs = ot[n];
 			const uint32 pOrgs = poss.size();
 			const uint32 nOrgs = negs.size();
+			assert(tid < max_cnts);
+			assert(tid < max_types);
+			assert(tid < max_poss);
+			assert(tid < max_refs);
 			variable_elimination(tid, x, p, n, pOrgs, nOrgs, cnf, ot, poss, negs, 
 								 units, resolved, proof, varcore, outs, ucnt, type, rpos, rref, eliminated);
 			tid += stride_x;
@@ -526,7 +538,13 @@ namespace ParaFROST {
 					MARKADDING(eliminated[x]);
 					atomicAggMax(&lastEliminatedID, tid);
 				}
-				else if (!IS_RES(elimType)) freezeClauses(*cnf, poss, negs);
+				else if (!IS_RES(elimType)) {
+					freezeClauses(*cnf, poss, negs);
+				}
+			}
+			else {
+				assert(!RECOVERADDEDCLS(xinfo));
+				assert(!RECOVERADDEDLITS(xinfo));
 			}
 			eligible[tid] = eliminated[x] ? 0 : x;
 			tid += stride_x;
