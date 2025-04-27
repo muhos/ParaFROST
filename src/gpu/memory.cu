@@ -36,18 +36,38 @@ constexpr size_t HC_CNFSIZE  = sizeof(CNF);
 constexpr size_t HC_VARSIZE  = sizeof(uint32);
 constexpr size_t HC_VECSIZE  = sizeof(cuVecU);
 
-__global__ void resizeCNF_k(CNF* cnf, const S_REF d_size, const uint32 cs_size)
+template<class T>
+__global__ 
+void memset_k(T* mem, T val, size_t size)
+{
+	size_t tid = global_tx;
+	while (tid < size) { mem[tid] = val; tid += stride_x; }
+}
+
+__global__ 
+void resizeCNF_k(CNF* cnf, const S_REF d_size, const uint32 cs_size)
 {
 	cnf->resize(d_size, cs_size);
 }
 
-__global__ void assignListPtrs(OT* __restrict__ ot, const uint32* __restrict__ hist, const S_REF* __restrict__ segs, const uint32 size)
+__global__ 
+void assignListPtrs(OT* __restrict__ ot, const uint32* __restrict__ hist, const S_REF* __restrict__ segs, const uint32 size)
 {
 	uint32 tid = global_tx;
 	while (tid < size) {
 		assert(segs[tid] < UINT32_MAX);
 		(*ot)[tid].alloc(ot->data(segs[tid]), hist[tid]);
 		tid += stride_x;
+	}
+}
+
+void cuMM::cuMemSetAsync(addr_t mem, const Byte& val, const size_t& size)
+{
+	OPTIMIZEBLOCKS(uint32(size), BLOCK1D);
+	memset_k<Byte> << <nBlocks, BLOCK1D >> > (mem, val, size);
+	if (gopts.sync_always) {
+		LASTERR("CUDA memory set failed");
+		SYNCALL;
 	}
 }
 
@@ -72,7 +92,6 @@ uint32* cuMM::resizeLits(const size_t& min_lits)
 		assert(litsPool.mem == NULL);
 		if (!hasDeviceMem(min_cap, "Literals")) return NULL;
 		CHECK(cudaMalloc((void**)&litsPool.mem, min_cap));
-		litsPool.thrust_lits = t_iptr(litsPool.mem);
 		litsPool.cap = min_cap;
 		litsPool.size = min_lits;
 	}
@@ -106,7 +125,6 @@ bool cuMM::allocHist(cuHist& cuhist, const bool& proofEnabled)
 			ea += inf.nDualVars;
 		}
 		assert(ea == histPool.mem + min_cap);
-		cuhist.thrust_hist = t_iptr(d_hist);
 		histPool.cap = min_cap;
 	}
 	return true;

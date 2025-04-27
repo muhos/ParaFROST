@@ -22,7 +22,7 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 #include <cstdio>
 #include <cstdlib>
 #include <cassert>
-#include <cuda.h>
+#include <cuda_runtime.h>
 #include <device_launch_parameters.h>
 #include "logging.hpp"
 

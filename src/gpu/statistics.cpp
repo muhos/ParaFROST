@@ -18,6 +18,9 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 #include "solver.hpp" 
 #include "control.hpp"
+#include "options.cuh"
+#include "timer.cuh"
+
 using namespace ParaFROST;
 
 void Solver::report()

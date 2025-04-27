@@ -126,8 +126,15 @@ namespace ParaFROST {
 				}
 			}
 		}
-		_PFROST_IN_D_		S_REF*		jump		(S_REF&, const uint32&, const uint32&);
+		_PFROST_D_			S_REF*		jump		(S_REF& ref, const uint32& nCls, const uint32& nLits);
 	};
+
+	void prepareCNFAsync(CNF* cnf, const cudaStream_t& _s);
+	void veResizeCNFAsync(CNF* cnf, S_REF* rref, uint32* type, uint32* rpos);
+	void copyIfAsync(uint32* dest, CNF* src);
+	void copyIf(uint32* dest, CNF* src);
+
+	extern __device__ int lastEliminatedID;
 
 }
 

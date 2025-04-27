@@ -44,7 +44,6 @@ namespace ParaFROST {
 
 	struct cuLits {
 		uint32* mem;
-		t_iptr  thrust_lits;
 		size_t  size, cap;
 		cuLits() : mem(NULL), size(0), cap(0) {}
 	};
@@ -173,6 +172,7 @@ namespace ParaFROST {
 			}
 			#endif	
 		}
+		void			cuMemSetAsync	(addr_t, const Byte&, const size_t&);
 		void	        resizeCNFAsync	(CNF*, const S_REF&, const uint32&);
 		bool			resizeCNF		(CNF*&, const size_t&, const size_t&);
 		uint32*			resizeLits		(const size_t&);
@@ -183,11 +183,12 @@ namespace ParaFROST {
 		bool			resizeOTAsync	(OT*&, const size_t&, const cudaStream_t& _s = 0);
 		void			createMirror	(CNF*&, const size_t&, const size_t&);
 		void			mirrorCNF		(CNF*&);
-		void			scatterCNF		(CNF*, S_REF*, Byte*);
 		void			compactCNF		(CNF*, CNF*);
 		bool			checkMemAdvice	();
 
 	};
+
+	
 
 #if defined(__GNUC__) && (__GNUC__ >= 8)
 #pragma GCC diagnostic pop

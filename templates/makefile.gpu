@@ -73,7 +73,7 @@ ALL_LDFLAGS += $(addprefix -Xlinker ,$(LDFLAGS))
 
 # gencode arguments
 
-SMS ?= 75
+SMS ?= 75 80 89
 ifeq ($(SMS),)
 $(error no SM architectures have been specified)
 endif
@@ -91,7 +91,7 @@ endif
 # target rules
 
 CPPOBJEXT := o
-CUOBJEXT  := cuo 
+CUOBJEXT  := cuda.o 
 
 mainsrc   := main
 cusrc     := $(sort $(wildcard *.cu))
@@ -125,7 +125,7 @@ $(LIB): $(cuobj) $(cppobj)
 
 $(BIN): $(mainsrc).$(CPPOBJEXT) $(LIB)
 	@$(ENDING) $@
-	@$(NVCC) $(ALL_LDFLAGS) $(GENCODE_FLAGS) -o $@ $(mainsrc).$(CPPOBJEXT) -L. -l$(BIN) $(EXTRALIB)
+	@$(NVCC) $(ALL_LDFLAGS) $(GENCODE_FLAGS) -o $@ $(mainsrc).$(CPPOBJEXT) -L. $(LIB) $(EXTRALIB)
 	@$(DONE)
 
 $(mainsrc).$(CPPOBJEXT): $(mainsrc).cpp

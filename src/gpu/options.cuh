@@ -21,6 +21,7 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 #include "datatypes.hpp"
 #include "constants.cuh"
+#include "definitions.cuh"
 
 namespace ParaFROST {
 
@@ -62,6 +63,11 @@ namespace ParaFROST {
 	};
 
 	extern GOPTION gopts;
+
+	extern __constant__ 
+	KOptions kOpts[1];
+
+	void initDevOpts();
 
 }
 

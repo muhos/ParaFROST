@@ -17,8 +17,8 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 **********************************************************************************/
 
 #include "solver.hpp" 
-#include "definitions.cuh"
 #include "version.hpp"
+#include <cuda_runtime.h>
 
 #if defined(__linux__)
 #include <fpu_control.h>

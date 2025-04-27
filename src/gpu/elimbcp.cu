@@ -17,6 +17,7 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 **********************************************************************************/
 
 #include "solver.hpp"
+#include "occurrence.cuh"
 
 using namespace ParaFROST;
 

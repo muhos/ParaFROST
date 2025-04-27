@@ -80,6 +80,6 @@ namespace ParaFROST {
 	#define SH_MAX_BVE_OUT	190
 	#define SH_MAX_BCE_IN	95 
 	#define SUB_MAX_CL_SIZE 1000
-
+	
 }
 #endif

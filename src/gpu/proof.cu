@@ -16,17 +16,115 @@ You should have received a copy of the GNU General Public License
 along with this program.  If not, see <https://www.gnu.org/licenses/>.
 **********************************************************************************/
 
+#include "count.cuh"
 #include "proof.cuh"
 #include "timer.cuh"
+#include "shared.cuh"
+#include "reduce.cuh"
 #include "options.cuh"
 #include "primitives.cuh"
 
 using namespace ParaFROST;
 
+//=======================================================
+// constant proof lookup table
+#define MAXLEADINGZEROS 30
+__constant__
+Byte BLUT[MAXLEADINGZEROS + 1] =
+{
+	1, 1, 1, 1, 1, 1,
+	2, 2, 2, 2, 2, 2, 2,
+	3, 3, 3, 3, 3, 3, 3,
+	4, 4, 4, 4, 4, 4, 4,
+	5, 5, 5, 5
+};
+#define COUNTBYTES(LIT) BLUT[MAXLEADINGZEROS - __clz(LIT)]
+//=======================================================
+
 __global__ void printHead(cuVecB* proof)
 {
 	printf("this = %p, mem = %p, size = %d, cap = %d", 
 		proof, proof->data(), proof->size(), proof->capacity());
+}
+
+_PFROST_D_ void countBytes(const uint32& lit, Byte& perLit, uint32& total)
+{
+	// here we rely on data racing to avoid
+	// counting the bytes for a duplicate
+	// assuming perLit is initially 0
+	if (!perLit) {
+		Byte local;
+		ORIGINIZELIT(orgLit, lit);
+		perLit = local = COUNTBYTES(orgLit);
+		total += local;
+	}
+	else // the more threads taking this path the better
+		total += perLit;
+	assert(total);
+	assert(perLit >= 1 && perLit <= 5);
+}
+
+__global__ 
+void cnt_proof(const uint32* __restrict__ literals, const uint32 numLits)
+{
+	uint32* sh_bytes = SharedMemory<uint32>();
+	grid_t tid = global_tx_off;
+	uint32 nbytes = 0;
+	while (tid < numLits) {
+		addr_t lbyte = DC_PTRS->d_lbyte;
+		uint32 lit = literals[tid];
+		countBytes(lit, lbyte[lit], nbytes);
+		grid_t off = tid + blockDim.x;
+		if (off < numLits) {
+			lit = literals[off];
+			countBytes(lit, lbyte[lit], nbytes);
+		}
+		tid += stride_x_off;
+	}
+	loadShared(sh_bytes, nbytes, numLits);
+	sharedReduce(sh_bytes, nbytes);
+	warpReduce(sh_bytes, nbytes);
+	if (!threadIdx.x) devLBlocks[blockIdx.x] = nbytes;
+}
+
+__global__ 
+void cnt_proof_verify(const uint32* __restrict__ literals, const uint32 numLits)
+{
+	grid_t tid = 0;
+	while (tid < numLits) {
+		addr_t lbyte = DC_PTRS->d_lbyte;
+		const uint32 lit = literals[tid];
+		if (lit & 0xF0000000) lbyte[lit] = 5;
+		else if (lit & 0x0FE00000) lbyte[lit] = 4;
+		else if (lit & 0x001FC000) lbyte[lit] = 3;
+		else if (lit & 0x00003F80) lbyte[lit] = 2;
+		else lbyte[lit] = 1;
+		printf(" literal(%d) has %d bytes of its original\n", SIGN(lit) ? -int(ABS(lit)) : ABS(lit), lbyte[lit]);
+		gcounter += lbyte[lit];
+		tid++;
+	}
+	printf(" total = %d\n", gcounter);
+}
+
+uint32 cuPROOF::count(const uint32* literals, const uint32& numLits)
+{
+	if (!proof.checkFile()) LOGERROR("host proof system is not activated");
+	if (!literals) return 0;
+	if (!numLits) return 0;
+	enabled = true;
+	LOGN2(2, " Counting proof bytes..");
+	OPTIMIZEBLOCKS2(numLits, BLOCK1D);
+	OPTIMIZESHARED(blockSize, sizeof(uint32));
+	SYNCALL; // sync any pending kernels or transfers
+	if (gopts.profile_gpu) cutimer->start();
+	cnt_proof << <nBlocks, blockSize, smemSize >> > (literals, numLits);
+	LASTERR("Proof counting failed");
+	CHECK(cudaMemcpyFromSymbol(hostLBlocks, devLBlocks, nBlocks * sizeof(uint32)));
+	if (gopts.profile_gpu) cutimer->stop(), cutimer->ve += cutimer->gpuTime();
+	const uint32 maxcap = seqreduceBlocks(hostLBlocks, nBlocks);
+	assert(maxcap && maxcap < (numLits * sizeof(uint32)));
+	LOGENDING(2, 5, "(%d bytes)", maxcap);
+	return maxcap;
 }
 
 void cuPROOF::writeClause(addr_t& byte)

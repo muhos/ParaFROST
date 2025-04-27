@@ -19,6 +19,7 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 #ifndef __GPU_MODEL_
 #define __GPU_MODEL_
 
+#include "definitions.hpp"
 #include "primitives.cuh"
 
 namespace ParaFROST {

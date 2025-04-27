@@ -25,26 +25,8 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 namespace ParaFROST {
 
-	template<class T>
-	_PFROST_D_ T atomicAggInc(T* counter) {
-		const uint32 mask = __activemask(), total = __popc(mask);
-		uint32 laneMask;
-		laneMask_lt(laneMask);
-		const T prefix = (T)__popc(mask & laneMask);
-		const int lowest_lane = __ffs(mask) - 1;
-		T warpRes = prefix ? 0 : atomicAdd(counter, total);
-		warpRes = __shfl_sync(mask, warpRes, lowest_lane);
-		return (prefix + warpRes);
-	}
 
-	template<class T, class R>
-	_PFROST_D_ void atomicAggMax(T* counter, const R ref) {
-		const uint32 mask = __activemask(), max_id = (32 - __clz(mask)) - 1;
-		uint32 lane_id;
-		laneId(lane_id);
-		if (lane_id == max_id)
-			atomicMax(counter, ref);
-	}
+	
 
 }
 

@@ -16,10 +16,10 @@ You should have received a copy of the GNU General Public License
 along with this program.  If not, see <https://www.gnu.org/licenses/>.
 **********************************************************************************/
 
+#include "grid.cuh"
 #include "timer.cuh"
 #include "memory.cuh"
 #include "options.cuh"
-#include "primitives.cuh"
 #include "definitions.hpp"
 #include <cub/device/device_scan.cuh>
 #include <cub/device/device_select.cuh>

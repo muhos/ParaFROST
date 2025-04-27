@@ -17,36 +17,58 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 **********************************************************************************/
 
 #include "solver.hpp"
-using namespace ParaFROST;
+#include "options.cuh"
+#include "timer.cuh"
+#include "count.cuh"
+#include "grid.cuh"
+#include <thrust/sort.h>
+#include <thrust/binary_search.h>
+#include <thrust/adjacent_difference.h>
+#include <thrust/device_ptr.h>
 
-uint32* Solver::flattenCNF(const uint32& numLits)
-{
-	assert(numLits);
-	uint32* literals = cumm.resizeLits(numLits);
-	if (flattened || !literals) return literals;
-	LOGN2(2, " Copying survived literals..");
-	copyIfAsync(literals, cnf);
-	LOGENDING(2, 5, "(%d copied)", numLits);
-	flattened = true;
-	return literals;
-}
 
-void Solver::histSimp(const uint32& numLits)
-{
-	LOGN2(2, " Computing histogram on %d elements..", numLits);
-	assert(numLits);
-	cuLits& culits = cumm.literals();
-	assert(culits.size >= numLits);
-	t_iptr& thrust_lits = culits.thrust_lits;
-	t_iptr& thrust_hist = cuhist.thrust_hist;
-	SYNC(0); // sync 'flattenCNF'
-	if (gopts.profile_gpu) cutimer->start();
-	cacher.insert(cumm.scatter(), cumm.scatterCap());
-	thrust::sort(thrust::cuda::par(tca), thrust_lits, thrust_lits + numLits);
-	thrust::counting_iterator<size_t> search_begin(0);
-	thrust::upper_bound(thrust::cuda::par(tca), thrust_lits, thrust_lits + numLits, search_begin, search_begin + inf.nDualVars, thrust_hist);
-	thrust::adjacent_difference(thrust::cuda::par(tca), thrust_hist, thrust_hist + inf.nDualVars, thrust_hist);
-	cacher.erase(cumm.scatterCap());
-	if (gopts.profile_gpu) cutimer->stop(), cutimer->vo += cutimer->gpuTime();
-	LOGDONE(2, 5);
+namespace ParaFROST {
+
+	__constant__ DCPTR DC_PTRS[1];
+
+	__global__
+		void printCMem()
+	{
+		printf("c   Variable mapping array %p\n", DC_PTRS->d_vorg);
+		printf("c   Literal  bytes array %p\n", DC_PTRS->d_lbyte);
+	}
+
+	void printConstants()
+	{
+		printCMem << <1, 1 >> > ();
+		LASTERR("Printing constant memory failed");
+		SYNCALL;
+	}
+
+	void initDevVorg(const cuHist& cuhist)
+	{
+		DCPTR ptrs = { cuhist.d_vorg, cuhist.d_lbyte };
+		CHECK(cudaMemcpyToSymbol(DC_PTRS, &ptrs, sizeof(DCPTR), 0, cudaMemcpyHostToDevice));
+	}
+
+	void Solver::histSimp(const uint32& numLits)
+	{
+		LOGN2(2, " Computing histogram on %d elements..", numLits);
+		assert(numLits);
+		cuLits& culits = cumm.literals();
+		assert(culits.size >= numLits);
+		thrust::device_ptr<uint32> thrust_lits = thrust::device_ptr<uint32>(culits.mem);
+		thrust::device_ptr<uint32> thrust_hist = thrust::device_ptr<uint32>(cuhist.d_hist);
+		SYNC(0); // sync 'flattenCNF'
+		if (gopts.profile_gpu) cutimer->start();
+		cacher.insert(cumm.scatter(), cumm.scatterCap());
+		thrust::sort(thrust::cuda::par(tca), thrust_lits, thrust_lits + numLits);
+		thrust::counting_iterator<size_t> search_begin(0);
+		thrust::upper_bound(thrust::cuda::par(tca), thrust_lits, thrust_lits + numLits, search_begin, search_begin + inf.nDualVars, thrust_hist);
+		thrust::adjacent_difference(thrust::cuda::par(tca), thrust_hist, thrust_hist + inf.nDualVars, thrust_hist);
+		cacher.erase(cumm.scatterCap());
+		if (gopts.profile_gpu) cutimer->stop(), cutimer->vo += cutimer->gpuTime();
+		LOGDONE(2, 5);
+	}
+
 }

@@ -26,3 +26,7 @@ namespace ParaFROST {
 	const char* date();
 
 }
+#define VERSION "3.4.3"
+#define OSYSTEM "linux rig-muhos 5.15.167.4-microsoft-standard-wsl2 x86_64"
+#define DATE "Sun Apr 27 21:41:37 CEST 2025"
+#define COMPILER "g++ (Ubuntu 13.3.0-6ubuntu2~24.04) 13.3.0 + nvcc 12.8.93"

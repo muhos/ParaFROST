@@ -19,14 +19,10 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 #ifndef __GPU_HISTOGRAM_
 #define __GPU_HISTOGRAM_
 
-#include <cuda_runtime.h>
-#include <thrust/device_ptr.h>
 #include "definitions.cuh"
 #include "vector.hpp"
 
 namespace ParaFROST {
-
-	typedef thrust::device_ptr<uint32> t_iptr;
 
 	struct cuHist {
 
@@ -34,7 +30,6 @@ namespace ParaFROST {
 		uint32  * d_hist, * h_hist;
 		uint32	* d_vorg;
 		Byte	* d_lbyte;		// only used if proof is enabled
-		t_iptr	thrust_hist;
 
 		cuHist() : 
 			d_segs(NULL)
@@ -66,6 +61,18 @@ namespace ParaFROST {
 			CHECK(cudaMemcpyAsync(d_vorg, vorg.data(), vorg.size() * sizeof(uint32), cudaMemcpyHostToDevice, _s));
 		}
 	};
+
+	// To shared device pointers of d_vorg and d_lbyte.
+	struct DCPTR {
+		uint32* d_vorg;
+		addr_t	d_lbyte;
+	};
+
+	extern __constant__ DCPTR DC_PTRS[1];
+
+	void initDevVorg(const cuHist&);
+	void printConstants();
+
 
 }
 

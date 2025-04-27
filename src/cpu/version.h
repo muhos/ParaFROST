@@ -26,3 +26,6 @@ namespace ParaFROST {
 	const char* date();
 
 }
+#define VERSION "3.2.5"
+#define OSYSTEM "linux rig-muhos 5.15.167.4-microsoft-standard-wsl2 x86_64"
+#define DATE "Sun Apr 27 21:41:37 CEST 2025"

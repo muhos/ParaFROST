@@ -23,17 +23,17 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 #endif
 #include <moderngpu/kernel_segsort.hxx>
 #include "modernalloc.cuh"
+#include "options.cuh"
+#include "timer.cuh"
 
-using namespace mgpu;
 using namespace ParaFROST;
-
-MCA context(0, 0); // for segmented sort
 
 void Solver::sortOT() {
 	assert(cumm.occurs());
 	if (gopts.profile_gpu) cutimer->start();
+	static MCA mca(cacher, 0, 0);
 	const int offset = 3; // first three elements in occurs = zero
-	segmented_sort(cumm.occurs(), inf.nLiterals, cuhist.d_segs + offset, inf.nDualVars - offset, olist_cmp, context);
+	segmented_sort(cumm.occurs(), inf.nLiterals, cuhist.d_segs + offset, inf.nDualVars - offset, olist_cmp, mca);
 	if (gopts.sync_always) {
 		LASTERR("Sorting OT failed");
 		SYNCALL;

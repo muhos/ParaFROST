@@ -25,6 +25,7 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 #include "function.cuh"
 #include "ifthenelse.cuh"
 #include "equivalence.cuh"
+#include "shared.cuh"
 
 namespace ParaFROST {
 
@@ -64,8 +65,6 @@ namespace ParaFROST {
 	#endif
 	
 	//==========================================//
-
-	__device__ int   lastEliminatedID;
 
 	#define ADD_RESOLVENT \
 	{ \
@@ -262,21 +261,7 @@ namespace ParaFROST {
 	//=========================================================//
 	// kernels
 	//=========================================================//
-
-	__global__ void reset_id() { lastEliminatedID = -1; }
-
-	__global__ void print_id() { printf("c lastEliminatedID = %d\n", lastEliminatedID); }
 	
-	__global__ void mapfrozen_k(const uint32* __restrict__ frozen, uint32* __restrict__ varcore, const uint32 size)
-	{
-		grid_t tid = global_tx;
-		while (tid < size) {
-			assert(frozen[tid] && frozen[tid] < NOVAR);
-			varcore[frozen[tid]] = tid;
-			tid += stride_x;
-		}
-	}
-
 	// Macros for checking applicability of variable elimination
 	#define MEMORY_SAFE_DBG \
 		if ((addedPos + nAddedCls) > cnf->refs().capacity()) { \
@@ -491,6 +476,19 @@ namespace ParaFROST {
 		}
 	}
 
+	_PFROST_IN_D_ uint32 laneId() {
+		uint32 id;
+		asm("mov.u32 %0, %%laneid;" : "=r"(id));
+		return id;
+	}
+
+	template<class T, class R>
+	_PFROST_IN_D_ void atomicAggMax(T* counter, const R ref) {
+		const uint32 mask = __activemask(), max_id = (32 - __clz(mask)) - 1;
+		if (laneId() == max_id)
+			atomicMax(counter, ref);
+	}
+
 	__global__ void ve_k_2(
 		CNF* __restrict__ cnf,
 		OT* __restrict__ ot,
@@ -548,32 +546,6 @@ namespace ParaFROST {
 			}
 			eligible[tid] = eliminated[x] ? 0 : x;
 			tid += stride_x;
-		}
-	}
-
-	__global__ void resizeCNF_k(CNF* cnf,
-		const uint32* __restrict__ type,
-		const uint32* __restrict__ rpos,
-		const S_REF* __restrict__ rref,
-		const int verbose)
-	{
-		if (lastEliminatedID >= 0) {
-			const uint32 lastAdded = type[lastEliminatedID];
-			const uint32 lastAddedPos = rpos[lastEliminatedID];
-			const S_REF  lastAddedRef = rref[lastEliminatedID];
-			assert(lastAdded < NOVAR);
-			assert(lastAddedPos < NOVAR);
-			assert(lastAddedRef < GNOREF);
-			assert(RECOVERTYPE(lastAdded) < TYPE_MASK);
-			const uint32 lastAddedCls = RECOVERADDEDCLS(lastAdded);
-			const uint32 lastAddedLits = RECOVERADDEDLITS(lastAdded);
-			assert(lastAddedCls && lastAddedCls <= ADDEDCLS_MAX);
-			assert(lastAddedLits && lastAddedLits <= ADDEDLITS_MAX);
-			const S_REF lastAddedBuckets = lastAddedLits + DC_NBUCKETS * lastAddedCls;
-			const S_REF data_size = lastAddedBuckets + lastAddedRef;
-			const uint32 cs_size = lastAddedCls + lastAddedPos;
-			cnf->resize(data_size, cs_size);
-			if (verbose > 1) printf("c   resized CNF to %d clauses and %lld data for a last ID %d\n", cs_size, data_size, lastEliminatedID);
 		}
 	}
 

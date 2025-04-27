@@ -19,9 +19,6 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 #ifndef __THRUST_MEMORY_
 #define __THRUST_MEMORY_
 
-#include <cuda_runtime.h>
-#include <thrust/system/cuda/vector.h>
-#include <thrust/device_ptr.h>
 #include "logging.hpp"
 #include "cache.cuh"
 
@@ -34,8 +31,12 @@ namespace ParaFROST {
 
 	class TCA {
 
+		CACHER& cacher;
+
 	public:
 		typedef char value_type;
+
+		TCA(CACHER& cacher) : cacher(cacher) {}
 
 		char* allocate(size_t size) {
 			return (char*)cacher.allocate(size);

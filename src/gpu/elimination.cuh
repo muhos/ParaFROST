@@ -26,6 +26,7 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 #include "printer.cuh"
 #include "proofutils.cuh"
 #include "primitives.cuh"
+#include "definitions.hpp"
 
 namespace ParaFROST {
 
@@ -49,25 +50,6 @@ namespace ParaFROST {
 		for (uint32 i = 0; i < negs.size(); i++)
 			if (cnf[negs[i]].deleted()) return false;
 		return true;
-	}
-
-	_PFROST_D_ void calcSig(SCLAUSE& c)
-	{
-		if (c.size() <= 1) return;
-		uint32 sig = 0;
-		forall_clause(c, lit) { 
-			sig |= MAPHASH(*lit); 
-		}
-		c.set_sig(sig);
-	}
-
-	_PFROST_D_ void calcSig(uint32* data, const int& size, uint32& _sig)
-	{
-		if (size <= 1) return;
-		assert(_sig == 0);
-		uint32* end = data + size;
-		while (data != end) 
-			_sig |= MAPHASH(*data++);
 	}
 
 	_PFROST_D_ bool isEqual(SCLAUSE& c1, const uint32* c2, const int& size)
@@ -655,32 +637,6 @@ namespace ParaFROST {
 			}
 
 			saveWitness(saved, n);
-		}
-	}
-
-	// kernels
-	__global__ void printCMem()
-	{
-		printf("c   Number of buckets per SCLAUSE = %d\n", DC_NBUCKETS);
-		printf("c   Variable mapping array %p\n", DC_PTRS->d_vorg);
-		printf("c   Literal  bytes array %p\n", DC_PTRS->d_lbyte);
-	}
-
-	template<class T>
-	__global__ void memset_k(T* mem, T val, size_t size)
-	{
-		size_t tid = global_tx;
-		while (tid < size) { mem[tid] = val; tid += stride_x; }
-	}
-
-	__global__ void prep_cnf_k(CNF* cnf)
-	{
-		grid_t tid = global_tx;
-		while (tid < cnf->size()) {
-			SCLAUSE& c = cnf->clause(tid);
-			devSort(c.data(), c.size());
-			calcSig(c);
-			tid += stride_x;
 		}
 	}
 

@@ -32,7 +32,7 @@ $ch	-s or --statistics    enable costly statistics (may impact runtime)
 $ch	-a or --all           enable all above flags except 'assert' and 'verbosity'
 $ch	--ncolors             disable colors in all solver outputs
 $ch	--clean=<target>      remove old installation of <cpu | gpu | all> solvers
-$ch	--standard=<n>        compile with <11 | 14 | 17> c++ standard
+$ch	--standard=<n>        compile with <17 | 20> c++ standard
 $ch	--gextra="flags"      pass extra "flags" to the GPU compiler (nvcc)
 $ch --cextra="flags"      pass extra "flags" to the CPU compiler (g++)
 EOF
@@ -116,7 +116,7 @@ if [[ "$clean" != "" ]] && [[ "$clean" != "cpu" ]] && [[ "$clean" != "gpu" ]] &&
 	error "invalid clean target '$clean'"
 fi
 
-if [ ! $standard = 14 ] && [ ! $standard = 17 ]; then 
+if [ ! $standard = 17 ] && [ ! $standard = 20 ]; then 
 	error "invalid c++ standard '$standard'"
 fi
 
@@ -397,6 +397,7 @@ if [[ $pedantic = 1 ]]; then log "  turning off 'pedantic' due to incompatibilit
 
 # default flags
 INCLUDE="../../dep"
+RELOC="-rdc=true"
 EXTLAMBDA="--expt-extended-lambda"
 RELAXEDEXPR="--expt-relaxed-constexpr"
 OPTIMIZE="-O3"
@@ -433,13 +434,21 @@ if [ -d dep ]; then
 	NVCCFLAGS="$NVCCFLAGS -I$INCLUDE"
 fi
 
+NVCCFLAGS="$NVCCFLAGS $RELOC"
+
 if [[ $gextra != "" ]]; then NVCCFLAGS="$NVCCFLAGS $gextra"; fi
 if [[ $cextra != "" ]]; then CCFLAGS="$CCFLAGS $cextra"; fi
 
+first=$(printf "%s" "$NVCCFLAGS" | cut -d' ' -f1-5)
+second=$(printf "%s" "$NVCCFLAGS" | cut -d' ' -f6-8)
+rest=$(printf "%s" "$NVCCFLAGS" | cut -d' ' -f9-)
+
 log ""
 log "building with:"
-log "'$NVCCFLAGS"
-log "-Xcompiler $CCFLAGS'"
+[ ! -z "$first" ] && log "$(printf " %s\n" "$first")"
+[ ! -z "$second" ] && log "$(printf " %s\n" "$second")"
+[ ! -z "$rest" ] && log "$(printf " %s\n" "$rest")"
+log " -Xcompiler $CCFLAGS'"
 log ""
 
 [ ! -f $gputemplate ] && error "cannot find the GPU makefile template"

@@ -19,6 +19,15 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 #include "options.cuh"
 #include "input.hpp"
 
+namespace ParaFROST {
+	__constant__ KOptions kOpts[1];
+
+	void initDevOpts()
+	{
+		CHECK(cudaMemcpyToSymbol(kOpts, &gopts.hostKOpts, sizeof(KOptions), 0, cudaMemcpyHostToDevice));
+	}
+}
+
 using namespace ParaFROST;
 
 BOOL_OPT opt_sync_always_en("syncalways", "synchronize all device calls with the host (useful for debugging)", false);

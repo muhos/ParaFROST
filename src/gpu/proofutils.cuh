@@ -20,43 +20,15 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 #define __GPU_PROOFUTILS_
 
 #include "definitions.hpp"
-#include "primitives.cuh"
+#include "histogram.cuh"
 #include "printer.cuh"
 
 namespace ParaFROST {
 
 	#define PROOF_DBG 0
 
-	//=======================================================
-	// constant proof lookup table
-	#define MAXLEADINGZEROS 30
-	__constant__ Byte BLUT[MAXLEADINGZEROS + 1] =
-	{
-		1, 1, 1, 1, 1, 1,
-		2, 2, 2, 2, 2, 2, 2,
-		3, 3, 3, 3, 3, 3, 3,
-		4, 4, 4, 4, 4, 4, 4,
-		5, 5, 5, 5
-	};
-	#define COUNTBYTES(LIT) BLUT[MAXLEADINGZEROS - __clz(LIT)]
-	//=======================================================
+	#define GETBYTECOUNT(LIT) DC_PTRS->d_lbyte[LIT]
 
-	_PFROST_D_ void countBytes(const uint32& lit, Byte& perLit, uint32& total)
-	{
-		// here we rely on data racing to avoid
-		// counting the bytes for a duplicate
-		// assuming perLit is initially 0
-		if (!perLit) {
-			Byte local;
-			ORIGINIZELIT(orgLit, lit);
-			perLit = local = COUNTBYTES(orgLit);
-			total += local;
-		}
-		else // the more threads taking this path the better
-			total += perLit;
-		assert(total);
-		assert(perLit >= 1 && perLit <= 5);
-	}
 
 	_PFROST_D_ void countProofBytes(const uint32 unit, uint32& bytes)
 	{

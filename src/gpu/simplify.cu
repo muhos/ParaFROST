@@ -17,8 +17,28 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 **********************************************************************************/
 
 #include "solver.hpp"
+#include "timer.cuh"
+#include "options.cuh"
+#include "memory.cuh"
+#include "occurrence.cuh"
 
 using namespace ParaFROST;
+
+uint32 Solver::updateNumElims() 
+{
+	const uint32 remainedPVs = *vars->electedSize;
+	assert(remainedPVs <= vars->numElected);
+	inf.n_del_vars_after = vars->numElected - remainedPVs;
+	return remainedPVs;
+}
+
+inline void	Solver::updateNumPVs() 
+{
+	uint32 remainedPVs = updateNumElims();
+	vars->nMelted += inf.n_del_vars_after;
+	vars->numElected = remainedPVs;
+	LOG2(2, "  BVE eliminated %d variables while %d survived", inf.n_del_vars_after, vars->numElected);
+}
 
 inline void	Solver::cleanManaged() 
 {
@@ -27,32 +47,6 @@ inline void	Solver::cleanManaged()
 	vars = NULL, cnf = NULL, ot = NULL;
 }
 
-inline bool	Solver::reallocCNF()
-{
-	int times = phase + 1;
-	if (times > 1 && times != opts.phases && (times % opts.shrink_rate) == 0) {
-		size_t maxAddedCls = opts.ve_en ? inf.nClauses : 0;
-		size_t maxAddedLits = opts.ve_en ? size_t(stats.literals.original * opts.lits_mul) : 0;
-		LOG2(2, " Maximum added clauses/literals = %zd/%zd", maxAddedCls, maxAddedLits);
-		if (!cumm.resizeCNF(cnf, inf.nClauses + maxAddedCls, inf.nLiterals + maxAddedLits)) {
-			simpstate = CNFALLOC_FAIL, compacted = false;
-			return false;
-		}
-		compacted = true;
-		olist_cmp.init(cnf), compact_cmp.init(cnf);
-	}
-	else cumm.cacheCNFPtr(cnf), compacted = false;
-	return true;
-}
-
-inline bool	Solver::reallocOT(const cudaStream_t& stream)
-{
-	assert(inf.nLiterals);
-	if (!flattenCNF(inf.nLiterals)) { simpstate = OTALLOC_FAIL; return false; }
-	histSimp(inf.nLiterals);
-	if (!cumm.resizeOTAsync(ot, inf.nLiterals, stream)) { simpstate = OTALLOC_FAIL; return false; }
-	return true;
-}
 
 inline void	Solver::initSimplifier()
 {
@@ -116,8 +110,8 @@ void Solver::awaken()
 	if (gopts.unified_access) {
 		LOGN2(2, " Extracting clauses directly to device..");
 		if (gopts.profile_gpu) cutimer->start();
-		extract(cnf, orgs), orgs.clear(true);
-		extract(cnf, learnts), learnts.clear(true);
+		extractCNF(cnf, orgs), orgs.clear(true);
+		extractCNF(cnf, learnts), learnts.clear(true);
 		cm.destroy();
 		assert(inf.nClauses == cnf->size());
 		if (gopts.profile_gpu) cutimer->stop(), cutimer->io += cutimer->gpuTime();
@@ -126,8 +120,8 @@ void Solver::awaken()
 		LOGN2(2, " Extracting clauses heterogeneously to device..");
 		if (gopts.profile_gpu) cutimer->start(streams[0]);
 		cumm.createMirror(hcnf, maxClauses(), maxLiterals());
-		extract(hcnf, orgs), reflectCNF(streams[0], streams[1]), orgs.clear(true);
-		extract(hcnf, learnts), reflectCNF(streams[0], streams[1]), learnts.clear(true);
+		extractCNF(hcnf, orgs), reflectCNF(streams[0], streams[1]), orgs.clear(true);
+		extractCNF(hcnf, learnts), reflectCNF(streams[0], streams[1]), learnts.clear(true);
 		cm.destroy();
 		SYNC(streams[0]); SYNC(streams[1]);
 		cumm.resizeCNFAsync(cnf, hcnf->data().size, hcnf->size());
@@ -141,7 +135,7 @@ void Solver::awaken()
 	initDevVorg(cuhist); // load device pointers to constant memory
 	prepareCNFAsync(cnf, streams[0]);
 	if (opts.proof_en) 
-		cuMemSetAsync(cuhist.d_lbyte, 0, inf.nDualVars);
+		cumm.cuMemSetAsync(cuhist.d_lbyte, 0, inf.nDualVars);
 	assert(vorg.size() == inf.maxVar + 1);
 	cuhist.fetchVars(vorg, streams[1]);
 	if (opts.proof_en) {
@@ -254,7 +248,7 @@ void Solver::optSimp()
 	initSharedMem();
 }
 
-void Solver::masterFree()
+void Solver::freeSimp()
 {
 	LOG2(2, " Freeing up GPU memory..");
 	SYNCALL;
@@ -266,9 +260,4 @@ void Solver::masterFree()
 	cumm.breakMirror(), hcnf = NULL;
 	if (opts.proof_en) 
 		cuproof.destroy();
-}
-
-void Solver::slavesFree()
-{
-
 }

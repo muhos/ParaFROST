@@ -67,8 +67,6 @@ namespace ParaFROST {
 
 	};
 
-	extern CACHER cacher;
-
 }
 
 #endif

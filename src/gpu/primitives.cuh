@@ -1,4 +1,4 @@
-/***********************************************************************[elimination.cuh]
+/***********************************************************************[primitives.cuh]
 Copyright(c) 2020, Muhammad Osama - Anton Wijs,
 Copyright(c) 2022-present, Muhammad Osama.
 
@@ -23,29 +23,13 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 #include "cnf.cuh"
 #include "grid.cuh"
 #include "vector.cuh"
-#include "shared.cuh"
-#include "atomics.cuh"
 #include "sclause.cuh"
 #include "options.cuh"
 #include "constants.cuh"
+#include "histogram.cuh"
+#include "definitions.hpp"
 
 namespace ParaFROST {
-
-	//=======================================================
-	
-	__constant__ KOptions kOpts[1];
-
-	// saving nr. of 'SCLAUSE' buckets as constant
-	__constant__ uint32 DC_NBUCKETS = SCLAUSEBUCKETS;
-
-	// constant device pointers (have to be used inside 
-	// kernels defined in kernels.cu since their first
-	// definition in a '.cu' file (symbol) was there
-	struct DCPTR {
-		uint32* d_vorg;
-		addr_t	d_lbyte;
-	};
-	__constant__ DCPTR DC_PTRS[1];
 
 	#define ORIGINIZELIT(ORGLIT, LIT)							\
 		const uint32* VORGPTR = DC_PTRS->d_vorg;				\
@@ -53,9 +37,6 @@ namespace ParaFROST {
 		assert(LIT > 1 && LIT < NOVAR);							\
 		uint32 ORGLIT = V2DEC(VORGPTR[ABS(LIT)], SIGN(LIT));	\
 		assert(ORGLIT > 1 && ORGLIT < NOVAR);					\
-
-	#define GETBYTECOUNT(LIT) DC_PTRS->d_lbyte[LIT]
-	//=======================================================
 
 	template<class T, class CMP>
 	_PFROST_H_D_ bool devIsSorted(T* d, const int& sz, CMP cmp) {
@@ -192,129 +173,28 @@ namespace ParaFROST {
 	template<typename T>
 	_PFROST_IN_D_ void devSwap(T& a, T& b) { T c = a; a = b, b = c; }
 
-	template<typename T>
-	_PFROST_IN_D_ void warpReduce(volatile T* smem, T& val)
+
+	_PFROST_IN_D_ void calcSig(SCLAUSE& c)
 	{
-		if (threadIdx.x < 32) {
-			if (blockDim.x >= 64) val += smem[threadIdx.x + 32];
-			val += __shfl_down_sync(FULLWARP, val, 16);
-			val += __shfl_down_sync(FULLWARP, val, 8);
-			val += __shfl_down_sync(FULLWARP, val, 4);
-			val += __shfl_down_sync(FULLWARP, val, 2);
-			val += __shfl_down_sync(FULLWARP, val, 1);
+		if (c.size() <= 1) return;
+		uint32 sig = 0;
+		forall_clause(c, lit) {
+			sig |= MAPHASH(*lit);
 		}
+		c.set_sig(sig);
 	}
 
-	template<typename T1, typename T2>
-	_PFROST_IN_D_ void warpReduce(volatile T1* smem1, T1& val1, volatile T2* smem2, T2& val2) 
+	_PFROST_IN_D_ void calcSig(uint32* data, const int& size, uint32& _sig)
 	{
-		if (threadIdx.x < 32) {
-			if (blockDim.x >= 64) {
-				val1 += smem1[threadIdx.x + 32];
-				val2 += smem2[threadIdx.x + 32];
-			}
-			val1 += __shfl_down_sync(FULLWARP, val1, 16);
-			val2 += __shfl_down_sync(FULLWARP, val2, 16);
-			val1 += __shfl_down_sync(FULLWARP, val1, 8);
-			val2 += __shfl_down_sync(FULLWARP, val2, 8);
-			val1 += __shfl_down_sync(FULLWARP, val1, 4);
-			val2 += __shfl_down_sync(FULLWARP, val2, 4);
-			val1 += __shfl_down_sync(FULLWARP, val1, 2);
-			val2 += __shfl_down_sync(FULLWARP, val2, 2);
-			val1 += __shfl_down_sync(FULLWARP, val1, 1);
-			val2 += __shfl_down_sync(FULLWARP, val2, 1);
-		}
+		if (size <= 1) return;
+		assert(_sig == 0);
+		uint32* end = data + size;
+		while (data != end)
+			_sig |= MAPHASH(*data++);
 	}
 
-	template<typename T, typename S>
-	_PFROST_IN_D_ void loadShared(T* smem, const T& val, const S& size) 
-	{
-		smem[threadIdx.x] = (threadIdx.x < size) ? val : 0;
-		__syncthreads();
-	}
 
-	template<typename T1, typename T2, typename S>
-	_PFROST_IN_D_ void loadShared(T1* smem1, const T1& val1, T2* smem2, const T2& val2, const S& size) 
-	{
-		if (threadIdx.x < size) { smem1[threadIdx.x] = val1, smem2[threadIdx.x] = val2; }
-		else { smem1[threadIdx.x] = 0, smem2[threadIdx.x] = 0; }
-		__syncthreads();
-	}
 
-	template<typename T>
-	_PFROST_IN_D_ void sharedReduce(T* smem, T& val) {
-		if (blockDim.x >= 512) {
-			if (threadIdx.x < 256) smem[threadIdx.x] = val = val + smem[threadIdx.x + 256];
-			__syncthreads();
-		}
-		if (blockDim.x >= 256) {
-			if (threadIdx.x < 128) smem[threadIdx.x] = val = val + smem[threadIdx.x + 128];
-			__syncthreads();
-		}
-		if (blockDim.x >= 128) {
-			if (threadIdx.x < 64) smem[threadIdx.x] = val = val + smem[threadIdx.x + 64];
-			__syncthreads();
-		}
-	}
-
-	template<typename T1, typename T2>
-	_PFROST_IN_D_ void sharedReduce(T1* smem1, T1& val1, T2* smem2, T2& val2)
-	{
-		if (blockDim.x >= 512) {
-			if (threadIdx.x < 256) {
-				smem1[threadIdx.x] = val1 = val1 + smem1[threadIdx.x + 256];
-				smem2[threadIdx.x] = val2 = val2 + smem2[threadIdx.x + 256];
-			}
-			__syncthreads();
-		}
-		if (blockDim.x >= 256) {
-			if (threadIdx.x < 128) {
-				smem1[threadIdx.x] = val1 = val1 + smem1[threadIdx.x + 128];
-				smem2[threadIdx.x] = val2 = val2 + smem2[threadIdx.x + 128];
-			}
-			__syncthreads();
-		}
-		if (blockDim.x >= 128) {
-			if (threadIdx.x < 64) {
-				smem1[threadIdx.x] = val1 = val1 + smem1[threadIdx.x + 64];
-				smem2[threadIdx.x] = val2 = val2 + smem2[threadIdx.x + 64];
-			}
-			__syncthreads();
-		}
-	}
-
-	template<typename T>
-	_PFROST_IN_D_ void cuVec<T>::insert(const T& val)
-	{
-		const uint32 idx = atomicInc(&sz, cap);
-		assert(checkAtomicBound(idx, cap));
-		_mem[idx] = val;
-	}
-
-	template<typename T>
-	_PFROST_IN_D_ void cuVec<T>::push(const T& val)
-	{
-		const uint32 idx = atomicAggInc(&sz);
-		assert(checkAtomicBound(idx, cap));
-		_mem[idx] = val;
-	}
-
-	template<typename T>
-	_PFROST_IN_D_ T* cuVec<T>::jump(const uint32& n)
-	{
-		const uint32 idx = atomicAdd(&sz, n);
-		assert(checkAtomicBound(idx, cap));
-		return _mem + idx;
-	}
-
-	_PFROST_IN_D_ S_REF* CNF::jump(S_REF& ref, const uint32& nCls, const uint32& nLits)
-	{
-		assert(nLits >= nCls);
-		const S_REF regionSize = nLits + DC_NBUCKETS * nCls;
-		ref = atomicAdd(&_data.size, regionSize);
-		assert(ref < _data.cap);
-		return _refs.jump(nCls);
-	}
 } 
 
 #endif

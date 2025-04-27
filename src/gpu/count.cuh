@@ -19,143 +19,48 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 #ifndef __GPU_COUNT_
 #define __GPU_COUNT_
 
-#include "proofutils.cuh"
+#include "definitions.cuh"
+#include "definitions.hpp"
 
 namespace ParaFROST {
 
 	#define MAXREDUCEBLOCKS 256
+
+	extern 
 	uint32 hostCBlocks[MAXREDUCEBLOCKS];
+	extern
 	uint32 hostLBlocks[MAXREDUCEBLOCKS];
-	__device__ uint32 devCBlocks[MAXREDUCEBLOCKS];
-	__device__ uint32 devLBlocks[MAXREDUCEBLOCKS];
-	__device__ uint32 gcounter;
 
-	// kernels
-	__global__ void reset_counter() { gcounter = 0; }
+	extern __device__
+	uint32 gcounter;
+	extern __device__
+	uint32 devCBlocks[MAXREDUCEBLOCKS];
+	extern __device__
+	uint32 devLBlocks[MAXREDUCEBLOCKS];
 
-	__global__ void print_counter() { printf("c gcounter = %d\n", gcounter); }
+	__global__ void reset_counter();
 
-	__global__ void check_counter(const uint32 checksum) { assert(checksum == gcounter); }
+	__global__ void print_counter();
 
-	__global__ void cnt_proof_verify(const uint32* __restrict__ literals, const uint32 numLits)
+	__global__ void check_counter(const uint32 checksum);
+
+	template <typename D, typename I>
+	inline D seqreduceBlocks(const D* blocks, const I& n)
 	{
-		grid_t tid = 0;
-		while (tid < numLits) {
-			addr_t lbyte = DC_PTRS->d_lbyte;
-			const uint32 lit = literals[tid];
-			if (lit & 0xF0000000) lbyte[lit] = 5;
-			else if (lit & 0x0FE00000) lbyte[lit] = 4;
-			else if (lit & 0x001FC000) lbyte[lit] = 3;
-			else if (lit & 0x00003F80) lbyte[lit] = 2;
-			else lbyte[lit] = 1;
-			printf(" literal(%d) has %d bytes of its original\n", SIGN(lit) ? -int(ABS(lit)) : ABS(lit), lbyte[lit]);
-			gcounter += lbyte[lit];
-			tid++;
-		}
-		printf(" total = %d\n", gcounter);
+		D finalcount = 0;
+		for (I i = 0; i < n; ++i)
+			finalcount += blocks[i];
+		return finalcount;
 	}
 
-	__global__ void cnt_proof(const uint32* __restrict__ literals, const uint32 numLits)
+	template <typename D, typename I>
+	inline void seqreduceBlocks(const D* CBlocks, const D* LBlocks, const I& n)
 	{
-		uint32* sh_bytes = SharedMemory<uint32>();
-		grid_t tid = global_tx_off;
-		uint32 nbytes = 0;
-		while (tid < numLits) {
-			addr_t lbyte = DC_PTRS->d_lbyte;
-			uint32 lit = literals[tid];
-			countBytes(lit, lbyte[lit], nbytes);
-			grid_t off = tid + blockDim.x;
-			if (off < numLits) {
-				lit = literals[off];
-				countBytes(lit, lbyte[lit], nbytes);
-			}
-			tid += stride_x_off;
-		}
-		loadShared(sh_bytes, nbytes, numLits);
-		sharedReduce(sh_bytes, nbytes);
-		warpReduce(sh_bytes, nbytes);
-		if (!threadIdx.x) devLBlocks[blockIdx.x] = nbytes;
-	}
-
-	__global__ void cnt_cls(const CNF* __restrict__ cnf)
-	{
-		uint32* sh_rCls = SharedMemory<uint32>();
-		grid_t tid = global_tx_off;
-		uint32 nCls = 0;
-		while (tid < cnf->size()) {
-			const SCLAUSE& c1 = cnf->clause(tid);
-			if (c1.original() || c1.learnt()) nCls++;
-			uint32 off = tid + blockDim.x;
-			if (off < cnf->size()) {
-				const SCLAUSE& c2 = cnf->clause(off);
-				if (c2.original() || c2.learnt()) nCls++;
-			}
-			tid += stride_x_off;
-		}
-		loadShared(sh_rCls, nCls, cnf->size());
-		sharedReduce(sh_rCls, nCls);
-		warpReduce(sh_rCls, nCls);
-		if (!threadIdx.x) devCBlocks[blockIdx.x] = nCls;
-	}
-
-	__global__ void cnt_lits(const CNF* __restrict__ cnf)
-	{
-		uint32* sh_rLits = SharedMemory<uint32>();
-		grid_t tid = global_tx_off;
-		uint32 nLits = 0;
-		while (tid < cnf->size()) {
-			const SCLAUSE& c1 = cnf->clause(tid);
-			if (c1.original() || c1.learnt()) nLits += c1.size();
-			uint32 off = tid + blockDim.x;
-			if (off < cnf->size()) {
-				const SCLAUSE& c2 = cnf->clause(off);
-				if (c2.original() || c2.learnt()) nLits += c2.size();
-			}
-			tid += stride_x_off;
-		}
-		loadShared(sh_rLits, nLits, cnf->size());
-		sharedReduce(sh_rLits, nLits);
-		warpReduce(sh_rLits, nLits);
-		if (!threadIdx.x) devLBlocks[blockIdx.x] = nLits;
-	}
-
-	__global__ void cnt_cls_lits(const CNF* __restrict__ cnf)
-	{
-		uint32* sh_rCls = SharedMemory<uint32>();
-		uint32* sh_rLits = sh_rCls + blockDim.x;
-		grid_t tid = global_tx_off;
-		uint32 nCls = 0;
-		uint32 nLits = 0;
-		while (tid < cnf->size()) {
-			const SCLAUSE& c1 = cnf->clause(tid);
-			if (c1.original() || c1.learnt()) nCls++, nLits += c1.size();
-			grid_t off = tid + blockDim.x;
-			if (off < cnf->size()) {
-				const SCLAUSE& c2 = cnf->clause(off);
-				if (c2.original() || c2.learnt()) nCls++, nLits += c2.size();
-			}
-			tid += stride_x_off;
-		}
-		loadShared(sh_rCls, nCls, sh_rLits, nLits, cnf->size());
-		sharedReduce(sh_rCls, nCls, sh_rLits, nLits);
-		warpReduce(sh_rCls, nCls, sh_rLits, nLits);
-		if (!threadIdx.x) {
-			grid_t bx = blockIdx.x;
-			devCBlocks[bx] = nCls;
-			devLBlocks[bx] = nLits;
-		}
-	}
-
-	__global__ void copy_if_k(uint32* __restrict__ dest, CNF* __restrict__ src)
-	{
-		grid_t tid = global_tx;
-		while (tid < src->size()) {
-			SCLAUSE& c = src->clause(tid);
-			if (c.original() || c.learnt()) {
-				uint32* d = dest + atomicAdd(&gcounter, c.size());
-				forall_clause(c, s) { *d++ = *s; }
-			}
-			tid += stride_x;
+		inf.n_cls_after = 0;
+		inf.n_lits_after = 0;
+		for (I i = 0; i < n; ++i) {
+			inf.n_cls_after += CBlocks[i];
+			inf.n_lits_after += LBlocks[i];
 		}
 	}
 

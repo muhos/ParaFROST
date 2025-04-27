@@ -38,6 +38,7 @@ Solver::Solver() :
 	, ot(NULL)
 	, cnf(NULL)
 	, hcnf(NULL)
+	, tca(cacher)
 	, cuproof(cumm, proof)
 	, streams(NULL)
 	, mapped(false)

@@ -32,9 +32,17 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 #include "memory.hpp"
 #include "restart.hpp"
 #include "options.hpp"
-#include "simplify.cuh"
 #include "statistics.hpp"
 #include "solvertypes.hpp"
+#include "thrustalloc.cuh"
+#include "variables.cuh"
+#include "histogram.cuh"
+#include "memory.cuh"
+#include "cache.cuh"
+#include "proof.cuh"
+#include "table.cuh"
+#include "cnf.cuh"
+#include "key.cuh"
 
 namespace ParaFROST {
 	/*****************************************************/
@@ -652,6 +660,7 @@ namespace ParaFROST {
 		VARS			*vars;
 		OT				*ot;
 		CNF				*cnf, *hcnf;
+		CACHER			cacher;
 		TCA				tca;
 		cuMM			cumm;
 		cuHist			cuhist;
@@ -702,77 +711,13 @@ namespace ParaFROST {
 				delete[] streams;
 			}
 		}
-		inline bool		verifyLCVE          () {
-			for (uint32 v = 0; v < vars->numElected; v++)
-				if (sp->frozen[vars->elected->at(v)])
-					return false;
-			return true;
-		}
-		inline void		logReductions       () {
-			int64 varsRemoved = int64(inf.n_del_vars_after) + nForced;
-			int64 clsRemoved = int64(inf.nClauses) - inf.n_cls_after;
-			int64 litsRemoved = int64(inf.nLiterals) - inf.n_lits_after;
-			const char* header = "  %s%-10s  %-10s %-10s %-10s%s";
-			LOG1(header, CREPORT, " ", "Variables", "Clauses", "Literals", CNORMAL);
-			const char* rem = "  %s%-10s: %s%-9lld  %c%-8lld  %c%-8lld%s";
-			const char* sur = "  %s%-10s: %s%-9d  %-9d  %-9d%s";
-			LOG1(rem, CREPORT, "Removed", CREPORTVAL,
-				-varsRemoved,
-				clsRemoved < 0 ? '+' : '-', abs(clsRemoved),
-				litsRemoved < 0 ? '+' : '-', abs(litsRemoved), CNORMAL);
-			LOG1(sur, CREPORT, "Survived", CREPORTVAL,
-				maxActive(),
-				inf.n_cls_after,
-				inf.n_lits_after, CNORMAL);
-		}
-		inline uint32	updateNumElims		() {
-			const uint32 remainedPVs = *vars->electedSize;
-			assert(remainedPVs <= vars->numElected);
-			inf.n_del_vars_after = vars->numElected - remainedPVs;
-			return remainedPVs;
-		}
-		inline void		updateNumPVs		() {
-			uint32 remainedPVs = updateNumElims();
-			vars->nMelted += inf.n_del_vars_after;
-			vars->numElected = remainedPVs;
-			LOG2(2, "  BVE eliminated %d variables while %d survived", inf.n_del_vars_after, vars->numElected);
-		}
-		inline void		countCls            (const bool& host = 0) {
-			if (host) {
-				assert(!hcnf->empty());
-				inf.n_cls_after = 0;
-				for (uint32 i = 0; i < hcnf->size(); i++) {
-					SCLAUSE& c = hcnf->clause(i);
-					if (c.original() || c.learnt())
-						inf.n_cls_after++;
-				}
-			}
-			else parcountCls(cnf);
-		}
-		inline void		countLits           (const bool& host = 0) {
-			if (host) {
-				assert(!hcnf->empty());
-				inf.n_lits_after = 0;
-				for (uint32 i = 0; i < hcnf->size(); i++) {
-					SCLAUSE& c = hcnf->clause(i);
-					if (c.original() || c.learnt())
-						inf.n_lits_after += c.size();
-				}
-			}
-			else parcountLits(cnf);
-		}
-		inline void		countAll            (const bool& host = 0) {
-			if (host) {
-				assert(!hcnf->empty());
-				inf.n_cls_after = 0, inf.n_lits_after = 0;
-				for (uint32 i = 0; i < hcnf->size(); i++) {
-					SCLAUSE& c = hcnf->clause(i);
-					if (c.original() || c.learnt())
-						inf.n_cls_after++, inf.n_lits_after += c.size();
-				}
-			}
-			else parcountAll(cnf);
-		}
+		inline void		updateNumPVs		();
+		inline bool		verifyLCVE			();
+		void			logReductions		();
+		uint32			updateNumElims		();
+		void			countCls			(const bool& host = 0);
+		void			countLits			(const bool& host = 0);
+		void			countAll			(const bool& host = 0);
 		inline bool		stop                (const int64 cr, const int64 lr) {
 			return (phase == opts.phases)
 				|| (simpstate == CNFALLOC_FAIL)
@@ -781,10 +726,11 @@ namespace ParaFROST {
 		}
 		//===========================================//
 		void			optSimp             ();
+		void			freeSimp			();
 		void			varReorder          ();
 		void			newBeginning        ();
-		void			simplifying          ();
-		void			simplify             ();
+		void			simplifying         ();
+		void			simplify            ();
 		void			awaken              ();
 		bool			LCVE                ();
 		void			sortOT				();
@@ -795,29 +741,28 @@ namespace ParaFROST {
 		void			BCE                 ();
 		bool			prop                ();
 		bool			propFailed          ();
-		void			masterFree          ();
-		void			slavesFree          ();
-		void			createOTHost        (HOT&);
+		void			writeBackCNF		();
+		bool			reallocCNF			();
+		void			extractCNF			(CNF*, BCNF&);
 		uint32*			flattenCNF          (const uint32&);
+		void			reflectCNF			(const cudaStream_t&, const cudaStream_t&);
+		void			cacheCNF			(const cudaStream_t&, const cudaStream_t&);
 		void			histSimp            (const uint32&);
-		void			extract             (CNF*, BCNF&);
-		void			cacheCNF            (const cudaStream_t&, const cudaStream_t&);
+		void			createOTHost		(HOT&);
 		void			cacheUnits          (const cudaStream_t&);
 		void			cacheNumUnits       (const cudaStream_t&);
 		void			cacheResolved       (const cudaStream_t&);
 		void			cacheEliminated     (const cudaStream_t&);
 		void			markEliminated		(const cudaStream_t&);
-		void			reflectCNF          (const cudaStream_t&, const cudaStream_t&);
+		bool			reallocOT			(const cudaStream_t& stream = 0);
 		inline bool		depFreeze           (OL& ol, LIT_ST* frozen, uint32*& tail, const uint32& cand, const uint32& pmax, const uint32& nmax);
 		inline bool		propClause          (const LIT_ST*, const uint32&, SCLAUSE&);
 		inline bool		enqueueCached       (const cudaStream_t&);
-		inline bool		reallocOT           (const cudaStream_t& stream = 0);
-		inline bool		reallocCNF          ();
-		inline void		writeBack           ();
 		inline void		mapFrozen			();
 		inline void		cleanProped         ();
 		inline void		cleanManaged        ();
 		inline void		initSimplifier      ();
+			   void		initSharedMem		();
 		//==========================================//
 		//             Local search                 //
 		//==========================================//
@@ -825,13 +770,11 @@ namespace ParaFROST {
 		inline void		saveTrail			(const LIT_ST*, const bool&);
 		inline void		saveAll				(const LIT_ST*);
 		inline uint32	breakValue			(const uint32&);
-		inline double	breakScore			(const uint32&);
 		inline void		makeClauses			(const uint32&);
 		inline void		breakClauses		(const uint32&);
 		inline void		walkassign			();
 		uint32			promoteLit			();
 		uint32			ipromoteLit			();
-		void			updateBest			();
 		bool			walkschedule		();
 		void			walkinit			();
 		void			walkstep			();

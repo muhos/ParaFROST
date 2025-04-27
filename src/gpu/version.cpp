@@ -18,7 +18,6 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 #include "version.hpp"
 #include <string>
-#include <cuda.h>
 #ifdef  _WIN32
 #include <Windows.h>
 #endif
@@ -29,7 +28,7 @@ using namespace ParaFROST;
 char buffer[BUFFERSIZE];
 
 #ifndef VERSION
-	#define VERSION "3.0"
+	#define VERSION "3.x"
 #endif
 
 #ifndef COMPILER

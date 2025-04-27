@@ -17,8 +17,98 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 **********************************************************************************/
 
 #include "solver.hpp"
+#include "key.cuh"
+#include "grid.cuh"
+#include "timer.cuh"
+#include "table.cuh"
+#include "cache.cuh"
+#include "options.cuh"
+#include "variables.cuh"
+#include "histogram.cuh"
+#include <thrust/sort.h>
 
 using namespace ParaFROST;
+
+__global__ 
+void assign_scores(
+	uint32* __restrict__ eligible,
+	uint32* __restrict__ scores,
+	const uint32* __restrict__ hist,
+	uint32 size)
+{
+	grid_t tid = global_tx;
+	while (tid < size) {
+		const uint32 v = tid + 1;
+		const uint32 p = V2L(v), ps = hist[p], ns = hist[NEG(p)];
+		eligible[tid] = v;
+		scores[v] = ps * ns;
+		tid += stride_x;
+	}
+}
+
+__global__ 
+void assign_scores(
+	uint32* __restrict__ eligible,
+	uint32* __restrict__ scores,
+	uint32* __restrict__ hist,
+	const OT* __restrict__ ot,
+	uint32 size)
+{
+	grid_t tid = global_tx;
+	while (tid < size) {
+		const uint32 v = tid + 1;
+		const uint32 p = V2L(v), n = NEG(p), ps = (*ot)[p].size(), ns = (*ot)[n].size();
+		hist[p] = ps, hist[n] = ns;
+		eligible[tid] = v;
+		scores[v] = ps * ns;
+		tid += stride_x;
+	}
+}
+
+__global__ 
+void mapfrozen_k(const uint32* __restrict__ frozen, uint32* __restrict__ varcore, const uint32 size)
+{
+	grid_t tid = global_tx;
+	while (tid < size) {
+		assert(frozen[tid] && frozen[tid] < NOVAR);
+		varcore[frozen[tid]] = tid;
+		tid += stride_x;
+	}
+}
+
+void calcScores(VARS* vars, uint32* hist)
+{
+	if (gopts.profile_gpu) cutimer->start();
+	OPTIMIZEBLOCKS(inf.maxVar, BLOCK1D);
+	assign_scores << <nBlocks, BLOCK1D >> > (vars->eligible, vars->scores, hist, inf.maxVar);
+	if (gopts.profile_gpu) cutimer->stop(), cutimer->vo += cutimer->gpuTime();
+	LASTERR("Assigning scores failed");
+	SYNCALL;
+}
+
+void calcScores(VARS* vars, uint32* hist, OT* ot)
+{
+	if (gopts.profile_gpu) cutimer->start();
+	OPTIMIZEBLOCKS(inf.maxVar, BLOCK1D);
+	assign_scores << <nBlocks, BLOCK1D >> > (vars->eligible, vars->scores, hist, ot, inf.maxVar);
+	if (gopts.profile_gpu) cutimer->stop(), cutimer->vo += cutimer->gpuTime();
+	LASTERR("Assigning scores failed");
+	SYNCALL;
+}
+
+void mapFrozenAsync(VARS* vars, const uint32& size)
+{
+	assert(vars->varcore == vars->eligible); // an alies of eligible
+	if (gopts.profile_gpu) cutimer->start();
+	OPTIMIZEBLOCKS(size, BLOCK1D);
+	// 'vars->scores' is an alies for frozen vars on the GPU side
+	mapfrozen_k << <nBlocks, BLOCK1D >> > (vars->scores, vars->varcore, size);
+	if (gopts.sync_always) {
+		LASTERR("Mapping frozen failed");
+		SYNCALL;
+	}
+	if (gopts.profile_gpu) cutimer->stop(), cutimer->ve += cutimer->gpuTime();
+}
 
 void Solver::varReorder()
 {
@@ -164,6 +254,13 @@ inline bool Solver::depFreeze(OL& ol, LIT_ST* frozen, uint32*& tail, const uint3
 			}
 		}
 	}
+	return true;
+}
+
+inline bool	Solver::verifyLCVE() {
+	for (uint32 v = 0; v < vars->numElected; v++)
+		if (sp->frozen[vars->elected->at(v)])
+			return false;
 	return true;
 }
 

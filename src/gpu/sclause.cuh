@@ -197,6 +197,9 @@ namespace ParaFROST {
 	constexpr size_t SCLAUSESIZE = sizeof(SCLAUSE);
 	constexpr size_t SCLAUSEBUCKETS = SCLAUSESIZE / SBUCKETSIZE;
 
+	// saving nr. of 'SCLAUSE' buckets as device constant.
+	constexpr __constant__ uint32 DC_NBUCKETS = SCLAUSEBUCKETS;
+
 	#define SCBUCKETS(CLAUSESIZE) \
 		(SCLAUSEBUCKETS + (CLAUSESIZE))
 

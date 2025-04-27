@@ -18,6 +18,8 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 #include "solver.hpp" 
 #include "control.hpp"
+#include "options.cuh"
+#include "timer.cuh"
 
 namespace ParaFROST {
 	GOPTION			gopts;
@@ -25,7 +27,6 @@ namespace ParaFROST {
 	Solver			*solver = NULL;
 	cuTIMER			*cutimer = NULL;
 	cudaDeviceProp	devProp;
-	CACHER			cacher;
 	uint32			maxGPUThreads = 0;
 	size_t			maxGPUSharedMem = 0;
 }
@@ -35,7 +36,7 @@ using namespace ParaFROST;
 
 Solver::~Solver() 
 { 
-	masterFree();
+	freeSimp();
     std::free(this->learnCallbackBuffer);
 }
 
@@ -56,6 +57,7 @@ Solver::Solver(const string& formulaStr) :
 	, ot(NULL)
 	, cnf(NULL)
 	, hcnf(NULL)
+	, tca(cacher)
 	, cuproof(cumm, proof)
 	, streams(NULL)
 	, mapped(false)
