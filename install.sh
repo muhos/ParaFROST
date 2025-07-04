@@ -402,7 +402,7 @@ EXTLAMBDA="--expt-extended-lambda"
 RELAXEDEXPR="--expt-relaxed-constexpr"
 OPTIMIZE="-O3"
 FASTMATH="-use_fast_math"
-ARCH="-m${TARGET_SIZE}"
+ARCH="-m${TARGET_SIZE} -arch=native"
 CCFLAGS="-std=c++$standard"
 NVCCFLAGS="--std c++$standard"
 
