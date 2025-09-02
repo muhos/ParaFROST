@@ -121,11 +121,17 @@ namespace ParaFROST {
 	#define forall_clause(C, PTR) \
 		for (uint32* PTR = C, *CEND = C.end(); PTR != CEND; PTR++)
 
+	#define forall_clause_const(C, PTR) \
+		for (const uint32* PTR = C.data(), *CEND = C.end(); PTR != CEND; PTR++)
+
 	#define forall_cnf(INCNF, PTR) \
 		for (C_REF* PTR = INCNF, *CNFEND = INCNF.end(); PTR != CNFEND; PTR++)
 
 	#define forall_occurs(LIST, PTR) \
 		for (S_REF* PTR = LIST, *LISTEND = LIST.end(); PTR != LISTEND; PTR++)
+
+	#define forall_occurs_const(LIST, PTR) \
+		for (const S_REF* PTR = LIST.data(), *LISTEND = LIST.end(); PTR != LISTEND; PTR++)
 	//====================================================//
 	//                 Global Inline helpers              //
 	//====================================================//

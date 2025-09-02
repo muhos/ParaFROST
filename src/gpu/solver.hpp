@@ -675,6 +675,21 @@ namespace ParaFROST {
 	
 	public:
 
+		// Getters
+		inline VARS*	getVars				()		{ return vars; }
+		inline OT*		getOT				()		{ return ot; }
+		inline CNF*		getDeviceCNF		()		{ return cnf; }
+		inline CNF*		getHostCNF			()		{ return hcnf; }
+		inline CACHER&	getCacher			()		{ return cacher; }
+		inline TCA*		getTCA				()		{ return &tca; }
+		inline cuMM*	getCUMM				()		{ return &cumm; }
+		inline cuHist*	getCUHIST			()		{ return &cuhist; }
+		inline cuPROOF*	getCUPROOF			()		{ return &cuproof; }
+		inline int		getSimpState		()		{ return simpstate; }
+		inline int		getDevCount			()		{ return devCount; }
+		inline bool		isMapped			()		{ return mapped; }
+		inline bool		isCompacted			()		{ return compacted; }
+
 		inline void		enqueueDevUnit		(const uint32& lit) {
 			CHECKLIT(lit);
 			assert(active(lit));
@@ -729,8 +744,6 @@ namespace ParaFROST {
 		void			freeSimp			();
 		void			varReorder          ();
 		void			newBeginning        ();
-		void			simplifying         ();
-		void			simplify            ();
 		void			awaken              ();
 		bool			LCVE                ();
 		void			sortOT				();
@@ -743,6 +756,8 @@ namespace ParaFROST {
 		bool			propFailed          ();
 		void			writeBackCNF		();
 		bool			reallocCNF			();
+		void			simplifying         (const bool& keep_gpu_mem = false);
+		void			simplify            (const bool& keep_gpu_mem = false);
 		void			extractCNF			(CNF*, BCNF&);
 		uint32*			flattenCNF          (const uint32&);
 		void			reflectCNF			(const cudaStream_t&, const cudaStream_t&);

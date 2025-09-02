@@ -116,7 +116,11 @@ namespace ParaFROST {
 		_PFROST_H_D_ uint32&    operator[]	   (const int& i) { assert(i < _sz); return _lits[i]; }
 		_PFROST_H_D_ uint32		operator[]	   (const int& i) const { assert(i < _sz); return _lits[i]; }
 		_PFROST_H_D_ uint32*    data           (const int& i = 0) { assert(i < _sz); return _lits + i; }
+		_PFROST_H_D_ const 
+					 uint32* 	data           (const int& i = 0) const { assert(i < _sz); return _lits + i; }
 		_PFROST_H_D_ uint32*    end            () { return _lits + _sz; }
+		_PFROST_H_D_ const 
+					 uint32* 	end            () const { return _lits + _sz; }
 		_PFROST_H_D_ uint32		back           () { assert(_sz); return _lits[_sz - 1]; }
 		_PFROST_H_D_ uint32		back           () const { assert(_sz); return _lits[_sz - 1]; }
 		_PFROST_H_D_ operator   uint32*        () { assert(_sz); return _lits; }

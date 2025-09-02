@@ -45,6 +45,8 @@ namespace ParaFROST {
 			_occurs = (S_REF*)(_lists + maxLists);
 		}
 		_PFROST_H_D_	S_REF*	data			(const uint32& i = 0) { return _occurs + i; }
+		_PFROST_H_D_	const 
+						S_REF*	data			(const uint32& i = 0) const { return _occurs + i; }
 		_PFROST_H_D_	OL&		operator []		(const uint32& i) { assert(i < maxLists); return _lists[i]; }
 		_PFROST_H_D_	OL		operator []		(const uint32& i) const { assert(i < maxLists); return _lists[i]; }
 		_PFROST_H_D_			operator OL*	() { return _lists; }
@@ -72,10 +74,6 @@ namespace ParaFROST {
 			return true;
 		}
 	};
-
-	#define forall_occurs(LIST, PTR) \
-		for (S_REF* PTR = LIST, *LISTEND = LIST.end(); PTR != LISTEND; PTR++)
-
 }
 
 #endif

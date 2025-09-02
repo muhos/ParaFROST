@@ -66,20 +66,22 @@ inline void	Solver::initSimplifier()
 	}
 }
 
-void Solver::simplify()
+void Solver::simplify(const bool& keep_gpu_mem)
 {
 	if (alldisabled()) return;
 	assert(conflict == NOREF);
 	assert(UNSOLVED(cnfstate));
 	assert(stats.clauses.original);
 	stats.sigma.calls++;
-	simplifying();
+	simplifying(keep_gpu_mem);
 	INCREASE_LIMIT(this, sigma, stats.sigma.calls, nlognlogn, true);
 	last.sigma.reduces = stats.reduces + 1;
 	if (opts.phases > 2) {
 		opts.phases--;
 		LOG2(2, "  simplify phases decreased to %d", opts.phases);
 	}
+	if (keep_gpu_mem)
+		LOG2(2, " Keeping GPU memory for future calls");
 }
 
 void Solver::awaken()
@@ -146,7 +148,7 @@ void Solver::awaken()
 	}
 }
 
-void Solver::simplifying()
+void Solver::simplifying(const bool& keep_gpu_mem)
 {
 	/********************************/
 	/*         awaken sigma         */
@@ -200,11 +202,19 @@ void Solver::simplifying()
 	/*          Write Back          */
 	/********************************/
 	assert(sp->propagated == trail.size());
-	cacheEliminated(streams[5]);             // if ERE is enabled, this transfer would be already done
+	cacheEliminated(streams[5]);             	// if ERE is enabled, this transfer would be already done
 	cumm.updateMaxCap(), cacher.updateMaxCap(); // for reporting GPU memory only
-	markEliminated(streams[5]);              // must be executed before map()
-	cacheCNF(streams[0], streams[1]);
-	if (!propFailed()) killSolver();         // prop any pending units via host memory if 'realloc' failed
+	markEliminated(streams[5]);              	// must be executed before map()
+	if (keep_gpu_mem) {
+		if (vars->nUnits) {
+			cacheCNF(streams[0], streams[1]);
+			if (!propFailed()) return;
+		}
+	}
+	else {
+		cacheCNF(streams[0], streams[1]);
+		if (vars->nUnits && !propFailed()) killSolver();         // prop any pending units via host memory if 'realloc' failed
+	}
 	bool success = (bclauses != inf.nClauses);
 	inf.maxMelted += vars->nMelted;
 	stats.sigma.all.clauses += bclauses - int64(inf.nClauses);
@@ -219,6 +229,10 @@ void Solver::simplifying()
 		stats.literals.original = 0;
 		stats.literals.learnt = 0;
 		cnfstate = SAT; 
+		printStats(1, 's', CGREEN); 
+		return;
+	}
+	if (keep_gpu_mem) {
 		printStats(1, 's', CGREEN); 
 		return;
 	}

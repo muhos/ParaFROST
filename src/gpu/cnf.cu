@@ -70,7 +70,7 @@ namespace ParaFROST {
 			assert(lastAdded < NOVAR);
 			assert(lastAddedPos < NOVAR);
 			assert(lastAddedRef < GNOREF);
-			assert(RECOVERTYPE(lastAdded) < TYPE_MASK);
+			assert(RECOVERTYPE(lastAdded) <= TYPE_MASK);
 			const uint32 lastAddedCls = RECOVERADDEDCLS(lastAdded);
 			const uint32 lastAddedLits = RECOVERADDEDLITS(lastAdded);
 			assert(lastAddedCls && lastAddedCls <= ADDEDCLS_MAX);
