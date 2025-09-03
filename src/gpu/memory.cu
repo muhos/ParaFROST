@@ -40,8 +40,7 @@ template<class T>
 __global__ 
 void memset_k(T* mem, T val, size_t size)
 {
-	size_t tid = global_tx;
-	while (tid < size) { mem[tid] = val; tid += stride_x; }
+	for_parallel_x(tid, size) { mem[tid] = val; }
 }
 
 __global__ 
@@ -53,11 +52,9 @@ void resizeCNF_k(CNF* cnf, const S_REF d_size, const uint32 cs_size)
 __global__ 
 void assignListPtrs(OT* __restrict__ ot, const uint32* __restrict__ hist, const S_REF* __restrict__ segs, const uint32 size)
 {
-	uint32 tid = global_tx;
-	while (tid < size) {
+	for_parallel_x(tid, size) {
 		assert(segs[tid] < UINT32_MAX);
 		(*ot)[tid].alloc(ot->data(segs[tid]), hist[tid]);
-		tid += stride_x;
 	}
 }
 

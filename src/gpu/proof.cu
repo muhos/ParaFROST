@@ -68,9 +68,8 @@ __global__
 void cnt_proof(const uint32* __restrict__ literals, const uint32 numLits)
 {
 	uint32* sh_bytes = SharedMemory<uint32>();
-	grid_t tid = global_tx_off;
 	uint32 nbytes = 0;
-	while (tid < numLits) {
+	for_parallel_x_double (tid, numLits) {
 		addr_t lbyte = DC_PTRS->d_lbyte;
 		uint32 lit = literals[tid];
 		countBytes(lit, lbyte[lit], nbytes);
@@ -79,7 +78,6 @@ void cnt_proof(const uint32* __restrict__ literals, const uint32 numLits)
 			lit = literals[off];
 			countBytes(lit, lbyte[lit], nbytes);
 		}
-		tid += stride_x_off;
 	}
 	loadShared(sh_bytes, nbytes, numLits);
 	sharedReduce(sh_bytes, nbytes);

@@ -33,8 +33,7 @@ namespace ParaFROST {
 	//=================================//
 	__global__ void scatter_k(const CNF* __restrict__ src, S_REF* __restrict__ scatter, addr_t __restrict__ stencil, const size_t max_size)
 	{
-		uint32 tid = global_tx;
-		while (tid < src->size()) {
+		for_parallel_x(tid, src->size()) {
 			const SCLAUSE& c = src->clause(tid);
 			assert(tid < max_size);
 			if (c.deleted()) { stencil[tid] = 0, scatter[tid] = 0; }
@@ -42,14 +41,12 @@ namespace ParaFROST {
 				stencil[tid] = 1, scatter[tid] = c.size() + DC_NBUCKETS;
 				assert(c.size() == scatter[tid] - DC_NBUCKETS);
 			}
-			tid += stride_x;
 		}
 	}
 
 	__global__ void compact_k(CNF* __restrict__ src, CNF* __restrict__ dest, const S_REF* __restrict__ scatter, const addr_t __restrict__ stencil)
 	{
-		uint32 tid = global_tx;
-		while (tid < src->size()) {
+		for_parallel_x(tid, src->size()) {
 			if (stencil[tid]) {
 				const S_REF new_r = scatter[tid];
 				new (dest->cref(new_r)) SCLAUSE(src->clause(tid));
@@ -57,7 +54,6 @@ namespace ParaFROST {
 				assert(src->clause(tid).capacity() == dest->cref(new_r)->capacity());
 			}
 			else assert(src->clause(tid).deleted());
-			tid += stride_x;
 		}
 	}
 

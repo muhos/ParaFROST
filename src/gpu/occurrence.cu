@@ -25,8 +25,7 @@ namespace ParaFROST {
 
 	__global__ void reduce_ot(const CNF* __restrict__ cnfptr, OT* __restrict__ ot)
 	{
-		grid_t tid = global_tx;
-		while (tid < ot->size()) {
+		for_parallel_x (tid, ot->size()) {
 			OL& ol = (*ot)[tid];
 			if (ol.size()) {
 				const CNF& cnf = *cnfptr;
@@ -38,23 +37,19 @@ namespace ParaFROST {
 				}
 				ol.resize(j - ol);
 			}
-			tid += stride_x;
 		}
 	}
 
 	__global__ void reset_ot_k(OT* ot)
 	{
-		grid_t tid = global_tx;
-		while (tid < ot->size()) {
+		for_parallel_x (tid, ot->size()) {
 			(*ot)[tid].clear();
-			tid += stride_x;
 		}
 	}
 
 	__global__ void create_ot_k(CNF* __restrict__ cnf, OT* __restrict__ ot_ptr)
 	{
-		grid_t tid = global_tx;
-		while (tid < cnf->size()) {
+		for_parallel_x (tid, cnf->size()) {
 			const S_REF r = cnf->ref(tid);
 			SCLAUSE& c = (*cnf)[r];
 			if (c.original() || c.learnt()) {
@@ -63,7 +58,6 @@ namespace ParaFROST {
 					ot[*lit].insert(r);
 				}
 			}
-			tid += stride_x;
 		}
 	}
 

@@ -36,13 +36,11 @@ void assign_scores(
 	const uint32* __restrict__ hist,
 	uint32 size)
 {
-	grid_t tid = global_tx;
-	while (tid < size) {
+	for_parallel_x(tid, size) {
 		const uint32 v = tid + 1;
 		const uint32 p = V2L(v), ps = hist[p], ns = hist[NEG(p)];
 		eligible[tid] = v;
 		scores[v] = ps * ns;
-		tid += stride_x;
 	}
 }
 
@@ -54,25 +52,21 @@ void assign_scores(
 	const OT* __restrict__ ot,
 	uint32 size)
 {
-	grid_t tid = global_tx;
-	while (tid < size) {
+	for_parallel_x(tid, size) {
 		const uint32 v = tid + 1;
 		const uint32 p = V2L(v), n = NEG(p), ps = (*ot)[p].size(), ns = (*ot)[n].size();
 		hist[p] = ps, hist[n] = ns;
 		eligible[tid] = v;
 		scores[v] = ps * ns;
-		tid += stride_x;
 	}
 }
 
 __global__ 
 void mapfrozen_k(const uint32* __restrict__ frozen, uint32* __restrict__ varcore, const uint32 size)
 {
-	grid_t tid = global_tx;
-	while (tid < size) {
+	for_parallel_x(tid, size) {
 		assert(frozen[tid] && frozen[tid] < NOVAR);
 		varcore[frozen[tid]] = tid;
-		tid += stride_x;
 	}
 }
 

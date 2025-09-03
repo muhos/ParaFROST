@@ -412,9 +412,8 @@ namespace ParaFROST {
 		S_REF* __restrict__ rref,
 		const uint32 max_refs)
 	{
-		grid_t tid = global_tx;
 		uint32* outs = SharedMemory<uint32>();
-		while (tid < elected->size()) {
+		for_parallel_x(tid, elected->size()) {
 			const uint32 x = elected->at(tid);
 			assert(x);
 			assert(!ELIMINATED(eliminated[x]));
@@ -431,7 +430,6 @@ namespace ParaFROST {
 			countOrgs(cnf, negs, nOrgs);
 			variable_elimination(tid, x, p, n, pOrgs, nOrgs, cnf, ot, poss, negs, 
 								 units, resolved, proof, varcore, outs, ucnt, type, rpos, rref, eliminated);
-			tid += stride_x;
 		}
 	}
 
@@ -453,9 +451,8 @@ namespace ParaFROST {
 		S_REF* __restrict__ rref,
 		const uint32 max_refs)
 	{
-		grid_t tid = global_tx;
 		uint32* outs = SharedMemory<uint32>();
-		while (tid < elected->size()) {
+		for_parallel_x(tid, elected->size()) {
 			const uint32 x = elected->at(tid);
 			assert(x);
 			assert(!ELIMINATED(eliminated[x]));
@@ -472,7 +469,6 @@ namespace ParaFROST {
 			assert(tid < max_refs);
 			variable_elimination(tid, x, p, n, pOrgs, nOrgs, cnf, ot, poss, negs, 
 								 units, resolved, proof, varcore, outs, ucnt, type, rpos, rref, eliminated);
-			tid += stride_x;
 		}
 	}
 
@@ -503,9 +499,8 @@ namespace ParaFROST {
 		const uint32* __restrict__ rpos,
 		const S_REF* __restrict__ rref)
 	{
-		grid_t tid = global_tx;
 		uint32* outs = SharedMemory<uint32>();
-		while (tid < elected->size()) {
+		for_parallel_x(tid, elected->size()) {
 			const uint32 x = elected->at(tid);
 			assert(x);
 			const uint32 xinfo = type[tid];
@@ -545,7 +540,6 @@ namespace ParaFROST {
 				assert(!RECOVERADDEDLITS(xinfo));
 			}
 			eligible[tid] = eliminated[x] ? 0 : x;
-			tid += stride_x;
 		}
 	}
 

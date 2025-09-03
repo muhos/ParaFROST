@@ -83,16 +83,14 @@ __global__ void bce_k(
     cuVecU* __restrict__ resolved,
     const cuVecU* __restrict__ pVars,
     const Byte* __restrict__ eliminated) {
-    grid_t tid = global_tx;
     __shared__ uint32 sh_cls[BLBCE * SH_MAX_BCE_IN];
-    while (tid < pVars->size()) {
+    for_parallel_x(tid, pVars->size()) {
         const uint32 x = (*pVars)[tid];
         assert(x);
         assert(!ELIMINATED(eliminated[x]));
         const uint32 p = V2L(x), n = NEG(p);
         if ((*ot)[p].size() <= kOpts->bce_max_occurs && (*ot)[n].size() <= kOpts->bce_max_occurs)
             blocked_x(x, *cnf, (*ot)[p], (*ot)[n], resolved, proof, sh_cls + threadIdx.x * SH_MAX_BCE_IN);
-        tid += stride_x;
     }
 }
 

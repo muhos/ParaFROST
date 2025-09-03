@@ -33,26 +33,22 @@ namespace ParaFROST {
 	__global__
 	void copy_if_k(uint32* __restrict__ dest, CNF* __restrict__ src)
 	{
-		grid_t tid = global_tx;
-		while (tid < src->size()) {
+		for_parallel_x (tid, src->size()) {
 			SCLAUSE& c = src->clause(tid);
 			if (c.original() || c.learnt()) {
 				uint32* d = dest + atomicAdd(&gcounter, c.size());
 				forall_clause(c, s) { *d++ = *s; }
 			}
-			tid += stride_x;
 		}
 	}
 
 	__global__ 
 	void prep_cnf_k(CNF* cnf)
 	{
-		grid_t tid = global_tx;
-		while (tid < cnf->size()) {
+		for_parallel_x (tid, cnf->size()) {
 			SCLAUSE& c = cnf->clause(tid);
 			devSort(c.data(), c.size());
 			calcSig(c);
-			tid += stride_x;
 		}
 	}
 

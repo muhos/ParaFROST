@@ -44,9 +44,8 @@ namespace ParaFROST {
 	void cnt_cls(const CNF* __restrict__ cnf)
 	{
 		uint32* sh_rCls = SharedMemory<uint32>();
-		grid_t tid = global_tx_off;
 		uint32 nCls = 0;
-		while (tid < cnf->size()) {
+		for_parallel_x_double(tid, cnf->size()) {
 			const SCLAUSE& c1 = cnf->clause(tid);
 			if (c1.original() || c1.learnt()) nCls++;
 			uint32 off = tid + blockDim.x;
@@ -54,7 +53,6 @@ namespace ParaFROST {
 				const SCLAUSE& c2 = cnf->clause(off);
 				if (c2.original() || c2.learnt()) nCls++;
 			}
-			tid += stride_x_off;
 		}
 		loadShared(sh_rCls, nCls, cnf->size());
 		sharedReduce(sh_rCls, nCls);
@@ -66,9 +64,8 @@ namespace ParaFROST {
 	void cnt_lits(const CNF* __restrict__ cnf)
 	{
 		uint32* sh_rLits = SharedMemory<uint32>();
-		grid_t tid = global_tx_off;
 		uint32 nLits = 0;
-		while (tid < cnf->size()) {
+		for_parallel_x_double(tid, cnf->size()){
 			const SCLAUSE& c1 = cnf->clause(tid);
 			if (c1.original() || c1.learnt()) nLits += c1.size();
 			uint32 off = tid + blockDim.x;
@@ -76,7 +73,6 @@ namespace ParaFROST {
 				const SCLAUSE& c2 = cnf->clause(off);
 				if (c2.original() || c2.learnt()) nLits += c2.size();
 			}
-			tid += stride_x_off;
 		}
 		loadShared(sh_rLits, nLits, cnf->size());
 		sharedReduce(sh_rLits, nLits);
@@ -89,10 +85,9 @@ namespace ParaFROST {
 	{
 		uint32* sh_rCls = SharedMemory<uint32>();
 		uint32* sh_rLits = sh_rCls + blockDim.x;
-		grid_t tid = global_tx_off;
 		uint32 nCls = 0;
 		uint32 nLits = 0;
-		while (tid < cnf->size()) {
+		for_parallel_x_double(tid, cnf->size()) {
 			const SCLAUSE& c1 = cnf->clause(tid);
 			if (c1.original() || c1.learnt()) nCls++, nLits += c1.size();
 			grid_t off = tid + blockDim.x;
@@ -100,7 +95,6 @@ namespace ParaFROST {
 				const SCLAUSE& c2 = cnf->clause(off);
 				if (c2.original() || c2.learnt()) nCls++, nLits += c2.size();
 			}
-			tid += stride_x_off;
 		}
 		loadShared(sh_rCls, nCls, sh_rLits, nLits, cnf->size());
 		sharedReduce(sh_rCls, nCls, sh_rLits, nLits);

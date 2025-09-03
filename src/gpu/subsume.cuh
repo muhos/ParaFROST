@@ -407,9 +407,8 @@ namespace ParaFROST {
 		const cuVecU* __restrict__ elected,
 		const Byte* __restrict__ eliminated)
 	{
-		grid_t tid = global_tx;
 		uint32* sh_cls = SharedMemory<uint32>();
-		while (tid < elected->size()) {
+		for_parallel_x (tid, elected->size()) {
 			const uint32 x = (*elected)[tid];
 			assert(x);
 			assert(!ELIMINATED(eliminated[x]));
@@ -481,7 +480,6 @@ namespace ParaFROST {
 				assert(checkMolten(cnf, poss, negs));
 				assert(checkDeleted(cnf, poss, negs));
 			}
-			tid += stride_x;
 		}
 	}
 

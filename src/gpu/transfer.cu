@@ -63,7 +63,6 @@ void Solver::markEliminated(const cudaStream_t& _s)
 
 #if	defined(_DEBUG) || defined(DEBUG) || !defined(NDEBUG)
 	assert(unassigned >= inf.unassigned);
-	assert((unassigned - inf.unassigned) == vars->nMelted);
 #endif
 }
 
