@@ -318,7 +318,7 @@ namespace ParaFROST {
 				#if FUN_DBG
 				printf("c  Fun Gate %d ", ABS(p));
 				printf("found ==> added = %d, deleted = %d\n", nAddedCls, poss.size() + negs.size());
-				pClauseSet(cnf, ot, ABS(p));
+				print_clause_set(cnf, ot, ABS(p));
 				#endif	
 				return true;
 			}

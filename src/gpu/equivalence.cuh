@@ -156,7 +156,7 @@ namespace ParaFROST {
 					c.melt(); // mark as fanout clause
 					#if EQU_DBG
 					printf("c  Gate %d = -/+%d found\n", ABS(p), ABS(def));
-					pClauseSet(cnf, poss, negs);
+					print_clause_set(cnf, poss, negs);
 					#endif
 					return def;
 				}

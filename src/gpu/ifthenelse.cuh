@@ -114,7 +114,7 @@ namespace ParaFROST {
 						printf("c  Gate %d = ITE(%d, %d, %d) found ==> added = %d, deleted = %d\n",
 							ABS(dx), -int(ABS(yi)), -int(ABS(zi)), -int(ABS(zj)),
 							nAddedCls, dx_list.size() + fx_list.size());
-						printGate(cnf, dx_list, fx_list);
+						print_gate(cnf, dx_list, fx_list);
 						#endif
 
 						return true;

@@ -31,14 +31,14 @@ namespace ParaFROST {
 		if (g_c.size() != size) {
 			printf("c  WARNING - memory incoherency for -> clause size not equal\n");
 			printf("c  global clause: "), g_c.print();
-			printf("c  shared clause: "), pSharedClause(sh_c, size);
+			printf("c  shared clause: "), print_shared_clause(sh_c, size);
 			return false;
 		}
 		while (it < size) {
 			if (sh_c[it] != g_c[it]) {
 				printf("c  WARNING - memory incoherency for -> clauses not equal\n");
 				printf("c  global clause: "), g_c.print();
-				printf("c  shared clause: "), pSharedClause(sh_c, size);
+				printf("c  shared clause: "), print_shared_clause(sh_c, size);
 				return false;
 			}
 			else it++;

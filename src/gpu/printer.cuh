@@ -24,16 +24,16 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 namespace ParaFROST {
 
-	_PFROST_H_D_ void pLit(const uint32& l) { printf("%6d", SIGN(l) ? -int(ABS(l)) : ABS(l)); }
+	_PFROST_H_D_ void print_literal(const uint32& l) { printf("%6d", SIGN(l) ? -int(ABS(l)) : ABS(l)); }
 
-	_PFROST_H_D_ void pSharedClause(const uint32* c, const int& sz)
+	_PFROST_H_D_ void print_shared_clause(const uint32* c, const int& sz)
 	{
 		printf("(");
-		for (int k = 0; k < sz; k++) pLit(c[k]), printf(" ");
+		for (int k = 0; k < sz; k++) print_literal(c[k]), printf(" ");
 		printf(") shared\n");
 	}
 
-	_PFROST_H_D_ void pClauseSet(const CNF& cnf, const OT& ot, const uint32& v)
+	_PFROST_H_D_ void print_clause_set(const CNF& cnf, const OT& ot, const uint32& v)
 	{
 		const OL& poss = ot[V2L(v)], & negs = ot[NEG(V2L(v))];
 		for (uint32 i = 0; i < poss.size(); i++) {
@@ -44,7 +44,7 @@ namespace ParaFROST {
 		}
 	}
 
-	_PFROST_H_D_ void pClauseSet(const CNF& cnf, const OL& poss, const OL& negs)
+	_PFROST_H_D_ void print_clause_set(const CNF& cnf, const OL& poss, const OL& negs)
 	{
 		for (uint32 i = 0; i < poss.size(); i++) {
 			printf("c  "), cnf[poss[i]].print();
@@ -54,7 +54,7 @@ namespace ParaFROST {
 		}
 	}
 
-	_PFROST_H_D_ void pClauseSet(const CNF& cnf, const OL& ol)
+	_PFROST_H_D_ void print_clause_set(const CNF& cnf, const OL& ol)
 	{
 		for (uint32 i = 0; i < ol.size(); i++) {
 			printf("c  c(%lld)->", uint64(ol[i]));
@@ -62,7 +62,7 @@ namespace ParaFROST {
 		}
 	}
 
-	_PFROST_H_D_ void printGate(const CNF& cnf, const OL& poss, const OL& negs)
+	_PFROST_H_D_ void print_gate(const CNF& cnf, const OL& poss, const OL& negs)
 	{
 		for (uint32 i = 0; i < poss.size(); i++) {
 			if (cnf[poss[i]].molten()) {

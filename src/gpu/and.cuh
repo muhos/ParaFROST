@@ -99,7 +99,7 @@ namespace ParaFROST {
 						if (k < nImps - 1) printf(",");
 					}
 					printf(" ) found ==> added = %d, deleted = %d\n", nAddedCls, dx_list.size() + fx_list.size());
-					printGate(cnf, dx_list, fx_list);
+					print_gate(cnf, dx_list, fx_list);
 					#endif
 
 					return true;

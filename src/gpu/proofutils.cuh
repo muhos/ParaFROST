@@ -34,7 +34,7 @@ namespace ParaFROST {
 	{
 		bytes += 2 + GETBYTECOUNT(unit); // 2: 1 prefix + 1 suffix
 		#if PROOF_DBG
-		printf("c  counted %d bytes for unit ", bytes), pLit(orgLit), printf("\n");
+		printf("c  counted %d bytes for unit ", bytes), print_literal(orgLit), printf("\n");
 		#endif
 	}
 
@@ -47,7 +47,7 @@ namespace ParaFROST {
 			bytes += GETBYTECOUNT(lits[i]);
 		}
 		#if PROOF_DBG
-		printf("c  counted %d bytes for clause", bytes), pSharedClause(lits, size);
+		printf("c  counted %d bytes for clause", bytes), print_shared_clause(lits, size);
 		#endif
 	}
 
@@ -101,7 +101,7 @@ namespace ParaFROST {
 		ORIGINIZELIT(orgLit, lit);
 
 		#if PROOF_DBG
-		printf("c   proof saving literal "), pLit(orgLit), printf(": ");
+		printf("c   proof saving literal "), print_literal(orgLit), printf(": ");
 		#endif
 
 		while (ISLARGE(orgLit)) {
@@ -136,7 +136,7 @@ namespace ParaFROST {
 		assert(state == PROOF_ADDED || state == PROOF_DELETED);
 
 		#if PROOF_DBG
-		printf("c  proof saving clause("), pSharedClause(lits, size);
+		printf("c  proof saving clause("), print_shared_clause(lits, size);
 		printf("c   proof saving state '%c'\n", state);
 		#endif
 

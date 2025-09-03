@@ -102,7 +102,7 @@ _PFROST_D_ bool countResolvents(
 
 		#if RES_DBG
 		printf("c  Resolving(%d) ==> added = %d, deleted = %d\n", x, nAddedCls, me.size() + other.size());
-		pClauseSet(cnf, me, other);
+		print_clause_set(cnf, me, other);
 		#endif	
 
 		return true;
@@ -192,7 +192,7 @@ _PFROST_D_ bool countResolvents(
 
 		#if RES_DBG
 		printf("c  Resolving(%d) ==> added = %d, deleted = %d\n", x, nAddedCls, me.size() + other.size());
-		pClauseSet(cnf, me, other);
+		print_clause_set(cnf, me, other);
 		#endif	
 
 		return true;
