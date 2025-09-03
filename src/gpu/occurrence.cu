@@ -67,17 +67,17 @@ namespace ParaFROST {
 		}
 	}
 
-	void reduceOTAsync(CNF* cnf, OT* ot, const bool& p)
+	void reduceOTAsync(CNF* cnf, OT* ot, const bool& print)
 	{
 		assert(cnf);
 		assert(ot);
 		if (gopts.profile_gpu) cutimer->start();
 		OPTIMIZEBLOCKS(inf.nDualVars, BLOCK1D);
 		reduce_ot << <nBlocks, BLOCK1D >> > (cnf, ot);
-		if (p || gopts.sync_always) {
+		if (print || gopts.sync_always) {
 			LASTERR("Occurrence table reduction failed");
 			SYNCALL;
-			if (p) {
+			if (print) {
 				LOGRULER('=', 30);
 				LOG0("\toccurrence table");
 				ot->print();
@@ -100,25 +100,28 @@ namespace ParaFROST {
 		}
 	}
 
-	void createOTAsync(CNF* cnf, OT* ot, const bool& p)
+	void createOTAsync(CNF* cnf, OT* ot, const bool& print)
 	{
 		assert(cnf);
 		assert(ot);
+		LOGN2(2, " Creating occurrence table on GPU..");
 		if (gopts.profile_gpu) cutimer->start();
 		resetOTAsync(cnf, ot);
 		OPTIMIZEBLOCKS(inf.nClauses, BLOCK1D);
 		create_ot_k << <nBlocks, BLOCK1D >> > (cnf, ot);
-		if (p || gopts.sync_always) {
+		if (print || gopts.sync_always) {
+			LOG2(2, "");
 			LASTERR("Occurrence table creation failed");
 			SYNCALL;
 			assert(ot->accViolation(inf.maxVar));
-			if (p) {
+			if (print) {
 				LOGRULER('=', 30);
 				LOG0("\toccurrence table");
 				ot->print();
 				LOGRULER('=', 30);
 			}
 		}
+		LOGDONE(2, 5);
 		if (gopts.profile_gpu) cutimer->stop(), cutimer->cot += cutimer->gpuTime();
 	}
 

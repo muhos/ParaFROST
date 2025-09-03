@@ -681,15 +681,14 @@ namespace ParaFROST {
 		inline CNF*		getDeviceCNF		()		{ return cnf; }
 		inline CNF*		getHostCNF			()		{ return hcnf; }
 		inline CACHER&	getCacher			()		{ return cacher; }
-		inline TCA*		getTCA				()		{ return &tca; }
-		inline cuMM*	getCUMM				()		{ return &cumm; }
-		inline cuHist*	getCUHIST			()		{ return &cuhist; }
-		inline cuPROOF*	getCUPROOF			()		{ return &cuproof; }
-		inline int		getSimpState		()		{ return simpstate; }
-		inline int		getDevCount			()		{ return devCount; }
-		inline bool		isMapped			()		{ return mapped; }
+		inline TCA*		getThrustAllocator	()		{ return &tca; }
+		inline cuMM*	getCUAllocator		()		{ return &cumm; }
+		inline cuHist*	getCUHistogram		()		{ return &cuhist; }
+		inline cuPROOF*	getCUProver			()		{ return &cuproof; }
+		inline int		getSimplifierState	()		{ return simpstate; }
+		inline int		getDeviceCount		()		{ return devCount; }
 		inline bool		isCompacted			()		{ return compacted; }
-
+		// Helpers
 		inline void		enqueueDevUnit		(const uint32& lit) {
 			CHECKLIT(lit);
 			assert(active(lit));
@@ -756,6 +755,7 @@ namespace ParaFROST {
 		bool			propFailed          ();
 		void			writeBackCNF		();
 		bool			reallocCNF			();
+		bool			reallocCNF			(const bool& realloc);
 		void			simplifying         (const bool& keep_gpu_mem = false);
 		void			simplify            (const bool& keep_gpu_mem = false);
 		void			extractCNF			(CNF*, BCNF&);

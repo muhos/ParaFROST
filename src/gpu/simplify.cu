@@ -164,7 +164,7 @@ void Solver::simplifying(const bool& keep_gpu_mem)
 	timer.solve += timer.cpuTime();
 	timer.start();
 	awaken();
-	if (simpstate == CNFALLOC_FAIL) {
+	if (simpstate == CNFALLOC_FAIL || simpstate == AWAKEN_FAIL) {
 		recycle();
 		return;
 	}
@@ -179,7 +179,7 @@ void Solver::simplifying(const bool& keep_gpu_mem)
 		if (!reallocOT(streams[0])) break;
 		SYNC(streams[0]);
 		reallocCNF();
-		createOTAsync(cnf, ot, 0);
+		createOTAsync(cnf, ot);
 		if (!prop()) killSolver();
 		if (!LCVE()) break;
 		sortOT();
@@ -201,20 +201,18 @@ void Solver::simplifying(const bool& keep_gpu_mem)
 	/********************************/
 	/*          Write Back          */
 	/********************************/
+	if (vars->nUnits && reallocFailed()) {
+		// TODO:
+		// If reallocation failed while unit clauses are pending,
+		// one can append them to the trail and continue solving.
+		LOGERROR("unit clauses are pending and reallocation of CNF/OT failed");
+	}
 	assert(sp->propagated == trail.size());
 	cacheEliminated(streams[5]);             	// if ERE is enabled, this transfer would be already done
 	cumm.updateMaxCap(), cacher.updateMaxCap(); // for reporting GPU memory only
 	markEliminated(streams[5]);              	// must be executed before map()
-	if (keep_gpu_mem) {
-		if (vars->nUnits) {
-			cacheCNF(streams[0], streams[1]);
-			if (!propFailed()) return;
-		}
-	}
-	else {
+	if (!keep_gpu_mem)
 		cacheCNF(streams[0], streams[1]);
-		if (vars->nUnits && !propFailed()) killSolver();         // prop any pending units via host memory if 'realloc' failed
-	}
 	bool success = (bclauses != inf.nClauses);
 	inf.maxMelted += vars->nMelted;
 	stats.sigma.all.clauses += bclauses - int64(inf.nClauses);
@@ -233,6 +231,10 @@ void Solver::simplifying(const bool& keep_gpu_mem)
 		return;
 	}
 	if (keep_gpu_mem) {
+		SYNCALL;
+		assert(!simpstate);
+		if (simpstate != CNFALLOC_FAIL && !compacted) 
+			reallocCNF(true);
 		printStats(1, 's', CGREEN); 
 		return;
 	}

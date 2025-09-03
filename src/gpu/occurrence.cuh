@@ -26,8 +26,8 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 namespace ParaFROST {
 
 	void resetOTAsync(CNF* cnf, OT* ot);
-	void createOTAsync(CNF*, OT*, const bool&);
-	void reduceOTAsync(CNF*, OT*, const bool&);
+	void createOTAsync(CNF* cnf, OT* ot, const bool& print = false);
+	void reduceOTAsync(CNF* cnf, OT* ot, const bool& print = false);
 
 }
 

@@ -133,10 +133,9 @@ namespace ParaFROST {
 		}
 	}
 
-	bool Solver::reallocCNF()
+	bool Solver::reallocCNF(const bool& realloc)
 	{
-		int times = phase + 1;
-		if (times > 1 && times != opts.phases && (times % opts.shrink_rate) == 0) {
+		if (realloc) {
 			size_t maxAddedCls = opts.ve_en ? inf.nClauses : 0;
 			size_t maxAddedLits = opts.ve_en ? size_t(stats.literals.original * opts.lits_mul) : 0;
 			LOG2(2, " Maximum added clauses/literals = %zd/%zd", maxAddedCls, maxAddedLits);
@@ -149,6 +148,12 @@ namespace ParaFROST {
 		}
 		else cumm.cacheCNFPtr(cnf), compacted = false;
 		return true;
+	}
+
+	bool Solver::reallocCNF()
+	{
+		const int times = phase + 1;
+		return reallocCNF(times > 1 && times != opts.phases && (times % opts.shrink_rate) == 0);
 	}
 
 	uint32* Solver::flattenCNF(const uint32& numLits)

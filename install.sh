@@ -41,8 +41,7 @@ exit 0
 }
 
 error () {
-printf "$ch error: %-$((lineWidth - 1))s\n" "$1"
-printf "$ch %${lineWidth}s\n" |tr ' ' '-'
+printf "error: %-$((lineWidth - 1))s\n" "$1"
 exit 1
 }
 
