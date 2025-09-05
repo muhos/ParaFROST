@@ -88,7 +88,7 @@ void Solver::awaken()
 {
 	assert(conflict == NOREF);
 	assert(UNSOLVED(cnfstate));
-	assert(sp->propagated == trail.size());
+	assert(isPropagated());
 	initSimplifier();
 	// overapproximate the size of new formula and saved witnesses
 	size_t numCls = maxClauses(), numLits = maxLiterals();
@@ -207,7 +207,7 @@ void Solver::simplifying(const bool& keep_gpu_mem)
 		// one can append them to the trail and continue solving.
 		LOGERROR("unit clauses are pending and reallocation of CNF/OT failed");
 	}
-	assert(sp->propagated == trail.size());
+	assert(isPropagated());
 	cacheEliminated(streams[5]);             	// if ERE is enabled, this transfer would be already done
 	cumm.updateMaxCap(), cacher.updateMaxCap(); // for reporting GPU memory only
 	markEliminated(streams[5]);              	// must be executed before map()

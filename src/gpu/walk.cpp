@@ -73,7 +73,7 @@ void Solver::walk()
 {
 	assert(!DL());
 	assert(UNSOLVED(cnfstate));
-	assert(sp->propagated == trail.size());
+	assert(isPropagated());
 	stats.walk.calls++;
 	wt.clear(true);
 	shrinkTop(true);

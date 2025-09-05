@@ -48,7 +48,7 @@ bool Solver::chronoHasRoot() {
 
 void Solver::reduce()
 {
-	assert(sp->propagated == trail.size());
+	assert(isPropagated());
 	assert(conflict == NOREF);
 	assert(UNSOLVED(cnfstate));
 	assert(learnts.size());

@@ -249,7 +249,7 @@ void Solver::iunassume()
 void Solver::idecide()
 {
 	assert(inf.unassigned);
-	assert(sp->propagated == trail.size());
+	assert(isPropagated());
 	assert(conflict == NOREF);
 	assert(UNSOLVED(cnfstate));
 	int level = DL();

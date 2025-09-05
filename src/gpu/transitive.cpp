@@ -110,7 +110,7 @@ void Solver::transitive()
 	if (!opts.transitive_en) return;
 	assert(probed);
 	assert(!DL());
-	assert(sp->propagated == trail.size());
+	assert(isPropagated());
 	sortWT();
 	SET_BOUNDS(this, limit, transitive, transitiveticks, searchticks, 0);
 	assert(last.transitive.literals < inf.nDualVars);

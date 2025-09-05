@@ -96,9 +96,9 @@ namespace ParaFROST {
 			_data.size += SCBUCKETS(src.size());
 
 		}
-		_PFROST_H_D_		void		print		(const uint32& off = 0, const bool& p_ref = true) {
+		_PFROST_H_D_		void		print		(const uint32& off = 0, const bool& p_ref = true) const {
 			for (uint32 i = off; i < size(); i++) {
-				SCLAUSE& c = clause(i);
+				const SCLAUSE& c = clause(i);
 				if (c.size()) {
 					if (p_ref) printf("c  C(%d, r: %lld)->", i, uint64(_refs[i]));
 					else printf("c  C(%d)->", i);
@@ -106,9 +106,9 @@ namespace ParaFROST {
 				}
 			}
 		}
-		_PFROST_H_D_		void		printAdded	(const uint32& off = 0, const bool& p_ref = true) {
+		_PFROST_H_D_		void		printAdded	(const uint32& off = 0, const bool& p_ref = true) const {
 			for (uint32 i = off; i < size(); i++) {
-				SCLAUSE& c = clause(i);
+				const SCLAUSE& c = clause(i);
 				if (c.size() && c.added()) {
 					if (p_ref) printf("c  C(%d, r: %lld)->", i, uint64(_refs[i]));
 					else printf("c  C(%d)->", i);
@@ -116,9 +116,9 @@ namespace ParaFROST {
 				}
 			}
 		}
-		_PFROST_H_D_		void		printDeleted(const uint32& off = 0, const bool& p_ref = true) {
+		_PFROST_H_D_		void		printDeleted(const uint32& off = 0, const bool& p_ref = true) const {
 			for (uint32 i = off; i < size(); i++) {
-				SCLAUSE& c = clause(i);
+				const SCLAUSE& c = clause(i);
 				if (c.size() && c.deleted()) {
 					if (p_ref) printf("c  C(%d, r: %lld)->", i, uint64(_refs[i]));
 					else printf("c  C(%d)->", i);

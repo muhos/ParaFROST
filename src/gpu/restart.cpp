@@ -30,7 +30,7 @@ bool Solver::canRestart()
 
 void Solver::restart()
 {
-	assert(sp->propagated == trail.size());
+	assert(isPropagated());
 	assert(conflict == NOREF);
 	assert(UNSOLVED(cnfstate));
 	stats.restart.all++;

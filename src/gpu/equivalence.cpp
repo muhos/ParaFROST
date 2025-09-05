@@ -42,7 +42,7 @@ bool Solver::decompose()
 {
 	if (!cnfstate) return false;
 	assert(!DL());
-	assert(sp->propagated == trail.size());
+	assert(isPropagated());
 	assert(analyzed.empty());
 	assert(minimized.empty());
 	stats.decompose.calls++;

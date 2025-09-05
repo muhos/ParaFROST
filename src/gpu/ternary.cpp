@@ -229,7 +229,7 @@ void Solver::ternary()
     if (!canTernary()) return;
     assert(!DL());
     assert(!last.ternary.resolvents);
-    assert(sp->propagated == trail.size());
+    assert(isPropagated());
     SLEEPING(sleep.ternary, opts.ternary_sleep_en);
     stats.ternary.calls++;
     wt.clear(true);

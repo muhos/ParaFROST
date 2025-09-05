@@ -111,7 +111,7 @@ void Solver::FLE()
 {
 	if (!cnfstate) return;
 	assert(!DL());
-	assert(sp->propagated == trail.size());
+	assert(isPropagated());
 	SLEEPING(sleep.probe, opts.probe_sleep_en);
 	SET_BOUNDS(this, probe_limit, probe, probeticks, searchticks, nlogn(maxActive()));
 	VSTATE* states = sp->vstate;
@@ -137,7 +137,7 @@ void Solver::FLE()
 		{
 			assert(!DL());
 			assert(unassigned(probe));
-			assert(sp->propagated == trail.size());
+			assert(isPropagated());
 			unmarkProbe(probe);
 			if (currfailed && vhist[probe] == currfailed)
 				continue;
@@ -150,7 +150,7 @@ void Solver::FLE()
 			}
 			else {
 				assert(DL() == 1);
-				assert(sp->propagated == trail.size());
+				assert(isPropagated());
 				for (uint32 i = propagated; i < trail.size(); i++)
 					vhist[trail[i]] = currfailed;
 				backtrack();

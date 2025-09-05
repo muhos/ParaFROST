@@ -132,33 +132,13 @@ void Solver::varReorder()
 bool Solver::LCVE()
 {
 	// reorder variables
-	uint32* evars = vars->eligible;
-	uint32* eend = evars + inf.maxVar;
-	LOGN2(2, " Finding eligible variables for LCVE..");
-	assert(cuhist.d_hist != NULL);
-	// NOTE: OT creation will be synced in calcScores call
-	if (vars->nUnits) calcScores(vars, cuhist.d_hist, ot); // update d_hist & calc scores
-	else calcScores(vars, cuhist.d_hist);
-	cuhist.cacheHist(inf.nDualVars, streams[2]);
-	if (gopts.profile_gpu) cutimer->start(streams[3]);
-	cacher.insert(cumm.scatter(), cumm.scatterCap());
-	thrust::sort(thrust::cuda::par(tca).on(streams[3]), evars, eend, GPU_LCV_CMP(vars->scores));
-	cacher.erase(cumm.scatterCap());
-	LOGDONE(2, 5);
-	vars->nUnits = 0;
-	SYNC(streams[2]);
-	if (gopts.profile_gpu) cutimer->stop(streams[3]), cutimer->vo += cutimer->gpuTime();
-	if (verbose == 4) {
-		LOG0(" Eligible variables:");
-		for (uint32 v = 0; v < inf.maxVar; v++) {
-			uint32 x = evars[v], p = V2L(x), n = NEG(p);
-			LOG1("  e[%d]->(v: %d, p: %d, n: %d, s: %d)", v, x, cuhist[p], cuhist[n], vars->scores[x]);
-		}
-	}
+	varReorder();
 
 	// extended LCVE
 	LOGN2(2, " Electing variables (p-mu: %d, n-mu: %d)..", opts.mu_pos << multiplier, opts.mu_neg << multiplier);
 	sp->stacktail = sp->tmpstack;
+	uint32* evars = vars->eligible;
+	uint32* eend = evars + inf.maxVar;
 	uint32*& tail = sp->stacktail;
 	LIT_ST* frozen = sp->frozen;
 	const uint32 maxoccurs = opts.lcve_max_occurs;

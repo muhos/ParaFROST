@@ -410,7 +410,7 @@ void Solver::schedule2viv(BCNF& schedule, const bool& tier2, const bool& learnt)
 void Solver::vivifying(const CL_ST& type)
 {
 	assert(!DL());
-	assert(sp->propagated == trail.size());
+	assert(isPropagated());
 	const bool tier2 = ISVIVIFYTIER2(type);
 	const bool learnt = tier2 || ISVIVIFYTIER1(type);
 	BCNF schedule;

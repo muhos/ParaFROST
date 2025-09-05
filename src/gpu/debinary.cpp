@@ -24,7 +24,7 @@ void Solver::debinary() {
 	if (!cnfstate) return;
 	assert(!DL());
 	assert(!wt.empty());
-	assert(sp->propagated == trail.size());
+	assert(isPropagated());
 	stats.debinary.calls++;
 	uVec1D& marked = minimized;
 	int64 subsumed = 0, units = 0;

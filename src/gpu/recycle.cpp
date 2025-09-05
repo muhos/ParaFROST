@@ -145,7 +145,7 @@ void Solver::recycle(CMM& new_cm)
 
 void Solver::recycle() 
 {
-	assert(sp->propagated == trail.size());
+	assert(isPropagated());
 	assert(conflict == NOREF);
 	assert(UNSOLVED(cnfstate));
 	shrink();

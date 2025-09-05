@@ -131,7 +131,7 @@ bool Solver::shrink()
 	assert(trail.size());
 	assert(conflict == NOREF);
 	assert(UNSOLVED(cnfstate));
-	assert(sp->propagated == trail.size());
+	assert(isPropagated());
 	assert(!unassigned(trail.back()));
 #ifdef STATISTICS
 	stats.shrink.calls++;
@@ -155,7 +155,7 @@ void Solver::shrinkTop(const bool& conditional)
 	assert(UNSOLVED(cnfstate));
 	assert(conflict == NOREF);
 	assert(UNSOLVED(cnfstate));
-	assert(sp->propagated == trail.size());
+	assert(isPropagated());
 	LOGN2(2, " Shrinking all clauses on top level..");
 	if (sp->simplified < inf.maxFrozen) sp->simplified = inf.maxFrozen;
 #ifdef STATISTICS

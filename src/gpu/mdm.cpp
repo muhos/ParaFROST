@@ -130,7 +130,7 @@ void Solver::MDMInit()
 {
 	if (!last.mdm.rounds) return;
 	assert(inf.unassigned);
-	assert(sp->propagated == trail.size());
+	assert(isPropagated());
 	assert(conflict == NOREF);
 	assert(UNSOLVED(cnfstate));
 	if (opts.mdm_walk_en) {
@@ -207,7 +207,7 @@ void Solver::MDM()
 		return;
 	}
 	assert(inf.unassigned);
-	assert(sp->propagated == trail.size());
+	assert(isPropagated());
 	assert(conflict == NOREF);
 	assert(UNSOLVED(cnfstate));
 	stats.mdm.calls++;

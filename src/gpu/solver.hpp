@@ -190,9 +190,10 @@ namespace ParaFROST {
 				|| (termCallback && termCallback(termCallbackState))
 				|| (opts.boundsearch_en && (stats.conflicts >= opts.conflict_out || stats.decisions.single >= opts.decision_out));
 		}
+		inline bool		isPropagated		() const { return sp->propagated == trail.size(); }
 		inline void		rootify				() {
 			assert(UNSOLVED(cnfstate));
-			assert(sp->propagated == trail.size());
+			assert(isPropagated());
 			backtrack();
 			if (BCP()) learnEmpty();
 		}
@@ -523,6 +524,8 @@ namespace ParaFROST {
 			inf.unassigned--;
 			inf.maxSubstituted++;
 		}
+		inline LIT_ST*	getValues			() { return sp->value; }
+		inline int*		getLevels			() { return sp->level; }
 		//==============================================
 		bool			keeping				(CLAUSE&);
 		CL_ST			rooted				(CLAUSE&);

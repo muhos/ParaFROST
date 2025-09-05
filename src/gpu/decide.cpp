@@ -63,7 +63,7 @@ uint32 Solver::makeAssign(const uint32& v, const bool& tphase)
 void Solver::decide()
 {
 	assert(inf.unassigned);
-	assert(sp->propagated == trail.size());
+	assert(isPropagated());
 	assert(conflict == NOREF);
 	assert(UNSOLVED(cnfstate));
 	uint32 cand = vsidsEnabled() ? nextVSIDS() : nextVMFQ();
