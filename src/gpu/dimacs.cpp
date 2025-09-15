@@ -87,10 +87,10 @@ bool Solver::parser()
 				if (sign) LOGERROR("number of variables in header is negative");
 				if (inf.orgVars == 0) LOGERROR("zero number of variables in header");
 				if (inf.orgVars >= INT_MAX - 1) LOGERROR("number of variables not supported");
-				inf.nOrgCls = toInteger(str, sign);
+				inf.orgCls = toInteger(str, sign);
 				if (sign) LOGERROR("number of clauses in header is negative");
-				if (inf.nOrgCls == 0) LOGERROR("zero number of clauses in header");
-				LOG2(1, " Found header %s%d %d%s", CREPORTVAL, inf.orgVars, inf.nOrgCls, CNORMAL);
+				if (inf.orgCls == 0) LOGERROR("zero number of clauses in header");
+				LOG2(1, " Found header %s%d %d%s", CREPORTVAL, inf.orgVars, inf.orgCls, CNORMAL);
 				assert(orgs.empty());
 				if (!opts.parseincr_en) {
 					allocSolver();
@@ -159,15 +159,15 @@ bool Solver::parser()
 			formula.eatWS(ch);
 			if (!isDigit(ch)) 
 				LOGERROR("expected digit after 'p cnf %d '", inf.orgVars);
-			inf.nOrgCls = formula.toInteger(ch, sign);
+			inf.orgCls = formula.toInteger(ch, sign);
 			if (sign) LOGERROR("number of clauses in header is negative");
-			if (inf.nOrgCls == 0) LOGERROR("zero number of clauses in header");
+			if (inf.orgCls == 0) LOGERROR("zero number of clauses in header");
 			while (ch != '\n') {
 				if (!isSpace(ch))
-					LOGERROR("expected newline after 'p cnf %d %d'", inf.orgVars, inf.nOrgCls);
+					LOGERROR("expected newline after 'p cnf %d %d'", inf.orgVars, inf.orgCls);
 				ch = formula.get();
 			}
-			LOG2(1, " Found header %s%d %d%s", CREPORTVAL, inf.orgVars, inf.nOrgCls, CNORMAL);
+			LOG2(1, " Found header %s%d %d%s", CREPORTVAL, inf.orgVars, inf.orgCls, CNORMAL);
 			assert(orgs.empty());
 			if (!opts.parseincr_en) {
 				allocSolver();
@@ -198,7 +198,7 @@ bool Solver::parser()
 		}
 	}
 	assert(stats.clauses.original == orgs.size());
-	assert(orgs.size() <= inf.nOrgCls);
+	assert(orgs.size() <= inf.orgCls);
 	orgs.shrinkCap();
 	in_c.clear(true), org.clear(true);
 	timer.stop();
@@ -263,7 +263,7 @@ bool Solver::toClause(Lits_t& c, Lits_t& org, char*& str)
 				return false;
 			}
 		}
-		else if (orgs.size() + 1 > inf.nOrgCls) LOGERROR("too many clauses");
+		else if (orgs.size() + 1 > inf.orgCls) LOGERROR("too many clauses");
 		else if (newsize) {
 			if (newsize == 2) formula.binaries++;
 			else if (newsize == 3) formula.ternaries++;
@@ -328,7 +328,7 @@ bool Solver::toClause(Lits_t& c, Lits_t& org, int& ch)
 				return false;
 			}
 		}
-		else if (orgs.size() + 1 > inf.nOrgCls) LOGERROR("too many clauses");
+		else if (orgs.size() + 1 > inf.orgCls) LOGERROR("too many clauses");
 		else if (newsize) {
 			if (newsize == 2) formula.binaries++;
 			else if (newsize == 3) formula.ternaries++;

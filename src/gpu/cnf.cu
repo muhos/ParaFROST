@@ -83,10 +83,10 @@ namespace ParaFROST {
 	{
 		if (gopts.profile_gpu) cutimer->start();
 		reset_counter << <1, 1 >> > ();
-		OPTIMIZEBLOCKS(inf.nClauses, BLOCK1D);
+		OPTIMIZEBLOCKS(inf.numClauses, BLOCK1D);
 		copy_if_k << <nBlocks, BLOCK1D >> > (dest, src);
 #if defined(_DEBUG) || defined(DEBUG) || !defined(NDEBUG)
-		check_counter << <1, 1 >> > (inf.nLiterals);
+		check_counter << <1, 1 >> > (inf.numLiterals);
 #endif
 		if (gopts.profile_gpu) cutimer->stop(), cutimer->vo += cutimer->gpuTime();
 		LASTERR("Copying literals failed");
@@ -97,10 +97,10 @@ namespace ParaFROST {
 	{
 		if (gopts.profile_gpu) cutimer->start();
 		reset_counter << <1, 1 >> > ();
-		OPTIMIZEBLOCKS(inf.nClauses, BLOCK1D);
+		OPTIMIZEBLOCKS(inf.numClauses, BLOCK1D);
 		copy_if_k << <nBlocks, BLOCK1D >> > (dest, src);
 		if (gopts.sync_always) {
-			check_counter << <1, 1 >> > (inf.nLiterals);
+			check_counter << <1, 1 >> > (inf.numLiterals);
 			LASTERR("Copying literals failed");
 			SYNCALL;
 		}
@@ -109,9 +109,9 @@ namespace ParaFROST {
 
 	void prepareCNFAsync(CNF* cnf, const cudaStream_t& _s)
 	{
-		assert(inf.nClauses);
+		assert(inf.numClauses);
 		if (gopts.profile_gpu) cutimer->start(_s);
-		OPTIMIZEBLOCKS(inf.nClauses, BLOCK1D);
+		OPTIMIZEBLOCKS(inf.numClauses, BLOCK1D);
 		prep_cnf_k << <nBlocks, BLOCK1D, 0, _s >> > (cnf);
 		if (gopts.sync_always) {
 			LASTERR("Preparing CNF failed");
@@ -132,10 +132,10 @@ namespace ParaFROST {
 	bool Solver::reallocCNF(const bool& realloc)
 	{
 		if (realloc) {
-			size_t maxAddedCls = opts.ve_en ? inf.nClauses : 0;
+			size_t maxAddedCls = opts.ve_en ? inf.numClauses : 0;
 			size_t maxAddedLits = opts.ve_en ? size_t(stats.literals.original * opts.lits_mul) : 0;
 			LOG2(2, " Maximum added clauses/literals = %zd/%zd", maxAddedCls, maxAddedLits);
-			if (!cumm.resizeCNF(cnf, inf.nClauses + maxAddedCls, inf.nLiterals + maxAddedLits)) {
+			if (!cumm.resizeCNF(cnf, inf.numClauses + maxAddedCls, inf.numLiterals + maxAddedLits)) {
 				simpstate = CNFALLOC_FAIL, compacted = false;
 				return false;
 			}
@@ -180,7 +180,7 @@ namespace ParaFROST {
 			CLAUSE& c = cm[src[i]];
 			if (c.deleted()) continue;
 			dest->newClause(c);
-			inf.nClauses++, inf.nLiterals += c.size();
+			inf.numClauses++, inf.numLiterals += c.size();
 		}
 	}
 
@@ -196,7 +196,7 @@ namespace ParaFROST {
 		stats.clauses.original = orgs.size();
 		stats.clauses.learnt = learnts.size();
 		stats.sigma.all.literals += bliterals - maxLiterals();
-		assert(maxClauses() == int64(inf.nClauses));
+		assert(maxClauses() == int64(inf.numClauses));
 	}
 
 	void Solver::cacheCNF(const cudaStream_t& s1, const cudaStream_t& s2)
@@ -213,7 +213,7 @@ namespace ParaFROST {
 		if (gopts.profile_gpu) cutimer->start(copystream);
 		if (compacted) {
 			countCls();
-			inf.nClauses = inf.n_cls_after;
+			inf.numClauses = inf.numClausesSurvived;
 		}
 		else {
 			size_t bytes = 0;
@@ -223,14 +223,14 @@ namespace ParaFROST {
 			assert(tmp);
 			// *tmp will hold the new size, so tmp + 1 will be the start of the temporary array
 			cub::DeviceSelect::If(tmp + 1, bytes, cumm.refsMem(), cumm.refsMem(), tmp, hcnf->size(), compact_cmp, s1);
-			CHECK(cudaMemcpy(&inf.nClauses, tmp, sizeof(uint32), cudaMemcpyDeviceToHost));
-			if (inf.nClauses) hcnf->resize(inf.nClauses);
+			CHECK(cudaMemcpy(&inf.numClauses, tmp, sizeof(uint32), cudaMemcpyDeviceToHost));
+			if (inf.numClauses) hcnf->resize(inf.numClauses);
 			if (bytes > cumm.scatterCap()) {
 				assert(tmp != cumm.scatter());
 				cacher.deallocate(tmp);
 			}
 		}
-		if (inf.nClauses) {
+		if (inf.numClauses) {
 			if (!gopts.unified_access)
 				CHECK(cudaMemcpyAsync(hcnf->data().mem, cumm.cnfMem(), hcnf->data().size * SBUCKETSIZE, cudaMemcpyDeviceToHost, s2));
 			if (!reallocFailed() && opts.aggr_cnf_sort)

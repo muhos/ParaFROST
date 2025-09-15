@@ -86,7 +86,7 @@ void Solver::iallocSpace()
 	assert(ilevel.size() == ivstate.size());
 	assert(ilevel.size() == inf.maxVar + 1);
 	assert(imarks.empty());
-	inf.nOrgCls = orgs.size();
+	inf.orgCls = orgs.size();
 	vorg[0] = 0;
 	model.lits[0] = 0;
 	model.init(vorg);

@@ -163,7 +163,7 @@ inline void REPCH(const char& ch, const size_t& size, const size_t& off = 0) {
 #define LOGREDCL(SOLVER, VERBOSITY, MESSAGE) \
     if (verbose >= VERBOSITY) { \
         SOLVER->countAll(); \
-        inf.n_del_vars_after = 0; \
+        inf.numDeletedVars = 0; \
         LOG1("\t\t %s%s%s", CLBLUE, MESSAGE, CNORMAL); \
         SOLVER->logReductions(); }
 

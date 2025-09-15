@@ -24,7 +24,6 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 #include "subsume.cuh"
 #include "blocked.cuh"
 #include "redundancy.cuh"
-#include "occurrence.cuh"
 #include "definitions.cuh"
 #include <cub/device/device_scan.cuh>
 #include <cub/device/device_select.cuh>
@@ -242,7 +241,7 @@ namespace ParaFROST {
 		if (opts.ve_en) {
 			if (interrupted()) killSolver();
 			LOG2(2, " Eliminating variables..");
-			inf.n_del_vars_after = 0;
+			inf.numDeletedVars = 0;
 			veAsync(cnf, ot, vars, streams, cuproof.gpuStream(), cumm, cacher, cuhist, stats.sigma.calls > 1);
 			postVE();
 			LOGREDALL(this, 2, "BVE Reductions");
@@ -295,7 +294,7 @@ namespace ParaFROST {
 			if (interrupted()) killSolver();
 			if (!vars->numElected) return;
 			LOG2(2, " Eliminating redundances..");
-			ereCls = inf.nClauses;
+			ereCls = inf.numClauses;
 			cacheEliminated(streams[5]);
 			ereAsync(cnf, ot, vars, cuproof.gpuStream());
 			LOGREDCL(this, 2, "ERE Reductions");

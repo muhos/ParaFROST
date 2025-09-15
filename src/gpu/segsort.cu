@@ -28,12 +28,18 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 using namespace ParaFROST;
 
+__global__ void print_segments(const S_REF* segs, const uint32* hist, const uint32 n) {
+	for (int i = 0; i < n; i++) {
+		printf("c   Segment %d starts at %lld with count %d\n", i, segs[i], hist[i]);
+	}
+}
+
 void Solver::sortOT() {
 	assert(cumm.occurs());
 	if (gopts.profile_gpu) cutimer->start();
 	static MCA mca(cacher, 0, 0);
 	const int offset = 3; // first three elements in occurs = zero
-	segmented_sort(cumm.occurs(), inf.nLiterals, cuhist.d_segs + offset, inf.nDualVars - offset, olist_cmp, mca);
+	segmented_sort(cumm.occurs(), inf.numLiterals, cuhist.d_segs + offset, inf.nDualVars - offset, olist_cmp, mca);
 	if (gopts.sync_always) {
 		LASTERR("Sorting OT failed");
 		SYNCALL;

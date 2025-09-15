@@ -47,27 +47,27 @@ namespace ParaFROST {
 		}
 	}
 
-	__global__ void create_ot_k(CNF* __restrict__ cnf, OT* __restrict__ ot_ptr)
+	__global__ void create_ot_k(const CNF* __restrict__ cnf, OT* __restrict__ ot_ptr)
 	{
 		for_parallel_x (tid, cnf->size()) {
 			const S_REF r = cnf->ref(tid);
-			SCLAUSE& c = (*cnf)[r];
+			const SCLAUSE& c = (*cnf)[r];
 			if (c.original() || c.learnt()) {
 				OT& ot = *ot_ptr;
-				forall_clause(c, lit) {
+				forall_clause_const(c, lit) {
 					ot[*lit].insert(r);
 				}
 			}
 		}
 	}
 
-	void reduceOTAsync(CNF* cnf, OT* ot, const bool& print)
+	void Solver::reduceOTAsync(const bool& print, const cudaStream_t& stream)
 	{
 		assert(cnf);
 		assert(ot);
 		if (gopts.profile_gpu) cutimer->start();
 		OPTIMIZEBLOCKS(inf.nDualVars, BLOCK1D);
-		reduce_ot << <nBlocks, BLOCK1D >> > (cnf, ot);
+		reduce_ot << <nBlocks, BLOCK1D, 0, stream >> > (cnf, ot);
 		if (print || gopts.sync_always) {
 			LASTERR("Occurrence table reduction failed");
 			SYNCALL;
@@ -81,12 +81,12 @@ namespace ParaFROST {
 		if (gopts.profile_gpu) cutimer->stop(), cutimer->rot += cutimer->gpuTime();
 	}
 
-	void resetOTAsync(CNF* cnf, OT* ot)
+	void Solver::resetOTAsync(const cudaStream_t& stream)
 	{
 		assert(cnf);
 		assert(ot);
 		OPTIMIZEBLOCKS(inf.nDualVars, BLOCK1D);
-		reset_ot_k << <nBlocks, BLOCK1D >> > (ot);
+		reset_ot_k << <nBlocks, BLOCK1D, 0, stream >> > (ot);
 		if (gopts.sync_always) {
 			LASTERR("Occurrence table reset failed");
 			SYNCALL;
@@ -94,15 +94,15 @@ namespace ParaFROST {
 		}
 	}
 
-	void createOTAsync(CNF* cnf, OT* ot, const bool& print)
+	void Solver::createOTAsync(const bool& print, const cudaStream_t& stream)
 	{
 		assert(cnf);
 		assert(ot);
 		LOGN2(2, " Creating occurrence table on GPU..");
 		if (gopts.profile_gpu) cutimer->start();
-		resetOTAsync(cnf, ot);
-		OPTIMIZEBLOCKS(inf.nClauses, BLOCK1D);
-		create_ot_k << <nBlocks, BLOCK1D >> > (cnf, ot);
+		resetOTAsync(stream);
+		OPTIMIZEBLOCKS(inf.numClauses, BLOCK1D);
+		create_ot_k << <nBlocks, BLOCK1D, 0, stream >> > (cnf, ot);
 		if (print || gopts.sync_always) {
 			LOG2(2, "");
 			LASTERR("Occurrence table creation failed");
@@ -122,10 +122,10 @@ namespace ParaFROST {
 
 	bool Solver::reallocOT(const cudaStream_t& stream)
 	{
-		assert(inf.nLiterals);
-		if (!flattenCNF(inf.nLiterals)) { simpstate = OTALLOC_FAIL; return false; }
-		histSimp(inf.nLiterals);
-		if (!cumm.resizeOTAsync(ot, inf.nLiterals, stream)) { simpstate = OTALLOC_FAIL; return false; }
+		assert(inf.numLiterals);
+		if (!flattenCNF(inf.numLiterals)) { simpstate = OTALLOC_FAIL; return false; }
+		histSimp(inf.numLiterals);
+		if (!cumm.resizeOTAsync(ot, inf.numLiterals, stream)) { simpstate = OTALLOC_FAIL; return false; }
 		return true;
 	}
 

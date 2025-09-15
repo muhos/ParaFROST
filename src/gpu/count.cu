@@ -108,27 +108,27 @@ namespace ParaFROST {
 
 	void parcountCls(CNF* cnf)
 	{
-		const uint32 cnf_sz = inf.nClauses;
+		const uint32 cnf_sz = inf.numClauses;
 		OPTIMIZEBLOCKS2(cnf_sz, BLOCK1D);
 		OPTIMIZESHARED(blockSize, sizeof(uint32));
 		cnt_cls << <nBlocks, blockSize, smemSize >> > (cnf);
 		CHECK(cudaMemcpyFromSymbol(hostCBlocks, devCBlocks, nBlocks * sizeof(uint32)));
-		inf.n_cls_after = seqreduceBlocks(hostCBlocks, nBlocks);
+		inf.numClausesSurvived = seqreduceBlocks(hostCBlocks, nBlocks);
 	}
 
 	void parcountLits(CNF* cnf)
 	{
-		const uint32 cnf_sz = inf.nClauses;
+		const uint32 cnf_sz = inf.numClauses;
 		OPTIMIZEBLOCKS2(cnf_sz, BLOCK1D);
 		OPTIMIZESHARED(blockSize, sizeof(uint32));
 		cnt_lits << <nBlocks, blockSize, smemSize >> > (cnf);
 		CHECK(cudaMemcpyFromSymbol(hostLBlocks, devLBlocks, nBlocks * sizeof(uint32)));
-		inf.n_lits_after = seqreduceBlocks(hostLBlocks, nBlocks);
+		inf.numLiteralsSurvived = seqreduceBlocks(hostLBlocks, nBlocks);
 	}
 
 	void parcountAll(CNF* cnf)
 	{
-		const uint32 cnf_sz = inf.nClauses + (inf.nClauses >> 1);
+		const uint32 cnf_sz = inf.numClauses + (inf.numClauses >> 1);
 		OPTIMIZEBLOCKS2(cnf_sz, BLOCK1D);
 		OPTIMIZESHARED(blockSize, sizeof(uint32) * 2);
 		cnt_cls_lits << <nBlocks, blockSize, smemSize >> > (cnf);
@@ -141,11 +141,11 @@ namespace ParaFROST {
 	{
 		if (host) {
 			assert(!hcnf->empty());
-			inf.n_cls_after = 0;
+			inf.numClausesSurvived = 0;
 			for (uint32 i = 0; i < hcnf->size(); i++) {
 				SCLAUSE& c = hcnf->clause(i);
 				if (c.original() || c.learnt())
-					inf.n_cls_after++;
+					inf.numClausesSurvived++;
 			}
 		}
 		else parcountCls(cnf);
@@ -155,11 +155,11 @@ namespace ParaFROST {
 	{
 		if (host) {
 			assert(!hcnf->empty());
-			inf.n_lits_after = 0;
+			inf.numLiteralsSurvived = 0;
 			for (uint32 i = 0; i < hcnf->size(); i++) {
 				SCLAUSE& c = hcnf->clause(i);
 				if (c.original() || c.learnt())
-					inf.n_lits_after += c.size();
+					inf.numLiteralsSurvived += c.size();
 			}
 		}
 		else parcountLits(cnf);
@@ -169,11 +169,11 @@ namespace ParaFROST {
 	{
 		if (host) {
 			assert(!hcnf->empty());
-			inf.n_cls_after = 0, inf.n_lits_after = 0;
+			inf.numClausesSurvived = 0, inf.numLiteralsSurvived = 0;
 			for (uint32 i = 0; i < hcnf->size(); i++) {
 				SCLAUSE& c = hcnf->clause(i);
 				if (c.original() || c.learnt())
-					inf.n_cls_after++, inf.n_lits_after += c.size();
+					inf.numClausesSurvived++, inf.numLiteralsSurvived += c.size();
 			}
 		}
 		else parcountAll(cnf);
@@ -181,9 +181,9 @@ namespace ParaFROST {
 
 	void Solver::logReductions()
 	{
-		int64 varsRemoved = int64(inf.n_del_vars_after) + nForced;
-		int64 clsRemoved = int64(inf.nClauses) - inf.n_cls_after;
-		int64 litsRemoved = int64(inf.nLiterals) - inf.n_lits_after;
+		int64 varsRemoved = int64(inf.numDeletedVars) + nForced;
+		int64 clsRemoved = int64(inf.numClauses) - inf.numClausesSurvived;
+		int64 litsRemoved = int64(inf.numLiterals) - inf.numLiteralsSurvived;
 		const char* header = "  %s%-10s  %-10s %-10s %-10s%s";
 		LOG1(header, CREPORT, " ", "Variables", "Clauses", "Literals", CNORMAL);
 		const char* rem = "  %s%-10s: %s%-9lld  %c%-8lld  %c%-8lld%s";
@@ -194,8 +194,8 @@ namespace ParaFROST {
 			litsRemoved < 0 ? '+' : '-', abs(litsRemoved), CNORMAL);
 		LOG1(sur, CREPORT, "Survived", CREPORTVAL,
 			maxActive(),
-			inf.n_cls_after,
-			inf.n_lits_after, CNORMAL);
+			inf.numClausesSurvived,
+			inf.numLiteralsSurvived, CNORMAL);
 	}
 
 }

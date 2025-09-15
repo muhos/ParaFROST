@@ -20,7 +20,6 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 #include "timer.cuh"
 #include "options.cuh"
 #include "memory.cuh"
-#include "occurrence.cuh"
 
 using namespace ParaFROST;
 
@@ -28,16 +27,16 @@ uint32 Solver::updateNumElims()
 {
 	const uint32 remainedPVs = *vars->electedSize;
 	assert(remainedPVs <= vars->numElected);
-	inf.n_del_vars_after = vars->numElected - remainedPVs;
+	inf.numDeletedVars = vars->numElected - remainedPVs;
 	return remainedPVs;
 }
 
 inline void	Solver::updateNumPVs() 
 {
 	uint32 remainedPVs = updateNumElims();
-	vars->nMelted += inf.n_del_vars_after;
+	vars->nMelted += inf.numDeletedVars;
 	vars->numElected = remainedPVs;
-	LOG2(2, "  BVE eliminated %d variables while %d survived", inf.n_del_vars_after, vars->numElected);
+	LOG2(2, "  BVE eliminated %d variables while %d survived", inf.numDeletedVars, vars->numElected);
 }
 
 inline void	Solver::cleanManaged() 
@@ -107,7 +106,7 @@ void Solver::awaken()
 		!cumm.resizeCNF(cnf, numCls, numLits)) { simpstate = CNFALLOC_FAIL; return; }
 	olist_cmp.init(cnf), compact_cmp.init(cnf);
 	printStats(1, '-', CGREEN0);
-	inf.nClauses = inf.nLiterals = 0;
+	inf.numClauses = inf.numLiterals = 0;
 	wt.clear(true);
 	if (gopts.unified_access) {
 		LOGN2(2, " Extracting clauses directly to device..");
@@ -115,7 +114,7 @@ void Solver::awaken()
 		extractCNF(cnf, orgs), orgs.clear(true);
 		extractCNF(cnf, learnts), learnts.clear(true);
 		cm.destroy();
-		assert(inf.nClauses == cnf->size());
+		assert(inf.numClauses == cnf->size());
 		if (gopts.profile_gpu) cutimer->stop(), cutimer->io += cutimer->gpuTime();
 	}
 	else {
@@ -128,10 +127,10 @@ void Solver::awaken()
 		SYNC(streams[0]); SYNC(streams[1]);
 		cumm.resizeCNFAsync(cnf, hcnf->data().size, hcnf->size());
 		assert(hcnf->data().size == dataoff);
-		assert(inf.nClauses == hcnf->size() && hcnf->size() == csoff);
+		assert(inf.numClauses == hcnf->size() && hcnf->size() == csoff);
 		if (gopts.profile_gpu) cutimer->stop(streams[0]), cutimer->io += cutimer->gpuTime();
 	}
-	LOGENDING(2, 5, "(%d clauses extracted)", inf.nClauses);
+	LOGENDING(2, 5, "(%d clauses extracted)", inf.numClauses);
     vars->varcore = gopts.hostKOpts.ve_fun_en ? vars->eligible : NULL;
 	SYNC(0); // sync device CNF resize
 	initDevVorg(cuhist); // load device pointers to constant memory
@@ -141,8 +140,8 @@ void Solver::awaken()
 	assert(vorg.size() == inf.maxVar + 1);
 	cuhist.fetchVars(vorg, streams[1]);
 	if (opts.proof_en) {
-		const uint32 *literals = flattenCNF(inf.nLiterals);
-		uint32 proofcap = cuproof.count(literals, inf.nLiterals);
+		const uint32 *literals = flattenCNF(inf.numLiterals);
+		uint32 proofcap = cuproof.count(literals, inf.numLiterals);
 		proofcap *= 1.5;
 		if (!cuproof.alloc(proofcap)) { simpstate = AWAKEN_FAIL; return; }
 	}
@@ -172,14 +171,14 @@ void Solver::simplifying(const bool& keep_gpu_mem)
 	/*      reduction phases        */
 	/********************************/
 	assert(!phase && !multiplier);
-	const int64 bmelted = inf.maxMelted, bclauses = inf.nClauses;
+	const int64 bmelted = inf.maxMelted, bclauses = inf.numClauses;
 	int64 cdiff = INT64_MAX, ldiff = INT64_MAX;
-	int64 clsbefore = inf.nClauses, litsbefore = inf.nLiterals;
-	while (inf.nClauses && inf.nLiterals && !simpstate && !interrupted()) {
+	int64 clsbefore = inf.numClauses, litsbefore = inf.numLiterals;
+	while (inf.numClauses && inf.numLiterals && !simpstate && !interrupted()) {
 		if (!reallocOT(streams[0])) break;
 		SYNC(streams[0]);
 		reallocCNF();
-		createOTAsync(cnf, ot);
+		createOTAsync();
 		if (!prop()) killSolver();
 		if (!LCVE()) break;
 		sortOT();
@@ -189,9 +188,9 @@ void Solver::simplifying(const bool& keep_gpu_mem)
 		countAll();
 		updateNumPVs();
 		cacheNumUnits(streams[3]);
-		inf.nClauses = inf.n_cls_after, inf.nLiterals = inf.n_lits_after;
-		cdiff = clsbefore - inf.nClauses, clsbefore = inf.nClauses;
-		ldiff = litsbefore - inf.nLiterals, litsbefore = inf.nLiterals;
+		inf.numClauses = inf.numClausesSurvived, inf.numLiterals = inf.numLiteralsSurvived;
+		cdiff = clsbefore - inf.numClauses, clsbefore = inf.numClauses;
+		ldiff = litsbefore - inf.numLiterals, litsbefore = inf.numLiterals;
 		cacheUnits(streams[3]);
 		phase++, multiplier++;
 		multiplier += phase == opts.phases;
@@ -213,14 +212,14 @@ void Solver::simplifying(const bool& keep_gpu_mem)
 	markEliminated(streams[5]);              	// must be executed before map()
 	if (!keep_gpu_mem)
 		cacheCNF(streams[0], streams[1]);
-	bool success = (bclauses != inf.nClauses);
+	bool success = (bclauses != inf.numClauses);
 	inf.maxMelted += vars->nMelted;
-	stats.sigma.all.clauses += bclauses - int64(inf.nClauses);
+	stats.sigma.all.clauses += bclauses - int64(inf.numClauses);
 	stats.sigma.all.variables += int64(inf.maxMelted) - bmelted;
 	last.shrink.removed = stats.shrunken;
-	if (ereCls > inf.nClauses) stats.sigma.ere.removed += ereCls - inf.nClauses;
+	if (ereCls > inf.numClauses) stats.sigma.ere.removed += ereCls - inf.numClauses;
 	if (inf.maxFrozen > sp->simplified) stats.units.forced += inf.maxFrozen - sp->simplified;
-	if (!inf.unassigned || !inf.nClauses) { 
+	if (!inf.unassigned || !inf.numClauses) { 
 		LOG2(2, " All clauses removed");
 		stats.clauses.original = 0;
 		stats.clauses.learnt = 0;

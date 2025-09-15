@@ -28,7 +28,7 @@ void Solver::newBeginning()
 	assert(wt.empty());
 	assert(orgs.empty());
 	assert(learnts.empty());
-	assert(inf.nClauses <= hcnf->size());
+	assert(inf.numClauses <= hcnf->size());
 	if (gopts.unified_access) assert(hcnf == NULL), hcnf = cnf;
 	assert(!hcnf->empty());
 	cm.init(hcnf->data().size);

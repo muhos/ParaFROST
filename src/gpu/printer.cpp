@@ -47,7 +47,7 @@ void Solver::printStats(const bool& _p, const Byte& _t, const char* _c)
 	if (verbose == 1 && _p) {
 		const int l2c = (int)ratio(stats.literals.learnt, stats.clauses.learnt);
 		const int vr = (int)percent(maxActive(), inf.orgVars);
-		const int cr = (int)percent((double)stats.clauses.original, inf.nOrgCls);
+		const int cr = (int)percent((double)stats.clauses.original, inf.orgCls);
 		solLine[0] = _t;
 		LOGN0("");
 		SETCOLOR(_c, stdout);

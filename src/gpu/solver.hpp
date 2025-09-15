@@ -684,10 +684,10 @@ namespace ParaFROST {
 		inline CNF*		getDeviceCNF		()		{ return cnf; }
 		inline CNF*		getHostCNF			()		{ return hcnf; }
 		inline CACHER&	getCacher			()		{ return cacher; }
-		inline TCA*		getThrustAllocator	()		{ return &tca; }
-		inline cuMM*	getCUAllocator		()		{ return &cumm; }
-		inline cuHist*	getCUHistogram		()		{ return &cuhist; }
-		inline cuPROOF*	getCUProver			()		{ return &cuproof; }
+		inline TCA&		getThrustAllocator	()		{ return tca; }
+		inline cuMM&	getCUAllocator		()		{ return cumm; }
+		inline cuHist&	getCUHistogram		()		{ return cuhist; }
+		inline cuPROOF&	getCUProver			()		{ return cuproof; }
 		inline int		getSimplifierState	()		{ return simpstate; }
 		inline int		getDeviceCount		()		{ return devCount; }
 		inline bool		isCompacted			()		{ return compacted; }
@@ -766,6 +766,9 @@ namespace ParaFROST {
 		void			reflectCNF			(const cudaStream_t&, const cudaStream_t&);
 		void			cacheCNF			(const cudaStream_t&, const cudaStream_t&);
 		void			histSimp            (const uint32&);
+		void 			resetOTAsync		(const cudaStream_t& stream = 0);
+		void 			reduceOTAsync		(const bool& print = false, const cudaStream_t& stream = 0);
+		void			createOTAsync		(const bool& print = false, const cudaStream_t& stream = 0);
 		void			createOTHost		(HOT&);
 		void			cacheUnits          (const cudaStream_t&);
 		void			cacheNumUnits       (const cudaStream_t&);

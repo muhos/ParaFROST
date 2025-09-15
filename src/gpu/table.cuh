@@ -51,7 +51,7 @@ namespace ParaFROST {
 		_PFROST_H_D_	OL		operator []		(const uint32& i) const { assert(i < maxLists); return _lists[i]; }
 		_PFROST_H_D_			operator OL*	() { return _lists; }
 		_PFROST_H_D_	uint32	size			() const { return maxLists; }
-		_PFROST_H_D_	void	print			() {
+		_PFROST_H_D_	void	print			() const {
 			for (uint32 v = 2; v < size(); v++) {
 				int sign_v = SIGN(v) ? -int(ABS(v)) : ABS(v);
 				printf("c  list[ %d ][cap = %d]", sign_v, _lists[v].capacity()), _lists[v].print();

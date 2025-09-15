@@ -56,11 +56,11 @@ namespace ParaFROST {
 	template <typename D, typename I>
 	inline void seqreduceBlocks(const D* CBlocks, const D* LBlocks, const I& n)
 	{
-		inf.n_cls_after = 0;
-		inf.n_lits_after = 0;
+		inf.numClausesSurvived = 0;
+		inf.numLiteralsSurvived = 0;
 		for (I i = 0; i < n; ++i) {
-			inf.n_cls_after += CBlocks[i];
-			inf.n_lits_after += LBlocks[i];
+			inf.numClausesSurvived += CBlocks[i];
+			inf.numLiteralsSurvived += LBlocks[i];
 		}
 	}
 

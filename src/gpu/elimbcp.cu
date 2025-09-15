@@ -17,7 +17,6 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 **********************************************************************************/
 
 #include "solver.hpp"
-#include "occurrence.cuh"
 
 using namespace ParaFROST;
 
@@ -45,7 +44,7 @@ bool Solver::propFailed()
 		SYNCALL; // sync 'cacheCNF'
 		assert(reallocFailed());
 		assert(hcnf != NULL);
-		assert(inf.nClauses == hcnf->size());
+		assert(inf.numClauses == hcnf->size());
 		HOT hot(inf.nDualVars);
 		createOTHost(hot);
 		// start proping on host
@@ -62,7 +61,7 @@ bool Solver::propFailed()
 		}
 		if (trail.size() == sp->propagated) vars->nUnits = nForced = 0; // duplicate units
 		else LOGN2(2, " Propagating pending forced units..");
-		int64 bclauses = inf.nClauses, bliterals = inf.nLiterals;
+		int64 bclauses = inf.numClauses, bliterals = inf.numLiterals;
 		CNF& hcnf = *this->hcnf;
 		while (sp->propagated < trail.size()) { // propagate units
 			uint32 assign = trail[sp->propagated++], f_assign = FLIP(assign);
@@ -91,11 +90,11 @@ bool Solver::propFailed()
 		nForced = sp->propagated - nForced;
 		LOGREDALLHOST(this, 2, "BCP Reductions");
 		countAll(1);
-		inf.nClauses = inf.n_cls_after;
-		inf.nLiterals = inf.n_lits_after;
+		inf.numClauses = inf.numClausesSurvived;
+		inf.numLiterals = inf.numLiteralsSurvived;
 		stats.units.forced += nForced;
-		stats.sigma.all.clauses += bclauses - int64(inf.nClauses);
-		stats.sigma.all.literals += bliterals - int64(inf.nLiterals);
+		stats.sigma.all.clauses += bclauses - int64(inf.numClauses);
+		stats.sigma.all.literals += bliterals - int64(inf.numLiterals);
 		vars->nUnits = nForced = 0;
 	}
 	return true;
@@ -187,7 +186,7 @@ inline void	Solver::cleanProped() {
 		LOGREDALL(this, 2, "BCP Reductions");
 		nForced = 0, vars->tmpUnits.clear();
 		assert(vars->tmpUnits.data() == cumm.unitsdPtr());
-		if (!opts.sub_en) reduceOTAsync(cnf, ot, 0);
+		if (!opts.sub_en) reduceOTAsync();
 		CHECK(cudaMemcpyAsync(vars->units, &vars->tmpUnits, sizeof(cuVecU), cudaMemcpyHostToDevice));
 	}
 }

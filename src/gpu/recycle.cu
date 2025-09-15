@@ -68,10 +68,10 @@ namespace ParaFROST {
 		assert(old_size <= nscatters);
 		assert(SCLAUSEBUCKETS == sizeof(SCLAUSE) / sizeof(uint32));
 
-		LOG2(2, " Compacting simplified CNF (%d to %d) on GPU..", old_size, inf.nClauses);
+		LOG2(2, " Compacting simplified CNF (%d to %d) on GPU..", old_size, inf.numClauses);
 
-		const S_REF data_size = REGIONBUCKETS(inf.nClauses, inf.nLiterals);
-		resizeCNFAsync(dest, data_size, inf.nClauses);
+		const S_REF data_size = REGIONBUCKETS(inf.numClauses, inf.numLiterals);
+		resizeCNFAsync(dest, data_size, inf.numClauses);
 
 		OPTIMIZEBLOCKS(old_size, BLOCK1D);
 		scatter_k << <nBlocks, BLOCK1D >> > (src, d_scatter, d_stencil, nscatters);
@@ -94,7 +94,7 @@ namespace ParaFROST {
 
 		compact_k << <nBlocks, BLOCK1D >> > (src, dest, d_scatter, d_stencil);
 
-		pinned_cnf->resize(data_size, inf.nClauses);
+		pinned_cnf->resize(data_size, inf.numClauses);
 
 		LASTERR("CNF compact failed");
 		SYNC(0);
