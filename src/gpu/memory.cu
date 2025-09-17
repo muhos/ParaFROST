@@ -60,8 +60,9 @@ void assignListPtrs(OT* __restrict__ ot, const uint32* __restrict__ hist, const 
 
 void cuMM::cuMemSetAsync(addr_t mem, const Byte& val, const size_t& size)
 {
-	OPTIMIZEBLOCKS(uint32(size), BLOCK1D);
-	memset_k<Byte> << <nBlocks, BLOCK1D >> > (mem, val, size);
+	grid_t nThreads(BLOCK1D);
+	OPTIMIZEBLOCKS(uint32(size), nThreads, 0);
+	memset_k<Byte> << <nBlocks, nThreads >> > (mem, val, size);
 	if (gopts.sync_always) {
 		LASTERR("CUDA memory set failed");
 		SYNCALL;
@@ -284,7 +285,8 @@ bool cuMM::resizeOTAsync(OT*& ot, const size_t& min_lits, const cudaStream_t& _s
 	size_t ebytes = 0;
 	DeviceScan::ExclusiveSum(NULL, ebytes, d_hist, d_segs, inf.nDualVars, _s);
 	DeviceScan::ExclusiveSum(tmp, ebytes, d_hist, d_segs, inf.nDualVars, _s);
-	OPTIMIZEBLOCKS(inf.nDualVars, BLOCK1D);
+	grid_t nThreads(BLOCK1D);
+	OPTIMIZEBLOCKS(inf.nDualVars, nThreads, 0);
 	const size_t min_cap = HC_OTSIZE + inf.nDualVars * HC_OLSIZE + min_lits * HC_SREFSIZE;
 	assert(min_cap);
 	if (otPool.cap < min_cap) { // realloc
@@ -303,11 +305,11 @@ bool cuMM::resizeOTAsync(OT*& ot, const size_t& min_lits, const cudaStream_t& _s
 		SYNC(_s); // needed for calling the next constructor on host
 		new (ot) OT(inf.nDualVars);
 		d_occurs = ot->data();
-		assignListPtrs << <nBlocks, BLOCK1D, 0, _s >> > (ot, d_hist, d_segs, inf.nDualVars);
+		assignListPtrs << <nBlocks, nThreads, 0, _s >> > (ot, d_hist, d_segs, inf.nDualVars);
 		otPool.cap = min_cap;
 	}
 	else
-		assignListPtrs << <nBlocks, BLOCK1D, 0, _s >> > (ot, d_hist, d_segs, inf.nDualVars);
+		assignListPtrs << <nBlocks, nThreads, 0, _s >> > (ot, d_hist, d_segs, inf.nDualVars);
 	if (gopts.sync_always) {
 		LASTERR("Occurrence lists allocation failed");
 		SYNC(_s);

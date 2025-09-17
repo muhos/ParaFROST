@@ -72,7 +72,7 @@ inline void WALK::destroy()
 void Solver::walk()
 {
 	assert(!DL());
-	assert(UNSOLVED(cnfstate));
+	assert(IS_UNSOLVED(cnfstate));
 	assert(isPropagated());
 	stats.walk.calls++;
 	wt.clear(true);

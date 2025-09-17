@@ -56,10 +56,10 @@ namespace ParaFROST {
 		reset_id << <1, 1 >> > ();
 		LOGDONE(2, 5);
 		LOGN2(2, "  configuring phase 1 with ");
-		OPTIMIZEBLOCKSELIM(vars->numElected, BLVE1, gopts.ve);
+		grid_t nThreads = BLVE1;
 		OPTIMIZESHARED(nThreads, SH_MAX_BVE_OUT1 * sizeof(uint32));
-		LOGENDING(2, 5, "(%d/%d ths, %d/%d bls) and %zd KB shared memory",
-			nThreads, BLVE1, nBlocks, MAXBLOCKS, smemSize / KBYTE);
+		OPTIMIZEBLOCKSELIM(vars->numElected, nThreads, smemSize, gopts.ve);
+		LOGENDING(2, 5, "(%d/%d ths, %d bls) and %zd KB shared memory", nThreads, BLVE1, nBlocks, smemSize / KBYTE);
 #if VE_DBG
 		if (in) in_ve_k_1 << <1, 1, smemSize >> > (cnf, ot, vars->elected, vars->eliminated, vars->units, vars->resolved, proof, vars->varcore, ucnt, max_cnts, type, max_types, rpos, max_poss, rref, max_refs);
 		else	   ve_k_1 << <1, 1, smemSize >> > (cnf, ot, vars->elected, vars->eliminated, vars->units, vars->resolved, proof, vars->varcore, ucnt, max_cnts, type, max_types, rpos, max_poss, rref, max_refs);
@@ -110,10 +110,10 @@ namespace ParaFROST {
 		S_REF* rref)
 	{
 		LOGN2(2, "  configuring phase 3 with ");
-		OPTIMIZEBLOCKSELIM(vars->numElected, BLVE2, gopts.ve);
+		grid_t nThreads = BLVE2;
 		OPTIMIZESHARED(nThreads, SH_MAX_BVE_OUT2 * sizeof(uint32));
-		LOGENDING(2, 5, "(%d/%d ths, %d/%d bls) and %zd KB shared memory",
-			nThreads, BLVE2, nBlocks, MAXBLOCKS, smemSize / KBYTE);
+		OPTIMIZEBLOCKSELIM(vars->numElected, nThreads, smemSize, gopts.ve);
+		LOGENDING(2, 5, "(%d/%d ths, %d bls) and %zd KB shared memory", nThreads, BLVE2, nBlocks, smemSize / KBYTE);
 #if VE_DBG
 		ve_k_2 << <1, 1, smemSize >> > (cnf, ot, vars->elected, vars->eliminated, vars->eligible, vars->units, vars->resolved, proof, ucnt, type, rpos, rref);
 #else
@@ -162,10 +162,11 @@ namespace ParaFROST {
 		assert(vars->numElected);
 		if (gopts.profile_gpu) cutimer->start();
 		LOGN2(2, "  configuring SUB kernel with ");
-		OPTIMIZEBLOCKSELIM(vars->numElected, BLSUB, gopts.sub);
+		grid_t nThreads = BLSUB;
 		OPTIMIZESHARED(nThreads, SH_MAX_SUB_IN * sizeof(uint32));
-		LOGENDING(2, 5, "(%d/%d ths, %d/%d bls) and %zd KB shared memory",
-			nThreads, BLSUB, nBlocks, MAXBLOCKS, smemSize / KBYTE);
+		OPTIMIZEBLOCKSELIM(vars->numElected, nThreads, smemSize, gopts.sub);
+		LOGENDING(2, 5, "(%d/%d ths, %d bls) and %zd KB shared memory",
+			nThreads, BLSUB, nBlocks, smemSize / KBYTE);
 #if SS_DBG
 		sub_k << <1, 1, smemSize >> > (cnf, ot, proof, vars->units, vars->elected, vars->eliminated);
 #else
@@ -184,8 +185,9 @@ namespace ParaFROST {
 		assert(ot);
 		assert(vars->numElected);
 		if (gopts.profile_gpu) cutimer->start();
-		OPTIMIZEBLOCKS(vars->numElected, BLBCE);
-		bce_k << <nBlocks, BLBCE >> > (cnf, ot, proof, vars->resolved, vars->elected, vars->eliminated);
+		grid_t nThreads = BLBCE;
+		OPTIMIZEBLOCKS(vars->numElected, nThreads, 0);
+		bce_k << <nBlocks, nThreads >> > (cnf, ot, proof, vars->resolved, vars->elected, vars->eliminated);
 		if (gopts.profile_gpu) cutimer->stop(), cutimer->bce += cutimer->gpuTime();
 		if (gopts.sync_always) {
 			LASTERR("BCE Elimination failed");
@@ -200,18 +202,20 @@ namespace ParaFROST {
 		assert(vars->numElected);
 		if (gopts.profile_gpu) cutimer->start();
 #if	defined(_DEBUG) || defined(DEBUG) || !defined(NDEBUG)
-		dim3 block2D(16, devProp.warpSize);
+		dim3 block2D(16, gopts.ere_min_threads);
 #else 
-		dim3 block2D(devProp.warpSize, devProp.warpSize);
+		dim3 block2D(devProp.warpSize, gopts.ere_min_threads);
 #endif
+
 		SYNCALL;
 		dim3 grid2D(1, 1, 1);
 		LOGN2(2, "  configuring ERE kernel with ");
-		OPTIMIZEBLOCKSERE(vars->numElected, block2D, gopts.ere);
 		OPTIMIZESHARED(block2D.y, SH_MAX_ERE_OUT * sizeof(uint32));
+		OPTIMIZEBLOCKSERE(vars->numElected, block2D, smemSize, gopts.ere);
 		grid2D.y = nBlocks;
-		LOGENDING(2, 5, "(%d/%d ths, %d/%d bls) and %zd KB shared memory",
-			block2D.y, devProp.warpSize, grid2D.y, MAXBLOCKS, smemSize / KBYTE);
+		LOGENDING(2, 5, "((x: %d/%d, y: %d/%d) ths, (x: %d, y: %d/%d) bls) and %zd KB shared memory",
+			block2D.x, devProp.warpSize, block2D.y, gopts.ere_min_threads, 
+			grid2D.x, grid2D.y, hardCap, smemSize / KBYTE);
 		ere_k << <grid2D, block2D, smemSize >> > (cnf, ot, proof, vars->elected, vars->eliminated);
 		if (gopts.profile_gpu) cutimer->stop(), cutimer->ere += cutimer->gpuTime();
 		if (gopts.sync_always) {

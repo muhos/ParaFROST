@@ -169,7 +169,7 @@ bool Solver::decompose()
 			learnEmpty();
 		}
 		if (cnfstate) {
-			assert(UNSOLVED(cnfstate));
+			assert(IS_UNSOLVED(cnfstate));
 			forall_variables(v) {
 				if (sp->vstate[v].state) continue;
 				const uint32 p = V2L(v);
@@ -195,7 +195,7 @@ bool Solver::decompose()
 
 bool Solver::substitute(BCNF& cnf, uint32* smallests)
 {
-	assert(UNSOLVED(cnfstate));
+	assert(IS_UNSOLVED(cnfstate));
 	assert(learntC.empty());
 	bool binaries = false;
 	uint32 units = 0;

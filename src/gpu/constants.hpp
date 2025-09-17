@@ -26,6 +26,8 @@ extern int verbose;
 
 namespace ParaFROST {
 
+	enum CNFState { UNSAT = 0, SAT = 1, UNSOLVED = 2 };
+
 	#define MBYTE			0x00100000
 	#define KBYTE			0x00000400
 	#define GBYTE			0x40000000
@@ -40,13 +42,9 @@ namespace ParaFROST {
 	#define BESTPHASE		4
 	#define RANDPHASE		5
 	#define WALKPHASE		6
-	#define UNSAT			0
-	#define SAT				1
-	#define UNSOLVED_M		2
 	#define PROOF_ADDED	    97  // 'a'
 	#define PROOF_DELETED	100 // 'd'
-	#define UNSOLVED(x)		((x) & UNSOLVED_M)
-	#define RESETSTATE(x)	(x = UNSOLVED_M)
+	#define IS_UNSOLVED(x)	((x) & UNSOLVED)
 
 	#define NEG_SIGN		0x00000001
 	#define HASH_MASK		0x0000001F

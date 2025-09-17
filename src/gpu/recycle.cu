@@ -72,9 +72,9 @@ namespace ParaFROST {
 
 		const S_REF data_size = REGIONBUCKETS(inf.numClauses, inf.numLiterals);
 		resizeCNFAsync(dest, data_size, inf.numClauses);
-
-		OPTIMIZEBLOCKS(old_size, BLOCK1D);
-		scatter_k << <nBlocks, BLOCK1D >> > (src, d_scatter, d_stencil, nscatters);
+		grid_t nThreads(BLOCK1D);
+		OPTIMIZEBLOCKS(old_size, nThreads, 0);
+		scatter_k << <nBlocks, nThreads >> > (src, d_scatter, d_stencil, nscatters);
 		if (gopts.sync_always) {
 			LASTERR("Scattering CNF failed");
 			SYNC(0);

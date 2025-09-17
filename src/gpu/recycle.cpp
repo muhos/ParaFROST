@@ -147,7 +147,7 @@ void Solver::recycle()
 {
 	assert(isPropagated());
 	assert(conflict == NOREF);
-	assert(UNSOLVED(cnfstate));
+	assert(IS_UNSOLVED(cnfstate));
 	shrink();
 	if (canCollect()) {
 		LOGN2(2, " Recycling garbage..");

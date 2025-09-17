@@ -39,7 +39,7 @@ INT_OPT opt_ve_min_threads("veminthreads",
 INT_OPT opt_sub_min_threads("subminthreads",
 	"set the minimum x-threads allowed per block in SUB (the tuner may optimize it to a higher value)", 4, INT32R(2, 1024));
 INT_OPT opt_ere_min_threads("ereminthreads",
-	"set the minimum y-threads allowed per block in ERE (the tuner may optimize it to a higher value)", 4, INT32R(2, 32));
+	"set the minimum y-threads allowed per block in ERE (the tuner may optimize it to a higher value)", 4, INT32R(2, 1024));
 DOUBLE_OPT opt_ve_min_blocks("veminblocks", 
 	"set the minimum percentage of supported blocks to trigger the embedded tuner in BVE", 0.5, FP64R(0, 1));
 DOUBLE_OPT opt_sub_min_blocks("subminblocks", 

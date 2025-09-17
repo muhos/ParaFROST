@@ -151,7 +151,7 @@ uint32 Solver::autarkReasoning(LIT_ST* autarkies)
 void Solver::autarky()
 {
 	if (!opts.autarky_en || incremental) return;
-	if (!UNSOLVED(cnfstate)) return;
+	if (!IS_UNSOLVED(cnfstate)) return;
 	SLEEPING(sleep.autarky, opts.autarky_sleep_en);
 	assert(!DL());
 	stats.autarky.calls++;

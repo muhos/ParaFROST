@@ -113,7 +113,7 @@ bool Solver::BCP()
 }
 
 bool Solver::BCPProbe() {
-	assert(UNSOLVED(cnfstate));
+	assert(IS_UNSOLVED(cnfstate));
 	assert(DL() == 1);
 	conflict = NOREF;
 	bool isConflict = false;
@@ -128,7 +128,7 @@ bool Solver::BCPProbe() {
 }
 
 bool Solver::BCPVivify() {
-	assert(UNSOLVED(cnfstate));
+	assert(IS_UNSOLVED(cnfstate));
 	conflict = NOREF;
 	bool isConflict = false;
 	while (!isConflict && sp->propagated < trail.size()) {

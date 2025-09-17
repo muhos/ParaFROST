@@ -265,11 +265,9 @@ void ParaFROST::Solver::killSolver()
 {
 	SYNCALL;
 	wrapup();
-	LOG0("");
-	LOGN2(1, " Cleaning up..");
+	LOGHEADER(1, 5, "Exit");
 	this->~Solver();
 	solver = NULL;
-	LOGDONE(1, 5);
 	if (!quiet_en) LOGRULER('-', RULELEN);
 	exit(EXIT_SUCCESS);
 }

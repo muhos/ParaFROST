@@ -22,7 +22,7 @@ using namespace ParaFROST;
 
 void Solver::vibrate() {
 
-	assert(UNSOLVED(cnfstate));
+	assert(IS_UNSOLVED(cnfstate));
 	if (last.rephase.type) return;
 	if (!opts.stable_en) return;
 	if (stable) {

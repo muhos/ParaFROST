@@ -67,7 +67,8 @@ namespace ParaFROST {
 	struct OCCUR { uint32 ps, ns; };
 	struct CNF_INFO {
 		uint32 orgVars, maxVar, maxFrozen, maxMelted, maxSubstituted, nDualVars, unassigned, numDeletedVars;
-		uint32 orgCls, numClausesSurvived, numLiteralsSurvived, numClauses, numLiterals;
+		uint32 orgCls, numClausesSurvived, numClauses;
+		uint32 numLiteralsSurvived, numLiterals;
 		CNF_INFO() { RESETSTRUCT(this); }
 	};
 	extern CNF_INFO inf;

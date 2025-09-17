@@ -132,13 +132,13 @@ void Solver::MDMInit()
 	assert(inf.unassigned);
 	assert(isPropagated());
 	assert(conflict == NOREF);
-	assert(UNSOLVED(cnfstate));
+	assert(IS_UNSOLVED(cnfstate));
 	if (opts.mdm_walk_en) {
 		stats.mdm.walks++;
 		walk();
 	}
 	// check if formula is solved by walk strategy
-	if (!UNSOLVED(cnfstate)) return;
+	if (!IS_UNSOLVED(cnfstate)) return;
 	stats.mdm.calls++;
 	LOG2(2, " MDM %d: electing decisions at decaying round %d..", stats.mdm.calls, last.mdm.rounds);
 	eligible.resize(inf.maxVar);
@@ -209,7 +209,7 @@ void Solver::MDM()
 	assert(inf.unassigned);
 	assert(isPropagated());
 	assert(conflict == NOREF);
-	assert(UNSOLVED(cnfstate));
+	assert(IS_UNSOLVED(cnfstate));
 	stats.mdm.calls++;
 	LOG2(2, " MDM %d: electing decisions at decaying round %d..", stats.mdm.calls, last.mdm.rounds);
 	eligible.clear();
@@ -224,7 +224,7 @@ void Solver::MDM()
 		walk();
 	}
 	// check if formula is solved by walk strategy
-	if (!UNSOLVED(cnfstate)) {
+	if (!IS_UNSOLVED(cnfstate)) {
 		eligible.clear();
 		return;
 	}

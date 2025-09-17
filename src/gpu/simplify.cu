@@ -69,7 +69,7 @@ void Solver::simplify(const bool& keep_gpu_mem)
 {
 	if (alldisabled()) return;
 	assert(conflict == NOREF);
-	assert(UNSOLVED(cnfstate));
+	assert(IS_UNSOLVED(cnfstate));
 	assert(stats.clauses.original);
 	stats.sigma.calls++;
 	simplifying(keep_gpu_mem);
@@ -81,12 +81,14 @@ void Solver::simplify(const bool& keep_gpu_mem)
 	}
 	if (keep_gpu_mem)
 		LOG2(2, " Keeping GPU memory for future calls");
+	if (!opts.solve_en) killSolver();
+	timer.start();
 }
 
 void Solver::awaken()
 {
 	assert(conflict == NOREF);
-	assert(UNSOLVED(cnfstate));
+	assert(IS_UNSOLVED(cnfstate));
 	assert(isPropagated());
 	initSimplifier();
 	// overapproximate the size of new formula and saved witnesses
@@ -247,8 +249,6 @@ void Solver::simplifying(const bool& keep_gpu_mem)
 	UPDATE_SLEEPER(this, sigma, success);
 	printStats(1, 's', CGREEN);
 	timer.stop(), timer.simp += timer.cpuTime();
-	if (!opts.solve_en) killSolver();
-	timer.start();
 }
 
 void Solver::optSimp()
@@ -265,7 +265,6 @@ void Solver::optSimp()
 
 void Solver::freeSimp()
 {
-	LOG2(2, " Freeing up GPU memory..");
 	SYNCALL;
 	cacher.destroy();
 	cumm.freeFixed();

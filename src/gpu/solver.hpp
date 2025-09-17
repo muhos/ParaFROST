@@ -91,7 +91,7 @@ namespace ParaFROST {
 		C_REF			conflict, ignore;
 		size_t			solLineLen;
 		string			solLine;
-		CNF_ST			cnfstate;
+		CNFState		cnfstate;
 		bool			intr, stable, probed, incremental;
 
 	public:
@@ -149,7 +149,7 @@ namespace ParaFROST {
 		inline void		nointerrupt			() { intr = false; }
 		inline void		incDL				() { dlevels.push(trail.size()); }
 		inline bool		interrupted			() const { return intr; }
-		inline CNF_ST	status				() const { return cnfstate; }
+		inline CNFState	status				() const { return cnfstate; }
 		inline int		DL					() const { assert(dlevels.size()); return (int)dlevels.size() - 1; }
 		inline int64	maxClauses			() const { return stats.clauses.original + stats.clauses.learnt; }
 		inline int64	maxLiterals			() const { return stats.literals.original + stats.literals.learnt; }
@@ -192,7 +192,7 @@ namespace ParaFROST {
 		}
 		inline bool		isPropagated		() const { return sp->propagated == trail.size(); }
 		inline void		rootify				() {
-			assert(UNSOLVED(cnfstate));
+			assert(IS_UNSOLVED(cnfstate));
 			assert(isPropagated());
 			backtrack();
 			if (BCP()) learnEmpty();

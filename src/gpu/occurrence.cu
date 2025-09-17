@@ -66,8 +66,9 @@ namespace ParaFROST {
 		assert(cnf);
 		assert(ot);
 		if (gopts.profile_gpu) cutimer->start();
-		OPTIMIZEBLOCKS(inf.nDualVars, BLOCK1D);
-		reduce_ot << <nBlocks, BLOCK1D, 0, stream >> > (cnf, ot);
+		grid_t nThreads(BLOCK1D);
+		OPTIMIZEBLOCKS(inf.nDualVars, nThreads, 0);
+		reduce_ot << <nBlocks, nThreads, 0, stream >> > (cnf, ot);
 		if (print || gopts.sync_always) {
 			LASTERR("Occurrence table reduction failed");
 			SYNCALL;
@@ -85,8 +86,9 @@ namespace ParaFROST {
 	{
 		assert(cnf);
 		assert(ot);
-		OPTIMIZEBLOCKS(inf.nDualVars, BLOCK1D);
-		reset_ot_k << <nBlocks, BLOCK1D, 0, stream >> > (ot);
+		grid_t nThreads(BLOCK1D);
+		OPTIMIZEBLOCKS(inf.nDualVars, nThreads, 0);
+		reset_ot_k << <nBlocks, nThreads, 0, stream >> > (ot);
 		if (gopts.sync_always) {
 			LASTERR("Occurrence table reset failed");
 			SYNCALL;
@@ -101,8 +103,9 @@ namespace ParaFROST {
 		LOGN2(2, " Creating occurrence table on GPU..");
 		if (gopts.profile_gpu) cutimer->start();
 		resetOTAsync(stream);
-		OPTIMIZEBLOCKS(inf.numClauses, BLOCK1D);
-		create_ot_k << <nBlocks, BLOCK1D, 0, stream >> > (cnf, ot);
+		grid_t nThreads(BLOCK1D);
+		OPTIMIZEBLOCKS(inf.numClauses, nThreads, 0);
+		create_ot_k << <nBlocks, nThreads, 0, stream >> > (cnf, ot);
 		if (print || gopts.sync_always) {
 			LOG2(2, "");
 			LASTERR("Occurrence table creation failed");

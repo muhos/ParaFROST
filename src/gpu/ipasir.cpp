@@ -57,7 +57,7 @@ class ipasir_t: public Solver {
         isolve(assumptions);
         assumptions.clear();
         nomodel = (cnfstate != SAT);
-        return UNSOLVED(cnfstate) ? 0 : (cnfstate == SAT ? 10 : 20);
+        return IS_UNSOLVED(cnfstate) ? 0 : (cnfstate == SAT ? 10 : 20);
     }
     int val(int lit) {
         if (nomodel) return 0;

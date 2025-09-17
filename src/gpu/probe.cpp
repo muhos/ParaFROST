@@ -52,7 +52,7 @@ struct PROBE_HEAP_CMP {
 
 void Solver::analyzeFailed(const uint32& failed)
 {
-	assert(UNSOLVED(cnfstate));
+	assert(IS_UNSOLVED(cnfstate));
 	assert(DL() == 1);
 	assert(conflict != NOREF);
 	CHECKLIT(failed);
@@ -197,7 +197,7 @@ void Solver::probe()
 {
 	rootify();
 	assert(conflict == NOREF);
-	assert(UNSOLVED(cnfstate));
+	assert(IS_UNSOLVED(cnfstate));
 	stats.probe.calls++;
 	printStats(1, '-', CVIOLET0);
 	assert(!probed);

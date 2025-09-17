@@ -83,8 +83,9 @@ namespace ParaFROST {
 	{
 		if (gopts.profile_gpu) cutimer->start();
 		reset_counter << <1, 1 >> > ();
-		OPTIMIZEBLOCKS(inf.numClauses, BLOCK1D);
-		copy_if_k << <nBlocks, BLOCK1D >> > (dest, src);
+		grid_t nThreads = BLOCK1D;
+		OPTIMIZEBLOCKS(inf.numClauses, nThreads, 0);
+		copy_if_k << <nBlocks, nThreads >> > (dest, src);
 #if defined(_DEBUG) || defined(DEBUG) || !defined(NDEBUG)
 		check_counter << <1, 1 >> > (inf.numLiterals);
 #endif
@@ -97,8 +98,9 @@ namespace ParaFROST {
 	{
 		if (gopts.profile_gpu) cutimer->start();
 		reset_counter << <1, 1 >> > ();
-		OPTIMIZEBLOCKS(inf.numClauses, BLOCK1D);
-		copy_if_k << <nBlocks, BLOCK1D >> > (dest, src);
+		grid_t nThreads = BLOCK1D;
+		OPTIMIZEBLOCKS(inf.numClauses, nThreads, 0);
+		copy_if_k << <nBlocks, nThreads >> > (dest, src);
 		if (gopts.sync_always) {
 			check_counter << <1, 1 >> > (inf.numLiterals);
 			LASTERR("Copying literals failed");
@@ -111,7 +113,8 @@ namespace ParaFROST {
 	{
 		assert(inf.numClauses);
 		if (gopts.profile_gpu) cutimer->start(_s);
-		OPTIMIZEBLOCKS(inf.numClauses, BLOCK1D);
+		grid_t nThreads = BLOCK1D;
+		OPTIMIZEBLOCKS(inf.numClauses, nThreads, 0);
 		prep_cnf_k << <nBlocks, BLOCK1D, 0, _s >> > (cnf);
 		if (gopts.sync_always) {
 			LASTERR("Preparing CNF failed");

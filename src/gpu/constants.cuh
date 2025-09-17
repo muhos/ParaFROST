@@ -66,6 +66,8 @@ namespace ParaFROST {
 	#define BLVE2			128
 	#define BLSUB			64
 	#define BLBCE			128
+	#define BLEREY			8
+	#define BLEREX			64
 #if defined(EXTSHMEM)
 	#define SH_MAX_BVE_OUT1	250 
 	#define SH_MAX_BVE_OUT2	120

@@ -263,7 +263,7 @@ void Solver::subsume()
 {
 	if (!stats.clauses.original && !stats.clauses.learnt) return;
 	rootify();
-	assert(UNSOLVED(cnfstate));
+	assert(IS_UNSOLVED(cnfstate));
 	stats.subsume.calls++;
 	printStats(1, '-', CORANGE0);
 	wt.clear(true);

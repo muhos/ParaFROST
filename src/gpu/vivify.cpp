@@ -217,7 +217,7 @@ bool Solver::learnVivify(CLAUSE& cand, const C_REF& cref, const int& nonFalse, c
 
 bool Solver::vivifyClause(const C_REF& cref)
 {
-	assert(UNSOLVED(cnfstate));
+	assert(IS_UNSOLVED(cnfstate));
 	CLAUSE* candptr = cm.clause(cref);
 	assert(!candptr->deleted());
 	CLAUSE& candref = *candptr;

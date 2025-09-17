@@ -29,7 +29,7 @@ Solver::Solver() :
 	, bumped(0)
 	, conflict(NOREF)
 	, ignore(NOREF)
-	, cnfstate(UNSOLVED_M)
+	, cnfstate(UNSOLVED)
 	, intr(false)
 	, stable(false)
 	, probed(false)
@@ -117,7 +117,7 @@ void Solver::isolve(Lits_t& assumptions)
 	timer.start();
 	iallocSpace();
 	iunassume();
-	assert(UNSOLVED(cnfstate));
+	assert(IS_UNSOLVED(cnfstate));
 	if (BCP()) {
 		LOG2(2, " Incremental formula has a contradiction on top level");
 		learnEmpty();
@@ -127,9 +127,9 @@ void Solver::isolve(Lits_t& assumptions)
 		iassume(assumptions);
 		if (verbose == 1) printTable();
 		if (canPreSimplify()) simplify();
-		if (UNSOLVED(cnfstate)) {
+		if (IS_UNSOLVED(cnfstate)) {
 			MDMInit();
-			while (UNSOLVED(cnfstate) && !interrupted()) {
+			while (IS_UNSOLVED(cnfstate) && !interrupted()) {
 				LOGDL(this, 3);
 				if (BCP()) analyze();
 				else if (!inf.unassigned) cnfstate = SAT;

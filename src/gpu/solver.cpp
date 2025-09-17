@@ -48,7 +48,7 @@ Solver::Solver(const string& formulaStr) :
 	, bumped(0)
 	, conflict(NOREF)
 	, ignore(NOREF)
-	, cnfstate(UNSOLVED_M)
+	, cnfstate(UNSOLVED)
 	, intr(false)
 	, stable(false)
 	, probed(false)
@@ -125,7 +125,7 @@ void Solver::initSolver()
 	assert(UNDEFINED == -1);
 	assert(UNSAT == 0);
 	assert(SAT == 1);
-	assert(UNSOLVED(cnfstate));
+	assert(IS_UNSOLVED(cnfstate));
 	forceFPU();
 	opts.init();
 	subbin.resize(2);
@@ -196,9 +196,9 @@ void Solver::solve()
 	initLimits();
 	if (verbose == 1) printTable();
 	if (canPreSimplify()) simplify();
-	if (UNSOLVED(cnfstate)) {
+	if (IS_UNSOLVED(cnfstate)) {
 		MDMInit();
-		while (UNSOLVED(cnfstate) && !runningout()) {
+		while (IS_UNSOLVED(cnfstate) && !runningout()) {
 			if (BCP()) analyze();
 			else if (!inf.unassigned) cnfstate = SAT;
 			else if (canReduce()) reduce();
@@ -229,6 +229,6 @@ void Solver::wrapup() {
 		}
 	}
 	else if (cnfstate == UNSAT) LOGSAT("UNSATISFIABLE");
-	else if (UNSOLVED(cnfstate)) LOGSAT("UNKNOWN");
+	else if (IS_UNSOLVED(cnfstate)) LOGSAT("UNKNOWN");
 	if (opts.report_en) report();
 }

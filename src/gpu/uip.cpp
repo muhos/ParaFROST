@@ -173,7 +173,7 @@ inline void Solver::strengthenOTF(CLAUSE& c, const C_REF& ref, const uint32& sel
 
 bool Solver::finduip()
 {
-	assert(UNSOLVED(cnfstate));
+	assert(IS_UNSOLVED(cnfstate));
 	assert(conflict != NOREF);
 	const int level = DL();
 	sp->learntLBD = UNDEFINED;

@@ -28,7 +28,6 @@ namespace ParaFROST {
 	typedef unsigned char Byte;
 	typedef Byte* addr_t;
 	typedef signed char CL_ST;
-	typedef signed char CNF_ST;
 	typedef signed char LIT_ST;
 	typedef unsigned int uint32;
 	typedef signed long long int int64;

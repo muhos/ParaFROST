@@ -240,7 +240,7 @@ void Solver::iunassume()
 		}
 		assumptions.clear(true);
 	}
-	cnfstate = UNSOLVED_M;
+	cnfstate = UNSOLVED;
 	LOGDONE(2, 5);
 	backtrack();
 	iconflict.clear();
@@ -251,7 +251,7 @@ void Solver::idecide()
 	assert(inf.unassigned);
 	assert(isPropagated());
 	assert(conflict == NOREF);
-	assert(UNSOLVED(cnfstate));
+	assert(IS_UNSOLVED(cnfstate));
 	int level = DL();
 	uint32 dec = 0;
 	while (level < assumptions.size()) {

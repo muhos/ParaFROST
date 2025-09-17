@@ -50,7 +50,7 @@ void Solver::reduce()
 {
 	assert(isPropagated());
 	assert(conflict == NOREF);
-	assert(UNSOLVED(cnfstate));
+	assert(IS_UNSOLVED(cnfstate));
 	assert(learnts.size());
 	stats.reduces++;
 	if (!chronoHasRoot()) return;

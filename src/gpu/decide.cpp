@@ -65,7 +65,7 @@ void Solver::decide()
 	assert(inf.unassigned);
 	assert(isPropagated());
 	assert(conflict == NOREF);
-	assert(UNSOLVED(cnfstate));
+	assert(IS_UNSOLVED(cnfstate));
 	uint32 cand = vsidsEnabled() ? nextVSIDS() : nextVMFQ();
 	uint32 dec = makeAssign(cand, useTarget());
 	enqueueDecision(dec);

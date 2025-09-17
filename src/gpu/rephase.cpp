@@ -85,7 +85,7 @@ inline void	Solver::varWalkPhase()
 void Solver::rephase()
 {
 	rootify();
-	assert(UNSOLVED(cnfstate));
+	assert(IS_UNSOLVED(cnfstate));
 	stats.rephase.all++;
 	memset(sp->ptarget, UNDEFINED, inf.maxVar + 1ULL);
 	last.rephase.target = 0;

@@ -71,6 +71,31 @@ namespace ParaFROST {
 		return true;
 	}
 
+	_PFROST_D_ bool equal_ere_vec(const SCLAUSE& c1, const uint32* c2, int size) {
+		// c1 is not deleted; sizes already matched
+		const uint32* __restrict__ a = c1.data();
+		const uint32* __restrict__ b = c2;
+
+		// Try 16-byte aligned path
+		bool aligned = (((uintptr_t)a | (uintptr_t)b) & 0xF) == 0;
+		int i = 0;
+
+		if (aligned) {
+			const uint4* A = reinterpret_cast<const uint4*>(a);
+			const uint4* B = reinterpret_cast<const uint4*>(b);
+			int n4 = size >> 2; // size / 4
+			for (int k = 0; k < n4; ++k) {
+				uint4 x = A[k], y = B[k];
+				if (x.x != y.x || x.y != y.y || x.z != y.z || x.w != y.w) return false;
+			}
+			i = n4 << 2;
+		}
+
+		// tail
+		for (; i < size; ++i) if (a[i] != b[i]) return false;
+		return true;
+	}
+
 	_PFROST_D_ void forward_equ(CNF& cnf, OT& ot, cuVecB* proof, uint32* m_c, const int& m_len, const CL_ST& type)
 	{
 		assert(m_len > 1);
@@ -86,6 +111,8 @@ namespace ParaFROST {
 		}
 		const OL& minList = ot[best];
 		assert(minsize == minList.size());
+		
+		// search for the clause in the smaller occurrence listcd
 		for (int i = threadIdx.x; i < minsize; i += blockDim.x) {
 			SCLAUSE& c = cnf[minList[i]];
 			if (m_len == c.size() && (c.learnt() || (c.status() == type)) &&
@@ -104,87 +131,7 @@ namespace ParaFROST {
 			}
 		}
 	}
-
-	#define ERE_PUSH_LIT(LIT) \
-	{ \
-		lsize = ot[LIT].size(); \
-		if (lsize < minsize) \
-			minsize = lsize, best = LIT; \
-		sig |= MAPHASH(LIT); \
-		if (len < clause_max) \
-			out_c[len++] = LIT; \
-		else \
-			return 0; \
-	}
-
-	_PFROST_D_ int _merge_ere(
-		const uint32& x,
-		const int clause_max,
-		const OT& ot,
-		SCLAUSE& c1,
-		SCLAUSE& c2,
-		uint32* out_c,
-		uint32& sig,
-		uint32& best)
-	{
-		assert(x);
-		assert(!c1.deleted());
-		assert(!c2.deleted());
-		assert(c1.size() > 1);
-		assert(c2.size() > 1);
-
-		sig = 0;
-		best = 0;
-
-		int lsize = INT_MAX, minsize = INT_MAX;
-		uint32* d1 = c1.data();
-		uint32* d2 = c2.data();
-		uint32* e1 = c1.end();
-		uint32* e2 = c2.end();
-		uint32 lit1, lit2, v1, v2;
-		int len = 0;
-		while (d1 != e1 && d2 != e2) {
-			lit1 = *d1;
-			lit2 = *d2;
-			v1 = ABS(lit1);
-			v2 = ABS(lit2);
-			if (v1 == x) d1++;
-			else if (v2 == x) d2++;
-			else if (IS_TAUTOLOGY(lit1, lit2)) return 0;
-			else if (v1 < v2) {
-				ERE_PUSH_LIT(lit1);
-				d1++;
-			}
-			else if (v2 < v1) {
-				ERE_PUSH_LIT(lit2);
-				d2++;
-			}
-			else {
-				assert(lit1 == lit2);
-				ERE_PUSH_LIT(lit1);
-				d1++, d2++;
-			}
-		}
-
-		while (d1 != e1) {
-			lit1 = *d1;
-			if (NEQUAL(ABS(lit1), x)) {
-				ERE_PUSH_LIT(lit1);
-			}
-			d1++;
-		}
-
-		while (d2 != e2) {
-			lit2 = *d2;
-			if (NEQUAL(ABS(lit2), x)) {
-				ERE_PUSH_LIT(lit2);
-			}
-			d2++;
-		}
-
-		return len;
-	}
-
+	
 	// kernel
 	__global__ void ere_k(
 		CNF* __restrict__ cnf,
@@ -193,26 +140,20 @@ namespace ParaFROST {
 		const cuVecU* __restrict__ pVars,
 		const Byte* __restrict__ eliminated)
 	{
-		grid_t gid = global_ty;
 		uint32* smem = SharedMemory<uint32>();
-		while (gid < pVars->size()) {
+		for_parallel_y(gid, pVars->size()) {
 			const uint32 v = pVars->at(gid);
 			assert(v);
 			assert(!ELIMINATED(eliminated[v]));
 			const uint32 p = V2L(v), n = NEG(p);
 			OL& poss = (*ot)[p], & negs = (*ot)[n];
 			const int ds = poss.size(), fs = negs.size();
-
 			// do merging and apply forward equality check (on-the-fly) over resolvents
-			if (ds && fs && ds <= kOpts->ere_max_occurs && fs <= kOpts->ere_max_occurs) {
-
-				const int clause_max = kOpts->ere_clause_max;
-
-				// first clause in sorted lists is already larger than the max.
-				if ((*cnf)[*poss].size() > clause_max ||
-					(*cnf)[*negs].size() > clause_max)
-					continue;
-
+			const int clause_max = kOpts->ere_clause_max;
+			if (ds && fs && ds <= kOpts->ere_max_occurs && fs <= kOpts->ere_max_occurs &&
+				// first clause in sorted lists must be withing the max.
+				((*cnf)[*poss].size() <= clause_max && (*cnf)[*negs].size() <= clause_max)
+				) {
 				forall_occurs(poss, i) {
 					SCLAUSE& pos = (*cnf)[*i];
 					if (pos.deleted()) continue;
@@ -228,7 +169,6 @@ namespace ParaFROST {
 					}
 				}
 			}
-			gid += stride_y;
 		}
 	}
 
