@@ -42,8 +42,7 @@ namespace ParaFROST {
 		}
 
 	public:
-		_PFROST_H_D_ static constexpr 
-					size_t 		offset_size	() { return offsetof(cuVec, sz); }
+	
 		_PFROST_H_D_			cuVec		() : _mem(NULL), sz(0), cap(0) {}
 		_PFROST_H_D_			~cuVec		() { clear(true); }
 		_PFROST_H_D_ void		alloc		(T* head) { _mem = head; }
