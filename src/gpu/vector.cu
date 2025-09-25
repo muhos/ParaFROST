@@ -21,9 +21,39 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 namespace ParaFROST {
 
+	_PFROST_IN_D_ void laneMask_lt(uint32& lanemask) {
+		asm("mov.u32 %0, %%lanemask_lt;" : "=r"(lanemask));
+	}
+
+	template<>
+	_PFROST_D_ uint32 atomicAggInc(uint32* counter) {
+		const uint32 mask = __activemask(), total = __popc(mask);
+		uint32 laneMask;
+		laneMask_lt(laneMask);
+		const uint32 prefix = (uint32)__popc(mask & laneMask);
+		const int lowest_lane = __ffs(mask) - 1;
+		uint32 warpRes = prefix ? 0 : atomicAdd(counter, total);
+		warpRes = __shfl_sync(mask, warpRes, lowest_lane);
+		return (prefix + warpRes);
+	}
+
+	template<>
+	_PFROST_D_ int atomicAggInc(int* counter) {
+		const uint32 mask = __activemask();
+		const int total = __popc(mask);
+		uint32 laneMask;
+		laneMask_lt(laneMask);
+		const int prefix = __popc(mask & laneMask);
+		const int lowest_lane = __ffs(mask) - 1;
+		int warpRes = prefix ? 0 : atomicAdd(counter, total);
+		warpRes = __shfl_sync(mask, warpRes, lowest_lane);
+		return (prefix + warpRes);
+	}
+
+
 	template<>
 	_PFROST_D_ void cuVec<S_REF>::insert(const S_REF& val) {
-		const uint32 idx = atomicInc(&sz, cap);
+		const uint32 idx = atomicAdd(&sz, 1);
 		assert(checkAtomicBound(idx, cap));
 		_mem[idx] = val;
 	}
@@ -31,7 +61,14 @@ namespace ParaFROST {
 	
 	template<>
 	_PFROST_D_ void cuVec<uint32>::insert(const uint32& val) {
-		const uint32 idx = atomicInc(&sz, cap);
+		const uint32 idx = atomicAdd(&sz, 1);
+		assert(checkAtomicBound(idx, cap));
+		_mem[idx] = val;
+	}
+
+	template<>
+	_PFROST_D_ void cuVec<uint32>::insertAggr(const uint32& val) {
+		const uint32 idx = atomicAggInc(&sz);
 		assert(checkAtomicBound(idx, cap));
 		_mem[idx] = val;
 	}

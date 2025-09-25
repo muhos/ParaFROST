@@ -109,6 +109,7 @@ namespace ParaFROST {
 	void parcountCls(CNF* cnf)
 	{
 		const uint32 cnf_sz = inf.numClauses;
+		if (!cnf_sz) { inf.numClausesSurvived = 0; return; }
 		OPTIMIZEBLOCKS2(cnf_sz, BLOCK1D);
 		OPTIMIZESHARED(blockSize, sizeof(uint32));
 		cnt_cls << <nBlocks, blockSize, smemSize >> > (cnf);
@@ -119,6 +120,7 @@ namespace ParaFROST {
 	void parcountLits(CNF* cnf)
 	{
 		const uint32 cnf_sz = inf.numClauses;
+		if (!cnf_sz) { inf.numLiteralsSurvived = 0; return; }
 		OPTIMIZEBLOCKS2(cnf_sz, BLOCK1D);
 		OPTIMIZESHARED(blockSize, sizeof(uint32));
 		cnt_lits << <nBlocks, blockSize, smemSize >> > (cnf);
@@ -129,6 +131,7 @@ namespace ParaFROST {
 	void parcountAll(CNF* cnf)
 	{
 		const uint32 cnf_sz = inf.numClauses + (inf.numClauses >> 1);
+		if (!cnf_sz) { inf.numClausesSurvived = 0, inf.numLiteralsSurvived = 0; return; }
 		OPTIMIZEBLOCKS2(cnf_sz, BLOCK1D);
 		OPTIMIZESHARED(blockSize, sizeof(uint32) * 2);
 		cnt_cls_lits << <nBlocks, blockSize, smemSize >> > (cnf);

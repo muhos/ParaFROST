@@ -61,7 +61,7 @@ namespace ParaFROST {
 
 	#define WARP_ALIGN_DOWN(V,W)   ( ((V) / (W)) * (W) )
 	#define WARP_ALIGN_UP(V,W)     ( ( ROUNDUP((V), (W)) * (W) ) )
-	#define TPB_2D(BLOCK2D)        ( ((BLOCK2D).x) * ((BLOCK2D).y) )
+	#define BLSZ_2D(BLOCK2D)        ( ((BLOCK2D).x) * ((BLOCK2D).y) )
 
 	#define ROUNDUPBLOCKS(DATALEN, NTHREADS)  ROUNDUP((DATALEN), (NTHREADS))
 
@@ -71,7 +71,7 @@ namespace ParaFROST {
 		(BLOCK2D).x = MAX((BLOCK2D).x, (WARP));                                                 \
 		(BLOCK2D).x = WARP_ALIGN_DOWN((BLOCK2D).x, (WARP));                                     \
 		while ( ((size_t)(SMEM_EXPR) > (size_t)(MAXSMEM)) ||                                    \
-				( TPB_2D(BLOCK2D) > (BLOCKCAP) ) ) {                                            \
+				( BLSZ_2D(BLOCK2D) > (BLOCKCAP) ) ) {                                           \
 			if ((BLOCK2D).y > 1) {                                                              \
 				(BLOCK2D).y >>= 1;                                                              \
 				continue;                                                                       \
@@ -96,7 +96,7 @@ namespace ParaFROST {
 			unsigned _prevY_ = (BLOCK2D).y;                                                      \
 			(BLOCK2D).y = _nextY_;                                                               \
 			if ( ((size_t)(SMEM_EXPR) > (size_t)(MAXSMEM)) ||                                    \
-				( TPB_2D(BLOCK2D) > (BLOCKCAP) ) ) {                                             \
+				( BLSZ_2D(BLOCK2D) > (BLOCKCAP) ) ) {                                            \
 				(BLOCK2D).y = _prevY_;                                                           \
 				break;                                                                           \
 			}                                                                                    \
@@ -104,7 +104,7 @@ namespace ParaFROST {
 		}                                                                                        \
 	} while (0)
 
-	#define LOOP_SHRINK_NT_FOR_SMEM(NTHREADS, MINTHREADS, WARP, MAXSMEM, SMEM_EXPR)              \
+	#define LOOP_SHRINK_GRID_FOR_SMEM(NTHREADS, MINTHREADS, WARP, MAXSMEM, SMEM_EXPR)            \
 	do {                                                                                         \
 		(NTHREADS) = MAX((MINTHREADS), WARP_ALIGN_DOWN((NTHREADS), (WARP)));                     \
 		size_t _smem_ = (size_t)(SMEM_EXPR);                                                     \
@@ -119,7 +119,7 @@ namespace ParaFROST {
 		}                                                                                        \
 	} while (0)
 
-	#define LOOP_OVERSUB_NT(NVARS, NTHREADS, MINTHREADS, WARP, TARGETBLOCKS,                      \
+	#define LOOP_OVERSUB_GRID(NVARS, NTHREADS, MINTHREADS, WARP, TARGETBLOCKS,                    \
 							MAXSMEM, SMEM_EXPR, REALBLOCKS_LVAL)                                  \
 	do {                                                                                          \
 		(REALBLOCKS_LVAL) = ROUNDUP((NVARS), (NTHREADS));                                         \
@@ -147,10 +147,10 @@ namespace ParaFROST {
 		const uint32 minThr   = (uint32)warp;                                                    \
 		(NTHREADS) = MIN((uint32)(NTHREADS), blockCap);                                          \
 		(NTHREADS) = MAX((uint32)(NTHREADS), minThr);                                            \
-		LOOP_SHRINK_NT_FOR_SMEM((NTHREADS), minThr, warp, maxSmem, (SMEMSIZE));                  \
+		LOOP_SHRINK_GRID_FOR_SMEM((NTHREADS), minThr, warp, maxSmem, (SMEMSIZE));                \
 		grid_t realBlocks;                                                                       \
 		const grid_t targetBlocks = (grid_t)SMs * 8;                                             \
-		LOOP_OVERSUB_NT((NVARS), (NTHREADS), minThr, warp, targetBlocks,                         \
+		LOOP_OVERSUB_GRID((NVARS), (NTHREADS), minThr, warp, targetBlocks,                       \
 						maxSmem, (SMEMSIZE), realBlocks);                                        \
 		const uint32 maxGrid  = (uint32)devProp.maxGridSize[0];                                  \
 		hardCap = MIN(targetBlocks, maxGrid);                                                    \
@@ -171,10 +171,10 @@ namespace ParaFROST {
 		const uint32 minThr   = (uint32)MAX(MINTHREADS, warp);                                     \
 		(NTHREADS) = MIN((uint32)(NTHREADS), blockCap);                                            \
 		(NTHREADS) = MAX((uint32)(NTHREADS), minThr);                                              \
-		LOOP_SHRINK_NT_FOR_SMEM((NTHREADS), minThr, warp, maxSmem, (SMEMSIZE));                    \
+		LOOP_SHRINK_GRID_FOR_SMEM((NTHREADS), minThr, warp, maxSmem, (SMEMSIZE));                  \
 		grid_t realBlocks;                                                                         \
 		const grid_t targetBlocks = (grid_t)SMs * 8;                                               \
-		LOOP_OVERSUB_NT((NVARS), (NTHREADS), minThr, warp, targetBlocks,                           \
+		LOOP_OVERSUB_GRID((NVARS), (NTHREADS), minThr, warp, targetBlocks,                         \
 						maxSmem, (SMEMSIZE), realBlocks);                                          \
 		const uint32 maxGrid  = (uint32)devProp.maxGridSize[0];                                    \
 		hardCap = MIN(targetBlocks, maxGrid);                                                      \
@@ -216,7 +216,7 @@ namespace ParaFROST {
 				assert(blockSize);												\
 				const grid_t REALTHREADS = (blockSize) << 1;					\
 				const grid_t REALBLOCKS = ROUNDUPBLOCKS(DATALEN, REALTHREADS);  \
-				const grid_t MAXBLOCKS = maxGPUThreads / REALTHREADS;			\
+				const grid_t MAXBLOCKS = 4 * maxGPUThreads / REALTHREADS;		\
 				nBlocks = MIN(REALBLOCKS, MAXBLOCKS); 							\
 				multiplier++;													\
 			}  																	\

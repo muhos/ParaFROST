@@ -24,6 +24,9 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 namespace ParaFROST {
 
+	template<class T>
+	_PFROST_D_ T atomicAggInc(T* counter);
+
 	template<typename T>
 	class cuVec {
 		T* _mem;
@@ -39,12 +42,15 @@ namespace ParaFROST {
 		}
 
 	public:
+		_PFROST_H_D_ static constexpr 
+					size_t 		offset_size	() { return offsetof(cuVec, sz); }
 		_PFROST_H_D_			cuVec		() : _mem(NULL), sz(0), cap(0) {}
 		_PFROST_H_D_			~cuVec		() { clear(true); }
 		_PFROST_H_D_ void		alloc		(T* head) { _mem = head; }
 		_PFROST_H_D_ void		alloc		(T* head, const uint32& cap) { _mem = head, this->cap = cap; }
 		_PFROST_H_D_ void		alloc		(const uint32& cap) { _mem = (T*)(this + 1), this->cap = cap; }
 		_PFROST_D_	 void		insert		(const T& val);
+		_PFROST_D_	 void		insertAggr	(const T& val);
 		_PFROST_D_	 T*			jump		(const uint32& n);
 		_PFROST_H_D_ void		_pop		() { sz--; }
 		_PFROST_H_D_ void		_shrink		(const uint32& n) { sz -= n; }

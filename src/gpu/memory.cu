@@ -150,7 +150,8 @@ bool cuMM::allocVars(VARS*& vars, const size_t& resolvedCap)
 	vars->resolved = (cuVecU*)ea, ea += HC_VECSIZE;
 	uint32* uintPtr = (uint32*)ea;
 	vars->electedData = uintPtr;
-	vars->electedSize = (uint32*)(vars->elected + sizeof(uint32*));
+	const auto offset_sz = vars->elected->offset_size();
+	vars->electedSize = (uint32*)((addr_t)vars->elected + offset_sz);
 	SYNCALL; // sync. cudaMemsetAsync
 	vars->elected->alloc(uintPtr, inf.maxVar), uintPtr += inf.maxVar, d_units = uintPtr;
 	vars->units->alloc(uintPtr, inf.maxVar), uintPtr += inf.maxVar;

@@ -202,6 +202,16 @@ void Solver::simplifying(const bool& keep_gpu_mem)
 	/********************************/
 	/*          Write Back          */
 	/********************************/
+	if (!inf.unassigned || !inf.numClauses) { 
+		LOG2(2, "  All clauses removed, thus CNF is satisfiable");
+		stats.clauses.original = 0;
+		stats.clauses.learnt = 0;
+		stats.literals.original = 0;
+		stats.literals.learnt = 0;
+		cnfstate = SAT; 
+		printStats(1, 's', CGREEN); 
+		return;
+	}
 	if (vars->nUnits && reallocFailed()) {
 		// TODO:
 		// If reallocation failed while unit clauses are pending,
@@ -221,16 +231,6 @@ void Solver::simplifying(const bool& keep_gpu_mem)
 	last.shrink.removed = stats.shrunken;
 	if (ereCls > inf.numClauses) stats.sigma.ere.removed += ereCls - inf.numClauses;
 	if (inf.maxFrozen > sp->simplified) stats.units.forced += inf.maxFrozen - sp->simplified;
-	if (!inf.unassigned || !inf.numClauses) { 
-		LOG2(2, " All clauses removed");
-		stats.clauses.original = 0;
-		stats.clauses.learnt = 0;
-		stats.literals.original = 0;
-		stats.literals.learnt = 0;
-		cnfstate = SAT; 
-		printStats(1, 's', CGREEN); 
-		return;
-	}
 	if (keep_gpu_mem) {
 		SYNCALL;
 		assert(!simpstate);

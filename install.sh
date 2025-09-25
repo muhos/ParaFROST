@@ -410,7 +410,7 @@ NVCCFLAGS="--std c++$standard"
 if [ $debug = 0 ] && [ $assert = 0 ]; then 
 	NVCCFLAGS="$NVCCFLAGS -DNDEBUG $OPTIMIZE $FASTMATH"
 elif [ $debug = 1 ]; then
-	NVCCFLAGS="$NVCCFLAGS -g"
+	NVCCFLAGS="$NVCCFLAGS -G -g"
 elif [ $assert = 1 ]; then 
 	NVCCFLAGS="$NVCCFLAGS $OPTIMIZE"
 fi

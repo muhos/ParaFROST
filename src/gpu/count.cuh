@@ -24,7 +24,7 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 namespace ParaFROST {
 
-	#define MAXREDUCEBLOCKS 256
+	#define MAXREDUCEBLOCKS 1024
 
 	extern 
 	uint32 hostCBlocks[MAXREDUCEBLOCKS];
