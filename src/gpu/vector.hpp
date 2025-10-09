@@ -54,10 +54,43 @@ namespace ParaFROST {
 			maxCap = std::numeric_limits<S>::max();
 			_mem = NULL, sz = 0, cap = 0; resize(size);
 		}
-		__forceinline			Vec			(const S& size, const T& val) {
+		__forceinline explicit	Vec			(const S& size, const T& val) {
 			maxCap = std::numeric_limits<S>::max();
 			_mem = NULL, sz = 0, cap = 0; resize(size, val);
 		}
+		__forceinline explicit 	Vec			(T* first, T* last) {
+			maxCap = std::numeric_limits<S>::max();
+			_mem = NULL; sz = 0; cap = 0;
+			if (first == last) return;
+			const S n = static_cast<S>(std::distance(first, last));
+			assert(n <= maxCap);
+			reserve(n);
+			for (; first != last; ++first) {
+				new (_mem + sz) T(*first);
+				++sz;
+			}
+		}
+		__forceinline void 		insert		(T* pos, T* first, T* last) {
+			if (first == last) return;
+			const S idx = static_cast<S>(pos - _mem);
+			assert(idx <= sz);
+			const S add = static_cast<S>(std::distance(first, last));
+			assert(add <= maxCap - sz);
+			reserve(sz + add);
+			for (S i = sz; i-- > idx; ) {
+				new (_mem + i + add) T(std::move(_mem[i]));
+				_mem[i].~T();
+			}
+			S write = idx;
+			for (; first != last; ++first, ++write) {
+				new (_mem + write) T(*first);
+			}
+			sz += add;
+		}
+		__forceinline void 		insert		(const T* cpos, T* first, T* last) {
+			insert(const_cast<T*>(cpos), first, last);
+		}
+		__forceinline void		insert		(const T& val) { assert(cap > sz);  _mem[sz++] = val; }
 		__forceinline Vec<T>&	operator=	(Vec<T>& rhs) { return *this; }
 		__forceinline const T&	operator[]	(const S& index) const { assert(check(index)); return _mem[index]; }
 		__forceinline T&		operator[]	(const S& index) { assert(check(index)); return _mem[index]; }
@@ -66,11 +99,16 @@ namespace ParaFROST {
 		__forceinline			operator T* () { return _mem; }
 		__forceinline T*		data		() { return _mem; }
 		__forceinline T*		end			() { return _mem + sz; }
+		__forceinline T*		begin		() { return _mem; }
+		__forceinline const T* 	begin		() const { return _mem; }
+		__forceinline const T*	end			() const { return _mem + sz; }
+		__forceinline const T* 	cbegin		() const { return _mem; }
+		__forceinline const T*	cend		() const { return _mem + sz; }
+		__forceinline const T*	data		() const { return _mem; }
 		__forceinline bool		empty		() const { return !sz; }
 		__forceinline S			size		() const { return sz; }
 		__forceinline S			capacity	() const { return cap; }
 		__forceinline void		pop			() { assert(sz > 0); _mem[--sz].~T(); }
-		__forceinline void		insert		(const T& val) { assert(cap > sz);  _mem[sz++] = val; }
 		__forceinline void		push		(const T& val) { if (sz == cap) reserve(sz + 1); new (_mem + sz) T(val); sz++; }
 		__forceinline void		reserve		(const S& min_cap, const S& size) { reserve(min_cap); sz = size; }
 		__forceinline void		init		(const S& off, const S& n, const T& val) {

@@ -26,25 +26,37 @@ extern "C" {
 #endif
 
 namespace ParaFROST {
+
     class ipasir_t: public Solver {
+        
         Lits_t filtered, clause;
         bool nomodel;
 
-        inline uint32 abs(int lit) {
+        inline uint32 abs(const int& lit) {
             return uint32(lit < 0 ? -lit : lit);
         }
-        inline uint32 import(int lit) {
-            uint32 v = abs(lit);
+        inline uint32 import(const int& lit) {
+            const uint32 v = abs(lit);
             while (v > inf.maxVar) iadd();
             return V2DEC(v, (lit < 0));
+        }
+        inline uint32 import(const uint32_t& lit) {
+            const uint32 v = ABS(lit);
+            while (v > inf.maxVar) iadd();
+            return lit;
         }
 
         public:
 
-        ipasir_t() : clause(INIT_CAP), nomodel(false) {}
+        ipasir_t() : nomodel(false) 
+        {
+            clause.reserve(INIT_CAP);
+            filtered.reserve(INIT_CAP);
+        }
         ~ipasir_t() {}
 
-        void add(int lit) {
+        // Signed integer based.
+        void add(const int& lit) {
             nomodel = true;
             if (lit)
                 clause.push(import(lit));
@@ -53,22 +65,45 @@ namespace ParaFROST {
                 clause.clear();
             }
         }
-        void assume(int32_t lit) {
+        void assume(const int& lit) {
             nomodel = true;
             assumptions.push(import(lit));
         }
+        int val(const int& lit) {
+            if (nomodel) return 0;
+            return model.satisfied(import(lit)) ? lit : -lit;
+        }
+        int failed(const int& lit) {
+            return ifailed(import(lit));
+        }
+        // Unsigned integer based.
+        void add(const uint32_t& lit) {
+            nomodel = true;
+            if (lit)
+                clause.push(import(lit));
+            else {
+                itoClause(filtered, clause);
+                clause.clear();
+            }
+        }
+        void assume(const uint32_t& lit) {
+            nomodel = true;
+            assumptions.push(import(lit));
+        }
+        int val(const uint32_t& lit) {
+            if (nomodel) return 0;
+            const int v = int(ABS(lit));
+            return model.satisfied(import(lit)) ? v : -v;
+        }
+        int failed(const uint32_t& lit) {
+            return ifailed(import(lit));
+        }
+        // Solve and return status.
         int solve() {
             isolve(assumptions);
             assumptions.clear();
             nomodel = (cnfstate != SAT);
             return IS_UNSOLVED(cnfstate) ? 0 : (cnfstate == SAT ? 10 : 20);
-        }
-        int val(int lit) {
-            if (nomodel) return 0;
-            return model.satisfied(import(lit)) ? lit : -lit;
-        }
-        int failed(int lit) {
-            return ifailed(import(lit));
         }
     };
 
