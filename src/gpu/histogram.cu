@@ -60,14 +60,14 @@ namespace ParaFROST {
 		thrust::device_ptr<uint32> thrust_lits = thrust::device_ptr<uint32>(culits.mem);
 		thrust::device_ptr<uint32> thrust_hist = thrust::device_ptr<uint32>(cuhist.d_hist);
 		SYNC(0); // sync 'flattenCNF'
-		if (gopts.profile_gpu) cutimer->start();
+		if (gopts.profile_gpu) cutimer.start();
 		cacher.insert(cumm.scatter(), cumm.scatterCap());
 		thrust::sort(thrust::cuda::par(tca), thrust_lits, thrust_lits + numLits);
 		thrust::counting_iterator<size_t> search_begin(0);
-		thrust::upper_bound(thrust::cuda::par(tca), thrust_lits, thrust_lits + numLits, search_begin, search_begin + inf.nDualVars, thrust_hist);
-		thrust::adjacent_difference(thrust::cuda::par(tca), thrust_hist, thrust_hist + inf.nDualVars, thrust_hist);
+		thrust::upper_bound(thrust::cuda::par(tca), thrust_lits, thrust_lits + numLits, search_begin, search_begin + inf.maxDualVars, thrust_hist);
+		thrust::adjacent_difference(thrust::cuda::par(tca), thrust_hist, thrust_hist + inf.maxDualVars, thrust_hist);
 		cacher.erase(cumm.scatterCap());
-		if (gopts.profile_gpu) cutimer->stop(), cutimer->vo += cutimer->gpuTime();
+		if (gopts.profile_gpu) cutimer.stop(), stats.sigma.time.vo += cutimer.gpuTime();
 		LOGDONE(2, 5);
 	}
 

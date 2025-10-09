@@ -46,7 +46,7 @@ bool Solver::decompose()
 	assert(analyzed.empty());
 	assert(minimized.empty());
 	stats.decompose.calls++;
-	const uint32 dfs_size = inf.nDualVars;
+	const uint32 dfs_size = inf.maxDualVars;
 	DFS* dfs = pfcalloc<DFS>(dfs_size);
 	uint32* smallests = pfcalloc<uint32>(dfs_size), dfs_idx = 0;
 	uVec1D& scc = analyzed; 

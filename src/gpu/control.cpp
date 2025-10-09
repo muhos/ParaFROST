@@ -26,6 +26,10 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 namespace ParaFROST {
 
+	Solver *solver = NULL;
+
+	void init_solver(Solver* s) { solver = s; }
+
 	int64 sysMemUsed()
 	{
 		int64 memUsed = 0;

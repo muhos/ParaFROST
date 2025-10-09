@@ -219,12 +219,11 @@ void MODEL::verify(const string& path) {
 	inputFile.close();
 #endif
 	timer.stop();
-	timer.parse = timer.cpuTime();
 	LOG2(1, "  checked %s%d Variables%s, %s%d Clauses%s, and %s%d Literals%s in %s%.2f seconds%s",
 		CREPORTVAL, orgVars, CNORMAL,
 		CREPORTVAL, orgClauses, CNORMAL,
 		CREPORTVAL, orgLiterals, CNORMAL,
-		CREPORTVAL, timer.parse, CNORMAL);
+		CREPORTVAL, timer.cpuTime(), CNORMAL);
 	if (verified) LOG2(1, " model %sVERIFIED%s", CGREEN, CNORMAL);
 	else LOG2(1, " model %sNOT VERIFIED%s", CRED, CNORMAL);
 }

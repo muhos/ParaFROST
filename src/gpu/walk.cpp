@@ -77,7 +77,7 @@ void Solver::walk()
 	stats.walk.calls++;
 	wt.clear(true);
 	shrinkTop(true);
-	bot.resize(inf.nDualVars); // used as occurrence table for indexing 'tracker.cinfo'
+	bot.resize(inf.maxDualVars); // used as occurrence table for indexing 'tracker.cinfo'
 	walkinit();
 	walkassign();
 	if (cnfstate && walkschedule()) {
@@ -106,9 +106,9 @@ void Solver::walkinit()
 	tracker.nclauses = nclauses;
 	tracker.orgs.resize(nclauses);
 	tracker.cinfo.resize(nclauses);
-	tracker.value = pfmalloc<LIT_ST>(inf.nDualVars);
+	tracker.value = pfmalloc<LIT_ST>(inf.maxDualVars);
 	assert(tracker.value != NULL);
-	memset(tracker.value, UNDEFINED, inf.nDualVars);
+	memset(tracker.value, UNDEFINED, inf.maxDualVars);
 }
 
 bool Solver::walkschedule()

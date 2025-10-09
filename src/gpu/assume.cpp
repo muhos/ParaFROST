@@ -47,7 +47,7 @@ uint32 Solver::iadd() {
     const uint32 v = inf.orgVars = ++inf.maxVar;
     LOG2(3, "  adding new variable %d (%d unassigned)..", v, inf.unassigned);
     const uint32 lit = V2L(v);
-    inf.nDualVars = lit + 2;
+    inf.maxDualVars = lit + 2;
     wt.expand(lit + 2);
     ivalue.expand(lit + 2, UNDEFINED);
     ilevel.expand(v + 1, UNDEFINED);

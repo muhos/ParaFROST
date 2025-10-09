@@ -129,7 +129,7 @@ void Solver::map(const bool& sigmified)
 	LOG2(2, " Variable mapping compressed %d to %d, saving %.2f KB of memory",
 		inf.maxVar, vmap.numVars(), double(abs(memBefore - sysMemUsed())) / KBYTE);
 	inf.maxVar = vmap.numVars();
-	inf.nDualVars = V2L(inf.maxVar + 1);
+	inf.maxDualVars = V2L(inf.maxVar + 1);
 	inf.maxFrozen = inf.maxMelted = inf.maxSubstituted = 0;
 	vmap.destroy();
 	printStats(1, 'a', CGREEN2);

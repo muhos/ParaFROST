@@ -45,7 +45,7 @@ bool Solver::propFailed()
 		assert(reallocFailed());
 		assert(hcnf != NULL);
 		assert(inf.numClauses == hcnf->size());
-		HOT hot(inf.nDualVars);
+		HOT hot(inf.maxDualVars);
 		createOTHost(hot);
 		// start proping on host
 		nForced = sp->propagated;
@@ -107,6 +107,7 @@ bool Solver::prop()
 	while (sp->propagated < trail.size()) {
 		uint32 assign = trail[sp->propagated++], f_assign = FLIP(assign);
 		CHECKLIT(assign);
+		MARKFORCED(vars->eliminated[ABS(assign)]);
 		OL& ol = (*ot)[assign];
 		OL& f_ol = (*ot)[f_assign];
 		CNF& cnf = *this->cnf;
@@ -173,7 +174,7 @@ inline bool Solver::enqueueCached(const cudaStream_t& stream) {
 			else if (!val) return false; // early conflict detection
 		}
 		if (trail.size() == sp->propagated) vars->nUnits = nForced = 0; // duplicate units
-		else LOGN2(2, " Propagating forced units..");
+		else LOG2(2, " Propagating forced units..");
 		SYNCALL; // sync ot creation
 	}
 	return true;
@@ -181,8 +182,11 @@ inline bool Solver::enqueueCached(const cudaStream_t& stream) {
 
 inline void	Solver::cleanProped() {
 	if (vars->nUnits) {
-		LOGDONE(2, 5);
 		nForced = sp->propagated - nForced;
+		if (nForced) {
+			countAll();
+			inf.numClauses = inf.numClausesSurvived, inf.numLiterals = inf.numLiteralsSurvived;
+		}
 		LOGREDALL(this, 2, "BCP Reductions");
 		nForced = 0, vars->tmpUnits.clear();
 		assert(vars->tmpUnits.data() == cumm.unitsdPtr());

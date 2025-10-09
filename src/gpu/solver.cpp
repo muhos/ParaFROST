@@ -20,12 +20,11 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 #include "control.hpp"
 #include "options.cuh"
 #include "timer.cuh"
+#include "banner.hpp"
 
 namespace ParaFROST {
 	GOPTION			gopts;
 	CNF_INFO		inf;
-	Solver			*solver = NULL;
-	cuTIMER			*cutimer = NULL;
 	cudaDeviceProp	devProp;
 	uint32			maxGPUThreads = 0;
 	size_t			maxGPUSharedMem = 0;
@@ -40,40 +39,59 @@ Solver::~Solver()
     std::free(this->learnCallbackBuffer);
 }
 
-Solver::Solver(const string& formulaStr) :
-	formula(formulaStr)
-	, sp(NULL)
-	, vsids(VSIDS_CMP(activity))
-	, vschedule(SCORS_CMP(this))
-	, bumped(0)
-	, conflict(NOREF)
-	, ignore(NOREF)
-	, cnfstate(UNSOLVED)
-	, intr(false)
-	, stable(false)
-	, probed(false)
-	, incremental(false)
-	, vars(NULL)
-	, ot(NULL)
-	, cnf(NULL)
-	, hcnf(NULL)
-	, tca(cacher)
-	, cuproof(cumm, proof)
-	, streams(NULL)
-	, mapped(false)
-	, compacted(false)
-	, flattened(false)
-	, phase(0)
-	, nForced(0)
-	, simpstate(AWAKEN_SUCC)
-	, devCount(0)
-	, termCallbackState(NULL)
-	, learnCallbackState(NULL)
-	, learnCallbackBuffer(NULL)
-	, termCallback(NULL)
-	, learnCallback(NULL)
+Solver::Solver(const std::string& path) : Solver()
 {
-    LOGHEADER(1, 5, "Build")
+    formula = path;
+	LOGHEADER(1, 5, "Parser")
+	if (!parse() || BCP()) { assert(cnfstate == UNSAT), killSolver(); }
+	if (opts.parseonly_en) killSolver();
+}
+
+Solver::Solver()
+  : formula()
+  , timer()
+  , cutimer()
+  , sp(nullptr)
+  , vsids(VSIDS_CMP(activity))
+  , vschedule(SCORS_CMP(this))
+  , bumped(0)
+  , conflict(NOREF)
+  , ignore(NOREF)
+  , cnfstate(UNSOLVED)
+  , intr(false)
+  , stable(false)
+  , probed(false)
+  , incremental(false)
+  , vars(nullptr)
+  , ot(nullptr)
+  , cnf(nullptr)
+  , hcnf(nullptr)
+  , tca(cacher)
+  , cuproof(cumm, proof)
+  , streams(nullptr)
+  , mapped(false)
+  , compacted(false)
+  , flattened(false)
+  , phase(0)
+  , nForced(0)
+  , simpstate(AWAKEN_SUCC)
+  , devCount(0)
+  , termCallbackState(nullptr)
+  , learnCallbackState(nullptr)
+  , learnCallbackBuffer(nullptr)
+  , termCallback(nullptr)
+  , learnCallback(nullptr)
+{
+    initialize(false);
+}
+
+void Solver::initialize(const bool& banner)
+{
+	if (banner) {
+		LOGHEADER(1, 5, "Banner");
+		LOGFANCYBANNER(version());
+	}
+	LOGHEADER(1, 5, "Build")
 	getCPUInfo(stats.sysmem);
 	getBuildInfo();
 	initSolver();
@@ -83,18 +101,16 @@ Solver::Solver(const string& formulaStr) :
 		killSolver();
 	}
 	if (_gfree <= 200 * MBYTE) {
-		LOGWARNING("skipping GPU simplifier due to not enough GPU memory (free = %zd MB)", _gfree / MBYTE);
+		LOGWARNING("not enough GPU memory (free = %zd MB): skip simplifier", _gfree / MBYTE);
 		opts.sigma_en = opts.sigma_live_en = false;
 	}
 	else cumm.init(_gfree, _gpenalty);
-	
-	if (cumm.checkMemAdvice())
+	if (cumm.checkMemAdvice()) {
         LOG2(2, " Enabled GPU driver memory advice");
-    else
+	}
+	else {
         LOG2(2, " Disabled GPU driver memory advice");
-    LOGHEADER(1, 5, "Parser")
-	if (!parser() || BCP()) { assert(cnfstate == UNSAT), killSolver(); }
-	if (opts.parseonly_en) killSolver();
+	}
 	if (opts.sigma_en || opts.sigma_live_en) { optSimp(), createStreams(); }
 }
 
@@ -109,7 +125,7 @@ void Solver::allocSolver()
 	sp = new SP(maxSize);
 	sp->initSaved(opts.polarity);
 	cm.init(initcap);
-	wt.resize(inf.nDualVars);
+	wt.resize(inf.maxDualVars);
 	trail.reserve(inf.maxVar);
 	dlevels.reserve(inf.maxVar);
 	activity.resize(maxSize, 0.0);
@@ -189,7 +205,7 @@ void Solver::solve()
     LOGHEADER(1, 5, "Search");
 	if (incremental) {
 		LOG0("");
-		LOGWARNING("isolve() is not used in incremental mode");
+		LOGWARNING("isolve() should be called in incremental mode");
 		return;
 	}
 	timer.start();
@@ -210,7 +226,7 @@ void Solver::solve()
 			else decide();
 		}
 	}
-	timer.stop(), timer.solve += timer.cpuTime();
+	timer.stop(), stats.time.solve += timer.cpuTime();
 	wrapup();
 }
 

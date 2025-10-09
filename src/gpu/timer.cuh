@@ -29,9 +29,9 @@ namespace ParaFROST {
 		cudaEvent_t _start, _stop;
 		float _gpuTime;
 	public:
-		float vo, ve, sub, bce, ere, cot, rot, sot, sig, gc, io;
-		cuTIMER() {
-			RESETSTRUCT(this);
+		cuTIMER() :
+			_start(NULL), _stop(NULL), _gpuTime(0) 
+		{
 			cudaEventCreate(&_start);
 			cudaEventCreate(&_stop);
 		}
@@ -49,8 +49,6 @@ namespace ParaFROST {
 			return _gpuTime;
 		}
 	};
-
-	extern cuTIMER* cutimer;
 
 }
 

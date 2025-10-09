@@ -31,19 +31,22 @@ void Solver::report()
 		if (opts.sigma_en || opts.sigma_live_en) {
 			LOG1("\t\t\t%sSimplifier Report%s", CREPORT, CNORMAL);
 			if (!gopts.profile_gpu)
-				LOG1(" %sSimplifier time        : %s%-16.3f  sec%s", CREPORT, CREPORTVAL, timer.simp, CNORMAL);
+				LOG1(" %sSimplifier time        : %s%-16.3f  sec%s", CREPORT, CREPORTVAL, stats.time.simp, CNORMAL);
 			else {
-				LOG1(" %s - Var ordering        : %s%-16.2f  ms%s", CREPORT, CREPORTVAL, cutimer->vo, CNORMAL);
-				LOG1(" %s - CNF prepare         : %s%-16.2f  ms%s", CREPORT, CREPORTVAL, cutimer->sig, CNORMAL);
-				LOG1(" %s - CNF transfer        : %s%-16.2f  ms%s", CREPORT, CREPORTVAL, cutimer->io, CNORMAL);
-				LOG1(" %s - CNF compact         : %s%-16.2f  ms%s", CREPORT, CREPORTVAL, cutimer->gc, CNORMAL);
-				LOG1(" %s - OT  creation        : %s%-16.2f  ms%s", CREPORT, CREPORTVAL, cutimer->cot, CNORMAL);
-				LOG1(" %s - OT  sorting         : %s%-16.2f  ms%s", CREPORT, CREPORTVAL, cutimer->sot, CNORMAL);
-				LOG1(" %s - OT  reduction       : %s%-16.2f  ms%s", CREPORT, CREPORTVAL, cutimer->rot, CNORMAL);
-				LOG1(" %s - BVE                 : %s%-16.2f  ms%s", CREPORT, CREPORTVAL, cutimer->ve, CNORMAL);
-				LOG1(" %s - SUB                 : %s%-16.2f  ms%s", CREPORT, CREPORTVAL, cutimer->sub, CNORMAL);
-				LOG1(" %s - BCE                 : %s%-16.2f  ms%s", CREPORT, CREPORTVAL, cutimer->bce, CNORMAL);
-				LOG1(" %s - ERE                 : %s%-16.2f  ms%s", CREPORT, CREPORTVAL, cutimer->ere, CNORMAL);
+				stats.sigma.time.gc = cumm.compactTime();
+				LOG1(" %s - Var ordering        : %s%-16.2f  ms%s", CREPORT, CREPORTVAL, stats.sigma.time.vo, CNORMAL);
+				LOG1(" %s - CNF prepare         : %s%-16.2f  ms%s", CREPORT, CREPORTVAL, stats.sigma.time.sig, CNORMAL);
+				LOG1(" %s - CNF transfer        : %s%-16.2f  ms%s", CREPORT, CREPORTVAL, stats.sigma.time.io, CNORMAL);
+				LOG1(" %s - CNF compact         : %s%-16.2f  ms%s", CREPORT, CREPORTVAL, stats.sigma.time.gc, CNORMAL);
+				LOG1(" %s - OT  creation        : %s%-16.2f  ms%s", CREPORT, CREPORTVAL, stats.sigma.time.cot, CNORMAL);
+				LOG1(" %s - OT  sorting         : %s%-16.2f  ms%s", CREPORT, CREPORTVAL, stats.sigma.time.sot, CNORMAL);
+				LOG1(" %s - OT  reduction       : %s%-16.2f  ms%s", CREPORT, CREPORTVAL, stats.sigma.time.rot, CNORMAL);
+				if (opts.proof_en)
+					LOG1(" %s - Proof count/copy    : %s%-16.2f  ms%s", CREPORT, CREPORTVAL, cuproof.gpuTime(), CNORMAL);
+				LOG1(" %s - BVE                 : %s%-16.2f  ms%s", CREPORT, CREPORTVAL, stats.sigma.time.ve, CNORMAL);
+				LOG1(" %s - SUB                 : %s%-16.2f  ms%s", CREPORT, CREPORTVAL, stats.sigma.time.sub, CNORMAL);
+				LOG1(" %s - BCE                 : %s%-16.2f  ms%s", CREPORT, CREPORTVAL, stats.sigma.time.bce, CNORMAL);
+				LOG1(" %s - ERE                 : %s%-16.2f  ms%s", CREPORT, CREPORTVAL, stats.sigma.time.ere, CNORMAL);
 			}
 			LOG1(" %sDevice memory          : %s%-16.3f  MB%s", CREPORT, CREPORTVAL, ratio((double)(cumm.maxCapacity() + cacher.maxCapacity()), double(MBYTE)), CNORMAL);
 			LOG1(" %sSigmifications         : %s%-10d%s", CREPORT, CREPORTVAL, stats.sigma.calls, CNORMAL);
@@ -59,7 +62,7 @@ void Solver::report()
 		}
         LOG0("");
 		LOG1("\t\t\t%sSolver Report%s", CREPORT, CNORMAL);
-		LOG1(" %sSolver time            : %s%-16.3f  sec%s", CREPORT, CREPORTVAL, timer.solve, CNORMAL);
+		LOG1(" %sSolver time            : %s%-16.3f  sec%s", CREPORT, CREPORTVAL, stats.time.solve, CNORMAL);
 		LOG1(" %sSystem memory          : %s%-16.3f  MB%s", CREPORT, CREPORTVAL, ratio(double(sysMemUsed()), double(MBYTE)), CNORMAL);
 		LOG1(" %sFormula                : %s%-s%s", CREPORT, CREPORTVAL, formula.path.c_str(), CNORMAL);
 		LOG1(" %s Size                  : %s%-16.3f  MB%s", CREPORT, CREPORTVAL, ratio(double(formula.size), double(MBYTE)), CNORMAL);

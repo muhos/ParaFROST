@@ -73,8 +73,8 @@ void Solver::analyzeFailed(const uint32& failed)
 void Solver::scheduleProbes() 
 {
 	assert(probes.empty());
-	vhist.resize(inf.nDualVars);
-	memset(vhist, 0, sizeof(uint32) * inf.nDualVars);
+	vhist.resize(inf.maxDualVars);
+	memset(vhist, 0, sizeof(uint32) * inf.maxDualVars);
 	histBins(orgs);
 	histBins(learnts);
 	VSTATE* states = sp->vstate;
@@ -128,7 +128,7 @@ void Solver::FLE()
 			LOG2(2, "  no candidates found to probe");
 			break;
 		}
-		memset(vhist, 0, sizeof(uint32) * inf.nDualVars);
+		memset(vhist, 0, sizeof(uint32) * inf.maxDualVars);
 		stats.probe.rounds++;
 		currprobed = currfailed = 0;
 		while ((probe = nextProbe())

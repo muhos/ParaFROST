@@ -33,6 +33,7 @@ namespace ParaFROST {
 	// BVE bit-masking
 	constexpr Byte	 MELTING_MASK	= 0x01;
 	constexpr Byte   ADDING_MASK	= 0x02;
+	constexpr Byte   FORCED_MASK	= 0x04;
 	constexpr uint32 RES_MASK		= 0x00000001U;
 	constexpr uint32 AOIX_MASK		= 0x00000002U;
 	constexpr uint32 CORE_MASK		= 0x00000003U;
@@ -45,11 +46,13 @@ namespace ParaFROST {
 
 	#define ELIMINATE(x)					(x |= MELTING_MASK)
 	#define MARKADDING(x)					(x |= ADDING_MASK)
+	#define MARKFORCED(x)					(x |= FORCED_MASK)
 	#define IS_TAUTOLOGY(x,y)				(((x) ^ (y)) == NEG_SIGN)	
 	#define IS_RES(x)						((x) == RES_MASK)
 	#define IS_AOIX(x)						((x) == AOIX_MASK)
 	#define IS_CORE(x)						((x) == CORE_MASK)
 	#define IS_ADDING(x)					((x) & ADDING_MASK)
+	#define IS_FORCED(x)					((x) & FORCED_MASK)
 	#define ELIMINATED(x)					((x) & MELTING_MASK)
 	#define RECOVERTYPE(x)					((x) & TYPE_MASK)
 	#define RECOVERADDEDCLS(x)				(((x) & ADDEDCLS_MASK) >> 2)

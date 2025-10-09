@@ -24,6 +24,7 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 #include "constants.cuh"
 #include "variables.cuh"
 #include "histogram.cuh"
+#include "timer.cuh"
 
 namespace ParaFROST {
 	/*****************************************************/
@@ -62,6 +63,8 @@ namespace ParaFROST {
 		Byte	* d_stencil;
 		size_t	nscatters;
 		// trackers
+		cuTIMER cutimer;
+		float 	_compacttime;
 		int64	_tot, _free, cap, dcap, maxcap, penalty;
 		bool	isMemAdviseSafe;
 
@@ -113,7 +116,7 @@ namespace ParaFROST {
 				pool.cap = 0;
 			}
 		}
-						cuMM			() { RESETSTRUCT(this); }
+						cuMM			();
 		void			breakMirror		();
 		void			freePinned		();
 		void			freeFixed		();
@@ -126,6 +129,7 @@ namespace ParaFROST {
 		inline int64	dcapacity		() const { return dcap; }
 		inline int64	maxCapacity		() const { return maxcap; }
 		inline size_t	scatterCap		() const { return nscatters * sizeof(S_REF); }
+		inline float 	compactTime		() const { return _compacttime; }
 		inline S_REF*	refsMem			() { return d_refs_mem; }
 		inline S_REF*	scatter			() { return d_scatter; }
 		inline S_REF*	occurs			() { return d_occurs; }

@@ -188,8 +188,8 @@ bool Solver::subsumeAll()
 	BCNF shrunken;
 	HIST_LCV_CMP clause_cmp(vhist);
 	int64 checked = 0, subsumed = 0, strengthened = 0;
-	vhist.resize(inf.nDualVars);
-	memset(vhist, 0, sizeof(uint32) * inf.nDualVars);
+	vhist.resize(inf.maxDualVars);
+	memset(vhist, 0, sizeof(uint32) * inf.maxDualVars);
 	stats.subsume.leftovers = 0;
 	schedule2sub(orgs);
 	schedule2sub(learnts);
@@ -204,8 +204,8 @@ bool Solver::subsumeAll()
 		}
 	}
 	LOG2(2, " Scheduled %d (%.2f %%) clauses for subsumption", scheduled.size(), percent((double)scheduled.size(), (double)maxClauses()));
-	wot.resize(inf.nDualVars);
-	bot.resize(inf.nDualVars);
+	wot.resize(inf.maxDualVars);
+	bot.resize(inf.maxDualVars);
 	for (CSIZE* i = scheduled; i != scheduled.end(); i++) {
 		if (interrupted()) break;
 		if (stats.subsume.checks >= sub_limit) break;

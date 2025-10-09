@@ -184,21 +184,23 @@ namespace ParaFROST {
 
 	void Solver::logReductions()
 	{
-		int64 varsRemoved = int64(inf.numDeletedVars) + nForced;
+		int64 varsRemoved = int64(inf.currDeletedVars) + nForced;
 		int64 clsRemoved = int64(inf.numClauses) - inf.numClausesSurvived;
 		int64 litsRemoved = int64(inf.numLiterals) - inf.numLiteralsSurvived;
 		const char* header = "  %s%-10s  %-10s %-10s %-10s%s";
 		LOG1(header, CREPORT, " ", "Variables", "Clauses", "Literals", CNORMAL);
-		const char* rem = "  %s%-10s: %s%-9lld  %c%-8lld  %c%-8lld%s";
-		const char* sur = "  %s%-10s: %s%-9d  %-9d  %-9d%s";
+		const char* rem = "  %s%-10s: %s%c%-8lld  %c%-8lld  %c%-8lld%s";
+		const char* sur = "  %s%-10s: %s%-10d  %-9d  %-9d%s";
 		LOG1(rem, CREPORT, "Removed", CREPORTVAL,
-			-varsRemoved,
+			varsRemoved < 0 ? '+' : '-', abs(varsRemoved),
 			clsRemoved < 0 ? '+' : '-', abs(clsRemoved),
 			litsRemoved < 0 ? '+' : '-', abs(litsRemoved), CNORMAL);
+		assert(inf.unassigned >= inf.prevDeletedVars);
 		LOG1(sur, CREPORT, "Survived", CREPORTVAL,
-			maxActive(),
+			inf.unassigned - inf.prevDeletedVars,
 			inf.numClausesSurvived,
 			inf.numLiteralsSurvived, CNORMAL);
+		fflush(stdout);
 	}
 
 }

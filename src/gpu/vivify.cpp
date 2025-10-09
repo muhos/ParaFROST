@@ -415,8 +415,8 @@ void Solver::vivifying(const CL_ST& type)
 	const bool learnt = tier2 || ISVIVIFYTIER1(type);
 	BCNF schedule;
 	wt.clear(true);
-	vhist.resize(inf.nDualVars);
-	memset(vhist, 0, sizeof(uint32) * inf.nDualVars);
+	vhist.resize(inf.maxDualVars);
+	memset(vhist, 0, sizeof(uint32) * inf.maxDualVars);
 	schedule2viv(schedule, tier2, learnt);
 	sortviv(schedule);
 	rebuildWT(opts.vivify_priorbins);

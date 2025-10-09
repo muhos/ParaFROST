@@ -57,6 +57,8 @@ namespace ParaFROST {
 			, ternaries(0)
 			, maxClauseSize(0) {}
 
+		inline FORMULA& operator= (const string& p) { path = p; return *this; }
+
 		inline int get() { size++; return std::cin.get(); }
 
 		inline void eatWS(int& ch) { while (isSpace((ch = get()))); }

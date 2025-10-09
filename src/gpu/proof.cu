@@ -114,11 +114,11 @@ uint32 cuPROOF::count(const uint32* literals, const uint32& numLits)
 	OPTIMIZEBLOCKS2(numLits, BLOCK1D);
 	OPTIMIZESHARED(blockSize, sizeof(uint32));
 	SYNCALL; // sync any pending kernels or transfers
-	if (gopts.profile_gpu) cutimer->start();
+	if (gopts.profile_gpu) cutimer.start();
 	cnt_proof << <nBlocks, blockSize, smemSize >> > (literals, numLits);
 	LASTERR("Proof counting failed");
 	CHECK(cudaMemcpyFromSymbol(hostLBlocks, devLBlocks, nBlocks * sizeof(uint32)));
-	if (gopts.profile_gpu) cutimer->stop(), cutimer->ve += cutimer->gpuTime();
+	if (gopts.profile_gpu) cutimer.stop(), time += cutimer.gpuTime();
 	const uint32 maxcap = seqreduceBlocks(hostLBlocks, nBlocks);
 	assert(maxcap && maxcap < (numLits * sizeof(uint32)));
 	LOGENDING(2, 5, "(%d bytes)", maxcap);
@@ -245,10 +245,10 @@ void cuPROOF::cacheProof(const cudaStream_t& _s)
 	assert(header.data());
 	assert(hostStream->capacity() == header.capacity());
 	hostStream->resize(devSize);
-	if (gopts.profile_gpu) cutimer->start(_s);
+	if (gopts.profile_gpu) cutimer.start(_s);
 	CHECK(cudaMemcpyAsync(hostStream->data(), header.data(), devSize, cudaMemcpyDeviceToHost, _s));
 	if (gopts.sync_always) SYNC(_s);
-	if (gopts.profile_gpu) cutimer->stop(_s), cutimer->ve += cutimer->gpuTime();
+	if (gopts.profile_gpu) cutimer.stop(_s), time += cutimer.gpuTime();
 }
 
 void cuPROOF::destroy()

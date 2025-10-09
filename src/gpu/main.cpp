@@ -68,7 +68,7 @@ int main(int argc, char **argv)
 		signal_handler(handler_terminate);
 		string formula = argc > 1 ? argv[1] : "";
 		Solver* parafrost = new Solver(formula);
-		solver = parafrost;
+		init_solver(parafrost);
 		if (opt_timeout > 0) set_timeout(opt_timeout);
 		if (opt_memoryout > 0) set_memoryout(opt_memoryout);
 		signal_handler(handler_mercy_interrupt, handler_mercy_timeout);

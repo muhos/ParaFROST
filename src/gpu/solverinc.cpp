@@ -22,55 +22,20 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 using namespace ParaFROST;
 
-Solver::Solver() :
-	sp(NULL)
-	, vsids(VSIDS_CMP(activity))
-	, vschedule(SCORS_CMP(this))
-	, bumped(0)
-	, conflict(NOREF)
-	, ignore(NOREF)
-	, cnfstate(UNSOLVED)
-	, intr(false)
-	, stable(false)
-	, probed(false)
-	, incremental(true)
-	, vars(NULL)
-	, ot(NULL)
-	, cnf(NULL)
-	, hcnf(NULL)
-	, tca(cacher)
-	, cuproof(cumm, proof)
-	, streams(NULL)
-	, mapped(false)
-	, compacted(false)
-	, flattened(false)
-	, phase(0)
-	, nForced(0)
-	, simpstate(AWAKEN_SUCC)
-	, devCount(0)
-	, termCallbackState(NULL)
-	, learnCallbackState(NULL)
-	, learnCallbackBuffer(NULL)
-	, termCallback(NULL)
-	, learnCallback(NULL)
+Solver::Solver(const bool& inc)
+  : Solver()
 {
-	LOGHEADER(1, 5, "Banner");
-	LOGFANCYBANNER(version());
-	LOGHEADER(1, 5, "Build")
-	getCPUInfo(stats.sysmem);
-	getBuildInfo();
-	initSolver();
-	size_t _gfree = 0, _gpenalty = 0;
-	if (!(devCount = getGPUInfo(_gfree, _gpenalty))) {
-		LOGERRORN("no GPU(s) available that support CUDA");
-		killSolver();
-	}
-	if (_gfree <= 200 * MBYTE) {
-		LOGWARNING("not enough GPU memory (free = %zd MB): skip simplifier", _gfree / MBYTE);
-		opts.sigma_en = opts.sigma_live_en = false;
-	}
-	else cumm.init(_gfree, _gpenalty);
-	if (opts.sigma_en || opts.sigma_live_en) { optSimp(), createStreams(); }
+    incremental = inc;              // override default=false
+	initialize(true);
+}
+
+Solver::Solver(const bool& inc, const std::string& path)
+  : Solver(inc)
+{
+	formula = path;
+	LOGHEADER(1, 5, "Parser")
+	if (!parse() || BCP()) { assert(cnfstate == UNSAT), killSolver(); }
+	if (opts.parseonly_en) killSolver();
 }
 
 void Solver::iallocSpace()
@@ -81,7 +46,7 @@ void Solver::iallocSpace()
 	LOGN2(2, " Allocating fixed memory for %d variables..", inf.maxVar);
 	assert(inf.orgVars == inf.maxVar);
 	assert(vorg.size() == inf.maxVar + 1);
-	assert(V2L(inf.maxVar + 1) == inf.nDualVars);
+	assert(V2L(inf.maxVar + 1) == inf.maxDualVars);
 	assert(model.lits.size() == inf.maxVar + 1);
 	assert(ilevel.size() == ivstate.size());
 	assert(ilevel.size() == inf.maxVar + 1);
@@ -143,6 +108,6 @@ void Solver::isolve(Lits_t& assumptions)
 			}
 		}
 	}
-	timer.stop(), timer.solve += timer.cpuTime();
+	timer.stop(), stats.time.solve += timer.cpuTime();
 	wrapup();
 }

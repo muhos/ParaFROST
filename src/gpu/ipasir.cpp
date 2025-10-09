@@ -20,57 +20,11 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 #include "version.hpp"
 #include "ipasir.hpp"
 
-using namespace ParaFROST;
-
-class ipasir_t: public Solver {
-    Lits_t filtered, clause;
-    bool nomodel;
-
-	inline uint32 abs(int lit) {
-        return uint32(lit < 0 ? -lit : lit);
-	}
-	inline uint32 import(int lit) {
-        uint32 v = abs(lit);
-        while (v > inf.maxVar) iadd();
-        return V2DEC(v, (lit < 0));
-	}
-
-    public:
-
-    ipasir_t() : clause(INIT_CAP), nomodel(false) {}
-    ~ipasir_t() {}
-
-    void add(int lit) {
-        nomodel = true;
-        if (lit)
-            clause.push(import(lit));
-        else {
-            itoClause(filtered, clause);
-            clause.clear();
-        }
-    }
-    void assume(int32_t lit) {
-        nomodel = true;
-        assumptions.push(import(lit));
-    }
-    int solve() {
-        isolve(assumptions);
-        assumptions.clear();
-        nomodel = (cnfstate != SAT);
-        return IS_UNSOLVED(cnfstate) ? 0 : (cnfstate == SAT ? 10 : 20);
-    }
-    int val(int lit) {
-        if (nomodel) return 0;
-        return model.satisfied(import(lit)) ? lit : -lit;
-    }
-    int failed(int lit) {
-        return ifailed(import(lit));
-    }
-};
-
 extern "C" {
 
 #include "ipasir.hpp"
+
+using namespace ParaFROST;
 
 #define IPASIR(S) ((ipasir_t*)S)
 

@@ -29,6 +29,9 @@ namespace ParaFROST {
 		uint32 calls;
 		struct { uint64 removed; } ere;
 		struct { uint64 variables, clauses; int64 literals; } all;
+		struct {
+			float vo, ve, sub, bce, ere, cot, rot, sot, sig, gc, io;
+		} time;
 	};
 
 	struct STATS {
@@ -68,6 +71,7 @@ namespace ParaFROST {
 			uint64 assumed, reused;
 			uint64 checks, vivified, implied, subsumed, strengthened;
 		} vivify;
+		struct { float parse, solve, simp; } time;
 		SIGMASTATS sigma;
 		uint64 searchprops, searchticks, probeticks, transitiveticks;
 		uint64 marker;

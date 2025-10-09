@@ -59,7 +59,7 @@ namespace ParaFROST {
 
 	void cuMM::compactCNF(CNF* src, CNF* dest)
 	{
-		if (gopts.profile_gpu) cutimer->start();
+		if (gopts.profile_gpu) cutimer.start();
 		assert(src);
 		assert(dest);
 
@@ -99,7 +99,7 @@ namespace ParaFROST {
 		LASTERR("CNF compact failed");
 		SYNC(0);
 
-		if (gopts.profile_gpu) cutimer->stop(), cutimer->gc += cutimer->gpuTime();
+		if (gopts.profile_gpu) cutimer.stop(), _compacttime += cutimer.gpuTime();
 	}
 
 }

@@ -66,8 +66,11 @@ namespace ParaFROST {
 
 	struct OCCUR { uint32 ps, ns; };
 	struct CNF_INFO {
-		uint32 orgVars, maxVar, maxFrozen, maxMelted, maxSubstituted, nDualVars, unassigned, numDeletedVars;
-		uint32 orgCls, numClausesSurvived, numClauses;
+		uint32 orgVars, orgCls, maxVar, maxDualVars; // relative to input CNF.
+		uint32 maxFrozen, maxMelted, maxSubstituted, unassigned; // during solving.
+		// relative to simplifications.
+		uint32 currDeletedVars, prevDeletedVars; 
+		uint32 numClausesSurvived, numClauses;
 		uint32 numLiteralsSurvived, numLiterals;
 		CNF_INFO() { RESETSTRUCT(this); }
 	};
@@ -76,18 +79,12 @@ namespace ParaFROST {
 	class TIMER {
 	private:
 		clock_t _start, _stop;
-		clock_t _start_p, _stop_p;
 		float _cpuTime;
 	public:
-		float parse, solve, simp;
-		float vo, ve, sub, bce, ere, cot, rot, sot, gc, io;
-		TIMER			() { RESETSTRUCT(this); }
+		TIMER			() : _start(0), _stop(0), _cpuTime(0.0) {}
 		void start		() { _start = clock(); }
 		void stop		() { _stop = clock(); }
 		float cpuTime	() { return _cpuTime = ((float)abs(_stop - _start)) / CLOCKS_PER_SEC; }
-		void pstart		() { _start_p = clock(); }
-		void pstop		() { _stop_p = clock(); }
-		float pcpuTime	() { return _cpuTime = (((float)abs(_stop_p - _start_p)) / CLOCKS_PER_SEC) * float(1000.0); }
 	};
 	//====================================================//
 	//                 iterators & checkers               //
@@ -102,10 +99,10 @@ namespace ParaFROST {
 	}
 	template <class T>
 	inline bool  _checklit(const T LIT) {
-		const bool invariant = LIT <= 1 || LIT >= inf.nDualVars;
+		const bool invariant = LIT <= 1 || LIT >= inf.maxDualVars;
 		if (invariant)
-			LOGERRORN("invariant \"LIT > 1 && LIT < inf.nDualVars\" failed on literal (%lld), bound = %lld",
-				int64(LIT), int64(inf.nDualVars));
+			LOGERRORN("invariant \"LIT > 1 && LIT < inf.maxDualVars\" failed on literal (%lld), bound = %lld",
+				int64(LIT), int64(inf.maxDualVars));
 		return !invariant;
 	}
 	#define CHECKVAR(VAR) assert(_checkvar(VAR))
@@ -114,7 +111,7 @@ namespace ParaFROST {
 
 	#define forall_variables(VAR) for (uint32 VAR = 1; VAR <= inf.maxVar; VAR++)
 
-	#define forall_literal(LIT) for (uint32 LIT = 2; LIT < inf.nDualVars; LIT++)
+	#define forall_literal(LIT) for (uint32 LIT = 2; LIT < inf.maxDualVars; LIT++)
 
 	#define forall_vector(TYPE, VEC, PTR) \
 		for (TYPE* PTR = VEC, *VEND = VEC.end(); PTR != VEND; PTR++)

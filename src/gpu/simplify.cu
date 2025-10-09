@@ -27,16 +27,16 @@ uint32 Solver::updateNumElims()
 {
 	const uint32 remainedPVs = *vars->electedSize;
 	assert(remainedPVs <= vars->numElected);
-	inf.numDeletedVars = vars->numElected - remainedPVs;
+	inf.currDeletedVars = vars->numElected - remainedPVs;
 	return remainedPVs;
 }
 
 inline void	Solver::updateNumPVs() 
 {
 	uint32 remainedPVs = updateNumElims();
-	vars->nMelted += inf.numDeletedVars;
+	vars->currMelted += inf.currDeletedVars;
+	LOG2(2, "  BVE eliminated %d variables while %d survived", inf.currDeletedVars, vars->numElected);
 	vars->numElected = remainedPVs;
-	LOG2(2, "  BVE eliminated %d variables while %d survived", inf.numDeletedVars, vars->numElected);
 }
 
 inline void	Solver::cleanManaged() 
@@ -100,7 +100,7 @@ void Solver::awaken()
 		LOG2(2, " Maximum added clauses/literals = %zd/%zd", maxAddedCls, maxAddedLits);
 		numCls += maxAddedCls, numLits += maxAddedLits;
 	}
-	assert(inf.nDualVars);
+	assert(inf.maxDualVars);
 	if (!cumm.allocHist(cuhist, opts.proof_en) ||
 		!cumm.allocAux(numCls) ||
 		!cumm.allocVars(vars, savedLits) ||
@@ -112,16 +112,16 @@ void Solver::awaken()
 	wt.clear(true);
 	if (gopts.unified_access) {
 		LOGN2(2, " Extracting clauses directly to device..");
-		if (gopts.profile_gpu) cutimer->start();
+		if (gopts.profile_gpu) cutimer.start();
 		extractCNF(cnf, orgs), orgs.clear(true);
 		extractCNF(cnf, learnts), learnts.clear(true);
 		cm.destroy();
 		assert(inf.numClauses == cnf->size());
-		if (gopts.profile_gpu) cutimer->stop(), cutimer->io += cutimer->gpuTime();
+		if (gopts.profile_gpu) cutimer.stop(), stats.sigma.time.io += cutimer.gpuTime();
 	}
 	else {
 		LOGN2(2, " Extracting clauses heterogeneously to device..");
-		if (gopts.profile_gpu) cutimer->start(streams[0]);
+		if (gopts.profile_gpu) cutimer.start(streams[0]);
 		cumm.createMirror(hcnf, maxClauses(), maxLiterals());
 		extractCNF(hcnf, orgs), reflectCNF(streams[0], streams[1]), orgs.clear(true);
 		extractCNF(hcnf, learnts), reflectCNF(streams[0], streams[1]), learnts.clear(true);
@@ -130,15 +130,17 @@ void Solver::awaken()
 		cumm.resizeCNFAsync(cnf, hcnf->data().size, hcnf->size());
 		assert(hcnf->data().size == dataoff);
 		assert(inf.numClauses == hcnf->size() && hcnf->size() == csoff);
-		if (gopts.profile_gpu) cutimer->stop(streams[0]), cutimer->io += cutimer->gpuTime();
+		if (gopts.profile_gpu) cutimer.stop(streams[0]), stats.sigma.time.io += cutimer.gpuTime();
 	}
 	LOGENDING(2, 5, "(%d clauses extracted)", inf.numClauses);
     vars->varcore = gopts.hostKOpts.ve_fun_en ? vars->eligible : NULL;
 	SYNC(0); // sync device CNF resize
 	initDevVorg(cuhist); // load device pointers to constant memory
+	if (gopts.profile_gpu) cutimer.start(streams[0]);
 	prepareCNFAsync(cnf, streams[0]);
+	if (gopts.profile_gpu) cutimer.stop(streams[0]), stats.sigma.time.sig += cutimer.gpuTime();
 	if (opts.proof_en) 
-		cumm.cuMemSetAsync(cuhist.d_lbyte, 0, inf.nDualVars);
+		cumm.cuMemSetAsync(cuhist.d_lbyte, 0, inf.maxDualVars);
 	assert(vorg.size() == inf.maxVar + 1);
 	cuhist.fetchVars(vorg, streams[1]);
 	if (opts.proof_en) {
@@ -162,7 +164,7 @@ void Solver::simplifying(const bool& keep_gpu_mem)
 		return;
 	}
 	timer.stop();
-	timer.solve += timer.cpuTime();
+	stats.time.solve += timer.cpuTime();
 	timer.start();
 	awaken();
 	if (simpstate == CNFALLOC_FAIL || simpstate == AWAKEN_FAIL) {
@@ -173,7 +175,7 @@ void Solver::simplifying(const bool& keep_gpu_mem)
 	/*      reduction phases        */
 	/********************************/
 	assert(!phase && !multiplier);
-	const int64 bmelted = inf.maxMelted, bclauses = inf.numClauses;
+	const int64 imelted = inf.maxMelted, iclauses = inf.numClauses, iliterals = inf.numLiterals;
 	int64 cdiff = INT64_MAX, ldiff = INT64_MAX;
 	int64 clsbefore = inf.numClauses, litsbefore = inf.numLiterals;
 	while (inf.numClauses && inf.numLiterals && !simpstate && !interrupted()) {
@@ -182,6 +184,7 @@ void Solver::simplifying(const bool& keep_gpu_mem)
 		reallocCNF();
 		createOTAsync();
 		if (!prop()) killSolver();
+		else if (!inf.numClauses) break;
 		if (!LCVE()) break;
 		sortOT();
 		if (stop(cdiff, ldiff)) { ERE(); break; }
@@ -202,6 +205,14 @@ void Solver::simplifying(const bool& keep_gpu_mem)
 	/********************************/
 	/*          Write Back          */
 	/********************************/
+	inf.maxMelted += vars->currMelted;
+	bool success = (iclauses != inf.numClauses);
+	stats.sigma.all.clauses += iclauses - int64(inf.numClauses);
+	stats.sigma.all.literals += iliterals - int64(inf.numLiterals);
+	stats.sigma.all.variables += int64(inf.maxMelted) - imelted;
+	last.shrink.removed = stats.shrunken;
+	if (ereCls > inf.numClauses) stats.sigma.ere.removed += ereCls - inf.numClauses;
+	if (inf.maxFrozen > sp->simplified) stats.units.forced += inf.maxFrozen - sp->simplified;
 	if (!inf.unassigned || !inf.numClauses) { 
 		LOG2(2, "  All clauses removed, thus CNF is satisfiable");
 		stats.clauses.original = 0;
@@ -222,23 +233,16 @@ void Solver::simplifying(const bool& keep_gpu_mem)
 	cacheEliminated(streams[5]);             	// if ERE is enabled, this transfer would be already done
 	cumm.updateMaxCap(), cacher.updateMaxCap(); // for reporting GPU memory only
 	markEliminated(streams[5]);              	// must be executed before map()
-	if (!keep_gpu_mem)
-		cacheCNF(streams[0], streams[1]);
-	bool success = (bclauses != inf.numClauses);
-	inf.maxMelted += vars->nMelted;
-	stats.sigma.all.clauses += bclauses - int64(inf.numClauses);
-	stats.sigma.all.variables += int64(inf.maxMelted) - bmelted;
-	last.shrink.removed = stats.shrunken;
-	if (ereCls > inf.numClauses) stats.sigma.ere.removed += ereCls - inf.numClauses;
-	if (inf.maxFrozen > sp->simplified) stats.units.forced += inf.maxFrozen - sp->simplified;
 	if (keep_gpu_mem) {
 		SYNCALL;
 		assert(!simpstate);
 		if (simpstate != CNFALLOC_FAIL && !compacted) 
 			reallocCNF(true);
+		cacheCNF(streams[0], streams[1]);
 		printStats(1, 's', CGREEN); 
 		return;
 	}
+	cacheCNF(streams[0], streams[1]);
 	if (canMap()) map(true);
 	else newBeginning();
 	rebuildWT(opts.sigma_priorbins);
@@ -248,7 +252,7 @@ void Solver::simplifying(const bool& keep_gpu_mem)
 	}
 	UPDATE_SLEEPER(this, sigma, success);
 	printStats(1, 's', CGREEN);
-	timer.stop(), timer.simp += timer.cpuTime();
+	timer.stop(), stats.time.simp += timer.cpuTime();
 }
 
 void Solver::optSimp()
@@ -257,7 +261,6 @@ void Solver::optSimp()
 	gopts.init(opts.proof_en && !opts.proof_nonbinary_en);
     assert(SH_MAX_BVE_OUT1 >= gopts.hostKOpts.xor_max_arity);
     assert(SH_MAX_ERE_OUT >= gopts.hostKOpts.ere_clause_max);
-	cutimer = new cuTIMER;
 	initDevOpts();
 	LOGDONE(2, 5);
 	initSharedMem();

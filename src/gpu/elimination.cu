@@ -139,8 +139,7 @@ namespace ParaFROST {
 		assert(cnf);
 		assert(ot);
 		assert(vars->numElected);
-		if (gopts.profile_gpu) cutimer->start();
-		const uint32 max_refs = inf.nDualVars;
+		const uint32 max_refs = inf.maxDualVars;
 		const uint32 max_poss = inf.maxVar;
 		const uint32 max_types = inf.maxVar;
 		const uint32 max_cnts = inf.maxVar;
@@ -152,7 +151,6 @@ namespace ParaFROST {
 		vePhase1(cnf, ot, vars, proof, ucnt, max_cnts, type, max_types, rpos, max_poss, rref, max_refs, in);
 		vePhase2(vars, rpos, rref, streams, cumm, cacher);
 		vePhase3(cnf, ot, vars, proof, ucnt, type, rpos, rref);
-		if (gopts.profile_gpu) cutimer->stop(), cutimer->ve += cutimer->gpuTime();
 	}
 
 	void subAsync(CNF* cnf, OT* ot, VARS* vars, cuVecB* proof)
@@ -160,7 +158,6 @@ namespace ParaFROST {
 		assert(cnf);
 		assert(ot);
 		assert(vars->numElected);
-		if (gopts.profile_gpu) cutimer->start();
 		LOGN2(2, "  configuring SUB kernel with ");
 		grid_t nThreads = BLSUB;
 		OPTIMIZESHARED(nThreads, SH_MAX_SUB_IN * sizeof(uint32));
@@ -172,7 +169,6 @@ namespace ParaFROST {
 #else
 		sub_k << <nBlocks, nThreads, smemSize >> > (cnf, ot, proof, vars->units, vars->elected, vars->eliminated);
 #endif
-		if (gopts.profile_gpu) cutimer->stop(), cutimer->sub += cutimer->gpuTime();
 		if (gopts.sync_always) {
 			LASTERR("SUB Elimination failed");
 			SYNCALL;
@@ -184,11 +180,9 @@ namespace ParaFROST {
 		assert(cnf);
 		assert(ot);
 		assert(vars->numElected);
-		if (gopts.profile_gpu) cutimer->start();
 		grid_t nThreads = BLBCE;
 		OPTIMIZEBLOCKS(vars->numElected, nThreads, 0);
 		bce_k << <nBlocks, nThreads >> > (cnf, ot, proof, vars->resolved, vars->elected, vars->eliminated);
-		if (gopts.profile_gpu) cutimer->stop(), cutimer->bce += cutimer->gpuTime();
 		if (gopts.sync_always) {
 			LASTERR("BCE Elimination failed");
 			SYNCALL;
@@ -200,7 +194,6 @@ namespace ParaFROST {
 		assert(cnf);
 		assert(ot);
 		assert(vars->numElected);
-		if (gopts.profile_gpu) cutimer->start();
 #if	defined(_DEBUG) || defined(DEBUG) || !defined(NDEBUG)
 		dim3 block2D(16, gopts.ere_min_threads);
 #else 
@@ -217,7 +210,6 @@ namespace ParaFROST {
 			block2D.x, devProp.warpSize, block2D.y, gopts.ere_min_threads, 
 			grid2D.x, grid2D.y, hardCap, smemSize / KBYTE);
 		ere_k << <grid2D, block2D, smemSize >> > (cnf, ot, proof, vars->elected, vars->eliminated);
-		if (gopts.profile_gpu) cutimer->stop(), cutimer->ere += cutimer->gpuTime();
 		if (gopts.sync_always) {
 			LASTERR("ERE Elimination failed");
 			SYNCALL;
@@ -245,9 +237,11 @@ namespace ParaFROST {
 		if (opts.ve_en) {
 			if (interrupted()) killSolver();
 			LOG2(2, " Eliminating variables..");
-			inf.numDeletedVars = 0;
+			if (gopts.profile_gpu) cutimer.start();
+			inf.currDeletedVars = 0;
 			veAsync(cnf, ot, vars, streams, cuproof.gpuStream(), cumm, cacher, cuhist, stats.sigma.calls > 1);
 			postVE();
+			if (gopts.profile_gpu) cutimer.stop(), stats.sigma.time.ve += cutimer.gpuTime();
 			LOGREDALL(this, 2, "BVE Reductions");
 		}
 	}
@@ -276,7 +270,9 @@ namespace ParaFROST {
 		if (opts.sub_en || opts.ve_plus_en) {
 			if (interrupted()) killSolver();
 			LOG2(2, " Eliminating (self)-subsumptions..");
+			if (gopts.profile_gpu) cutimer.start();
 			subAsync(cnf, ot, vars, cuproof.gpuStream());
+			if (gopts.profile_gpu) cutimer.stop(), stats.sigma.time.sub += cutimer.gpuTime();
 			LOGREDCL(this, 2, "SUB Reductions");
 		}
 	}
@@ -287,7 +283,9 @@ namespace ParaFROST {
 			if (interrupted()) killSolver();
 			if (!vars->numElected) return;
 			LOG2(2, " Eliminating blocked clauses..");
+			if (gopts.profile_gpu) cutimer.start();
 			bceAsync(cnf, ot, vars, cuproof.gpuStream());
+			if (gopts.profile_gpu) cutimer.stop(), stats.sigma.time.bce += cutimer.gpuTime();
 			LOGREDCL(this, 2, "BCE Reductions");
 		}
 	}
@@ -300,7 +298,9 @@ namespace ParaFROST {
 			LOG2(2, " Eliminating redundances..");
 			ereCls = inf.numClauses;
 			cacheEliminated(streams[5]);
+			if (gopts.profile_gpu) cutimer.start();
 			ereAsync(cnf, ot, vars, cuproof.gpuStream());
+			if (gopts.profile_gpu) cutimer.stop(), stats.sigma.time.ere += cutimer.gpuTime();
 			LOGREDCL(this, 2, "ERE Reductions");
 			cuproof.cacheProof(0);
 			cuproof.writeProof(0);

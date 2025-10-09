@@ -81,7 +81,6 @@ namespace ParaFROST {
 
 	void copyIf(uint32* dest, CNF* src)
 	{
-		if (gopts.profile_gpu) cutimer->start();
 		reset_counter << <1, 1 >> > ();
 		grid_t nThreads = BLOCK1D;
 		OPTIMIZEBLOCKS(inf.numClauses, nThreads, 0);
@@ -89,14 +88,12 @@ namespace ParaFROST {
 #if defined(_DEBUG) || defined(DEBUG) || !defined(NDEBUG)
 		check_counter << <1, 1 >> > (inf.numLiterals);
 #endif
-		if (gopts.profile_gpu) cutimer->stop(), cutimer->vo += cutimer->gpuTime();
 		LASTERR("Copying literals failed");
 		SYNCALL;
 	}
 
 	void copyIfAsync(uint32* dest, CNF* src)
 	{
-		if (gopts.profile_gpu) cutimer->start();
 		reset_counter << <1, 1 >> > ();
 		grid_t nThreads = BLOCK1D;
 		OPTIMIZEBLOCKS(inf.numClauses, nThreads, 0);
@@ -106,13 +103,11 @@ namespace ParaFROST {
 			LASTERR("Copying literals failed");
 			SYNCALL;
 		}
-		if (gopts.profile_gpu) cutimer->stop(), cutimer->vo += cutimer->gpuTime();
 	}
 
 	void prepareCNFAsync(CNF* cnf, const cudaStream_t& _s)
 	{
 		assert(inf.numClauses);
-		if (gopts.profile_gpu) cutimer->start(_s);
 		grid_t nThreads = BLOCK1D;
 		OPTIMIZEBLOCKS(inf.numClauses, nThreads, 0);
 		prep_cnf_k << <nBlocks, BLOCK1D, 0, _s >> > (cnf);
@@ -120,7 +115,6 @@ namespace ParaFROST {
 			LASTERR("Preparing CNF failed");
 			SYNCALL;
 		}
-		if (gopts.profile_gpu) cutimer->stop(_s), cutimer->sig += cutimer->gpuTime();
 	}
 
 	void veResizeCNFAsync(CNF* cnf, S_REF* rref, uint32* type, uint32* rpos)
@@ -161,7 +155,9 @@ namespace ParaFROST {
 		uint32* literals = cumm.resizeLits(numLits);
 		if (flattened || !literals) return literals;
 		LOGN2(2, " Copying survived literals..");
+		if (gopts.profile_gpu) cutimer.start();
 		copyIfAsync(literals, cnf);
+		if (gopts.profile_gpu) cutimer.stop(), stats.sigma.time.vo += cutimer.gpuTime();
 		LOGENDING(2, 5, "(%d copied)", numLits);
 		flattened = true;
 		return literals;
@@ -198,7 +194,6 @@ namespace ParaFROST {
 		}
 		stats.clauses.original = orgs.size();
 		stats.clauses.learnt = learnts.size();
-		stats.sigma.all.literals += bliterals - maxLiterals();
 		assert(maxClauses() == int64(inf.numClauses));
 	}
 
@@ -213,7 +208,7 @@ namespace ParaFROST {
 		if (gopts.unified_access) copystream = 0, hcnf = cnf;
 		else copystream = s2, cumm.mirrorCNF(hcnf);
 		assert(hcnf);
-		if (gopts.profile_gpu) cutimer->start(copystream);
+		if (gopts.profile_gpu) cutimer.start(copystream);
 		if (compacted) {
 			countCls();
 			inf.numClauses = inf.numClausesSurvived;

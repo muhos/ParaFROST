@@ -159,8 +159,8 @@ void Solver::autarky()
 	// but learnts are ignored in reasoning 
 	// which save time to reattach them again
 	binarizeWT(true);
-	LIT_ST* autarkies = pfmalloc<LIT_ST>(inf.nDualVars);
-	memset(autarkies, UNDEFINED, inf.nDualVars);
+	LIT_ST* autarkies = pfmalloc<LIT_ST>(inf.maxDualVars);
+	memset(autarkies, UNDEFINED, inf.maxDualVars);
 	uint32 eliminated = autarkReasoning(autarkies);
 	analyzed.clear();
 	free(autarkies);

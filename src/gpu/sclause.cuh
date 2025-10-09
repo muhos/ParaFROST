@@ -141,6 +141,7 @@ namespace ParaFROST {
 		_PFROST_H_D_ int		size           () const { return _sz; }
 		_PFROST_H_D_ unsigned	lbd            () const { return _lbd; }
 		_PFROST_H_D_ uint32		sig            () const { return _sig; }
+		_PFROST_H_D_ uint32*	sig_ptr        () { return &_sig; }
 		_PFROST_H_D_ void		shareTo        (uint32* dest) {
 			assert(_sz > 1);
 			for (int k = 0; k < _sz; k++) {

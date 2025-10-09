@@ -33,7 +33,13 @@ using namespace ParaFROST;
 #define EOF_MSG "(exit: cntrl + Z)"
 #endif
 
-bool Solver::parser() 
+bool Solver::parse(const string& formulaStr) 
+{
+	formula.path = formulaStr;
+	return parse();
+}
+
+bool Solver::parse() 
 {
 	FAULT_DETECTOR;
 	struct stat st;
@@ -67,7 +73,7 @@ bool Solver::parser()
 #endif
 		in_c.reserve(INIT_CAP);
 		org.reserve(INIT_CAP);
-		// Initially 'inf' is reset but if parser() is called again
+		// Initially 'inf' is reset but if parse() is called again
 		// by an incremental solving procedure, then 'inf' has to be
 		// manually reset
 		RESETSTRUCT(&inf);
@@ -82,7 +88,7 @@ bool Solver::parser()
 				inf.orgVars = toInteger(str, sign);
 				if (!opts.parseincr_en) {
 					inf.unassigned = inf.maxVar = inf.orgVars;
-					inf.nDualVars = V2L(inf.orgVars + 1);
+					inf.maxDualVars = V2L(inf.orgVars + 1);
 				}
 				if (sign) LOGERROR("number of variables in header is negative");
 				if (inf.orgVars == 0) LOGERROR("zero number of variables in header");
@@ -149,7 +155,7 @@ bool Solver::parser()
 			inf.orgVars = formula.toInteger(ch, sign);
 			if (!opts.parseincr_en) {
 				inf.unassigned = inf.maxVar = inf.orgVars;
-				inf.nDualVars = V2L(inf.orgVars + 1);
+				inf.maxDualVars = V2L(inf.orgVars + 1);
 			}
 			if (sign) LOGERROR("number of variables in header is negative");
 			if (inf.orgVars == 0) LOGERROR("zero number of variables in header");
@@ -202,12 +208,12 @@ bool Solver::parser()
 	orgs.shrinkCap();
 	in_c.clear(true), org.clear(true);
 	timer.stop();
-	timer.parse = timer.cpuTime();
+	stats.time.parse = timer.cpuTime();
 	LOG2(1, " Read %s%d Variables%s, %s%d Clauses%s, and %s%lld Literals%s in %s%.2f seconds%s",
 		CREPORTVAL, inf.maxVar, CNORMAL,
 		CREPORTVAL, orgs.size() + trail.size(), CNORMAL,
 		CREPORTVAL, stats.literals.original + trail.size(), CNORMAL,
-		CREPORTVAL, timer.parse, CNORMAL);
+		CREPORTVAL, stats.time.parse, CNORMAL);
 	LOG2(1, "  found %s%d units%s, %s%d binaries%s, %s%d ternaries%s, %s%d larger%s", 
 		CREPORTVAL, formula.units, CNORMAL, 
 		CREPORTVAL, formula.binaries, CNORMAL, 

@@ -68,6 +68,7 @@ namespace ParaFROST {
 		_PFROST_H_D_ bool		empty		() const { return !sz; }
 		_PFROST_H_D_ uint32		size		() const { return sz; }
 		_PFROST_H_D_ uint32		capacity	() const { return cap; }
+		_PFROST_H_D_ void		force_resize(const uint32& n) { sz = n; }
 		_PFROST_H_D_ void		resize		(const uint32& n) { assert(n <= cap); sz = n; }
 		_PFROST_H_D_ void		shareTo		(T* dest) {
 			assert(sz && _mem);

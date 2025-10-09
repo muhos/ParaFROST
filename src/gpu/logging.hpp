@@ -150,6 +150,7 @@ inline void REPCH(const char& ch, const size_t& size, const size_t& off = 0) {
     if (verbose >= VERBOSITY) { \
         SOLVER->countAll(); \
         SOLVER->updateNumElims(); \
+        inf.prevDeletedVars += inf.currDeletedVars; \
         LOG1("\t\t %s%s%s", CLBLUE, MESSAGE, CNORMAL); \
         SOLVER->logReductions(); }
 
@@ -163,7 +164,7 @@ inline void REPCH(const char& ch, const size_t& size, const size_t& off = 0) {
 #define LOGREDCL(SOLVER, VERBOSITY, MESSAGE) \
     if (verbose >= VERBOSITY) { \
         SOLVER->countAll(); \
-        inf.numDeletedVars = 0; \
+        inf.currDeletedVars = 0; \
         LOG1("\t\t %s%s%s", CLBLUE, MESSAGE, CNORMAL); \
         SOLVER->logReductions(); }
 

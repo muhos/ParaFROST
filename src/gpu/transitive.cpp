@@ -113,11 +113,11 @@ void Solver::transitive()
 	assert(isPropagated());
 	sortWT();
 	SET_BOUNDS(this, limit, transitive, transitiveticks, searchticks, 0);
-	assert(last.transitive.literals < inf.nDualVars);
+	assert(last.transitive.literals < inf.maxDualVars);
 	uint32 tried = 0, units = 0;
 	uint64 removed = 0;
 	while (stats.transitiveticks <= limit
-		&& last.transitive.literals < inf.nDualVars
+		&& last.transitive.literals < inf.maxDualVars
 		&& cnfstate && !interrupted()) {
 		const uint32 lit = last.transitive.literals++;
 		CHECKLIT(lit);
@@ -128,7 +128,7 @@ void Solver::transitive()
 	}
 	LOG2(2, " Transitive %lld: tried %d literals, removing %lld clauses and %d units",
 		stats.probe.calls, tried, removed, units);
-	if (last.transitive.literals == inf.nDualVars)
+	if (last.transitive.literals == inf.maxDualVars)
 		last.transitive.literals = 2;
 	stats.transitive.probed += tried;
 	stats.transitive.failed += units;

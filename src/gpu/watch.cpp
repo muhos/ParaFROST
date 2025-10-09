@@ -131,7 +131,7 @@ void Solver::attachClauses(BCNF& src, const bool& hasElim)
 
 void Solver::rebuildWT(const CL_ST& code)
 {
-    wt.resize(inf.nDualVars);
+    wt.resize(inf.maxDualVars);
     if (PRIORALLBINS(code)) {
         if (PRIORLEARNTBINS(code)) {
             attachBins(learnts);

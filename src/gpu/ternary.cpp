@@ -233,8 +233,8 @@ void Solver::ternary()
     SLEEPING(sleep.ternary, opts.ternary_sleep_en);
     stats.ternary.calls++;
     wt.clear(true);
-    wot.resize(inf.nDualVars);
-    LIT_ST* use = pfcalloc<LIT_ST>(inf.nDualVars);
+    wot.resize(inf.maxDualVars);
+    LIT_ST* use = pfcalloc<LIT_ST>(inf.maxDualVars);
     attachTernary(orgs, use);
     attachTernary(learnts, use);
     const int64 numClauses = maxClauses();

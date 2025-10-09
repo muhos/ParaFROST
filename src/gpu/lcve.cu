@@ -72,22 +72,18 @@ void mapfrozen_k(const uint32* __restrict__ frozen, uint32* __restrict__ varcore
 
 void calcScores(VARS* vars, uint32* hist)
 {
-	if (gopts.profile_gpu) cutimer->start();
 	grid_t nThreads = BLOCK1D;
 	OPTIMIZEBLOCKS(inf.maxVar, nThreads, 0);
 	assign_scores << <nBlocks, nThreads >> > (vars->eligible, vars->scores, hist, inf.maxVar);
-	if (gopts.profile_gpu) cutimer->stop(), cutimer->vo += cutimer->gpuTime();
 	LASTERR("Assigning scores failed");
 	SYNCALL;
 }
 
 void calcScores(VARS* vars, uint32* hist, OT* ot)
 {
-	if (gopts.profile_gpu) cutimer->start();
 	grid_t nThreads = BLOCK1D;
 	OPTIMIZEBLOCKS(inf.maxVar, nThreads, 0);
 	assign_scores << <nBlocks, nThreads >> > (vars->eligible, vars->scores, hist, ot, inf.maxVar);
-	if (gopts.profile_gpu) cutimer->stop(), cutimer->vo += cutimer->gpuTime();
 	LASTERR("Assigning scores failed");
 	SYNCALL;
 }
@@ -95,7 +91,6 @@ void calcScores(VARS* vars, uint32* hist, OT* ot)
 void mapFrozenAsync(VARS* vars, const uint32& size)
 {
 	assert(vars->varcore == vars->eligible); // an alies of eligible
-	if (gopts.profile_gpu) cutimer->start();
 	grid_t nThreads = BLOCK1D;
 	OPTIMIZEBLOCKS(size, nThreads, 0);
 	// 'vars->scores' is an alies for frozen vars on the GPU side
@@ -104,7 +99,6 @@ void mapFrozenAsync(VARS* vars, const uint32& size)
 		LASTERR("Mapping frozen failed");
 		SYNCALL;
 	}
-	if (gopts.profile_gpu) cutimer->stop(), cutimer->ve += cutimer->gpuTime();
 }
 
 void Solver::varReorder()
@@ -112,17 +106,21 @@ void Solver::varReorder()
 	LOGN2(2, " Finding eligible variables for LCVE..");
 	assert(cuhist.d_hist != NULL);
 	// NOTE: OT creation will be synced in calcScores call
-	if (vars->nUnits) calcScores(vars, cuhist.d_hist, ot); // update d_hist & calc scores
-	else calcScores(vars, cuhist.d_hist);
-	cuhist.cacheHist(inf.nDualVars, streams[2]);
-	if (gopts.profile_gpu) cutimer->start(streams[3]);
+	if (gopts.profile_gpu) cutimer.start();
+	if (vars->nUnits) 
+		calcScores(vars, cuhist.d_hist, ot); // update d_hist & calc scores
+	else 
+		calcScores(vars, cuhist.d_hist);
+	if (gopts.profile_gpu) cutimer.stop(), stats.sigma.time.vo += cutimer.gpuTime();
+	cuhist.cacheHist(inf.maxDualVars, streams[2]);
+	if (gopts.profile_gpu) cutimer.start(streams[3]);
 	cacher.insert(cumm.scatter(), cumm.scatterCap());
 	thrust::sort(thrust::cuda::par(tca).on(streams[3]), vars->eligible, vars->eligible + inf.maxVar, GPU_LCV_CMP(vars->scores));
 	cacher.erase(cumm.scatterCap());
 	LOGDONE(2, 5);
 	vars->nUnits = 0;
 	SYNC(streams[2]);
-	if (gopts.profile_gpu) cutimer->stop(streams[3]), cutimer->vo += cutimer->gpuTime();
+	if (gopts.profile_gpu) cutimer.stop(streams[3]), stats.sigma.time.vo += cutimer.gpuTime();
 	if (verbose == 4) {
 		LOG0(" Eligible variables:");
 		for (uint32 v = 0; v < inf.maxVar; v++) {
@@ -187,7 +185,6 @@ bool Solver::LCVE()
 
 	if (vars->numElected < opts.lcve_min_vars) {
 		if (gopts.hostKOpts.ve_fun_en) SYNC(0); 
-		if (!vars->numElected) LOGDONE(2, 5);
 		if (verbose > 1) LOGWARNING("parallel variables not enough -> skip GPU simplifier");
 		return false;
 	}
@@ -203,7 +200,9 @@ inline void	Solver::mapFrozen()
 	if (!nFrozen) { vars->varcore = NULL; return; }
 	assert(nFrozen <= inf.maxVar);
 	CHECK(cudaMemcpy(vars->scores, frozen, nFrozen * sizeof(uint32), cudaMemcpyHostToDevice));
+	if (gopts.profile_gpu) cutimer.start();
 	mapFrozenAsync(vars, nFrozen);
+	if (gopts.profile_gpu) cutimer.stop(), stats.sigma.time.ve += cutimer.gpuTime();
 }
 
 inline bool Solver::depFreeze(OL& ol, LIT_ST* frozen, uint32*& tail, const uint32& cand, const uint32& pmax, const uint32& nmax)

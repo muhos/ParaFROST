@@ -34,14 +34,14 @@ void Solver::newBeginning()
 	cm.init(hcnf->data().size);
 	if (!gopts.unified_access) {
 		SYNC(streams[0]); SYNC(streams[1]); // sync CNF caching
-		if (gopts.profile_gpu) cutimer->stop(streams[1]), cutimer->io += cutimer->gpuTime();
+		if (gopts.profile_gpu) cutimer.stop(streams[1]), stats.sigma.time.io += cutimer.gpuTime();
 	}
 	cacheResolved(streams[2]);
 	writeBackCNF();
 	SYNCALL;
 	if (gopts.unified_access) {
 		hcnf = NULL;
-		if (gopts.profile_gpu) cutimer->stop(), cutimer->io += cutimer->gpuTime();
+		if (gopts.profile_gpu) cutimer.stop(), stats.sigma.time.io += cutimer.gpuTime();
 	}
 	else cumm.breakMirror(), hcnf = NULL;
 }

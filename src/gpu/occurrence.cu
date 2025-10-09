@@ -65,9 +65,9 @@ namespace ParaFROST {
 	{
 		assert(cnf);
 		assert(ot);
-		if (gopts.profile_gpu) cutimer->start();
+		if (gopts.profile_gpu) cutimer.start();
 		grid_t nThreads(BLOCK1D);
-		OPTIMIZEBLOCKS(inf.nDualVars, nThreads, 0);
+		OPTIMIZEBLOCKS(inf.maxDualVars, nThreads, 0);
 		reduce_ot << <nBlocks, nThreads, 0, stream >> > (cnf, ot);
 		if (print || gopts.sync_always) {
 			LASTERR("Occurrence table reduction failed");
@@ -79,7 +79,7 @@ namespace ParaFROST {
 				LOGRULER('=', 30);
 			}
 		}
-		if (gopts.profile_gpu) cutimer->stop(), cutimer->rot += cutimer->gpuTime();
+		if (gopts.profile_gpu) cutimer.stop(), stats.sigma.time.rot += cutimer.gpuTime();
 	}
 
 	void Solver::resetOTAsync(const cudaStream_t& stream)
@@ -87,7 +87,7 @@ namespace ParaFROST {
 		assert(cnf);
 		assert(ot);
 		grid_t nThreads(BLOCK1D);
-		OPTIMIZEBLOCKS(inf.nDualVars, nThreads, 0);
+		OPTIMIZEBLOCKS(inf.maxDualVars, nThreads, 0);
 		reset_ot_k << <nBlocks, nThreads, 0, stream >> > (ot);
 		if (gopts.sync_always) {
 			LASTERR("Occurrence table reset failed");
@@ -101,7 +101,7 @@ namespace ParaFROST {
 		assert(cnf);
 		assert(ot);
 		LOGN2(2, " Creating occurrence table on GPU..");
-		if (gopts.profile_gpu) cutimer->start();
+		if (gopts.profile_gpu) cutimer.start();
 		resetOTAsync(stream);
 		grid_t nThreads(BLOCK1D);
 		OPTIMIZEBLOCKS(inf.numClauses, nThreads, 0);
@@ -119,7 +119,7 @@ namespace ParaFROST {
 			}
 		}
 		LOGDONE(2, 5);
-		if (gopts.profile_gpu) cutimer->stop(), cutimer->cot += cutimer->gpuTime();
+		if (gopts.profile_gpu) cutimer.stop(), stats.sigma.time.cot += cutimer.gpuTime();
 	}
 
 

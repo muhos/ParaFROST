@@ -58,6 +58,20 @@ void assignListPtrs(OT* __restrict__ ot, const uint32* __restrict__ hist, const 
 	}
 }
 
+cuMM::cuMM()
+    : litsPool(),                      // Initialize cuLits
+      hcnfPool(), cnfPool(), otPool(), // Initialize cuPool instances
+      varsPool(), histPool(), auxPool(),
+      pinnedPool(),
+      cutimer(),                       // Initialize cuTIMER
+      pinned_cnf(nullptr), d_refs_mem(nullptr), d_scatter(nullptr),
+      d_segs(nullptr), d_occurs(nullptr), d_hist(nullptr),
+      d_cnf_mem(nullptr), d_units(nullptr), d_stencil(nullptr),
+      nscatters(0), _compacttime(0.0f), _tot(0), _free(0),
+      cap(0), dcap(0), maxcap(0), penalty(0),
+      isMemAdviseSafe(false)  
+{}
+
 void cuMM::cuMemSetAsync(addr_t mem, const Byte& val, const size_t& size)
 {
 	grid_t nThreads(BLOCK1D);
@@ -98,13 +112,13 @@ uint32* cuMM::resizeLits(const size_t& min_lits)
 
 bool cuMM::allocHist(cuHist& cuhist, const bool& proofEnabled)
 {
-	assert(inf.nDualVars == V2L(inf.maxVar + 1ULL));
-	const size_t segBytes = inf.nDualVars * HC_SREFSIZE;
-	const size_t histBytes = inf.nDualVars * HC_VARSIZE;
+	assert(inf.maxDualVars == V2L(inf.maxVar + 1ULL));
+	const size_t segBytes = inf.maxDualVars * HC_SREFSIZE;
+	const size_t histBytes = inf.maxDualVars * HC_VARSIZE;
 	const size_t varsBytes = (inf.maxVar + 1) * HC_VARSIZE;
 	size_t min_cap = segBytes + histBytes + varsBytes;
 	if (proofEnabled) 
-		min_cap += inf.nDualVars;
+		min_cap += inf.maxDualVars;
 	assert(min_cap);
 	if (histPool.cap < min_cap) {
 		DFREE(histPool);
@@ -120,7 +134,7 @@ bool cuMM::allocHist(cuHist& cuhist, const bool& proofEnabled)
 		cuhist.d_vorg = (uint32*)ea, ea += varsBytes;
 		if (proofEnabled) {
 			cuhist.d_lbyte = ea;
-			ea += inf.nDualVars;
+			ea += inf.maxDualVars;
 		}
 		assert(ea == histPool.mem + min_cap);
 		histPool.cap = min_cap;
@@ -174,10 +188,10 @@ bool cuMM::allocVars(VARS*& vars, const size_t& resolvedCap)
 bool cuMM::allocPinned(VARS* vars, cuHist& cuhist)
 {
 	assert(vars);
-	assert(inf.nDualVars == V2L(inf.maxVar + 1ULL));
+	assert(inf.maxDualVars == V2L(inf.maxVar + 1ULL));
 	const size_t elimBytes = inf.maxVar + 1;
 	const size_t unitBytes = inf.maxVar * HC_VARSIZE;
-	const size_t histBytes = inf.nDualVars * HC_VARSIZE;
+	const size_t histBytes = inf.maxDualVars * HC_VARSIZE;
 	size_t min_cap = HC_CNFSIZE + elimBytes + unitBytes + histBytes;
 	assert(min_cap);
 	if (pinnedPool.cap) {
@@ -283,11 +297,11 @@ bool cuMM::resizeOTAsync(OT*& ot, const size_t& min_lits, const cudaStream_t& _s
 	uint32* tmp = resizeLits(min_lits);
 	if (!tmp) return false;
 	size_t ebytes = 0;
-	DeviceScan::ExclusiveSum(NULL, ebytes, d_hist, d_segs, inf.nDualVars, _s);
-	DeviceScan::ExclusiveSum(tmp, ebytes, d_hist, d_segs, inf.nDualVars, _s);
+	DeviceScan::ExclusiveSum(NULL, ebytes, d_hist, d_segs, inf.maxDualVars, _s);
+	DeviceScan::ExclusiveSum(tmp, ebytes, d_hist, d_segs, inf.maxDualVars, _s);
 	grid_t nThreads(BLOCK1D);
-	OPTIMIZEBLOCKS(inf.nDualVars, nThreads, 0);
-	const size_t min_cap = HC_OTSIZE + inf.nDualVars * HC_OLSIZE + min_lits * HC_SREFSIZE;
+	OPTIMIZEBLOCKS(inf.maxDualVars, nThreads, 0);
+	const size_t min_cap = HC_OTSIZE + inf.maxDualVars * HC_OLSIZE + min_lits * HC_SREFSIZE;
 	assert(min_cap);
 	if (otPool.cap < min_cap) { // realloc
 		FREE(otPool);
@@ -303,13 +317,13 @@ bool cuMM::resizeOTAsync(OT*& ot, const size_t& min_lits, const cudaStream_t& _s
 		ot = (OT*)otPool.mem;
 		LASTERR("Exclusively scanning histogram failed");
 		SYNC(_s); // needed for calling the next constructor on host
-		new (ot) OT(inf.nDualVars);
+		new (ot) OT(inf.maxDualVars);
 		d_occurs = ot->data();
-		assignListPtrs << <nBlocks, nThreads, 0, _s >> > (ot, d_hist, d_segs, inf.nDualVars);
+		assignListPtrs << <nBlocks, nThreads, 0, _s >> > (ot, d_hist, d_segs, inf.maxDualVars);
 		otPool.cap = min_cap;
 	}
 	else
-		assignListPtrs << <nBlocks, nThreads, 0, _s >> > (ot, d_hist, d_segs, inf.nDualVars);
+		assignListPtrs << <nBlocks, nThreads, 0, _s >> > (ot, d_hist, d_segs, inf.maxDualVars);
 	if (gopts.sync_always) {
 		LASTERR("Occurrence lists allocation failed");
 		SYNC(_s);

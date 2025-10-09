@@ -43,6 +43,7 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 #include "table.cuh"
 #include "cnf.cuh"
 #include "key.cuh"
+#include "timer.cuh"
 
 namespace ParaFROST {
 	/*****************************************************/
@@ -55,6 +56,7 @@ namespace ParaFROST {
 	protected:
 		FORMULA			formula;
 		TIMER			timer;
+		cuTIMER			cutimer;
 		CMM				cm;
 		WT				wt;
 		SP				*sp;
@@ -648,13 +650,16 @@ namespace ParaFROST {
 		void			decide				();
 		void			report				();
 		void			wrapup				();
-		bool			parser				();
 		void			solve				();
+		bool			parse				();
+		bool			parse				(const string&);
 		void			map					(BCNF&);
 		void			map					(WL&);
 		void			map					(WT&);
 		void			map					(const bool& sigmified = false);
-						Solver				(const string&);
+		void 			initialize			(const bool& banner);
+		explicit 		Solver				(const std::string& path);  				// incremental = false, takes formula
+						Solver				();                       					// incremental = false
 						~Solver				();
 		//==========================================//
 		//                Simplifier                //
@@ -680,16 +685,16 @@ namespace ParaFROST {
 
 		// Getters
 		inline VARS*	getVars				()		{ return vars; }
-		inline OT*		getOT				()		{ return ot; }
+		inline OT*		getDeviceTable		()		{ return ot; }
 		inline CNF*		getDeviceCNF		()		{ return cnf; }
 		inline CNF*		getHostCNF			()		{ return hcnf; }
 		inline CACHER&	getCacher			()		{ return cacher; }
 		inline TCA&		getThrustAllocator	()		{ return tca; }
-		inline cuMM&	getCUAllocator		()		{ return cumm; }
-		inline cuHist&	getCUHistogram		()		{ return cuhist; }
-		inline cuPROOF&	getCUProver			()		{ return cuproof; }
-		inline int		getSimplifierState	()		{ return simpstate; }
+		inline cuMM&	getDeviceAllocator	()		{ return cumm; }
+		inline cuHist&	getDeviceHistogram	()		{ return cuhist; }
+		inline cuPROOF&	getDeviceProver		()		{ return cuproof; }
 		inline int		getDeviceCount		()		{ return devCount; }
+		inline int		getSimplifierState	()		{ return simpstate; }
 		inline bool		isCompacted			()		{ return compacted; }
 		// Helpers
 		inline void		enqueueDevUnit		(const uint32& lit) {
@@ -816,7 +821,8 @@ namespace ParaFROST {
         void*			learnCallbackState;
         int*			learnCallbackBuffer;
         int				learnCallbackLimit;
-		                Solver				();
+		explicit 		Solver				(const bool& inc);   						// sets incremental
+		explicit 		Solver				(const bool& inc, const std::string& path); // sets incremental, takes formula
 		void			iunassume           ();
 		void			iallocSpace         ();
 		uint32			iadd                ();
@@ -874,8 +880,6 @@ namespace ParaFROST {
 		void			printLearnt			();
 		
 	};
-
-	extern Solver* solver;
 }
 
 #endif 

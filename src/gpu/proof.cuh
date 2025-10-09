@@ -33,25 +33,30 @@ namespace ParaFROST {
 		cuMM&	cumm;
 		PROOF&	proof;
 
+		cuTIMER	cutimer;
 		cuPool  hostPool, devicePool;
 		cuVecB  *hostStream, *deviceStream;
 		cuVecB  header;
 		size_t  deviceAdded, bytesWritten;
+		float 	time;
 		bool	enabled;
 
 	public:
 
 		cuPROOF(cuMM& _cumm, PROOF& _proof) :
 			cumm(_cumm), proof(_proof)
+			, cutimer()
 			, hostPool()
 			, devicePool()
 			, hostStream(NULL)
 			, deviceStream(NULL)
 			, deviceAdded(0)
 			, bytesWritten(0)
+			, time(0.0f)
 			, enabled(false)
 		{}
 
+		inline float 	gpuTime		() const { return time; }
 		inline size_t	gpuClauses	() const { return deviceAdded; }
 		inline size_t	gpuBytes	() const { return bytesWritten; }
 		inline cuVecB*	gpuStream	() { return deviceStream; }	

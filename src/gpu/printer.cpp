@@ -104,6 +104,7 @@ void Solver::printCNF(const BCNF& cnf, const int& off)
 {
 	LOG1("\tHost CNF(size = %d)", cnf.size());
 	for (uint32 i = off; i < cnf.size(); i++) {
+		cm[cnf[i]].print();
 		if (cm[cnf[i]].size()) {
 			LOGCLAUSE(1, cm[cnf[i]], " C(%d)->", i);
 		}
