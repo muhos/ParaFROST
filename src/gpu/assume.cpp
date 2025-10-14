@@ -48,13 +48,8 @@ uint32 Solver::iadd() {
     LOG2(3, "  adding new variable %d (%d unassigned)..", v, inf.unassigned);
     const uint32 lit = V2L(v);
     inf.maxDualVars = lit + 2;
+    // Expanding non-SP structures.
     wt.expand(lit + 2);
-    ivalue.expand(lit + 2, UNDEFINED);
-    ilevel.expand(v + 1, UNDEFINED);
-    iphase.expand(v + 1, opts.polarity);
-    isource.expand(v + 1, NOREF);
-    ivstate.expand(v + 1);
-    ivstate[v] = VSTATE();
     ifrozen.expand(v + 1, 0);
     bumps.expand(v + 1, 0);
     activity.expand(v + 1, 0.0);
@@ -71,11 +66,20 @@ uint32 Solver::iadd() {
         if (opts.proof_en)
             proof.init(sp);
     }
-    sp->value = ivalue;
-    sp->level = ilevel;
-    sp->source = isource;
-    sp->vstate = ivstate;
-    sp->psaved = iphase;
+    if (!sp->selfallocated) {
+        // Build mode: expanding SP structures the rebind.
+        ivalue.expand(lit + 2, UNDEFINED);
+        ilevel.expand(v + 1, UNDEFINED);
+        iphase.expand(v + 1, opts.polarity);
+        isource.expand(v + 1, NOREF);
+        ivstate.expand(v + 1);
+        ivstate[v] = VSTATE();
+        sp->value = ivalue;
+        sp->level = ilevel;
+        sp->source = isource;
+        sp->vstate = ivstate;
+        sp->psaved = iphase;
+    }
     return v;
 }
 
@@ -105,7 +109,7 @@ bool Solver::itoClause(Lits_t& c, Lits_t& org) {
             uint32 mvar = ABS(mlit);
             mlit = V2DEC(mvar, sign);
             PRINT2(3, 5, "%d  ", SIGN(mlit) ? -int(mvar) : int(mvar));
-            LIT_ST val = ivalue[mlit];
+            LIT_ST val = sp->value[mlit];
             if (UNASSIGNED(val))
                 c.push(mlit);
             else if (val)
@@ -130,7 +134,7 @@ bool Solver::itoClause(Lits_t& c, Lits_t& org) {
         } else if (newsize == 1) {
             const uint32 unit = *c;
             CHECKLIT(unit);
-            LIT_ST val = ivalue[unit];
+            LIT_ST val = sp->value[unit];
             if (UNASSIGNED(val))
                 enqueueUnit(unit), formula.units++;
             else if (!val) {

@@ -64,7 +64,9 @@ namespace ParaFROST {
 		LAST			last;
 		STATS			stats;
 		SLEEP			sleep;
-		BCNF			orgs, learnts, reduced;
+		BCNF			orgs;
+		BCNF 			learnts;
+		BCNF 			reduced;
 		VMAP			vmap;
 		Lits_t			learntC;
 		CLAUSE			subbin;
@@ -79,22 +81,28 @@ namespace ParaFROST {
 		Vec<WOL>		wot;
 		Vec<BOL>		bot;	
 		Vec1D			lbdlevels;
-		uVec1D			vorg, vhist;
+		uVec1D			vorg;
+		uVec1D 			vhist;
 		uVec1D			eligible;
 		uVec1D			probes;
 		uVec1D			dlevels;
 		uVec1D			trail;
-		uVec1D			analyzed, minimized;
+		uVec1D			analyzed;
+		uVec1D 			minimized;
 		LBDREST			lbdrest;
 		LUBYREST		lubyrest;
 		RANDOM			random;
 		WALK			tracker;
 		uint64			bumped;
-		C_REF			conflict, ignore;
+		C_REF			conflict;
+		C_REF 			ignore;
 		size_t			solLineLen;
 		string			solLine;
 		CNFState		cnfstate;
-		bool			intr, stable, probed, incremental;
+		bool			intr;
+		bool 			stable;
+		bool			probed;
+		bool 			incremental;
 
 	public:
 		OPTION			opts;
@@ -816,6 +824,7 @@ namespace ParaFROST {
 		Vec<C_REF>		isource;
 		Vec1D			ilevel;
 		Lits_t			assumptions, iconflict;
+
 	public:
 		void*			termCallbackState;
         void*			learnCallbackState;

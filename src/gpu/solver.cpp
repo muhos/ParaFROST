@@ -122,8 +122,7 @@ void Solver::allocSolver()
 	assert(sp == NULL);
 	const uint32 maxSize = inf.maxVar + 1;
 	const C_REF initcap = inf.orgCls * sizeof(CLAUSE) + maxSize;
-	sp = new SP(maxSize);
-	sp->initSaved(opts.polarity);
+	sp = new SP(maxSize, opts.polarity);
 	cm.init(initcap);
 	wt.resize(inf.maxDualVars);
 	trail.reserve(inf.maxVar);

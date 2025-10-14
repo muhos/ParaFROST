@@ -8,6 +8,7 @@ src/cpu/version.h
 src/gpu/version.hpp
 src/cpu/Makefile
 src/gpu/Makefile
+src_backup
 build
 .vscode
 *.cnf

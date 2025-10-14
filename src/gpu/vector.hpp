@@ -159,12 +159,12 @@ namespace ParaFROST {
 				cap = sz;
 			}
 		}
-		__forceinline void		copyFrom	(Vec<T, S>& copy) {
+		__forceinline void		copyFrom	(const Vec<T, S>& copy) {
 			resize(copy.size());
-			std::memcpy(_mem, copy, sz * sizeof(T));
+			std::memcpy(_mem, copy.data(), sz * sizeof(T));
 		}
 		template<class SS = uint32>
-		__forceinline void		copyFrom	(T* copy, const SS& copy_sz) {
+		__forceinline void		copyFrom	(const T* copy, const SS& copy_sz) {
 			assert(copy_sz <= sz);
 			std::memcpy(_mem, copy, sz * sizeof(T));
 		}

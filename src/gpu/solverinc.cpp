@@ -44,28 +44,30 @@ void Solver::iallocSpace()
 	if (sp->size() == size_t(inf.maxVar) + 1) return; // avoid allocation if 'maxVar' didn't change
 	assert(inf.maxVar);
 	LOGN2(2, " Allocating fixed memory for %d variables..", inf.maxVar);
+	const size_t newsize = size_t(inf.maxVar) + 1;
 	assert(inf.orgVars == inf.maxVar);
-	assert(vorg.size() == inf.maxVar + 1);
-	assert(V2L(inf.maxVar + 1) == inf.maxDualVars);
-	assert(model.lits.size() == inf.maxVar + 1);
-	assert(ilevel.size() == ivstate.size());
-	assert(ilevel.size() == inf.maxVar + 1);
+	assert(vorg.size() == newsize);
+	assert(V2L(newsize) == inf.maxDualVars);
+	assert(model.lits.size() == newsize);
 	assert(imarks.empty());
 	inf.orgCls = orgs.size();
 	vorg[0] = 0;
 	model.lits[0] = 0;
 	model.init(vorg);
-	SP* newSP = new SP(inf.maxVar + 1);
+	// Fixed mode: SP grows its own memory.
+	SP* newSP = new SP(newsize, opts.polarity);
 	newSP->copyFrom(sp);
-	delete sp;
-	sp = newSP;
+	if (!newSP->selfallocated) {
+		ilevel.clear(true);
+		ivalue.clear(true);
+		iphase.clear(true);
+		isource.clear(true);
+		ivstate.clear(true);
+		newSP->selfallocated = true;
+	}
+	delete sp, sp = newSP;
 	if (opts.proof_en)
 		proof.init(sp, vorg);
-	ilevel.clear(true);
-	ivalue.clear(true);
-	iphase.clear(true);
-	isource.clear(true);
-	ivstate.clear(true);
 	LOGDONE(2, 5);
 	LOGMEMCALL(this, 2);
 }

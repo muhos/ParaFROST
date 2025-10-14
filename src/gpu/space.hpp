@@ -56,9 +56,10 @@ namespace ParaFROST {
 		uint32 trailpivot;
 		uint32 simplified;
 		uint32 propagated;
+		bool selfallocated;
 		//================
-		SP() { RESETSTRUCT(this); }
-		SP(const uint32& size) 
+				 SP	() { RESETSTRUCT(this); }
+		explicit SP	(const size_t& size, const LIT_ST& pol) 
 		{
 			RESETSTRUCT(this);
 			assert(sizeof(C_REF) == sizeof(uint64));
@@ -69,7 +70,7 @@ namespace ParaFROST {
 			_sz = size;
 			_cap = vec1Bytes + vec4Bytes + vec8Bytes;
 			assert(_cap);
-			pfralloc(_mem, _cap);
+			pfralloc(_mem, align_up(_cap, 64));
 			assert(_mem != NULL);
 			memset(_mem, 0, _cap);
 			// 8-byte arrays
@@ -93,22 +94,24 @@ namespace ParaFROST {
 			memset(marks, UNDEFINED, _sz);
 			memset(ptarget, UNDEFINED, _sz);
 			memset(pbest, UNDEFINED, _sz);
+			memset(psaved, pol, _sz);
 			forall_space(v) {
 				level[v] = UNDEFINED;
 				source[v] = NOREF;
 			}
+			selfallocated = true;
 		}
 		size_t	size		() const { return _sz; }
 		size_t	capacity	() const { return _cap; }
-		void	initSaved	(const LIT_ST& pol) {
-			memset(psaved, pol, _sz);
-		}
+		// Assume memory is already allocated and initialized properly.
 		void	copyFrom	(SP* src)
 		{
+			assert(src->size() <= _sz);
+			selfallocated = src->selfallocated;
 			propagated = src->propagated;
 			trailpivot = src->trailpivot;
 			simplified = src->simplified;
-			forall_space(v) {
+			for (size_t v = 1; v < src->size(); v++) {
 				const uint32 p = V2L(v), n = NEG(p);
 				value[p] = src->value[p];
 				value[n] = src->value[n];
@@ -117,6 +120,14 @@ namespace ParaFROST {
 				vstate[v] = src->vstate[v];
 				psaved[v] = src->psaved[v];
 			}
+		}
+		void 	printPhases	() {
+			LOGN1(" Phases->[");
+			forall_space(v) {
+				PRINT("%5d:%d ", v, psaved[v]);
+				breakline(v);
+			}
+			putc(']', stdout), PUTCH('\n');
 		}
 		void	printStates	() {
 			LOGN1(" States->[");
@@ -144,7 +155,7 @@ namespace ParaFROST {
 			putc(']', stdout), PUTCH('\n');
 		}
 		void	clearSubsume() { forall_space(v) vstate[v].subsume = 0; }
-		void	destroy		() { if (_mem != NULL) std::free(_mem); }
+		void	destroy		() { if (_mem != NULL) std::free(_mem); _mem = NULL; }
 				~SP			() { destroy(); }
 	};
 }

@@ -112,7 +112,7 @@ void Solver::map(const bool& sigmified)
 	vmap.mapShrinkVars(activity);
 	vsids.rebuild(tmp);
 	// map search space
-	SP* newSP = new SP(vmap.size());
+	SP* newSP = new SP(vmap.size(), opts.polarity);
 	vmap.mapSP(newSP);
 	delete sp;
 	sp = newSP;

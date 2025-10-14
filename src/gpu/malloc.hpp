@@ -28,8 +28,12 @@ namespace ParaFROST {
 
 	class MEMOUTEXCEPTION {};
 
+	inline std::size_t align_up(const size_t& n, const size_t& a) {
+		return (n + (a - 1)) & ~(a - 1);
+	}
+
 	template <class T>
-	T* pfmalloc(size_t numElements) {
+	T* pfmalloc(const size_t& numElements) {
 		if (!numElements) LOGERROR("catched zero-memory size at %s", __func__);
 		T* _mem = (T*)std::malloc(numElements * sizeof(T));
 		if (_mem == NULL) throw MEMOUTEXCEPTION();
@@ -37,7 +41,7 @@ namespace ParaFROST {
 	}
 
 	template <class T>
-	T* pfcalloc(size_t numElements) {
+	T* pfcalloc(const size_t& numElements) {
 		if (!numElements) LOGERROR("catched zero-memory size at %s", __func__);
 		T* _mem = (T*)std::calloc(numElements, sizeof(T));
 		if (_mem == NULL) throw MEMOUTEXCEPTION();
@@ -50,7 +54,7 @@ namespace ParaFROST {
 #endif
 
 	template <class T>
-	void pfralloc(T*& mem, size_t bytes) {
+	void pfralloc(T*& mem, const size_t& bytes) {
 		if (!bytes) LOGERROR("catched zero-memory size at %s", __func__);
 		T* _mem = (T*)std::realloc(mem, bytes);
 		if (_mem == NULL) throw MEMOUTEXCEPTION();
@@ -58,7 +62,7 @@ namespace ParaFROST {
 	}
 
 	template <class T>
-	void pfshrinkAlloc(T*& mem, size_t bytes) {
+	void pfshrinkAlloc(T*& mem, const size_t& bytes) {
 		if (!bytes) LOGERROR("catched zero-memory size at %s", __func__);
 		T* _mem = NULL;
 		_mem = (T*)std::realloc(_mem, bytes);
