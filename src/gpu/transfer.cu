@@ -57,7 +57,7 @@ void Solver::markEliminated(const cudaStream_t& _s)
 	SYNC(_s);
 
 	forall_variables(v) {
-		if (vars->cachedEliminated[v])
+		if (vars->cachedEliminated[v] && !IS_FORCED(vars->cachedEliminated[v]))
 			markEliminated(v);
 	}
 

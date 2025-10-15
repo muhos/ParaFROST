@@ -186,7 +186,9 @@ bool Solver::ieliminated(const uint32& v)
 	const uint32 mlit = imap(v);
 	if (!mlit) return true;
 	CHECKLIT(mlit);
-	return MELTED(sp->vstate[ABS(mlit)].state) || SUBSTITUTED(sp->vstate[ABS(mlit)].state);
+	return  MELTED(sp->vstate[ABS(mlit)].state) 
+        ||  SUBSTITUTED(sp->vstate[ABS(mlit)].state)
+        ||  FROZEN(sp->vstate[ABS(mlit)].state);
 }
 
 void Solver::ifreeze(const uint32& v) 
