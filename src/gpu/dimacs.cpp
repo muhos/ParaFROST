@@ -116,7 +116,7 @@ bool Solver::parse()
 					while (v > inf.maxVar) iadd();
 					org.push(V2DEC(v, s));
 				}
-				if (!itoClause(in_c, org)) return false;
+				if (!iclause(in_c, org)) return false;
 			}
 			else if (!toClause(in_c, org, str)) return false;
 		}
@@ -198,7 +198,7 @@ bool Solver::parse()
 					while (v > inf.maxVar) iadd();
 					org.push(V2DEC(v, s));
 				}
-				if (!itoClause(in_c, org)) return false;
+				if (!iclause(in_c, org)) return false;
 			}
 			else if (!toClause(in_c, org, ch)) return false;
 		}

@@ -66,7 +66,7 @@ cuMM::cuMM()
       cutimer(),                       // Initialize cuTIMER
       pinned_cnf(nullptr), d_refs_mem(nullptr), d_scatter(nullptr),
       d_segs(nullptr), d_occurs(nullptr), d_hist(nullptr),
-      d_cnf_mem(nullptr), d_units(nullptr), d_stencil(nullptr),
+      d_cnf_mem(nullptr), d_stencil(nullptr),
       nscatters(0), _compacttime(0.0f), _tot(0), _free(0),
       cap(0), dcap(0), maxcap(0), penalty(0),
       isMemAdviseSafe(false)  
@@ -157,7 +157,7 @@ bool cuMM::allocVars(VARS*& vars, const size_t& resolvedCap)
 	assert(min_cap);
 	if (!hasUnifiedMem(min_cap, "Fixed")) return false;
 	CHECK(cudaMallocManaged((void**)&varsPool.mem, min_cap));
-	CHECK(cudaMemsetAsync(varsPool.mem, 0, min_cap));
+	CHECK(cudaMemset(varsPool.mem, 0, min_cap));
 	addr_t ea = varsPool.mem, end = ea + min_cap;
 	vars->elected = (cuVecU*)ea, ea += HC_VECSIZE;
 	vars->units = (cuVecU*)ea, ea += HC_VECSIZE;
@@ -165,8 +165,9 @@ bool cuMM::allocVars(VARS*& vars, const size_t& resolvedCap)
 	uint32* uintPtr = (uint32*)ea;
 	vars->electedData = uintPtr;
 	vars->electedSize = (uint32*)((addr_t)vars->elected + sizeof(uint32*));
-	SYNCALL; // sync. cudaMemsetAsync
-	vars->elected->alloc(uintPtr, inf.maxVar), uintPtr += inf.maxVar, d_units = uintPtr;
+	vars->elected->alloc(uintPtr, inf.maxVar), uintPtr += inf.maxVar;
+	vars->unitsData = uintPtr;
+	vars->unitsSize = (uint32*)((addr_t)vars->units + sizeof(uint32*));
 	vars->units->alloc(uintPtr, inf.maxVar), uintPtr += inf.maxVar;
 	vars->eligible = uintPtr, uintPtr += inf.maxVar;
 	vars->scores = uintPtr, uintPtr += varsize;
@@ -371,7 +372,6 @@ void cuMM::freeVars()
 {
 	LOGN2(2, "  freeing up fixed unified memory..");
 	FREE(varsPool);
-	d_units = NULL;
 	LOGENDING(2, 5, "(remaining: %lld)", cap);
 }
 

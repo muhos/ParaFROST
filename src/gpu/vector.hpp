@@ -140,6 +140,26 @@ namespace ParaFROST {
 			for (S i = sz; i < size; i++) new (&_mem[i]) T();
 			sz = size;
 		}
+		__forceinline T* 		erase		(T* first, T* last) {
+			if (first == last) return first;
+			assert(_mem && first >= _mem && first <= _mem + sz);
+			assert(last  >= _mem && last  <= _mem + sz);
+			assert(first <= last);
+
+			const S idx = static_cast<S>(first - _mem);
+			const S cnt = static_cast<S>(last  - first);
+
+			// Shift left by cnt
+			for (S i = idx; i + cnt < sz; ++i) {
+				_mem[i] = std::move(_mem[i + cnt]);
+			}
+			// Destroy trailing cnt
+			for (S j = 0; j < cnt; ++j) {
+				_mem[--sz].~T();
+			}
+
+			return _mem + idx;
+		}
 		__forceinline void		expand		(const S& size, const T& val) {
 			if (sz >= size) return;
 			reserve(size);

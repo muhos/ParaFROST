@@ -189,7 +189,7 @@ inline void	Solver::cleanProped() {
 		}
 		LOGREDALL(this, 2, "BCP Reductions");
 		nForced = 0, vars->tmpUnits.clear();
-		assert(vars->tmpUnits.data() == cumm.unitsdPtr());
+		assert(vars->tmpUnits.data() == vars->unitsData);
 		if (!opts.sub_en) reduceOTAsync();
 		CHECK(cudaMemcpyAsync(vars->units, &vars->tmpUnits, sizeof(cuVecU), cudaMemcpyHostToDevice));
 	}

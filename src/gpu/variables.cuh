@@ -25,7 +25,9 @@ namespace ParaFROST {
 
 	struct VARS {
 		cuVecU* elected,	 * units,       * resolved;
-		uint32* electedData, * electedSize, * scores, * varcore, * eligible, * cachedUnits;
+		uint32* electedData, * electedSize;
+		uint32* unitsData, * unitsSize;
+		uint32* scores, * varcore, * eligible, * cachedUnits;
 		Byte*	eliminated,  * cachedEliminated;
 		cuVecU  tmpUnits;
 		uint32  numElected, nUnits, currMelted;
@@ -36,6 +38,8 @@ namespace ParaFROST {
 			, resolved(NULL)
 			, electedData(NULL)
 			, electedSize(NULL)
+			, unitsData(NULL)
+			, unitsSize(NULL)
 			, scores(NULL)
 			, varcore(NULL)
 			, eligible(NULL)

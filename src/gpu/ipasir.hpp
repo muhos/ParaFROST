@@ -40,7 +40,7 @@ namespace ParaFROST {
             while (v > inf.maxVar) iadd();
             return V2DEC(v, (lit < 0));
         }
-        inline uint32 import(const uint32_t& lit) {
+        inline uint32 uimport(const uint32_t& lit) {
             const uint32 v = ABS(lit);
             while (v > inf.maxVar) iadd();
             return lit;
@@ -61,7 +61,7 @@ namespace ParaFROST {
             if (lit)
                 clause.push(import(lit));
             else {
-                itoClause(filtered, clause);
+                iclause(filtered, clause);
                 clause.clear();
             }
         }
@@ -77,26 +77,26 @@ namespace ParaFROST {
             return ifailed(import(lit));
         }
         // Unsigned integer based.
-        void add(const uint32_t& lit) {
+        void uadd(const uint32_t& lit) {
             nomodel = true;
             if (lit)
-                clause.push(import(lit));
+                clause.push(uimport(lit));
             else {
-                itoClause(filtered, clause);
+                iclause(filtered, clause);
                 clause.clear();
             }
         }
-        void assume(const uint32_t& lit) {
+        void uassume(const uint32_t& lit) {
             nomodel = true;
-            assumptions.push(import(lit));
+            assumptions.push(uimport(lit));
         }
-        int val(const uint32_t& lit) {
+        int uval(const uint32_t& lit) {
             if (nomodel) return 0;
             const int v = int(ABS(lit));
-            return model.satisfied(import(lit)) ? v : -v;
+            return model.satisfied(uimport(lit)) ? v : -v;
         }
-        int failed(const uint32_t& lit) {
-            return ifailed(import(lit));
+        int ufailed(const uint32_t& lit) {
+            return ifailed(uimport(lit));
         }
         // Solve and return status.
         int solve() {

@@ -833,17 +833,18 @@ namespace ParaFROST {
 		explicit 		Solver				(const bool& inc);   						// sets incremental
 		explicit 		Solver				(const bool& inc, const std::string& path); // sets incremental, takes formula
 		void			iunassume           ();
-		void			iallocSpace         ();
+		void			iallocspace         ();
 		uint32			iadd                ();
 		void			idecide             ();
 		void			ianalyze            (const uint32&);
-		bool			itoClause           (Lits_t&, Lits_t&);
+		bool			iclause             (Lits_t&, Lits_t&);
 		void			iassume             (Lits_t&);
 		void			isolve              (Lits_t&);
 		bool		    ifailed             (const uint32& v);
 		void		    ifreeze             (const uint32& v);
 		void		    iunfreeze           (const uint32& v);
 		bool		    ieliminated         (const uint32& v);
+		void 			resetextended   	() { if (model.extended) model.extended = false; }
 		inline uint32   imap                (const uint32& v) const {
 			assert(v && v < NOVAR);
 			assert(model.lits.size() > v);

@@ -38,8 +38,9 @@ Solver::Solver(const bool& inc, const std::string& path)
 	if (opts.parseonly_en) killSolver();
 }
 
-void Solver::iallocSpace()
+void Solver::iallocspace()
 {
+	resetextended();
 	imarks.clear(true);
 	if (sp->size() == size_t(inf.maxVar) + 1) return; // avoid allocation if 'maxVar' didn't change
 	assert(inf.maxVar);
@@ -82,7 +83,7 @@ void Solver::isolve(Lits_t& assumptions)
 		return;
 	}
 	timer.start();
-	iallocSpace();
+	iallocspace();
 	iunassume();
 	assert(IS_UNSOLVED(cnfstate));
 	if (BCP()) {

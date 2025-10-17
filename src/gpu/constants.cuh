@@ -34,6 +34,7 @@ namespace ParaFROST {
 	constexpr Byte	 MELTING_MASK	= 0x01;
 	constexpr Byte   ADDING_MASK	= 0x02;
 	constexpr Byte   FORCED_MASK	= 0x04;
+	constexpr Byte   MAX_ELIM_MASK	= FORCED_MASK;
 	constexpr uint32 RES_MASK		= 0x00000001U;
 	constexpr uint32 AOIX_MASK		= 0x00000002U;
 	constexpr uint32 CORE_MASK		= 0x00000003U;

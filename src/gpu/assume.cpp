@@ -43,6 +43,7 @@ inline bool verifyMarkings(Vec<LIT_ST>& marks, Lits_t& clause) {
 }
 
 uint32 Solver::iadd() {
+    resetextended();
     inf.unassigned++;
     const uint32 v = inf.orgVars = ++inf.maxVar;
     LOG2(3, "  adding new variable %d (%d unassigned)..", v, inf.unassigned);
@@ -83,7 +84,7 @@ uint32 Solver::iadd() {
     return v;
 }
 
-bool Solver::itoClause(Lits_t& c, Lits_t& org) {
+bool Solver::iclause(Lits_t& c, Lits_t& org) {
     if (org.empty()) {
         learnEmpty();
         LOG2(2, "  original clause is empty.");
@@ -91,6 +92,7 @@ bool Solver::itoClause(Lits_t& c, Lits_t& org) {
     }
     assert(c.empty());
     assert(verifyMarkings(imarks, org));
+    if (DL()) backtrack();
     bool satisfied = false;
     if (verbose >= 3) printOriginal(org);
     LOGN2(3, "  adding mapped clause  ( ");
@@ -193,6 +195,7 @@ bool Solver::ieliminated(const uint32& v)
 
 void Solver::ifreeze(const uint32& v) 
 {
+    resetextended();
 	const uint32 mlit = imap(v);
 	CHECKLIT(mlit);
 	const uint32 mvar = ABS(mlit);
@@ -213,6 +216,7 @@ void Solver::iassume(Lits_t& assumptions)
 {
 	assert(inf.maxVar);
 	assert(stats.clauses.original);
+    resetextended();
 	int assumed = assumptions.size();
 	if (!assumed) return;
 	stats.decisions.assumed += uint64(assumed);

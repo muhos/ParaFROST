@@ -98,7 +98,6 @@ void MODEL::init(uint32* _vorg)
 void MODEL::extend(LIT_ST* currValue)
 {
 	if (extended) return;
-	assert(orgvalues == NULL);
 	orgvalues = currValue;
 	uint32 updated = 0;
 	value.resize(maxVar + 1, 0);
@@ -202,7 +201,7 @@ void MODEL::verify(const string& path) {
 			if (sign) LOGERROR("number of clauses in header is negative");
 			if (orgClauses == 0) LOGERROR("zero number of clauses in header");
 			LOG2(1, "  found header %s%d %d%s", CREPORTVAL, orgVars, orgClauses, CNORMAL);
-			if (orgVars != maxVar) {
+			if (orgVars > maxVar) {
 				LOGERRORN("variables in header inconsistent with model variables");
 				verified = false;
 				break;

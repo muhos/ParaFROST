@@ -70,7 +70,7 @@ void Solver::cacheUnits(const cudaStream_t& stream)
 {
 	SYNC(stream);
 	if ((vars->nUnits = vars->tmpUnits.size()))
-		CHECK(cudaMemcpyAsync(vars->cachedUnits, cumm.unitsdPtr(), vars->nUnits * sizeof(uint32), cudaMemcpyDeviceToHost, stream));
+		CHECK(cudaMemcpyAsync(vars->cachedUnits, vars->unitsData, vars->nUnits * sizeof(uint32), cudaMemcpyDeviceToHost, stream));
 	if (gopts.sync_always) SYNC(stream);
 }
 

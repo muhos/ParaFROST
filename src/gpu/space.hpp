@@ -111,7 +111,9 @@ namespace ParaFROST {
 			propagated = src->propagated;
 			trailpivot = src->trailpivot;
 			simplified = src->simplified;
-			for (size_t v = 1; v < src->size(); v++) {
+			size_t copySize = src->size();
+			if (!copySize) copySize = _sz;
+			for (size_t v = 1; v < copySize; v++) {
 				const uint32 p = V2L(v), n = NEG(p);
 				value[p] = src->value[p];
 				value[n] = src->value[n];

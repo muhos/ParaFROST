@@ -59,7 +59,6 @@ namespace ParaFROST {
 		CNF		* pinned_cnf;
 		S_REF	* d_refs_mem,	* d_scatter,	* d_segs,	* d_occurs;
 		uint32	* d_hist,		* d_cnf_mem;
-		uint32	* d_units;
 		Byte	* d_stencil;
 		size_t	nscatters;
 		// trackers
@@ -134,7 +133,6 @@ namespace ParaFROST {
 		inline S_REF*	scatter			() { return d_scatter; }
 		inline S_REF*	occurs			() { return d_occurs; }
 		inline uint32*	cnfMem			() { return d_cnf_mem; }
-		inline uint32*	unitsdPtr		() { return d_units; }
 		inline CNF*		pinnedCNF		() { return pinned_cnf; }
 		inline cuLits&	literals		() { return litsPool; }
 		void			reset			(const int64 _free) {
