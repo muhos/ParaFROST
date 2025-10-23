@@ -40,33 +40,25 @@ Solver::Solver(const bool& inc, const std::string& path)
 
 void Solver::iallocspace()
 {
+	// Safe guard in case isolve is called without iadd()
 	resetextended();
-	imarks.clear(true);
-	if (sp->size() == size_t(inf.maxVar) + 1) return; // avoid allocation if 'maxVar' didn't change
-	assert(inf.maxVar);
+	if (sp->size() == inf.maxVar + 1) return;
 	LOGN2(2, " Allocating fixed memory for %d variables..", inf.maxVar);
 	const size_t newsize = size_t(inf.maxVar) + 1;
 	assert(inf.orgVars == inf.maxVar);
 	assert(vorg.size() == newsize);
 	assert(V2L(newsize) == inf.maxDualVars);
 	assert(model.lits.size() == newsize);
-	assert(imarks.empty());
 	inf.orgCls = orgs.size();
 	vorg[0] = 0;
 	model.lits[0] = 0;
 	model.init(vorg);
-	// Fixed mode: SP grows its own memory.
-	SP* newSP = new SP(newsize, opts.polarity);
-	newSP->copyFrom(sp);
-	if (!newSP->selfallocated) {
-		ilevel.clear(true);
-		ivalue.clear(true);
-		iphase.clear(true);
-		isource.clear(true);
-		ivstate.clear(true);
-		newSP->selfallocated = true;
-	}
-	delete sp, sp = newSP;
+	if (sp == NULL) {
+        sp = new SP();
+        if (opts.proof_en)
+            proof.init(sp);
+    }
+    sp->expand(newsize, opts.polarity);
 	if (opts.proof_en)
 		proof.init(sp, vorg);
 	LOGDONE(2, 5);

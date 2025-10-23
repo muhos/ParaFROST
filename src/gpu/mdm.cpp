@@ -152,7 +152,7 @@ void Solver::MDMInit()
 		while (level < assumptions.size()) {
 			const uint32 a = assumptions[level];
 			CHECKLIT(a);
-			assert(ifrozen[ABS(a)]);
+			assert(sp->frozen[ABS(a)]);
 			const uint32 cand = ABS(a);
 			const LIT_ST val = sp->value[a];
 			if (UNASSIGNED(val)) {
@@ -236,7 +236,7 @@ void Solver::MDM()
 		while (level < assumptions.size()) {
 			const uint32 a = assumptions[level];
 			CHECKLIT(a);
-			assert(ifrozen[ABS(a)]);
+			assert(sp->frozen[ABS(a)]);
 			const uint32 cand = ABS(a);
 			const LIT_ST val = sp->value[a];
 			if (UNASSIGNED(val)) {

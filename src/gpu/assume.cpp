@@ -49,9 +49,13 @@ uint32 Solver::iadd() {
     LOG2(3, "  adding new variable %d (%d unassigned)..", v, inf.unassigned);
     const uint32 lit = V2L(v);
     inf.maxDualVars = lit + 2;
-    // Expanding non-SP structures.
+    if (sp == NULL) {
+        sp = new SP();
+        if (opts.proof_en)
+            proof.init(sp);
+    }
+    sp->expand(v + 1, opts.polarity);
     wt.expand(lit + 2);
-    ifrozen.expand(v + 1, 0);
     bumps.expand(v + 1, 0);
     activity.expand(v + 1, 0.0);
     model.maxVar = v;
@@ -62,25 +66,6 @@ uint32 Solver::iadd() {
     vmtf.init(v);
     vmtf.update(v, (bumps[v] = ++bumped));
     vsids.insert(v);
-    if (sp == NULL) {
-        sp = new SP();
-        if (opts.proof_en)
-            proof.init(sp);
-    }
-    if (!sp->selfallocated) {
-        // Build mode: expanding SP structures the rebind.
-        ivalue.expand(lit + 2, UNDEFINED);
-        ilevel.expand(v + 1, UNDEFINED);
-        iphase.expand(v + 1, opts.polarity);
-        isource.expand(v + 1, NOREF);
-        ivstate.expand(v + 1);
-        ivstate[v] = VSTATE();
-        sp->value = ivalue;
-        sp->level = ilevel;
-        sp->source = isource;
-        sp->vstate = ivstate;
-        sp->psaved = iphase;
-    }
     return v;
 }
 
@@ -91,7 +76,6 @@ bool Solver::iclause(Lits_t& c, Lits_t& org) {
         return false;
     }
     assert(c.empty());
-    assert(verifyMarkings(imarks, org));
     if (DL()) backtrack();
     bool satisfied = false;
     if (verbose >= 3) printOriginal(org);
@@ -101,11 +85,10 @@ bool Solver::iclause(Lits_t& c, Lits_t& org) {
         assert(orglit > 1 && orglit < NOVAR);
         const uint32 orgvar = ABS(orglit);
         const LIT_ST sign = SIGN(orglit);
-        imarks.expand(orgvar + 1, UNDEFINED);
-        LIT_ST marker = imarks[orgvar];
+        LIT_ST marker = l2marker(orglit);
         if (UNASSIGNED(marker)) {
             assert(sign >= 0);
-            imarks[orgvar] = sign;
+            markLit(orglit);
             uint32 mlit = imap(orgvar);
             CHECKLIT(mlit);
             uint32 mvar = ABS(mlit);
@@ -121,9 +104,7 @@ bool Solver::iclause(Lits_t& c, Lits_t& org) {
     }
     PRINT2(3, 5, ")\n");
     forall_clause(org, k) {
-        const uint32 orglit = *k;
-        assert(orglit > 1 && orglit < NOVAR);
-        imarks[ABS(orglit)] = UNDEFINED;
+        unmarkLit(*k);
     }
     if (satisfied) {
         if (opts.proof_en) proof.deleteClause(org);
@@ -195,25 +176,30 @@ bool Solver::ieliminated(const uint32& v)
 
 void Solver::ifreeze(const uint32& v) 
 {
+    assert(sp);
+    assert(sp->size() > v);
     resetextended();
 	const uint32 mlit = imap(v);
 	CHECKLIT(mlit);
 	const uint32 mvar = ABS(mlit);
-	ifrozen[mvar] = 1;
+	sp->frozen[mvar] = 1;
 	LOG2(3, "  freezing original variable %d (mapped to %d)..", v, mvar);
 }
 
 void Solver::iunfreeze(const uint32& v)
 {
+    assert(sp);
+    assert(sp->size() > v);
 	const uint32 mlit = imap(v);
 	CHECKLIT(mlit);
 	const uint32 mvar = ABS(mlit);
-	ifrozen[mvar] = 0;
+	sp->frozen[mvar] = 0;
 	LOG2(3, "  melting original variable %d (mapped to %d)..", v, mvar);
 }
 
 void Solver::iassume(Lits_t& assumptions)
 {
+    assert(sp);
 	assert(inf.maxVar);
 	assert(stats.clauses.original);
     resetextended();
@@ -230,7 +216,7 @@ void Solver::iassume(Lits_t& assumptions)
 			mlit = FLIP(mlit);
 		CHECKLIT(mlit);
 		const uint32 mvar = ABS(mlit);
-		ifrozen[mvar] = 1;
+		sp->frozen[mvar] = 1;
 		this->assumptions.push(mlit);
 		LOG2(4, "  assuming %d after mapping original assumption %d", l2i(mlit), l2i(a));
 	}
@@ -239,6 +225,7 @@ void Solver::iassume(Lits_t& assumptions)
 
 void Solver::iunassume()
 {
+    assert(sp);
 	assert(inf.maxVar);
 	assert(stats.clauses.original);
 	LOGN2(2, " Resetting %d assumptions and solver state..", assumptions.size());
@@ -246,7 +233,7 @@ void Solver::iunassume()
 		forall_clause(assumptions, k) {
 			const uint32 a = *k;
 			CHECKLIT(a);
-			ifrozen[ABS(a)] = 0;
+			sp->frozen[ABS(a)] = 0;
 		}
 		assumptions.clear(true);
 	}
@@ -267,7 +254,7 @@ void Solver::idecide()
 	while (level < assumptions.size()) {
 		const uint32 a = assumptions[level];
 		CHECKLIT(a);
-		assert(ifrozen[ABS(a)]);
+		assert(sp->frozen[ABS(a)]);
 		const LIT_ST val = sp->value[a];
 		if (UNASSIGNED(val)) {
 			dec = a;

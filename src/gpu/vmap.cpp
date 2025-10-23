@@ -76,8 +76,8 @@ void Solver::map(const bool& sigmified)
 		forall_clause(assumptions, k) {
 			const uint32 a = *k;
 			CHECKLIT(a);
-			assert(ifrozen[ABS(a)]);
-			ifrozen[ABS(a)] = 0;
+			assert(sp->frozen[ABS(a)]);
+			sp->frozen[ABS(a)] = 0;
 		}
 		// map assumptions
 		vmap.mapOrgs(assumptions);
@@ -85,8 +85,8 @@ void Solver::map(const bool& sigmified)
 		forall_clause(assumptions, k) {
 			const uint32 a = *k;
 			CHECKLIT(a);
-			assert(!ifrozen[ABS(a)]);
-			ifrozen[ABS(a)] = 1;
+			assert(!sp->frozen[ABS(a)]);
+			sp->frozen[ABS(a)] = 1;
 		}
 	}
 	// map transitive start literal

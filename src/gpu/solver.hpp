@@ -819,10 +819,6 @@ namespace ParaFROST {
 		//          Incremental Solving             //
 		//==========================================//
 	protected:
-		Vec<LIT_ST>		ifrozen, ivalue, iphase, imarks;
-		Vec<VSTATE>		ivstate;
-		Vec<C_REF>		isource;
-		Vec1D			ilevel;
 		Lits_t			assumptions, iconflict;
 
 	public:
@@ -852,7 +848,9 @@ namespace ParaFROST {
 		}
 		inline bool		iassumed            (const uint32& v) const {
 			CHECKVAR(v);
-			return incremental && ifrozen[v];
+			assert(sp);
+			assert(sp->size() > v);
+			return incremental && sp->frozen[v];
 		}
 		int				(*termCallback)		(void* state);
         void			(*learnCallback)	(void* state, int* clause);

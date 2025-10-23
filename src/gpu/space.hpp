@@ -37,6 +37,32 @@ namespace ParaFROST {
 			return sz * nVecs * sizeof(T);
 		}
 
+		inline void allocate(const size_t& size) {
+			assert(size);
+			assert(_mem == NULL);
+			const size_t vec8Bytes = calcBytes<C_REF>(size, 2);
+			const size_t vec4Bytes = calcBytes<uint32>(size, 2);
+			const size_t vec1Bytes = calcBytes<LIT_ST>(size, 9);
+			_sz = size;
+			_cap = vec1Bytes + vec4Bytes + vec8Bytes;
+			pfralloc(_mem, align_up(_cap, 64));
+			assert(_mem);
+			memset(_mem, 0, _cap);
+			source  = (C_REF*) _mem;
+			board   = (uint64*)(source + _sz);
+			level   = (int*)(_mem + vec8Bytes);
+			tmpstack= (uint32*)(level + _sz);
+			value   = (LIT_ST*)(_mem + vec8Bytes + vec4Bytes);
+			frozen  = value  + _sz + _sz;
+			seen    = frozen + _sz;
+			psaved  = seen   + _sz;
+			ptarget = psaved + _sz;
+			pbest   = ptarget+ _sz;
+			marks   = pbest  + _sz;
+			vstate  = (VSTATE*)(marks + _sz);
+			assert(_mem + _cap == addr_t(vstate) + _sz);
+		}
+
 		#define forall_space(X) for (uint32 X = 1; X < _sz; X++)
 		#define	breakline(X) if (X > 1 && X < _sz - 2 && X % 10 == 0) { \
 						PUTCH('\n'); LOGN0("\t\t"); }
@@ -56,7 +82,6 @@ namespace ParaFROST {
 		uint32 trailpivot;
 		uint32 simplified;
 		uint32 propagated;
-		bool selfallocated;
 		//================
 				 SP	() { RESETSTRUCT(this); }
 		explicit SP	(const size_t& size, const LIT_ST& pol) 
@@ -64,32 +89,7 @@ namespace ParaFROST {
 			RESETSTRUCT(this);
 			assert(sizeof(C_REF) == sizeof(uint64));
 			assert(sizeof(VSTATE) == sizeof(Byte));
-			const size_t vec8Bytes = calcBytes<C_REF>(size, 2);
-			const size_t vec4Bytes = calcBytes<uint32>(size, 2);
-			const size_t vec1Bytes = calcBytes<LIT_ST>(size, 9);
-			_sz = size;
-			_cap = vec1Bytes + vec4Bytes + vec8Bytes;
-			assert(_cap);
-			pfralloc(_mem, align_up(_cap, 64));
-			assert(_mem != NULL);
-			memset(_mem, 0, _cap);
-			// 8-byte arrays
-			source = (C_REF*)_mem;
-			board = (uint64*)(source + _sz);
-			// 4-byte arrays
-			level = (int*)(_mem + vec8Bytes);
-			tmpstack = (uint32*)(level + _sz);
-			// 1-byte arrays
-			value = (LIT_ST*)(_mem + vec8Bytes + vec4Bytes);
-			frozen = value + _sz + _sz;
-			seen = frozen + _sz;
-			psaved = seen + _sz;
-			ptarget = psaved + _sz;
-			pbest = ptarget + _sz;
-			marks = pbest + _sz;
-			vstate = (VSTATE*)(marks + _sz);
-			assert(_mem + _cap == addr_t(vstate) + _sz);
-			// initialize with custom values
+			allocate(size);
 			memset(value, UNDEFINED, _sz + _sz);
 			memset(marks, UNDEFINED, _sz);
 			memset(ptarget, UNDEFINED, _sz);
@@ -98,31 +98,59 @@ namespace ParaFROST {
 			forall_space(v) {
 				level[v] = UNDEFINED;
 				source[v] = NOREF;
+				vstate[v] = VSTATE();
 			}
-			selfallocated = true;
+		}
+		void 	expand		(const size_t& size, const LIT_ST& pol) {
+			if (size <= _sz) return;
+			const size_t old_sz = _sz;
+			addr_t old_mem = _mem;
+			_mem = NULL;
+			C_REF  *old_source = source;
+			uint64 *old_board  = board;
+			int    *old_level  = level;
+			uint32 *old_tmp    = tmpstack;
+			LIT_ST *old_value  = value;
+			LIT_ST *old_frozen = frozen;
+			LIT_ST *old_seen   = seen;
+			LIT_ST *old_psaved = psaved;
+			LIT_ST *old_ptarget= ptarget;
+			LIT_ST *old_pbest  = pbest;
+			LIT_ST *old_marks  = marks;
+			VSTATE *old_vstate = vstate;
+			allocate(size);
+			assert(_sz == size);
+			if (old_sz) {
+				memcpy(value,   old_value,  (old_sz * 2) * sizeof(LIT_ST));
+				memcpy(source,  old_source, old_sz * sizeof(C_REF));
+				memcpy(board,   old_board,  old_sz * sizeof(uint64));
+				memcpy(level,   old_level,  old_sz * sizeof(int));
+				memcpy(tmpstack,old_tmp,    old_sz * sizeof(uint32));
+				memcpy(frozen,  old_frozen, old_sz * sizeof(LIT_ST));
+				memcpy(seen,    old_seen,   old_sz * sizeof(LIT_ST));
+				memcpy(psaved,  old_psaved, old_sz * sizeof(LIT_ST));
+				memcpy(ptarget, old_ptarget,old_sz * sizeof(LIT_ST));
+				memcpy(pbest,   old_pbest,  old_sz * sizeof(LIT_ST));
+				memcpy(marks,   old_marks,  old_sz * sizeof(LIT_ST));
+				memcpy(vstate,  old_vstate, old_sz * sizeof(VSTATE));
+			}
+			for (size_t v = old_sz; v < _sz; ++v) {
+				level[v]  = UNDEFINED;
+				source[v] = NOREF;
+				psaved[v] = pol;
+				marks[v]  = UNDEFINED;
+				ptarget[v]= UNDEFINED;
+				pbest[v]  = UNDEFINED;
+				vstate[v] = VSTATE();
+			}
+			// Sentinel
+			assert(_sz >= old_sz);
+			memset(value + (old_sz * 2), UNDEFINED, ((_sz - old_sz) * 2) * sizeof(LIT_ST));
+			// Free old memory
+			if (old_mem) std::free(old_mem);
 		}
 		size_t	size		() const { return _sz; }
 		size_t	capacity	() const { return _cap; }
-		// Assume memory is already allocated and initialized properly.
-		void	copyFrom	(SP* src)
-		{
-			assert(src->size() <= _sz);
-			selfallocated = src->selfallocated;
-			propagated = src->propagated;
-			trailpivot = src->trailpivot;
-			simplified = src->simplified;
-			size_t copySize = src->size();
-			if (!copySize) copySize = _sz;
-			for (size_t v = 1; v < copySize; v++) {
-				const uint32 p = V2L(v), n = NEG(p);
-				value[p] = src->value[p];
-				value[n] = src->value[n];
-				level[v] = src->level[v];
-				source[v] = src->source[v];
-				vstate[v] = src->vstate[v];
-				psaved[v] = src->psaved[v];
-			}
-		}
 		void 	printPhases	() {
 			LOGN1(" Phases->[");
 			forall_space(v) {

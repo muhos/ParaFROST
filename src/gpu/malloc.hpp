@@ -35,7 +35,9 @@ namespace ParaFROST {
 	template <class T>
 	T* pfmalloc(const size_t& numElements) {
 		if (!numElements) LOGERROR("catched zero-memory size at %s", __func__);
-		T* _mem = (T*)std::malloc(numElements * sizeof(T));
+		// Align up the requested size
+		const size_t alignedSize = align_up(numElements * sizeof(T), 64);
+		T* _mem = (T*)std::malloc(alignedSize);
 		if (_mem == NULL) throw MEMOUTEXCEPTION();
 		return _mem;
 	}
@@ -43,7 +45,9 @@ namespace ParaFROST {
 	template <class T>
 	T* pfcalloc(const size_t& numElements) {
 		if (!numElements) LOGERROR("catched zero-memory size at %s", __func__);
-		T* _mem = (T*)std::calloc(numElements, sizeof(T));
+		// Align up the requested size
+		const size_t alignedElements = align_up(numElements, 64);
+		T* _mem = (T*)std::calloc(alignedElements, sizeof(T));
 		if (_mem == NULL) throw MEMOUTEXCEPTION();
 		return _mem;
 	}
