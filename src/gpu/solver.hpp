@@ -840,6 +840,7 @@ namespace ParaFROST {
 		void		    ifreeze             (const uint32& v);
 		void		    iunfreeze           (const uint32& v);
 		bool		    ieliminated         (const uint32& v);
+		bool		    ifixed              (const uint32& v);
 		void 			resetextended   	() { if (model.extended) model.extended = false; }
 		inline uint32   imap                (const uint32& v) const {
 			assert(v && v < NOVAR);
