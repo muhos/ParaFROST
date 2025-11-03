@@ -69,11 +69,6 @@ void Solver::isolve(Lits_t& assumptions)
 {
 	FAULT_DETECTOR;
 	LOGHEADER(1, 5, "Search");
-	if (!stats.clauses.original) {
-		assert(orgs.empty());
-		LOGWARNING("Formula is already SATISFIABLE by elimination");
-		return;
-	}
 	timer.start();
 	iallocspace();
 	iunassume();
@@ -81,6 +76,11 @@ void Solver::isolve(Lits_t& assumptions)
 	if (BCP()) {
 		LOG2(2, " Incremental formula has a contradiction on top level");
 		learnEmpty();
+	}
+	else if (!stats.clauses.original) {
+		assert(orgs.empty());
+		LOG2(2, " Formula is already SATISFIABLE by elimination");
+		cnfstate = SAT;
 	}
 	else {
 		initLimits();

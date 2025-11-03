@@ -234,7 +234,6 @@ void Solver::iunassume()
 {
     assert(sp);
 	assert(inf.maxVar);
-	assert(stats.clauses.original);
 	LOGN2(2, " Resetting %d assumptions and solver state..", assumptions.size());
 	if (assumptions.size()) {
 		forall_clause(assumptions, k) {
