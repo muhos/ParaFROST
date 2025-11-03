@@ -65,22 +65,22 @@ inline void	Solver::initSimplifier()
 	}
 }
 
-void Solver::simplify(const bool& keep_gpu_mem)
+void Solver::simplify(const bool& skip_transfer_to_host)
 {
 	if (alldisabled()) return;
 	assert(conflict == NOREF);
 	assert(IS_UNSOLVED(cnfstate));
 	assert(stats.clauses.original);
 	stats.sigma.calls++;
-	simplifying(keep_gpu_mem);
+	simplifying(skip_transfer_to_host);
 	INCREASE_LIMIT(this, sigma, stats.sigma.calls, nlognlogn, true);
 	last.sigma.reduces = stats.reduces + 1;
 	if (opts.phases > 2) {
 		opts.phases--;
 		LOG2(2, "  simplify phases decreased to %d", opts.phases);
 	}
-	if (keep_gpu_mem)
-		LOG2(2, " Keeping GPU memory for future calls");
+	if (skip_transfer_to_host)
+		LOG2(2, " Skipping copying device CNF to host");
 	if (!opts.solve_en) killSolver();
 	timer.start();
 }
@@ -151,7 +151,7 @@ void Solver::awaken()
 	}
 }
 
-void Solver::simplifying(const bool& keep_gpu_mem)
+void Solver::simplifying(const bool& skip_transfer_to_host)
 {
 	/********************************/
 	/*         awaken sigma         */
@@ -233,7 +233,7 @@ void Solver::simplifying(const bool& keep_gpu_mem)
 	cacheEliminated(streams[5]);             	// if ERE is enabled, this transfer would be already done
 	cumm.updateMaxCap(), cacher.updateMaxCap(); // for reporting GPU memory only
 	markEliminated(streams[5]);              	// must be executed before map()
-	if (keep_gpu_mem) {
+	if (skip_transfer_to_host) {
 		SYNCALL;
 		assert(!simpstate);
 		if (simpstate != CNFALLOC_FAIL && !compacted) 

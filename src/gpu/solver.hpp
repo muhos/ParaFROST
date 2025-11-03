@@ -772,8 +772,8 @@ namespace ParaFROST {
 		void			writeBackCNF		();
 		bool			reallocCNF			();
 		bool			reallocCNF			(const bool& realloc);
-		void			simplifying         (const bool& keep_gpu_mem = false);
-		void			simplify            (const bool& keep_gpu_mem = false);
+		void			simplifying         (const bool& skip_transfer_to_host = false);
+		void			simplify            (const bool& skip_transfer_to_host = false);
 		void			extractCNF			(CNF*, BCNF&);
 		uint32*			flattenCNF          (const uint32&);
 		void			reflectCNF			(const cudaStream_t&, const cudaStream_t&);
