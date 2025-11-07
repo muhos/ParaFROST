@@ -54,6 +54,7 @@ uint32 Solver::iadd() {
         if (opts.proof_en)
             proof.init(sp);
     }
+	assumed.expand(v + 1, false);
     sp->expand(v + 1, opts.polarity);
     wt.expand(lit + 2);
     bumps.expand(v + 1, 0);
@@ -189,7 +190,9 @@ void Solver::ifreeze(const uint32& v)
 	const uint32 mlit = imap(v);
 	CHECKLIT(mlit);
 	const uint32 mvar = ABS(mlit);
-	sp->frozen[mvar] = 1;
+	if (mvar >= assumed.size())
+		LOGERROR(" Assumed vector size %d is smaller than molten variable %d", assumed.size(), mvar);
+	assumed[mvar] = true;
 	LOG2(3, "  freezing original variable %d (mapped to %d)..", v, mvar);
 }
 
@@ -200,22 +203,25 @@ void Solver::iunfreeze(const uint32& v)
 	const uint32 mlit = imap(v);
 	CHECKLIT(mlit);
 	const uint32 mvar = ABS(mlit);
-	sp->frozen[mvar] = 0;
+	if (mvar >= assumed.size())
+		LOGERROR(" Assumed vector size %d is smaller than frozen variable %d", assumed.size(), mvar);
+	assumed[mvar] = false;
 	LOG2(3, "  melting original variable %d (mapped to %d)..", v, mvar);
 }
 
-void Solver::iassume(Lits_t& assumptions)
+void Solver::iassume(const Lits_t& assumptions)
 {
     assert(sp);
 	assert(inf.maxVar);
 	assert(stats.clauses.original);
     resetextended();
-	int assumed = assumptions.size();
+	const int assumed = assumptions.size();
 	if (!assumed) return;
 	stats.decisions.assumed += uint64(assumed);
-	LOGN2(2, " Adding %d assumptions..", assumed);
+	last.mdm.skip_rounds = assumed;
+	LOG2(2, " Adding %d assumptions..", assumed);
 	this->assumptions.reserve(assumed);
-	forall_clause(assumptions, k) {
+	forall_clause_const(assumptions, k) {
 		const uint32 a = *k, v = ABS(a);
 		assert(!ieliminated(v));
 		uint32 mlit = imap(v);
@@ -223,11 +229,10 @@ void Solver::iassume(Lits_t& assumptions)
 			mlit = FLIP(mlit);
 		CHECKLIT(mlit);
 		const uint32 mvar = ABS(mlit);
-		sp->frozen[mvar] = 1;
+		this->assumed[mvar] = true;
 		this->assumptions.push(mlit);
 		LOG2(4, "  assuming %d after mapping original assumption %d", l2i(mlit), l2i(a));
 	}
-	LOGDONE(2, 3);
 }
 
 void Solver::iunassume()
@@ -239,14 +244,22 @@ void Solver::iunassume()
 		forall_clause(assumptions, k) {
 			const uint32 a = *k;
 			CHECKLIT(a);
-			sp->frozen[ABS(a)] = 0;
+			assumed[ABS(a)] = false;
 		}
 		assumptions.clear(true);
 	}
 	cnfstate = UNSOLVED;
 	LOGDONE(2, 5);
 	backtrack();
+	LOGN2(2, " Resetting conflict clause of size %d..", iconflict.size());
 	iconflict.clear();
+	LOGDONE(2, 5);
+	LOGN2(2, " Resetting model %d values and %d resolved..", model.value.size(), model.resolved.size());
+	model.reset();
+	LOGDONE(2, 5);
+	LOGN2(2, " Resetting MDM %d skipping rounds..", last.mdm.skip_rounds);
+	last.mdm.skip_rounds = 0;
+	LOGDONE(2, 5);
 }
 
 void Solver::idecide()
@@ -260,13 +273,19 @@ void Solver::idecide()
 	while (level < assumptions.size()) {
 		const uint32 a = assumptions[level];
 		CHECKLIT(a);
-		assert(sp->frozen[ABS(a)]);
+		assert(assumed[ABS(a)]);
 		const LIT_ST val = sp->value[a];
 		if (UNASSIGNED(val)) {
 			dec = a;
+			if (last.mdm.skip_rounds > 0) 
+				last.mdm.skip_rounds--;
 			break;
 		}
-		else if (val) incDL(), level = DL();
+		else if (val) {
+			incDL(), level = DL();
+			if (last.mdm.skip_rounds > 0) 
+				last.mdm.skip_rounds--;
+		}
 		else {
 			assert(!val);
 			ianalyze(FLIP(a));
@@ -278,6 +297,7 @@ void Solver::idecide()
 		const uint32 cand = vsidsEnabled() ? nextVSIDS() : nextVMFQ();
 		dec = makeAssign(cand, useTarget());
 	}
+	LOG2(4, " IDecide: Making decision %d at level %d", l2i(dec), DL());
 	enqueueDecision(dec);
 	stats.decisions.single++;
 }

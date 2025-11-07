@@ -30,6 +30,7 @@ namespace ParaFROST {
     class ipasir_t: public Solver {
         
         Lits_t filtered, clause;
+        Lits_t eassumptions; // external assumptions
         bool nomodel;
 
         inline uint32 abs(const int& lit) {
@@ -67,7 +68,7 @@ namespace ParaFROST {
         }
         void assume(const int& lit) {
             nomodel = true;
-            assumptions.push(import(lit));
+            eassumptions.push(import(lit));
         }
         int val(const int& lit) {
             if (nomodel) return 0;
@@ -88,7 +89,7 @@ namespace ParaFROST {
         }
         void uassume(const uint32_t& lit) {
             nomodel = true;
-            assumptions.push(uimport(lit));
+            eassumptions.push(uimport(lit));
         }
         int uval(const uint32_t& lit) {
             if (nomodel) return 0;
@@ -100,8 +101,8 @@ namespace ParaFROST {
         }
         // Solve and return status.
         int solve() {
-            isolve(assumptions);
-            assumptions.clear();
+            isolve(eassumptions);
+            eassumptions.clear();
             nomodel = (cnfstate != SAT);
             return IS_UNSOLVED(cnfstate) ? 0 : (cnfstate == SAT ? 10 : 20);
         }

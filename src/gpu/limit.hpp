@@ -32,7 +32,7 @@ namespace ParaFROST {
 		} rephase;
 		struct {
 			uint32 decisions, unassigned;
-			int rounds;
+			int rounds, skip_rounds;
 		} mdm;
 		struct { uint64 reduces; } sigma, probe;
 		struct { uint64 resolvents; } ternary;

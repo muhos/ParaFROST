@@ -38,6 +38,9 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 #define PRINT(FORMAT, ...) fprintf(stdout, FORMAT, ## __VA_ARGS__);
 
+#define	BREAKLINE(X, SZ) if ((X) > 1 && (X) < (SZ) && ((X) % 20) == 0) { \
+						PUTCH('\n'); LOGN0("\t\t"); }
+
 #define LOGRULER(CH, TIMES) \
   do { \
      PUTCH(PREFIX[0]); \

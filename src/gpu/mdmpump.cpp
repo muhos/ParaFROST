@@ -26,6 +26,7 @@ inline void Solver::pumpFrozenHeap(const uint32& lit)
 	WL& ws = wt[lit];
 	if (ws.empty()) return;
 	uint32 v = ABS(lit);
+	assert(!iassumed(v));
 	assert(!sp->frozen[v]);
 	double norm_act = (double)sp->level[v] / last.mdm.decisions;
 	forall_watches(ws, w) {
@@ -48,6 +49,7 @@ inline void Solver::pumpFrozenQue(const uint32& lit)
 	WL& ws = wt[lit];
 	if (ws.empty()) return;
 	uint32 v = ABS(lit);
+	assert(!iassumed(v));
 	assert(!sp->frozen[v]);
 	forall_watches(ws, w) {
 		if (cm.deleted(w->ref)) continue;

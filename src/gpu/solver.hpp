@@ -820,6 +820,7 @@ namespace ParaFROST {
 		//==========================================//
 	protected:
 		Lits_t			assumptions, iconflict;
+		Vec<bool>		assumed;
 
 	public:
 		void*			termCallbackState;
@@ -834,8 +835,8 @@ namespace ParaFROST {
 		void			idecide             ();
 		void			ianalyze            (const uint32&);
 		bool			iclause             (Lits_t&, Lits_t&);
-		void			iassume             (Lits_t&);
-		void			isolve              (Lits_t&);
+		void			iassume             (const Lits_t&);
+		void			isolve              (const Lits_t&);
 		bool		    ifailed             (const uint32& v);
 		void		    ifreeze             (const uint32& v);
 		void		    iunfreeze           (const uint32& v);
@@ -849,9 +850,9 @@ namespace ParaFROST {
 		}
 		inline bool		iassumed            (const uint32& v) const {
 			CHECKVAR(v);
-			assert(sp);
-			assert(sp->size() > v);
-			return incremental && sp->frozen[v];
+			if (incremental && v >= assumed.size())
+				LOGERROR("variable(%d) exceeds assumed vector size %d", v, assumed.size());
+			return incremental && assumed[v];
 		}
 		int				(*termCallback)		(void* state);
         void			(*learnCallback)	(void* state, int* clause);

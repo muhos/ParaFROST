@@ -56,6 +56,7 @@ namespace ParaFROST {
 		void			extend          (LIT_ST*);
 		void			verify          (const string&);
 		bool			verify          (char*& clause);
+		inline void 	reset			() { value.clear(); resolved.clear(); extended = false; }
 		inline bool		satisfied		(const uint32& orglit) const { assert(orglit > 1 && ABS(orglit) < value.size()); return value[ABS(orglit)] == !SIGN(orglit); }
 		inline uint32	size            ()					const { return extended ? value.size() : 0; }
 		inline int		lit2int         (const uint32& lit) const { return SIGN(lit) ? -int(ABS(lit)) : int(ABS(lit)); }

@@ -64,8 +64,7 @@ namespace ParaFROST {
 		}
 
 		#define forall_space(X) for (uint32 X = 1; X < _sz; X++)
-		#define	breakline(X) if (X > 1 && X < _sz - 2 && X % 10 == 0) { \
-						PUTCH('\n'); LOGN0("\t\t"); }
+
 	public:
 		// arrays
 		int* level;
@@ -155,7 +154,7 @@ namespace ParaFROST {
 			LOGN1(" Phases->[");
 			forall_space(v) {
 				PRINT("%5d:%d ", v, psaved[v]);
-				breakline(v);
+				BREAKLINE(v, _sz - 2);
 			}
 			putc(']', stdout), PUTCH('\n');
 		}
@@ -163,7 +162,7 @@ namespace ParaFROST {
 			LOGN1(" States->[");
 			forall_space(v) {
 				PRINT("%5d:%d ", v, vstate[v].state);
-				breakline(v);
+				BREAKLINE(v, _sz - 2);
 			}
 			putc(']', stdout), PUTCH('\n');
 		}
@@ -172,7 +171,7 @@ namespace ParaFROST {
 			forall_space(v) {
 				uint32 lit = V2L(v);
 				PRINT("%5d:%d ", l2i(lit), value[lit]);
-				breakline(v);
+				BREAKLINE(v, _sz - 2);
 			}
 			putc(']', stdout), PUTCH('\n');
 		}
@@ -180,7 +179,7 @@ namespace ParaFROST {
 			LOGN1(" Levels->[");
 			forall_space(v) {
 				PRINT("%5d@%d ", v, level[v]);
-				breakline(v);
+				BREAKLINE(v, _sz - 2);
 			}
 			putc(']', stdout), PUTCH('\n');
 		}

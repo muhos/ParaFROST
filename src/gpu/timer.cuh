@@ -32,17 +32,24 @@ namespace ParaFROST {
 		cuTIMER() :
 			_start(NULL), _stop(NULL), _gpuTime(0) 
 		{
-			cudaEventCreate(&_start);
-			cudaEventCreate(&_stop);
+			if (!_start) cudaEventCreate(&_start);
+			if (!_stop) cudaEventCreate(&_stop);
 		}
 		~cuTIMER() {
-			cudaEventDestroy(_start);
-			cudaEventDestroy(_stop);
+			if (_start) cudaEventDestroy(_start);
+			if (_stop) cudaEventDestroy(_stop);
 			_start = NULL, _stop = NULL;
 		}
-		inline void  start  (const cudaStream_t& _s = 0) { cudaEventRecord(_start, _s); }
-		inline void  stop   (const cudaStream_t& _s = 0) { cudaEventRecord(_stop, _s); }
+		inline void  start  (const cudaStream_t& _s = 0) { 
+			assert(_start && _stop);
+			cudaEventRecord(_start, _s); 
+		}
+		inline void  stop   (const cudaStream_t& _s = 0) { 
+			assert(_start && _stop);
+			cudaEventRecord(_stop, _s); 
+		}
 		inline float gpuTime() {
+			assert(_start && _stop);
 			_gpuTime = 0;
 			cudaEventSynchronize(_stop);
 			cudaEventElapsedTime(&_gpuTime, _start, _stop);

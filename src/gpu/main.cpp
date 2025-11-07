@@ -75,9 +75,12 @@ int main(int argc, char **argv)
 		parafrost->solve();
 		if (!quiet_en) LOG0("");
 		LOGHEADER(1, 5, "Exit");
+		LOGN2(1, "Shutting down solver..");
+		PRINT2(2, 5, "\n");
 		solver = NULL;
 		delete parafrost;
-        if (verbose > 1) LOGRULER('-', RULELEN);
+		LOGDONE(1, 2);
+        if (verbose >= 1) LOGRULER('-', RULELEN);
 		return EXIT_SUCCESS;
 	}
 	catch (std::bad_alloc&) {

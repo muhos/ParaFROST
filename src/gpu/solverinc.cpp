@@ -65,7 +65,7 @@ void Solver::iallocspace()
 	LOGMEMCALL(this, 2);
 }
 
-void Solver::isolve(Lits_t& assumptions)
+void Solver::isolve(const Lits_t& assumptions)
 {
 	FAULT_DETECTOR;
 	LOGHEADER(1, 5, "Search");

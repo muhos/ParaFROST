@@ -48,7 +48,10 @@ inline bool	Solver::verifySeen()
 
 inline void	Solver::clearMDM() 
 {
-	assert(verifyMDM());
+	if (!verifyMDM()) {
+		LOGERROR("MDM verification failed");
+		killSolver();
+	}
 	uint32* start = trail + sp->propagated, *end = trail.end();
 	while (start != end)
 		sp->seen[ABS(*start++)] = 0;
@@ -116,6 +119,10 @@ inline bool Solver::depFreeze(WL& ws, const uint32& cand)
 bool Solver::canMMD()
 {
 	if (!opts.mdm_rounds) return false;
+	if (last.mdm.skip_rounds) {
+		LOG2(2, " Skipping MDM until %d assumptions are propagated..", last.mdm.skip_rounds);
+		return false;
+	}
 	if (uint64(opts.mdm_delay) > stats.conflicts) return false;
 	const bool enough = varsEnough();
 	const bool rounds = last.mdm.rounds;
@@ -129,6 +136,10 @@ bool Solver::canMMD()
 void Solver::MDMInit()
 {
 	if (!last.mdm.rounds) return;
+	if (last.mdm.skip_rounds) {
+		LOG2(2, " Skipping MDM until %d assumptions are propagated..", last.mdm.skip_rounds);
+		return;
+	}
 	assert(inf.unassigned);
 	assert(isPropagated());
 	assert(conflict == NOREF);
@@ -145,47 +156,16 @@ void Solver::MDMInit()
 	occurs.resize(inf.maxVar + 1);
 	varOrder(); // initial variable ordering
 	sp->stacktail = sp->tmpstack;
-	bool skipround = false;
-	if (assumptions.size()) {
-		assert(sp->stacktail == sp->tmpstack);
-		int level = DL();
-		while (level < assumptions.size()) {
-			const uint32 a = assumptions[level];
-			CHECKLIT(a);
-			assert(sp->frozen[ABS(a)]);
-			const uint32 cand = ABS(a);
-			const LIT_ST val = sp->value[a];
-			if (UNASSIGNED(val)) {
-				level++;
-				uint32 dec = a;
-				if (!depFreeze(wt[dec], cand))
-					skipround = true;
-				enqueueDecision(dec);
-				sp->seen[cand] = 1;
-			}
-			else if (val) incDL(), level = DL();
-			else {
-				ianalyze(FLIP(a));
-				cnfstate = UNSAT;
-				clearMDM(), eligible.clear(true), occurs.clear(true);
-				return;
-			}
-		}
-	}
-	else 
-		assert(sp->stacktail == sp->tmpstack);
-	if (!skipround) {
-		for (uint32 i = 0; i < inf.maxVar; i++) {
-			uint32 cand = eligible[i];
-			CHECKVAR(cand);
-			if (sp->frozen[cand] || sp->vstate[cand].state || iassumed(cand)) continue;
-			const LIT_ST pol = sp->psaved[cand];
-			assert(pol >= 0);
-			const uint32 dec = V2DEC(cand, pol);
-			if (valid(wt[dec]) && depFreeze(wt[dec], cand)) {
-				enqueueDecision(dec);
-				sp->seen[cand] = 1;
-			}
+	for (uint32 i = 0; i < inf.maxVar; i++) {
+		uint32 cand = eligible[i];
+		CHECKVAR(cand);
+		if (sp->frozen[cand] || sp->vstate[cand].state || iassumed(cand)) continue;
+		const LIT_ST pol = sp->psaved[cand];
+		assert(pol >= 0);
+		const uint32 dec = V2DEC(cand, pol);
+		if (valid(wt[dec]) && depFreeze(wt[dec], cand)) {
+			enqueueDecision(dec);
+			sp->seen[cand] = 1;
 		}
 	}
 	last.mdm.decisions = trail.size() - sp->propagated;
@@ -229,45 +209,14 @@ void Solver::MDM()
 		return;
 	}
 	sp->stacktail = sp->tmpstack;
-	bool skipround = false;
-	if (assumptions.size()) {
-		assert(sp->stacktail == sp->tmpstack);
-		int level = DL();
-		while (level < assumptions.size()) {
-			const uint32 a = assumptions[level];
-			CHECKLIT(a);
-			assert(sp->frozen[ABS(a)]);
-			const uint32 cand = ABS(a);
-			const LIT_ST val = sp->value[a];
-			if (UNASSIGNED(val)) {
-				level++;
-				uint32 dec = a;
-				if (!depFreeze(wt[dec], cand))
-					skipround = true;
-				enqueueDecision(dec);
-				sp->seen[cand] = 1;
-			}
-			else if (val) incDL(), level = DL();
-			else {
-				ianalyze(FLIP(a));
-				cnfstate = UNSAT;
-				clearMDM();
-				return;
-			}
-		}
-	}
-	else 
-		assert(sp->stacktail == sp->tmpstack);
-	if (!skipround) {
-		for (uint32 i = 0; i < eligible.size(); i++) {
-			uint32 cand = eligible[i];
-			CHECKVAR(cand);
-			if (sp->frozen[cand] || sp->vstate[cand].state || iassumed(cand)) continue;
-			uint32 dec = makeAssign(cand, useTarget());
-			if (valid(wt[dec]) && depFreeze(wt[dec], cand)) {
-				enqueueDecision(dec);
-				sp->seen[cand] = 1;
-			}
+	for (uint32 i = 0; i < eligible.size(); i++) {
+		uint32 cand = eligible[i];
+		CHECKVAR(cand);
+		if (sp->frozen[cand] || sp->vstate[cand].state || iassumed(cand)) continue;
+		uint32 dec = makeAssign(cand, useTarget());
+		if (valid(wt[dec]) && depFreeze(wt[dec], cand)) {
+			enqueueDecision(dec);
+			sp->seen[cand] = 1;
 		}
 	}
 	last.mdm.decisions = trail.size() - sp->propagated;
