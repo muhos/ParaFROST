@@ -120,7 +120,7 @@ bool Solver::canMMD()
 {
 	if (!opts.mdm_rounds) return false;
 	if (last.mdm.skip_rounds) {
-		LOG2(2, " Skipping MDM until %d assumptions are propagated..", last.mdm.skip_rounds);
+		LOG2(3, " Skipping MDM until %d assumptions are propagated..", last.mdm.skip_rounds);
 		return false;
 	}
 	if (uint64(opts.mdm_delay) > stats.conflicts) return false;
@@ -137,7 +137,7 @@ void Solver::MDMInit()
 {
 	if (!last.mdm.rounds) return;
 	if (last.mdm.skip_rounds) {
-		LOG2(2, " Skipping MDM until %d assumptions are propagated..", last.mdm.skip_rounds);
+		LOG2(3, " Skipping MDM until %d assumptions are propagated..", last.mdm.skip_rounds);
 		return;
 	}
 	assert(inf.unassigned);
