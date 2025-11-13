@@ -229,8 +229,9 @@ void Solver::solve()
 	wrapup();
 }
 
-void Solver::wrapup() {
+void Solver::wrapup(const CNFState& state) {
     LOGHEADER(1, 5, "Result");
+	if (state != UNSOLVED) cnfstate = state;
 	if (cnfstate == SAT) {
 		LOGSAT("SATISFIABLE");
 		assert(sp != NULL && sp->value != NULL);

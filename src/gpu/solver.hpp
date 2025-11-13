@@ -657,9 +657,9 @@ namespace ParaFROST {
 		void			eligibleVMFQ		();
 		void			decide				();
 		void			report				();
-		void			wrapup				();
 		void			solve				();
 		bool			parse				();
+		void			wrapup				(const CNFState& state = UNSOLVED);
 		bool			parse				(const string&);
 		void			map					(BCNF&);
 		void			map					(WL&);
