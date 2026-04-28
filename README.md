@@ -6,7 +6,9 @@ It is a parallel SAT solver with GPU-accelerated inprocessing capable of harness
 The CDCL search is built from scratch with various optimisations based on CaDiCaL heuristics (see our paper in [FMSD'23](https://link.springer.com/article/10.1007/s10703-023-00432-z)).
 The inprocessing engine extends our previous work in SIGmA simplifier with new data structures, parallel garbage collection and more.
 
-# Install
+---
+
+## Install
 
 To install either the CPU or the GPU solvers, use the `install.sh` script which has the following usage:
 
@@ -33,7 +35,7 @@ To install either the CPU or the GPU solvers, use the `install.sh` script which 
        --cextra="flags"      pass extra "flags" to the CPU compiler (g++)
 
 
-## GPU solver
+### GPU solver
 To build the GPU solver, make sure you have a CUDA-capable GPU with pre-installed NVIDIA driver and CUDA toolkit.
 
 For installing CUDA v12.8, run the following commands on a Ubuntu 24.04:<br>
@@ -49,18 +51,24 @@ installation guide in https://docs.nvidia.com/cuda/.
 Now the GPU solver is ready to install by running the install script via the command `./install.sh -g`. 
 The `parafrost` binary, the library `libparafrost.a`, and the main include file `solver.hpp` will be created by default in the build directory.<br>
 
-## CPU solver
+### CPU solver
 To build a CPU-only version of the solver, run `./install.sh -c`.<br>
 
-## Debug and Testing
+### Debug and Testing
 Add `-t` argument with the install command to enable assertions or `-d` to collect debugging information for both the CPU and GPU solvers.<br>
 
-# Usage
+---
+
+## Usage
 The solver can be used via the command `parafrost [<option> ...][<infile>.<cnf>][<option> ...]`.<br>
 For more options, type `parafrost -h` or `parafrost --helpmore`.
 
-# Incremental Solving
+---
+
+## Incremental Solving
 ParaFROST supports incremental solving to `add`/`remove` variables or clauses incrementally while solving with assumptions if needed. A fully configurable interface to integrate ParaFROST with CBMC model checker is created here (https://github.com/muhos/gpu4bmc). A similar interface can be created to work with ParaFROST in any SAT-based bounded model checker.
 
-# Citation
+---
+
+## Citation
 Please cite our latest paper [FMSD'23](https://link.springer.com/article/10.1007/s10703-023-00432-z) when using ParaFROST.
