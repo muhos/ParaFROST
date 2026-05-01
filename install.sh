@@ -370,10 +370,19 @@ if [ -z "$NVIDIASMI" ]; then
   log "memory extension will be disabled. To extend it manually use '--gextra=-DEXTSHMEM'"
   log "if the GPU compute capability is 7 or higher."
 else
-  GPUFAMILYLINE=$($NVIDIASMI -q | grep -m1 'Product Name')
-  if [[ "$GPUFAMILYLINE" == *"RTX"* ]]; then
-    log "detected an RTX GPU family, thus permitting shared memory extension"
-    extshared=1
+  COMPUTE_CAP=$($NVIDIASMI --query-gpu=compute_cap --format=csv,noheader 2>/dev/null | head -1)
+  if [ -z "$COMPUTE_CAP" ]; then
+    log "cannot query GPU compute capability, automated shared memory extension will be"
+    log "disabled. To extend it manually use '--gextra=-DEXTSHMEM' if compute capability"
+    log "is 7 or higher."
+  else
+    COMPUTE_CAP_MAJOR=$(echo "$COMPUTE_CAP" | cut -d'.' -f1)
+    if [ "$COMPUTE_CAP_MAJOR" -ge 7 ] 2>/dev/null; then
+      log "detected GPU compute capability $COMPUTE_CAP (>= 7.0), permitting shared memory extension"
+      extshared=1
+    else
+      log "detected GPU compute capability $COMPUTE_CAP (< 7.0), shared memory extension disabled"
+    fi
   fi
 fi
 
