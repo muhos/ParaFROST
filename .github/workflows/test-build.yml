@@ -21,4 +21,4 @@ jobs:
       - name: Clone cuarena
         run: git clone https://github.com/muhos/cuArena.git $HOME/cuarena
       - name: Build
-        run: bash install.sh -c -g
+        run: bash install.sh -c -g --cuarena=$HOME/cuarena
