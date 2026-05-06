@@ -30,7 +30,7 @@ To install either the CPU or the GPU solvers, use the `install.sh` script which 
        -a or --all           enable all above flags except 'assert'
        --ncolors             disable colors in all solver outputs
        --clean=<target>      remove old installation of <cpu | gpu | all> solvers
-       --standard=<n>        compile with <14 | 17 | 20> c++ standard
+       --standard=<n>        compile with <17 | 20> c++ standard
        --gextra="flags"      pass extra "flags" to the GPU compiler (nvcc)
        --cextra="flags"      pass extra "flags" to the CPU compiler (g++)
        --cuarena=<path>      path to cuArena root (default: dep/cuarena; NONE to disable)

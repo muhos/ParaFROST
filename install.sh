@@ -63,7 +63,7 @@ assert=0
 logging=0
 ncolors=0
 pedantic=0
-standard=17
+standard=20
 statistics=0
 cuarena_dir="dep/cuarena"
 

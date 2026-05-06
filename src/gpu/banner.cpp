@@ -23,13 +23,13 @@ void LOGFANCYBANNER(const char* VER)
 #if defined(_WIN32)
     SetConsoleOutputCP(65001);
 #endif
-    const char* solvername1 = u8"██████╗░░█████╗░██████╗░░█████╗░███████╗██████╗░░█████╗░░██████╗████████╗";
-    const char* solvername2 = u8"██╔══██╗██╔══██╗██╔══██╗██╔══██╗██╔════╝██╔══██╗██╔══██╗██╔════╝╚══██╔══╝";
-    const char* solvername3 = u8"██████╔╝███████║██████╔╝███████║█████╗░░██████╔╝██║░░██║╚█████╗░░░░██║░░░";
-    const char* solvername4 = u8"██╔═══╝░██╔══██║██╔══██╗██╔══██║██╔══╝░░██╔══██╗██║░░██║░╚═══██╗░░░██║░░░";
-    const char* solvername5 = u8"██║░░░░░██║░░██║██║░░██║██║░░██║██║░░░░░██║░░██║╚█████╔╝██████╔╝░░░██║░░░";
-    const char* solvername6 = u8"╚═╝░░░░░╚═╝░░╚═╝╚═╝░░╚═╝╚═╝░░╚═╝╚═╝░░░░░╚═╝░░╚═╝░╚════╝░╚═════╝░░░░╚═╝░░░";
-    const char* name_version = u8"Copyright\u00A9 Muhammad Osama Mahmoud                                  ";
+    const char* solvername1 = "██████╗░░█████╗░██████╗░░█████╗░███████╗██████╗░░█████╗░░██████╗████████╗";
+    const char* solvername2 = "██╔══██╗██╔══██╗██╔══██╗██╔══██╗██╔════╝██╔══██╗██╔══██╗██╔════╝╚══██╔══╝";
+    const char* solvername3 = "██████╔╝███████║██████╔╝███████║█████╗░░██████╔╝██║░░██║╚█████╗░░░░██║░░░";
+    const char* solvername4 = "██╔═══╝░██╔══██║██╔══██╗██╔══██║██╔══╝░░██╔══██╗██║░░██║░╚═══██╗░░░██║░░░";
+    const char* solvername5 = "██║░░░░░██║░░██║██║░░██║██║░░██║██║░░░░░██║░░██║╚█████╔╝██████╔╝░░░██║░░░";
+    const char* solvername6 = "╚═╝░░░░░╚═╝░░╚═╝╚═╝░░╚═╝╚═╝░░╚═╝╚═╝░░░░░╚═╝░░╚═╝░╚════╝░╚═════╝░░░░╚═╝░░░";
+    const char* name_version = "Copyright\u00A9 Muhammad Osama Mahmoud                                  ";
     size_t len = 75 + 1;
     if (RULELEN < len) LOGERROR("ruler length is smaller than the title (%zd)", len);
     size_t gap = (RULELEN - len - 3) / 2;
