@@ -25,6 +25,9 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 #include "variables.cuh"
 #include "histogram.cuh"
 #include "timer.cuh"
+#ifdef USE_CUARENA
+#include <cuarena/allocator.cuh>
+#endif
 
 namespace ParaFROST {
 	/*****************************************************/
@@ -66,6 +69,11 @@ namespace ParaFROST {
 		float 	_compacttime;
 		int64	_tot, _free, cap, dcap, maxcap, penalty;
 		bool	isMemAdviseSafe;
+		// cuarena backend
+	#ifdef USE_CUARENA
+		cuArena::DeviceArena arena;
+		bool                 arena_ready;
+	#endif
 
 	public:
 
@@ -80,10 +88,13 @@ namespace ParaFROST {
 			assert(_tot > cap);
 			return true;
 		}
-		inline bool		hasDeviceMem	(const size_t& min_cap, const char* name) {
+		inline bool		hasDeviceMem	(const size_t& min_cap, const char* name, 
+									     const cuArena::Region& type = cuArena::Region::Stable) {
 			const int64 used = dcap + min_cap;
-			LOG2(2, " Allocating GPU-only memory for %s (used/free = %.3f/%lld MB)", name, double(used) / MBYTE, _free / MBYTE);
-			if (used >= _free) { LOGWARNING("not enough memory for %s (current = %lld MB) -> skip GPU simplifier", name, used / MBYTE); return false; }
+			LOG2(2, " Allocating GPU-only memory for %s (used/free = %.2f/%.2f MB)", name, 
+				double(used) / MBYTE, 
+				double(type == cuArena::Region::Stable ? arena.gpu_stable_capacity() : arena.gpu_dynamic_capacity()) / MBYTE);
+			if (used >= _free) { LOGWARNING("not enough memory for %s (current = %lld MB) - skip GPU simplifier", name, used / MBYTE); return false; }
 			_free -= used;
 			dcap = used;
 			assert(_free >= 0);
@@ -104,10 +115,15 @@ namespace ParaFROST {
 			}
 		}
 		template <class POOL>
-		inline void		DFREE			(POOL& pool) {
+		inline void		DFREE			(POOL& pool, const bool& usearena = true) {
 			if (pool.mem) {
 				assert(pool.cap);
+			#ifdef USE_CUARENA
+				if (arena_ready && usearena) arena.deallocate(pool.mem);
+				else                           CHECK(cudaFree(pool.mem));
+			#else
 				CHECK(cudaFree(pool.mem));
+			#endif
 				pool.mem = NULL;
 				dcap -= pool.cap;
 				assert(dcap >= 0);
@@ -116,6 +132,9 @@ namespace ParaFROST {
 			}
 		}
 						cuMM			();
+	#ifdef USE_CUARENA
+		bool			initDeviceArena	(const size_t& numCls, const size_t& numLits, const bool& proofEnabled);
+	#endif
 		void			breakMirror		();
 		void			freePinned		();
 		void			freeFixed		();

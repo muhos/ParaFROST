@@ -35,6 +35,7 @@ $ch	--clean=<target>      remove old installation of <cpu | gpu | all> solvers
 $ch	--standard=<n>        compile with <17 | 20> c++ standard
 $ch	--gextra="flags"      pass extra "flags" to the GPU compiler (nvcc)
 $ch --cextra="flags"      pass extra "flags" to the CPU compiler (g++)
+$ch	--cuarena=<path>      path to cuarena root (default: dep/cuarena; NONE to disable)
 EOF
 printf "+%${lineWidth}s+\n" |tr ' ' '-'
 exit 0
@@ -64,6 +65,7 @@ ncolors=0
 pedantic=0
 standard=17
 statistics=0
+cuarena_dir="dep/cuarena"
 
 while [ $# -gt 0 ]
 do
@@ -101,6 +103,10 @@ do
 
     --cextra=*)
       cextra="${1#*=}"
+      ;;
+
+    --cuarena=*)
+      cuarena_dir="${1#*=}"
       ;;
 
     *) error "invalid option '$1' (use '-h' for help)";;
@@ -192,7 +198,7 @@ if [[ "$clean" = "cpu" ]] || [[ "$clean" = "all" ]]; then
 	endline
 	ruler
 fi
-if [[ "$clean" = "gpu" ]] || [[ "$clean" = "all" ]]; then 
+if [[ "$clean" = "gpu" ]] || [[ "$clean" = "all" ]]; then
 	cleanGPU=1
 	logn "cleaning up GPU files (other options will be ignored)..."
 	rm -rf build/gpu
@@ -201,6 +207,10 @@ if [[ "$clean" = "gpu" ]] || [[ "$clean" = "all" ]]; then
 	rm -f $srcdir/Makefile
 	rm -f $srcdir/*.o $srcdir/*.cuo $srcdir/$binary $srcdir/$library
 	cp $vertemplate $gpubuild
+	# clean cuarena
+	if [[ -d "$cuarena_dir" ]] && [[ -d "$cuarena_dir/build" ]]; then
+		rm -rf "$cuarena_dir/build"
+	fi
 	endline
 	ruler
 fi
@@ -361,6 +371,28 @@ NVCCVER="nvcc $NVCCVERSHORT"
 
 log "$NVCCVERSHORT."
 
+# resolve cuarena device pool backend
+CUARENA_RESOLVED="NONE"
+if [[ "$cuarena_dir" != "NONE" ]]; then
+  if [ -d "$cuarena_dir" ] && [ -f "$cuarena_dir/CMakeLists.txt" ]; then
+    CUARENA_RESOLVED=$(realpath "$cuarena_dir")
+    if ! command -v cmake &> /dev/null; then
+      log ""
+      log "cuarena found at '$CUARENA_RESOLVED' but cmake is not available"
+      log " disabling device pool backend (install cmake to enable it)"
+      CUARENA_RESOLVED="NONE"
+    else
+      log ""
+      log "found cuarena at '$CUARENA_RESOLVED'"
+      log " enabling device pool backend (-DUSE_CUARENA)"
+    fi
+  else
+    log ""
+    log "cuarena not found at '$cuarena_dir'; device pool backend disabled."
+    log " Use '--cuarena=<path>' or place cuarena at 'dep/cuarena'"
+  fi
+fi
+
 # try to find GPU family
 log ""
 extshared=0
@@ -429,6 +461,7 @@ fi
 [ $statistics = 1 ] && NVCCFLAGS="$NVCCFLAGS -DSTATISTICS"
 [ $ncolors = 1 ] && NVCCFLAGS="$NVCCFLAGS -DNCOLORS"
 [ $extshared = 1 ] && NVCCFLAGS="$NVCCFLAGS -DEXTSHMEM"
+[ "$CUARENA_RESOLVED" != "NONE" ] && NVCCFLAGS="$NVCCFLAGS -DUSE_CUARENA"
 
 NVCCFLAGS="$ARCH $NVCCFLAGS"
 
@@ -461,12 +494,19 @@ log ""
 
 [ ! -f $gputemplate ] && error "cannot find the GPU makefile template"
 
+if [ $debug = 1 ]; then   CUARENA_BUILD_TYPE="Debug"
+elif [ $assert = 1 ]; then CUARENA_BUILD_TYPE="RelWithDebInfo"
+else                       CUARENA_BUILD_TYPE="Release"
+fi
+
 cp $gputemplate $makefile
 sed -i "s|^CUDA_PATH.*|CUDA_PATH := $CUDA_DIR|" $makefile
 sed -i "s|^NVCCFLAGS.*|NVCCFLAGS := $NVCCFLAGS|" $makefile
 sed -i "s|^CCFLAGS.*|CCFLAGS := $CCFLAGS|" $makefile
 sed -i "s/^BIN :=.*/BIN := $binary/" $makefile
 sed -i "s/^LIB :=.*/LIB := $library/" $makefile
+sed -i "s|^CUARENA_DIR.*|CUARENA_DIR := $CUARENA_RESOLVED|" $makefile
+sed -i "s|^CUARENA_BUILD_TYPE.*|CUARENA_BUILD_TYPE := $CUARENA_BUILD_TYPE|" $makefile
 
 log ""
 

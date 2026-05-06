@@ -101,7 +101,11 @@ void Solver::awaken()
 		numCls += maxAddedCls, numLits += maxAddedLits;
 	}
 	assert(inf.maxDualVars);
-	if (!cumm.allocHist(cuhist, opts.proof_en) ||
+	if (
+	#ifdef USE_CUARENA
+		!cumm.initDeviceArena(numCls, numLits, opts.proof_en) ||
+	#endif
+		!cumm.allocHist(cuhist, opts.proof_en) ||
 		!cumm.allocAux(numCls) ||
 		!cumm.allocVars(vars, savedLits) ||
 		!cumm.allocPinned(vars, cuhist) ||

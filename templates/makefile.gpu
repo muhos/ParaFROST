@@ -39,9 +39,21 @@ NVCC := $(CUDA_PATH)/bin/nvcc -ccbin $(CXX)
 CCFLAGS   := NONE
 NVCCFLAGS := NONE
 
-# Common includes 
-INCLUDES  := -I../../common/inc
-EXTRALIB  := 
+# Common includes and extra libs
+
+INCLUDES := -I../../common/inc
+EXTRALIB :=
+
+# cuarena device pool backend (set by install.sh; NONE disables it)
+
+CUARENA_DIR        := NONE
+CUARENA_BUILD_TYPE := Release
+
+ifneq ($(CUARENA_DIR),NONE)
+CUARENA_LIB := $(CUARENA_DIR)/build/libcuarena.a
+INCLUDES    += -I$(CUARENA_DIR)/include
+EXTRALIB    += $(CUARENA_LIB)
+endif
 
 # generated binaries
 
@@ -63,7 +75,7 @@ endif
 endif
 
 # combine all flags
-ALL_CCFLAGS := 
+ALL_CCFLAGS :=
 ALL_CCFLAGS += $(NVCCFLAGS)
 ALL_CCFLAGS += $(addprefix -Xcompiler ,$(CCFLAGS))
 
@@ -74,7 +86,7 @@ ALL_LDFLAGS += $(addprefix -Xlinker ,$(LDFLAGS))
 # target rules
 
 CPPOBJEXT := o
-CUOBJEXT  := cuda.o 
+CUOBJEXT  := cuda.o
 
 mainsrc   := main
 cusrc     := $(sort $(wildcard *.cu))
@@ -99,31 +111,43 @@ ifneq ($(MAKECMDGOALS),clean)
 endif
 
 all: $(BIN)
-	
+
+# build cuarena static library via cmake (only when CUARENA_DIR is set)
+ifneq ($(CUARENA_DIR),NONE)
+$(CUARENA_LIB):
+	@cmake -B $(CUARENA_DIR)/build -S $(CUARENA_DIR) \
+	    -DCMAKE_BUILD_TYPE=$(CUARENA_BUILD_TYPE) \
+	    -DCMAKE_CUDA_ARCHITECTURES=native \
+	    -DCUARENA_BUILD_EXAMPLES=OFF \
+	    -DCUARENA_BUILD_TESTS=OFF \
+	    > /dev/null
+	@cmake --build $(CUARENA_DIR)/build --target cuArena > /dev/null
+endif
+
 $(LIB): $(cuobj) $(cppobj)
 	@$(ARCHIVE) "done" $@
 	@ar rc $@ $+
 	@ranlib $@
 	@$(DONE)
 
-$(BIN): $(mainsrc).$(CPPOBJEXT) $(LIB)
+$(BIN): $(mainsrc).$(CPPOBJEXT) $(LIB) $(CUARENA_LIB)
 	@$(ENDING) $@
 	@$(NVCC) $(ALL_LDFLAGS) -o $@ $(mainsrc).$(CPPOBJEXT) -L. $(LIB) $(EXTRALIB)
 	@$(DONE)
 
 $(mainsrc).$(CPPOBJEXT): $(mainsrc).cpp
 	@$(PROGRESS) $<
-	@$(NVCC) $(INCLUDES) $(ALL_CCFLAGS) -o $@ -c $< 
+	@$(NVCC) $(INCLUDES) $(ALL_CCFLAGS) -o $@ -c $<
 
 %.$(CUOBJEXT): %.cu
 	@$(PROGRESS) $<
-	@$(NVCC) $(INCLUDES) $(ALL_CCFLAGS) -o $@ -c $< 
-	
+	@$(NVCC) $(INCLUDES) $(ALL_CCFLAGS) -o $@ -c $<
+
 %.$(CPPOBJEXT): %.cpp
 	@$(PROGRESS) $<
 	@$(NVCC) $(INCLUDES) $(ALL_CCFLAGS) -o $@ -c $<
 
 clean:
-	rm -f *.$(CPPOBJEXT) *.$(CUOBJEXT) $(LIB) $(BIN) 
-	
+	rm -f *.$(CPPOBJEXT) *.$(CUOBJEXT) $(LIB) $(BIN)
+
 .PHONY: all clean

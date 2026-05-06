@@ -69,8 +69,47 @@ cuMM::cuMM()
       d_cnf_mem(nullptr), d_stencil(nullptr),
       nscatters(0), _compacttime(0.0f), _tot(0), _free(0),
       cap(0), dcap(0), maxcap(0), penalty(0),
-      isMemAdviseSafe(false)  
-{}
+      isMemAdviseSafe(false)
+{
+#ifdef USE_CUARENA
+    arena_ready = false;
+#endif
+}
+
+#ifdef USE_CUARENA
+bool cuMM::initDeviceArena(const size_t& numCls, const size_t& numLits, const bool& proofEnabled)
+{
+	if (arena_ready) return true;
+	// Stable region: histogram, auxiliary, and variable data (excluding literals)
+	const size_t varsize   = inf.maxVar + 1;
+	const size_t segBytes  = inf.maxDualVars * HC_SREFSIZE;
+	const size_t histBytes = inf.maxDualVars * HC_VARSIZE;
+	const size_t vorgBytes = varsize * HC_VARSIZE;
+	size_t hist_cap = segBytes + histBytes + vorgBytes;
+	if (proofEnabled) hist_cap += inf.maxDualVars;
+	const size_t scatterBytes = numCls * HC_SREFSIZE;
+	const size_t aux_cap = scatterBytes + numCls;
+	const size_t stable_cap = arena.align_up(hist_cap) + arena.align_up(aux_cap);
+	assert(stable_cap);
+	const size_t lits_dyn_cap = 2 * numLits * HC_VARSIZE;
+	const size_t total_cap  = stable_cap + arena.align_up(lits_dyn_cap);
+	LOG2(2, " Creating cuArena device pool (stable %.3f MB, dynamic %.3f MB)..", 
+		double(stable_cap) / MBYTE, double(lits_dyn_cap) / MBYTE);
+	try {
+		if (!arena.create_gpu_pool(total_cap, cuArena::GPUMemoryType::Device, 0, stable_cap)) {
+			LOGWARNING("cuArena: failed to create device pool (%.3f MB) -> falling back to cudaMalloc",
+				double(total_cap) / MBYTE);
+			return false;
+		}
+	} catch (const cuArena::gpu_memory_error& e) {
+		LOGWARNING("cuArena: device pool exception (%s) -> falling back to cudaMalloc", e.what());
+		return false;
+	}
+	arena_ready = true;
+	LOG2(2, " cuArena device pool ready");
+	return true;
+}
+#endif
 
 void cuMM::cuMemSetAsync(addr_t mem, const Byte& val, const size_t& size)
 {
@@ -102,8 +141,31 @@ uint32* cuMM::resizeLits(const size_t& min_lits)
 	if (litsPool.cap < min_cap) {
 		DFREE(litsPool);
 		assert(litsPool.mem == NULL);
-		if (!hasDeviceMem(min_cap, "Literals")) return NULL;
+		if (!hasDeviceMem(min_cap, "Literals", cuArena::Region::Dynamic)) return NULL;
+	#ifdef USE_CUARENA
+		if (arena_ready) {
+			try {
+				litsPool.mem = arena.allocate<uint32>(min_lits, cuArena::Region::Dynamic);
+			}
+			catch (const cuArena::gpu_memory_error&) {
+				LOGN2(2, "  cuArena: dynamic region fragmented, compacting and retrying..");
+				arena.compact_gpu_dynamic(nullptr);
+				try {
+					litsPool.mem = arena.allocate<uint32>(min_lits, cuArena::Region::Dynamic);
+				}
+				catch (const cuArena::gpu_memory_error& e2) {
+					LOGWARNING("cuArena: Literals alloc failed after compact (%s)", e2.what());
+					return NULL;
+				}
+				LOGENDING(2, 5, "(%.3f MB reclaimed)", double(arena.gpu_available()) / MBYTE);
+			}
+		}
+		else {
+			CHECK(cudaMalloc((void**)&litsPool.mem, min_cap));
+		}
+	#else
 		CHECK(cudaMalloc((void**)&litsPool.mem, min_cap));
+	#endif
 		litsPool.cap = min_cap;
 		litsPool.size = min_lits;
 	}
@@ -125,7 +187,14 @@ bool cuMM::allocHist(cuHist& cuhist, const bool& proofEnabled)
 		DFREE(histPool);
 		assert(histPool.mem == NULL);
 		if (!hasDeviceMem(min_cap, "Histogram")) return false;
+	#ifdef USE_CUARENA
+		try { histPool.mem = arena.allocate<Byte>(min_cap, cuArena::Region::Stable); }
+		catch (const cuArena::gpu_memory_error& e) {
+			LOGWARNING("cuArena: Histogram alloc failed (%s)", e.what()); return false;
+		}
+	#else
 		CHECK(cudaMalloc((void**)&histPool.mem, min_cap));
+	#endif
 		// NOTE: d_segs, d_hist used internally by OT allocation and externally
 		//       by BVE for calculating resolvents offsets (memory reuse)
 		//		 lbyte is used for proof byte counting
@@ -229,7 +298,14 @@ bool cuMM::allocAux(const size_t& clsCap)
 		DFREE(auxPool);
 		assert(auxPool.mem == NULL);
 		if (!hasDeviceMem(min_cap, "Auxiliary")) return false;
+	#ifdef USE_CUARENA
+		try { auxPool.mem = arena.allocate<Byte>(min_cap, cuArena::Region::Stable); }
+		catch (const cuArena::gpu_memory_error& e) {
+			LOGWARNING("cuArena: Auxiliary alloc failed (%s)", e.what()); return false;
+		}
+	#else
 		CHECK(cudaMalloc((void**)&auxPool.mem, min_cap));
+	#endif
 		d_scatter = (S_REF*)auxPool.mem;
 		d_stencil = auxPool.mem + scatterBytes;
 		auxPool.cap = min_cap;

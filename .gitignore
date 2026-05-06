@@ -12,3 +12,4 @@ src_backup
 build
 .vscode
 *.cnf
+*.txt
