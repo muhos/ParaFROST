@@ -169,6 +169,7 @@ void OPTION::init()
 {
 	autarky_en			= opt_autarky_en;
 	autarky_sleep_en	= opt_autarky_sleep_en;
+	boundsearch_en		= opt_boundsearch_en;
 	bumpreason_en		= opt_bumpreason_en;
 	chrono_en			= opt_chrono_en;
 	chrono_min			= opt_chrono_min;
