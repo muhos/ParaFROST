@@ -305,9 +305,6 @@ inline void	Solver::mapFrozen()
 {
 	if (!gopts.hostKOpts.ve_fun_en) return;
 #if defined(USE_CUARENA) && defined(USE_DEVICE_CNF)
-	// Use explicit D2H cudaMemcpy (DMA path) instead of direct CPU reads of managed
-	// memory: keeping scores pages GPU-resident avoids Ada Lovelace HMM page migration
-	// that would disrupt the next varReorder's thrust::sort on those same pages.
 	uint32 nFrozen = 0;
 	CHECK(cudaMemcpy(&nFrozen, vars->scores, sizeof(uint32), cudaMemcpyDeviceToHost));
 	if (!nFrozen) { vars->varcore = NULL; sp->stacktail = sp->tmpstack; return; }
