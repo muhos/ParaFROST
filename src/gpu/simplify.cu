@@ -23,9 +23,14 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 using namespace ParaFROST;
 
-uint32 Solver::updateNumElims() 
+uint32 Solver::updateNumElims()
 {
+#if defined(USE_CUARENA) && defined(USE_DEVICE_CNF)
+	uint32 remainedPVs = 0;
+	CHECK(cudaMemcpy(&remainedPVs, vars->electedSize, sizeof(uint32), cudaMemcpyDeviceToHost));
+#else
 	const uint32 remainedPVs = *vars->electedSize;
+#endif
 	assert(remainedPVs <= vars->numElected);
 	inf.currDeletedVars = vars->numElected - remainedPVs;
 	return remainedPVs;
@@ -103,13 +108,16 @@ void Solver::awaken()
 	assert(inf.maxDualVars);
 	if (
 	#ifdef USE_CUARENA
-		!cumm.initDeviceArena(numCls, numLits, opts.proof_en) ||
+		!cumm.initDeviceArena(numCls, numLits, savedLits, opts.proof_en) ||
 	#endif
 		!cumm.allocHist(cuhist, opts.proof_en) ||
 		!cumm.allocAux(numCls) ||
 		!cumm.allocVars(vars, savedLits) ||
 		!cumm.allocPinned(vars, cuhist) ||
 		!cumm.resizeCNF(cnf, numCls, numLits)) { simpstate = CNFALLOC_FAIL; return; }
+#ifdef USE_CUARENA
+	cacher.setArena(cumm.deviceArena());
+#endif
 	olist_cmp.init(cnf), compact_cmp.init(cnf);
 	printStats(1, '-', CGREEN0);
 	inf.numClauses = inf.numLiterals = 0;

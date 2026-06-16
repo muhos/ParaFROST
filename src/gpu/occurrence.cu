@@ -72,7 +72,7 @@ namespace ParaFROST {
 		if (print || gopts.sync_always) {
 			LASTERR("Occurrence table reduction failed");
 			SYNCALL;
-			if (print) {
+			if (print && !cumm.isDeviceCNF()) {
 				LOGRULER('=', 30);
 				LOG0("\toccurrence table");
 				ot->print();
@@ -92,7 +92,7 @@ namespace ParaFROST {
 		if (gopts.sync_always) {
 			LASTERR("Occurrence table reset failed");
 			SYNCALL;
-			assert(ot->accViolation(inf.maxVar));
+			assert(cumm.isDeviceCNF() || ot->accViolation(inf.maxVar));
 		}
 	}
 
@@ -107,11 +107,10 @@ namespace ParaFROST {
 		OPTIMIZEBLOCKS(inf.numClauses, nThreads, 0);
 		create_ot_k << <nBlocks, nThreads, 0, stream >> > (cnf, ot);
 		if (print || gopts.sync_always) {
-			LOG2(2, "");
 			LASTERR("Occurrence table creation failed");
 			SYNCALL;
-			assert(ot->accViolation(inf.maxVar));
-			if (print) {
+			assert(cumm.isDeviceCNF() || ot->accViolation(inf.maxVar));
+			if (print && !cumm.isDeviceCNF()) {
 				LOGRULER('=', 30);
 				LOG0("\toccurrence table");
 				ot->print();

@@ -55,7 +55,7 @@ namespace ParaFROST {
 		}
 
 	public:
-		MCA(CACHER& cacher, bool print_prop = true, cudaStream_t stream_ = 0) :
+		MCA(CACHER& cacher, bool print_prop = false, cudaStream_t stream_ = 0) :
 			cacher(cacher), context_t(), _stream(stream_) {
 
 			init();

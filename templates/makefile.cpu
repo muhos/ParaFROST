@@ -43,7 +43,8 @@ endif
 
 # target rules
 mainsrc := main
-allsrc := $(sort $(wildcard *.cpp))
+allsrc  := $(sort $(wildcard *.cpp))
+headers := $(sort $(wildcard $(SRC_DIR)/*.hpp))
 src := $(filter-out $(mainsrc).cpp,$(allsrc))
 obj := $(patsubst %.cpp,%.o,$(src))
 
@@ -60,11 +61,11 @@ $(BIN): $(mainsrc).o $(LIB)
 	@$(HOST_COMPILER) $(CCFLAGS) -o $@ $(mainsrc).o -L. -l$(BIN) $(LIBRARIES)
 	@$(DONE)
 
-$(mainsrc).o:$(mainsrc).cpp
+$(mainsrc).o:$(mainsrc).cpp $(headers)
 	@$(PROGRESS) $<
 	@$(HOST_COMPILER) $(CCFLAGS) -o $@ -c $<
 
-%.o:%.cpp
+%.o:%.cpp $(headers)
 	@$(PROGRESS) $<
 	@$(HOST_COMPILER) $(CCFLAGS) -o $@ -c $<
 

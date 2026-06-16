@@ -291,11 +291,26 @@ namespace ParaFROST {
 		inline void		clearFrozen			() {
 			assert(sp->stacktail - sp->tmpstack <= inf.maxVar);
 			uint32* start = sp->tmpstack, *tail = sp->stacktail;
+		#if defined(USE_CUARENA) && defined(USE_DEVICE_CNF)
+			while (start != tail)
+				sp->vstate[*start++].frozen = 0;
+		#else
 			while (start != tail)
 				sp->frozen[*start++] = 0;
+		#endif
 			assert(verifyFrozen());
 		}
 		inline bool		verifyFrozen		() {
+		#if defined(USE_CUARENA) && defined(USE_DEVICE_CNF)
+			for (uint32 v = 1; v <= inf.maxVar; v++) {
+				if (sp->vstate[v].frozen) {
+					LOG0("");
+					LOGERRORN("vstate.frozen(%d) is not melted", v);
+					return false;
+				}
+			}
+			return true;
+		#else
 			for (uint32 v = 0; v <= inf.maxVar; v++) {
 				if (sp->frozen[v]) {
 					LOG0("");
@@ -305,6 +320,7 @@ namespace ParaFROST {
 				}
 			}
 			return true;
+		#endif
 		}
 		inline void		attachDelayed		() {
 			forall_dwatches(dwatches, d) {

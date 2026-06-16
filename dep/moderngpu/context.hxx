@@ -17,14 +17,33 @@ enum memory_space_t {
 
 inline std::string device_prop_string(cudaDeviceProp prop) {
   int ordinal;
-  cudaGetDevice(&ordinal);
+  CHECK(cudaGetDevice(&ordinal));
 
   size_t freeMem, totalMem;
   cudaError_t result = cudaMemGetInfo(&freeMem, &totalMem);
-  if(cudaSuccess != result) throw cuda_exception_t(result);  
+  if (cudaSuccess != result) throw cuda_exception_t(result);
 
-  double memBandwidth = (prop.memoryClockRate * 1000.0) *
-    (prop.memoryBusWidth / 8 * 2) / 1.0e9;
+  int clockRate = 0;
+  int memoryClockRate = 0;
+  int memoryBusWidth = 0;
+  int eccEnabled = 0;
+
+  CHECK(cudaDeviceGetAttribute(&clockRate,
+                               cudaDevAttrClockRate,
+                               ordinal));
+  CHECK(cudaDeviceGetAttribute(&memoryClockRate,
+                               cudaDevAttrMemoryClockRate,
+                               ordinal));
+  CHECK(cudaDeviceGetAttribute(&memoryBusWidth,
+                               cudaDevAttrGlobalMemoryBusWidth,
+                               ordinal));
+  CHECK(cudaDeviceGetAttribute(&eccEnabled,
+                               cudaDevAttrEccEnabled,
+                               ordinal));
+
+  double memBandwidth =
+      (memoryClockRate * 1000.0) *
+      (memoryBusWidth / 8.0 * 2.0) / 1.0e9;
 
   std::string s = detail::stringprintf(
     "%s : %8.3lf Mhz   (Ordinal %d)\n"
@@ -32,11 +51,12 @@ inline std::string device_prop_string(cudaDeviceProp prop) {
     "FreeMem: %6dMB   TotalMem: %6dMB   %2d-bit pointers.\n"
     "Mem Clock: %8.3lf Mhz x %d bits   (%5.1lf GB/s)\n"
     "ECC %s\n\n",
-    prop.name, prop.clockRate / 1000.0, ordinal,
+    prop.name, clockRate / 1000.0, ordinal,
     prop.multiProcessorCount, prop.major, prop.minor,
-    (int)(freeMem / (1<< 20)), (int)(totalMem / (1<< 20)), 8 * sizeof(int*),
-    prop.memoryClockRate / 1000.0, prop.memoryBusWidth, memBandwidth,
-    prop.ECCEnabled ? "Enabled" : "Disabled");
+    (int)(freeMem / (1 << 20)), (int)(totalMem / (1 << 20)), 8 * sizeof(int*),
+    memoryClockRate / 1000.0, memoryBusWidth, memBandwidth,
+    eccEnabled ? "Enabled" : "Disabled");
+
   return s;
 }
 

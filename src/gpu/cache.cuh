@@ -23,6 +23,10 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 #include "logging.hpp"
 #include "constants.hpp"
 
+#ifdef USE_CUARENA
+namespace cuArena { class DeviceArena; }
+#endif
+
 namespace ParaFROST {
 
 	// memory cache types
@@ -42,10 +46,18 @@ namespace ParaFROST {
 		size_t			used, maxcap;
 		free_cache_t    free_cache;
 		alloc_cache_t   alloc_cache;
+	#ifdef USE_CUARENA
+		cuArena::DeviceArena* arena;
+	#endif
 
 	public:
 
+	#ifdef USE_CUARENA
+		CACHER() : used(0), maxcap(0), arena(nullptr) { }
+		inline void		setArena		(cuArena::DeviceArena* const a) { arena = a; }
+	#else
 		CACHER() : used(0), maxcap(0) { }
+	#endif
 		~CACHER() { destroy(); }
 		inline size_t	maxCapacity		() const { return maxcap; }
 		inline void		updateMaxCap	() { if (maxcap < used) maxcap = used; }
