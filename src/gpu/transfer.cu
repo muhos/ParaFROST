@@ -66,11 +66,14 @@ void Solver::markEliminated(const cudaStream_t& _s)
 #endif
 }
 
-void Solver::cacheUnits(const cudaStream_t& stream) 
+void Solver::cacheUnits(const cudaStream_t& stream)
 {
 	SYNC(stream);
-	if ((vars->nUnits = vars->tmpUnits.size()))
+	vars->nUnits = vars->tmpUnits.size();
+#if !(defined(USE_CUARENA) && defined(USE_DEVICE_CNF))
+	if (vars->nUnits)
 		CHECK(cudaMemcpyAsync(vars->cachedUnits, vars->unitsData, vars->nUnits * sizeof(uint32), cudaMemcpyDeviceToHost, stream));
+#endif
 	if (gopts.sync_always) SYNC(stream);
 }
 

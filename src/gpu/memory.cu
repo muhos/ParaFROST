@@ -139,11 +139,6 @@ bool cuMM::initDeviceArena(const size_t& numCls, const size_t& numLits, const si
 #endif
 	size_t dyn_cap = dyn_est;
 #if defined(USE_DEVICE_CNF)
-	// In the device-CNF path CNF and OT live inside the arena's dynamic region, so
-	// their peak can far exceed the first-round estimate (literals/OT blow up across
-	// simplification rounds). The CACHER (thrust/cub/moderngpu scratch) also draws
-	// from the dynamic region. The fixed vars pool is already part of stable_cap, so
-	// hand the rest of the leftover VRAM to the dynamic region, keeping only a margin.
 	size_t gpu_free = 0, gpu_tot = 0;
 	CHECK(cudaMemGetInfo(&gpu_free, &gpu_tot));
 	const size_t reserve  = size_t(penalty) + (256 * MBYTE);              // driver overhead + slack
@@ -315,7 +310,10 @@ bool cuMM::allocVars(VARS*& vars, const size_t& resolvedCap)
 	CHECK(cudaMallocManaged((void**)&varsPool.mem, min_cap));
 #endif
 	CHECK(cudaMemset(varsPool.mem, 0, min_cap));
-	addr_t ea = varsPool.mem, end = ea + min_cap;
+	addr_t ea = varsPool.mem;
+	#if !defined(NDEBUG)
+	addr_t end = ea + min_cap;
+	#endif
 	vars->elected = (cuVecU*)ea, ea += HC_VECSIZE;
 	vars->units = (cuVecU*)ea, ea += HC_VECSIZE;
 	vars->resolved = (cuVecU*)ea, ea += HC_VECSIZE;
@@ -331,7 +329,9 @@ bool cuMM::allocVars(VARS*& vars, const size_t& resolvedCap)
 	uint32* resolvedData = uintPtr; uintPtr += resolvedCap;
 	Byte* bytePtr = (Byte*)uintPtr;
 	vars->eliminated = bytePtr, bytePtr += varsize;
+	#if !defined(NDEBUG)
 	assert(bytePtr == end);
+	#endif
 	varsPool.cap = min_cap;
 #if defined(USE_CUARENA) && defined(USE_DEVICE_CNF)
 	initVars_k<<<1, 1>>>(vars->elected, vars->electedData, vars->units, vars->unitsData,

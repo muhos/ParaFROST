@@ -91,12 +91,20 @@ namespace ParaFROST {
 			assert(_tot > cap);
 			return true;
 		}
-		inline bool		hasDeviceMem	(const size_t& min_cap, const char* name, 
+		inline bool		hasDeviceMem	(const size_t& min_cap, const char* name,
 									     const cuArena::Region& type = cuArena::Region::Stable) {
 			const int64 used = dcap + min_cap;
-			LOG2(2, " Allocating GPU-only memory for %s (used/free = %.2f/%.2f MB)", name, 
-				double(used) / MBYTE, 
-				double(type == cuArena::Region::Stable ? arena.gpu_stable_capacity() : arena.gpu_dynamic_capacity()) / MBYTE);
+			if (arena_ready) {
+				const size_t avail = (type == cuArena::Region::Stable) ?
+					arena.gpu_stable_available() : arena.gpu_available();
+				LOG2(2, " Allocating GPU-only memory for %s (used/free = %.2f/%.2f MB)", name,
+					double(used) / MBYTE, double(avail) / MBYTE);
+				if (min_cap > avail) { LOGWARNING("not enough memory for %s (current = %lld MB) - skip GPU simplifier", name, used / MBYTE); return false; }
+				dcap = used;
+				return true;
+			}
+			LOG2(2, " Allocating GPU-only memory for %s (used/free = %.2f/%lld MB)", name,
+				double(used) / MBYTE, _free / MBYTE);
 			if (int64(min_cap) >= _free) { LOGWARNING("not enough memory for %s (current = %lld MB) - skip GPU simplifier", name, used / MBYTE); return false; }
 			_free -= min_cap;
 			dcap = used;
