@@ -189,7 +189,7 @@ namespace ParaFROST {
 		stats.literals.original = stats.literals.learnt = 0;
 		for (uint32 i = 0; i < hcnf->size(); i++) {
 			SCLAUSE& s = hcnf->clause(i);
-			if (s.deleted()) continue; //  skip deleted clauses left by 'propFailed'
+			if (s.deleted()) continue;
 			newClause(s);
 		}
 		stats.clauses.original = orgs.size();
@@ -204,9 +204,8 @@ namespace ParaFROST {
 		// thus cnf->size() or hcnf->size() must always be used
 		if (interrupted()) killSolver();
 		if (simpstate == OTALLOC_FAIL) SYNCALL;
-		cudaStream_t copystream;
-		if (gopts.unified_access) copystream = 0, hcnf = cnf;
-		else copystream = s2, cumm.mirrorCNF(hcnf);
+		cudaStream_t copystream = s2;
+		cumm.mirrorCNF(hcnf);
 		assert(hcnf);
 		if (gopts.profile_gpu) cutimer.start(copystream);
 		if (compacted) {
@@ -229,12 +228,10 @@ namespace ParaFROST {
 			}
 		}
 		if (inf.numClauses) {
-			if (!gopts.unified_access)
-				CHECK(cudaMemcpyAsync(hcnf->data().mem, cumm.cnfMem(), hcnf->data().size * SBUCKETSIZE, cudaMemcpyDeviceToHost, s2));
+			CHECK(cudaMemcpyAsync(hcnf->data().mem, cumm.cnfMem(), hcnf->data().size * SBUCKETSIZE, cudaMemcpyDeviceToHost, s2));
 			if (!reallocFailed() && opts.aggr_cnf_sort)
 				thrust::stable_sort(thrust::cuda::par(tca).on(s1), cumm.refsMem(), cumm.refsMem() + hcnf->size(), olist_cmp);
-			if (!gopts.unified_access)
-				CHECK(cudaMemcpyAsync(hcnf->refsData(), cumm.refsMem(), hcnf->size() * sizeof(S_REF), cudaMemcpyDeviceToHost, s1));
+			CHECK(cudaMemcpyAsync(hcnf->refsData(), cumm.refsMem(), hcnf->size() * sizeof(S_REF), cudaMemcpyDeviceToHost, s1));
 		}
 	}
 

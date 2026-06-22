@@ -27,7 +27,7 @@ namespace ParaFROST {
 		cuVecU* elected,	 * units,       * resolved;
 		uint32* electedData, * electedSize;
 		uint32* unitsData, * unitsSize;
-		uint32* scores, * varcore, * eligible, * cachedUnits;
+		uint32* scores, * varcore, * eligible;
 		Byte*	eliminated,  * cachedEliminated;
 		cuVecU  tmpUnits;
 		uint32  numElected, nUnits, currMelted;
@@ -43,7 +43,6 @@ namespace ParaFROST {
 			, scores(NULL)
 			, varcore(NULL)
 			, eligible(NULL)
-			, cachedUnits(NULL)
 			, eliminated(NULL)
 			, cachedEliminated(NULL)
 			, numElected(0), nUnits(0), currMelted(0)

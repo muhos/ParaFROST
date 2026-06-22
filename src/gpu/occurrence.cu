@@ -72,12 +72,6 @@ namespace ParaFROST {
 		if (print || gopts.sync_always) {
 			LASTERR("Occurrence table reduction failed");
 			SYNCALL;
-			if (print && !cumm.isDeviceCNF()) {
-				LOGRULER('=', 30);
-				LOG0("\toccurrence table");
-				ot->print();
-				LOGRULER('=', 30);
-			}
 		}
 		if (gopts.profile_gpu) cutimer.stop(), stats.sigma.time.rot += cutimer.gpuTime();
 	}
@@ -92,7 +86,6 @@ namespace ParaFROST {
 		if (gopts.sync_always) {
 			LASTERR("Occurrence table reset failed");
 			SYNCALL;
-			assert(cumm.isDeviceCNF() || ot->accViolation(inf.maxVar));
 		}
 	}
 
@@ -109,13 +102,6 @@ namespace ParaFROST {
 		if (print || gopts.sync_always) {
 			LASTERR("Occurrence table creation failed");
 			SYNCALL;
-			assert(cumm.isDeviceCNF() || ot->accViolation(inf.maxVar));
-			if (print && !cumm.isDeviceCNF()) {
-				LOGRULER('=', 30);
-				LOG0("\toccurrence table");
-				ot->print();
-				LOGRULER('=', 30);
-			}
 		}
 		LOGDONE(2, 5);
 		if (gopts.profile_gpu) cutimer.stop(), stats.sigma.time.cot += cutimer.gpuTime();

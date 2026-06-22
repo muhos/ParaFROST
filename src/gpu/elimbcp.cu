@@ -21,8 +21,6 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 using namespace ParaFROST;
 
-#if defined(USE_CUARENA) && defined(USE_DEVICE_CNF)
-
 // Per-variable assignment: 0 = unset, 1 = true, 2 = false
 #define BCP_UNSET 0u
 #define BCP_TRUE  1u
@@ -143,89 +141,6 @@ void bcp_apply_k(CNF* __restrict__ cnfptr, const uint32* __restrict__ state)
 	}
 }
 
-#endif
-
-void Solver::createOTHost(HOT& hot)
-{
-	assert(hcnf != NULL);
-	assert(vars->nUnits);
-	assert(reallocFailed());
-	for (uint32 i = 0; i < hcnf->size(); i++) {
-		const S_REF r = hcnf->ref(i);
-		SCLAUSE& c = (*hcnf)[r];
-		if (c.learnt() || c.original()) {
-			assert(c.size());
-			forall_clause(c, k) {
-				CHECKLIT(*k);
-				hot[*k].push(r);
-			}
-		}
-	}
-}
-
-bool Solver::propFailed()
-{
-	if (vars->nUnits) {
-		SYNCALL; // sync 'cacheCNF'
-		assert(reallocFailed());
-		assert(hcnf != NULL);
-		assert(inf.numClauses == hcnf->size());
-		HOT hot(inf.maxDualVars);
-		createOTHost(hot);
-		// start proping on host
-		nForced = sp->propagated;
-		assert(vars->cachedUnits != NULL);
-		LIT_ST* values = sp->value;
-		uint32* t = vars->cachedUnits + vars->nUnits;
-		for (uint32* u = vars->cachedUnits; u != t; u++) {
-			const uint32 unit = *u;
-			CHECKLIT(unit);
-			const LIT_ST val = values[unit];
-			if (UNASSIGNED(val)) enqueueDevUnit(unit);
-			else if (!val) return false; // early conflict detection
-		}
-		if (trail.size() == sp->propagated) vars->nUnits = nForced = 0; // duplicate units
-		else LOGN2(2, " Propagating pending forced units..");
-		int64 bclauses = inf.numClauses, bliterals = inf.numLiterals;
-		CNF& hcnf = *this->hcnf;
-		while (sp->propagated < trail.size()) { // propagate units
-			uint32 assign = trail[sp->propagated++], f_assign = FLIP(assign);
-			CHECKLIT(assign);
-			forall_occurs(hot[assign], i) {
-				hcnf[*i].markDeleted();
-			}
-			forall_occurs(hot[f_assign], i) {
-				SCLAUSE& c = hcnf[*i];
-				assert(c.size());
-				if (c.deleted()) continue;
-				if (propClause(values, f_assign, c))
-					c.markDeleted();
-				else {
-					assert(c.size()); // cannot be empty at this point
-					if (c.size() == 1) {
-						const uint32 unit = *c;
-						CHECKLIT(unit);
-						if (UNASSIGNED(values[unit])) enqueueUnit(unit);
-						else { learnEmpty(); return false; }
-					}
-				}
-			}
-		}
-		LOGDONE(2, 5);
-		nForced = sp->propagated - nForced;
-		LOGREDALLHOST(this, 2, "BCP Reductions");
-		countAll(1);
-		inf.numClauses = inf.numClausesSurvived;
-		inf.numLiterals = inf.numLiteralsSurvived;
-		stats.units.forced += nForced;
-		stats.sigma.all.clauses += bclauses - int64(inf.numClauses);
-		stats.sigma.all.literals += bliterals - int64(inf.numLiterals);
-		vars->nUnits = nForced = 0;
-	}
-	return true;
-}
-
-#if defined(USE_CUARENA) && defined(USE_DEVICE_CNF)
 bool Solver::prop()
 {
 	if (!vars->nUnits) return true; // nothing forced -> nothing to propagate
@@ -298,47 +213,8 @@ bool Solver::prop()
 	SYNC(streams[0]); SYNC(streams[1]);
 	return true;
 }
-#else
-bool Solver::prop()
-{
-	if (!enqueueCached(streams[3])) { learnEmpty(); return false; }
-	LIT_ST* values = sp->value;
-	while (sp->propagated < trail.size()) {
-		uint32 assign = trail[sp->propagated++], f_assign = FLIP(assign);
-		CHECKLIT(assign);
-		MARKFORCED(vars->eliminated[ABS(assign)]);
-		OL& ol = (*ot)[assign];
-		OL& f_ol = (*ot)[f_assign];
-		CNF& cnf = *this->cnf;
-		forall_occurs(f_ol, i) { // reduce unsatisfied 
-			SCLAUSE& c = cnf[*i];
-			assert(c.size());
-			if (c.deleted()) continue;
-			if (propClause(values, f_assign, c))
-				c.markDeleted();
-			else {
-				assert(c.size()); // cannot be empty at this point
-				if (c.size() == 1) {
-					const uint32 unit = *c;
-					CHECKLIT(unit);
-					if (UNASSIGNED(values[unit])) enqueueUnit(unit);
-					else { learnEmpty(); return false; }
-				}
-			}
-		}
-		forall_occurs(ol, i) { 
-			SCLAUSE& c = cnf[*i];
-			assert(c.size());
-			c.markDeleted();
-		}
-		ol.clear(true), f_ol.clear(true);
-	}
-	cleanProped();
-	return true;
-}
-#endif
 
-#if defined(BCP_TEST_UNITS) && defined(USE_CUARENA) && defined(USE_DEVICE_CNF)
+#if defined(BCP_TEST_UNITS)
 void Solver::injectTestUnits(const uint32& want)
 {
 	if (!want) return;
@@ -349,60 +225,3 @@ void Solver::injectTestUnits(const uint32& want)
 	LOG2(2, " [TEST] injected %u synthetic forced units before prop", vars->nUnits);
 }
 #endif
-
-inline bool Solver::propClause(const LIT_ST* values, const uint32& lit, SCLAUSE& c)
-{
-	assert(c.size() > 1);
-	uint32 sig = 0;
-	uint32* j = c;
-	forall_clause(c, i) {
-		const uint32 other = *i;
-		if (NEQUAL(other, lit)) {
-			if (values[other] > 0) return true;
-			*j++ = other;
-			sig |= MAPHASH(other);
-		}
-	}
-	assert(int(j - c) == c.size() - 1);
-	assert(c.hasZero() < 0);
-	c.set_sig(sig);
-	c.pop();
-	assert(c.isSorted());
-	return false;
-}
-
-inline bool Solver::enqueueCached(const cudaStream_t& stream) {
-	if (vars->nUnits) {
-		nForced = sp->propagated;
-		SYNC(stream); // sync units copy
-		assert(vars->cachedUnits != NULL);
-		LIT_ST* values = sp->value;
-		uint32* t = vars->cachedUnits + vars->nUnits;
-		for (uint32* u = vars->cachedUnits; u != t; u++) {
-			const uint32 unit = *u;
-			CHECKLIT(unit);
-			const LIT_ST val = values[unit];
-			if (UNASSIGNED(val)) enqueueDevUnit(unit);
-			else if (!val) return false; // early conflict detection
-		}
-		if (trail.size() == sp->propagated) vars->nUnits = nForced = 0; // duplicate units
-		else LOG2(2, " Propagating forced units..");
-		SYNCALL; // sync ot creation
-	}
-	return true;
-}
-
-inline void	Solver::cleanProped() {
-	if (vars->nUnits) {
-		nForced = sp->propagated - nForced;
-		if (nForced) {
-			countAll();
-			inf.numClauses = inf.numClausesSurvived, inf.numLiterals = inf.numLiteralsSurvived;
-		}
-		LOGREDALL(this, 2, "BCP Reductions");
-		nForced = 0, vars->tmpUnits.clear();
-		assert(vars->tmpUnits.data() == vars->unitsData);
-		if (!opts.sub_en) reduceOTAsync();
-		CHECK(cudaMemcpyAsync(vars->units, &vars->tmpUnits, sizeof(cuVecU), cudaMemcpyHostToDevice));
-	}
-}

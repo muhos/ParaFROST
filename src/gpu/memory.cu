@@ -49,7 +49,6 @@ void resizeCNF_k(CNF* cnf, const S_REF d_size, const uint32 cs_size)
 	cnf->resize(d_size, cs_size);
 }
 
-#if defined(USE_CUARENA) && defined(USE_DEVICE_CNF)
 __global__
 void initCNF_k(CNF* cnf, const S_REF data_cap, const uint32 cs_cap)
 {
@@ -73,9 +72,8 @@ void initVars_k(
 	units->alloc(unitsData, varsize);
 	resolved->alloc(resolvedData, resolvedCap);
 }
-#endif
 
-__global__ 
+__global__
 void assignListPtrs(OT* __restrict__ ot, const uint32* __restrict__ hist, const S_REF* __restrict__ segs, const uint32 size)
 {
 	for_parallel_x(tid, size) {
@@ -93,21 +91,16 @@ cuMM::cuMM()
       pinned_cnf(nullptr), d_refs_mem(nullptr), d_scatter(nullptr),
       d_segs(nullptr), d_occurs(nullptr), d_hist(nullptr),
       d_cnf_mem(nullptr), d_stencil(nullptr), d_vstate(nullptr),
-      nscatters(0), device_cnf(false),
+      nscatters(0),
       _compacttime(0.0f), _tot(0), _free(0),
-      cap(0), dcap(0), maxcap(0), penalty(0),
-      isMemAdviseSafe(false)
+      cap(0), dcap(0), maxcap(0), penalty(0)
 {
-#ifdef USE_CUARENA
     arena_ready = false;
-#endif
 }
 
-#ifdef USE_CUARENA
 bool cuMM::initDeviceArena(const size_t& numCls, const size_t& numLits, const size_t& resolvedCap, const bool& proofEnabled)
 {
 	if (arena_ready) return true;
-	(void)resolvedCap; // only consumed by the USE_DEVICE_CNF dynamic-sizing path below
 	// Stable region: histogram, auxiliary, and variable data (excluding literals)
 	const size_t varsize      = inf.maxVar + 1;
 	const size_t segBytes     = inf.maxDualVars * HC_SREFSIZE;
@@ -119,26 +112,19 @@ bool cuMM::initDeviceArena(const size_t& numCls, const size_t& numLits, const si
 	const size_t scatterBytes = numCls * HC_SREFSIZE;
 	const size_t aux_cap = scatterBytes + numCls;
 	size_t stable_cap = arena.align_up(hist_cap) + arena.align_up(aux_cap);
-#if defined(USE_DEVICE_CNF)
 	// Fixed vars pool (allocVars): headers + data + scores + resolved + eliminated.
 	const size_t vars_fixed = HC_VECSIZE * 3
 		+ varsize * HC_VARSIZE * 4 + resolvedCap * HC_VARSIZE + varsize;
 	stable_cap += arena.align_up(vars_fixed); // vars lives in the stable region
-#endif
 	assert(stable_cap);
 	// Estimated dynamic peak (lower bound used for sanity/clamping only).
 	const size_t lits_dyn_cap = 2 * numLits * HC_VARSIZE;
-#if defined(USE_DEVICE_CNF)
 	// CNF: two blocks needed at peak (old + new during realloc)
 	const size_t cnf_dyn_cap = HC_CNFSIZE + numCls * (SCLAUSESIZE + HC_SREFSIZE) + numLits * SBUCKETSIZE;
 	// OT: one block (header + OL array + literal refs)
 	const size_t ot_dyn_cap  = HC_OTSIZE + inf.maxDualVars * HC_OLSIZE + numLits * HC_SREFSIZE;
 	const size_t dyn_est = arena.align_up(lits_dyn_cap) + 2 * arena.align_up(cnf_dyn_cap) + arena.align_up(ot_dyn_cap);
-#else
-	const size_t dyn_est = arena.align_up(lits_dyn_cap);
-#endif
 	size_t dyn_cap = dyn_est;
-#if defined(USE_DEVICE_CNF)
 	size_t gpu_free = 0, gpu_tot = 0;
 	CHECK(cudaMemGetInfo(&gpu_free, &gpu_tot));
 	const size_t reserve  = size_t(penalty) + (256 * MBYTE);              // driver overhead + slack
@@ -149,7 +135,6 @@ bool cuMM::initDeviceArena(const size_t& numCls, const size_t& numLits, const si
 	else
 		LOGWARNING("cuArena: tight VRAM (free %.3f MB, stable %.3f MB, reserve %.3f MB) -> using estimated dynamic %.3f MB",
 			double(gpu_free) / MBYTE, double(stable_cap) / MBYTE, double(reserve) / MBYTE, double(dyn_cap) / MBYTE);
-#endif
 	const size_t total_cap = stable_cap + dyn_cap;
 	LOG2(2, " Creating cuArena device pool (stable %.3f MB, dynamic %.3f MB)..",
 		double(stable_cap) / MBYTE, double(dyn_cap) / MBYTE);
@@ -180,7 +165,6 @@ bool cuMM::initDeviceArena(const size_t& numCls, const size_t& numLits, const si
 			double(cpu_cap) / MBYTE);
 	return true;
 }
-#endif
 
 void cuMM::cuMemSetAsync(addr_t mem, const Byte& val, const size_t& size)
 {
@@ -213,7 +197,6 @@ uint32* cuMM::resizeLits(const size_t& min_lits)
 		DFREE(litsPool);
 		assert(litsPool.mem == NULL);
 		if (!hasDeviceMem(min_cap, "Literals", cuArena::Region::Dynamic)) return NULL;
-	#ifdef USE_CUARENA
 		if (arena_ready) {
 			try {
 				litsPool.mem = arena.allocate<uint32>(min_lits, cuArena::Region::Dynamic);
@@ -235,9 +218,6 @@ uint32* cuMM::resizeLits(const size_t& min_lits)
 		else {
 			CHECK(cudaMalloc((void**)&litsPool.mem, min_cap));
 		}
-	#else
-		CHECK(cudaMalloc((void**)&litsPool.mem, min_cap));
-	#endif
 		litsPool.cap = min_cap;
 		litsPool.size = min_lits;
 	}
@@ -260,14 +240,10 @@ bool cuMM::allocHist(cuHist& cuhist, const bool& proofEnabled)
 		DFREE(histPool);
 		assert(histPool.mem == NULL);
 		if (!hasDeviceMem(min_cap, "Histogram")) return false;
-	#ifdef USE_CUARENA
 		try { histPool.mem = arena.allocate<Byte>(min_cap, cuArena::Region::Stable); }
 		catch (const cuArena::gpu_memory_error& e) {
 			LOGWARNING("cuArena: Histogram alloc failed (%s)", e.what()); undoDeviceMem(min_cap); return false;
 		}
-	#else
-		CHECK(cudaMalloc((void**)&histPool.mem, min_cap));
-	#endif
 		// NOTE: d_segs, d_hist used internally by OT allocation and externally
 		//       by BVE for calculating resolvents offsets (memory reuse)
 		//		 lbyte is used for proof byte counting
@@ -299,16 +275,11 @@ bool cuMM::allocVars(VARS*& vars, const size_t& resolvedCap)
 	size_t min_cap = HC_VECSIZE * 3;                             // headers: (elected + units + resolved) 
 	min_cap += uintVec_sz * 3 + scores_sz + resolved_sz + varsize; // data:    (elected + units + eligible) + scores + resolved + eliminated
 	assert(min_cap);
-#if defined(USE_CUARENA) && defined(USE_DEVICE_CNF)
 	if (!hasDeviceMem(min_cap, "Fixed", cuArena::Region::Stable)) return false;
 	try { varsPool.mem = arena.allocate<Byte>(min_cap, cuArena::Region::Stable); }
 	catch (const cuArena::gpu_memory_error& e) {
 		LOGWARNING("cuArena: Fixed alloc failed (%s)", e.what()); undoDeviceMem(min_cap); return false;
 	}
-#else
-	if (!hasUnifiedMem(min_cap, "Fixed")) return false;
-	CHECK(cudaMallocManaged((void**)&varsPool.mem, min_cap));
-#endif
 	CHECK(cudaMemset(varsPool.mem, 0, min_cap));
 	addr_t ea = varsPool.mem;
 	#if !defined(NDEBUG)
@@ -333,24 +304,10 @@ bool cuMM::allocVars(VARS*& vars, const size_t& resolvedCap)
 	assert(bytePtr == end);
 	#endif
 	varsPool.cap = min_cap;
-#if defined(USE_CUARENA) && defined(USE_DEVICE_CNF)
 	initVars_k<<<1, 1>>>(vars->elected, vars->electedData, vars->units, vars->unitsData,
 		vars->resolved, resolvedData, uint32(varsize), uint32(resolvedCap));
 	LASTERR("Vars device init failed");
 	SYNC(0);
-#else
-	vars->elected->alloc(vars->electedData, varsize);
-	vars->units->alloc(vars->unitsData, varsize);
-	vars->resolved->alloc(resolvedData, uint32(resolvedCap));
-	if (isMemAdviseSafe) {
-		LOGN2(2, " Advising GPU driver to favor global over system memory in %s call..", __func__);
-		addr_t tmpPtr = ea + uintVec_sz; // skip elected
-		cudaMemLocation loc{cudaMemLocationTypeDevice, MASTER_GPU};
-		CHECK(cudaMemAdvise(tmpPtr, end - tmpPtr, cudaMemAdviseSetPreferredLocation, loc));
-		CHECK(cudaMemPrefetchAsync(tmpPtr, end - tmpPtr, loc, 0, 0));
-		LOGDONE(2, 5);
-	}
-#endif
 	return true;
 }
 
@@ -360,28 +317,18 @@ bool cuMM::allocPinned(VARS* vars, cuHist& cuhist)
 	assert(inf.maxDualVars == V2L(inf.maxVar + 1ULL));
 	const size_t varsize = inf.maxVar + 1;
 	const size_t elimBytes = varsize * sizeof(Byte);
-	const size_t unitBytes = varsize * HC_VARSIZE;
 	const size_t histBytes = inf.maxDualVars * HC_VARSIZE;
-	size_t min_cap = HC_CNFSIZE + elimBytes + unitBytes + histBytes;
+	size_t min_cap = HC_CNFSIZE + elimBytes + histBytes;
 	assert(min_cap);
-#ifdef USE_CUARENA
 	const bool arena_pinned = arena_ready && arena.cpu_capacity();
-#else
-	const bool arena_pinned = false;
-#endif
 	if (pinnedPool.cap) {
 		assert(pinnedPool.mem);
-	#ifdef USE_CUARENA
 		if (arena_pinned) arena.deallocate_pinned(pinnedPool.mem);
 		else CHECK(cudaFreeHost(pinnedPool.mem));
-	#else
-		CHECK(cudaFreeHost(pinnedPool.mem));
-	#endif
 		pinnedPool.mem = NULL;
 		pinnedPool.cap = 0;
 	}
 	assert(pinnedPool.mem == NULL);
-#ifdef USE_CUARENA
 	if (arena_pinned) {
 		try { pinnedPool.mem = arena.allocate_pinned<Byte>(min_cap); }
 		catch (const cuArena::cpu_memory_error& e) {
@@ -396,17 +343,9 @@ bool cuMM::allocPinned(VARS* vars, cuHist& cuhist)
 			return false;
 		}
 	}
-#else
-	cudaError_t retVal = cudaHostAlloc((void**)&pinnedPool.mem, min_cap, cudaHostAllocDefault);
-	if (retVal != cudaSuccess || retVal == cudaErrorMemoryAllocation) {
-		LOGWARNING("Pinned memory allocation failure due to %s", cudaGetErrorString(retVal));
-		return false;
-	}
-#endif
 	addr_t ea = pinnedPool.mem;
 	pinned_cnf = (CNF*)ea, ea += HC_CNFSIZE;
 	cuhist.h_hist = (uint32*)ea, ea += histBytes;
-	vars->cachedUnits = (uint32*)ea, ea += unitBytes;
 	vars->cachedEliminated = ea, ea += elimBytes;
     assert(ea == pinnedPool.mem + min_cap);
 	pinnedPool.cap = min_cap;
@@ -423,14 +362,10 @@ bool cuMM::allocAux(const size_t& clsCap)
 		DFREE(auxPool);
 		assert(auxPool.mem == NULL);
 		if (!hasDeviceMem(min_cap, "Auxiliary")) return false;
-	#ifdef USE_CUARENA
 		try { auxPool.mem = arena.allocate<Byte>(min_cap, cuArena::Region::Stable); }
 		catch (const cuArena::gpu_memory_error& e) {
 			LOGWARNING("cuArena: Auxiliary alloc failed (%s)", e.what()); undoDeviceMem(min_cap); return false;
 		}
-	#else
-		CHECK(cudaMalloc((void**)&auxPool.mem, min_cap));
-	#endif
 		d_scatter = (S_REF*)auxPool.mem;
 		d_stencil = auxPool.mem + scatterBytes;
 		auxPool.cap = min_cap;
@@ -449,7 +384,6 @@ bool cuMM::resizeCNF(CNF*& cnf, const size_t& clsCap, const size_t& litsCap)
 	assert(dataBytes % SBUCKETSIZE == 0);
 	const size_t min_cap = HC_CNFSIZE + dataBytes + csBytes;
 	assert(min_cap);
-#if defined(USE_CUARENA) && defined(USE_DEVICE_CNF)
 	if (cnfPool.cap == 0) {
 		assert(cnf == NULL);
 		assert(cnfPool.mem == NULL);
@@ -468,7 +402,6 @@ bool cuMM::resizeCNF(CNF*& cnf, const size_t& clsCap, const size_t& litsCap)
 		d_cnf_mem = pinned_cnf->data().mem;
 		d_refs_mem = pinned_cnf->refsData();
 		cnfPool.cap = min_cap;
-		device_cnf = true;
 	}
 	else {
 		assert(cnf);
@@ -504,51 +437,6 @@ bool cuMM::resizeCNF(CNF*& cnf, const size_t& clsCap, const size_t& litsCap)
 		cnfPool.cap = min_cap;
 		cnf = tmp_cnf;
 	}
-#else
-	if (cnfPool.cap == 0) {
-		assert(cnf == NULL);
-		assert(cnfPool.mem == NULL);
-		if (!hasUnifiedMem(min_cap, "CNF")) return false;
-		CHECK(cudaMallocManaged((void**)&cnfPool.mem, min_cap));
-		if (isMemAdviseSafe) {
-			LOGN2(2, " Advising GPU driver to favor global over system memory in %s call..", __func__);
-			cudaMemLocation loc{cudaMemLocationTypeDevice, MASTER_GPU};
-			CHECK(cudaMemAdvise(cnfPool.mem, min_cap, cudaMemAdviseSetPreferredLocation, loc));
-			LOGDONE(2, 5);
-		}
-		cnf = (CNF*)cnfPool.mem;
-		const S_REF data_cap = S_REF(dataBytes / SBUCKETSIZE);
-		new (cnf) CNF(data_cap, uint32(clsCap));
-		d_cnf_mem = cnf->data().mem, d_refs_mem = cnf->refsData();
-		cnfPool.cap = min_cap;
-	}
-	else {
-		assert(cnf);
-		assert(cnfPool.mem);
-		if (!hasUnifiedMem(min_cap, "CNF")) return false;
-		cacheCNFPtr(cnf);
-		addr_t newMem = NULL;
-		CHECK(cudaMallocManaged((void**)&newMem, min_cap));
-		SYNC(0);
-		if (isMemAdviseSafe) {
-			LOGN2(2, " Advising GPU driver to favor global over system memory in %s call..", __func__);
-			cudaMemLocation loc{cudaMemLocationTypeDevice, MASTER_GPU};
-			CHECK(cudaMemAdvise(newMem, min_cap, cudaMemAdviseSetPreferredLocation, loc));
-			CHECK(cudaMemPrefetchAsync(newMem, min_cap, loc, 0, 0));
-			LOGDONE(2, 5);
-		}
-		CNF* tmp_cnf = (CNF*)newMem;
-		const S_REF data_cap = S_REF(dataBytes / SBUCKETSIZE);
-		new (tmp_cnf) CNF(data_cap, uint32(clsCap));
-		d_cnf_mem = tmp_cnf->data().mem;
-		d_refs_mem = tmp_cnf->refsData();
-		compactCNF(cnf, tmp_cnf);
-		FREE(cnfPool);
-		cnfPool.mem = newMem;
-		cnfPool.cap = min_cap;
-		cnf = tmp_cnf;
-	}
-#endif
 	return true;
 }
 
@@ -566,7 +454,6 @@ bool cuMM::resizeOTAsync(OT*& ot, const size_t& min_lits, const cudaStream_t& _s
 	OPTIMIZEBLOCKS(inf.maxDualVars, nThreads, 0);
 	const size_t min_cap = HC_OTSIZE + inf.maxDualVars * HC_OLSIZE + min_lits * HC_SREFSIZE;
 	assert(min_cap);
-#if defined(USE_CUARENA) && defined(USE_DEVICE_CNF)
 	if (otPool.cap < min_cap) { // realloc
 		if (otPool.mem) DFREE(otPool);
 		assert(otPool.mem == NULL);
@@ -596,30 +483,6 @@ bool cuMM::resizeOTAsync(OT*& ot, const size_t& min_lits, const cudaStream_t& _s
 	}
 	else
 		assignListPtrs<<<nBlocks, nThreads, 0, _s>>>(ot, d_hist, d_segs, inf.maxDualVars);
-#else
-	if (otPool.cap < min_cap) { // realloc
-		FREE(otPool);
-		assert(otPool.mem == NULL);
-		if (!hasUnifiedMem(min_cap, "OT")) return false;
-		CHECK(cudaMallocManaged((void**)&otPool.mem, min_cap));
-		if (isMemAdviseSafe) {
-			LOGN2(2, " Advising GPU driver to favor global over system memory in %s call..", __func__);
-			cudaMemLocation loc{cudaMemLocationTypeDevice, MASTER_GPU};
-			CHECK(cudaMemAdvise(otPool.mem, min_cap, cudaMemAdviseSetPreferredLocation, loc));
-			CHECK(cudaMemPrefetchAsync(otPool.mem, min_cap, loc, 0, _s));
-			LOGDONE(2, 5);
-		}
-		ot = (OT*)otPool.mem;
-		LASTERR("Exclusively scanning histogram failed");
-		SYNC(_s); // needed for calling the next constructor on host
-		new (ot) OT(inf.maxDualVars);
-		d_occurs = ot->data();
-		assignListPtrs<<<nBlocks, nThreads, 0, _s>>>(ot, d_hist, d_segs, inf.maxDualVars);
-		otPool.cap = min_cap;
-	}
-	else
-		assignListPtrs<<<nBlocks, nThreads, 0, _s>>>(ot, d_hist, d_segs, inf.maxDualVars);
-#endif
 	if (gopts.sync_always) {
 		LASTERR("Occurrence lists allocation failed");
 		SYNC(_s);
@@ -665,43 +528,24 @@ void cuMM::mirrorCNF(CNF*& hcnf)
 
 void cuMM::freeVars()
 {
-#if defined(USE_CUARENA) && defined(USE_DEVICE_CNF)
 	LOGN2(2, " freeing up fixed device memory..");
 	DFREE(varsPool);
-#else
-	LOGN2(2, " freeing up fixed unified memory..");
-	FREE(varsPool);
-#endif
 	LOGDONE(2, 5);;
 }
 
 void cuMM::freeCNF()
 {
-	if (device_cnf) {
-		LOGN2(2, " freeing up CNF device memory..");
-		DFREE(cnfPool);
-		LOGDONE(2, 5);
-	}
-	else {
-		LOGN2(2, " freeing up CNF unified memory..");
-		FREE(cnfPool);
-		LOGDONE(2, 5);;
-	}
+	LOGN2(2, " freeing up CNF device memory..");
+	DFREE(cnfPool);
+	LOGDONE(2, 5);
 	d_cnf_mem = NULL, d_refs_mem = NULL;
 }
 
 void cuMM::freeOT()
 {
-	if (device_cnf) {
-		LOGN2(2, " freeing up OT device memory..");
-		DFREE(otPool);
-		LOGDONE(2, 5);
-	}
-	else {
-		LOGN2(2, " freeing up occurrence table unified memory..");
-		FREE(otPool);
-		LOGDONE(2, 5);;
-	}
+	LOGN2(2, " freeing up OT device memory..");
+	DFREE(otPool);
+	LOGDONE(2, 5);
 }
 
 void cuMM::freeFixed()
@@ -727,12 +571,8 @@ void cuMM::freePinned()
 {
 	LOGN2(2, " freeing up pinned memory..");
 	if (pinnedPool.mem) {
-	#ifdef USE_CUARENA
 		if (arena_ready && arena.cpu_capacity()) arena.deallocate_pinned(pinnedPool.mem);
 		else CHECK(cudaFreeHost(pinnedPool.mem));
-	#else
-		CHECK(cudaFreeHost(pinnedPool.mem));
-	#endif
 		pinnedPool.mem = NULL;
 		pinnedPool.cap = 0;
 		pinned_cnf = NULL;
@@ -751,10 +591,3 @@ void cuMM::breakMirror()
     LOGDONE(2, 5);
 }
 
-bool cuMM::checkMemAdvice()
-{
-	int concurrentManaged = 0;
-	cudaDeviceGetAttribute(&concurrentManaged, cudaDevAttrConcurrentManagedAccess, MASTER_GPU);
-	isMemAdviseSafe = concurrentManaged ? true : false;
-	return isMemAdviseSafe;
-}

@@ -105,12 +105,6 @@ void Solver::initialize(const bool& banner)
 		opts.sigma_en = opts.sigma_live_en = false;
 	}
 	else cumm.init(_gfree, _gpenalty);
-	if (cumm.checkMemAdvice()) {
-        LOG2(2, " Enabled GPU driver memory advice");
-	}
-	else {
-        LOG2(2, " Disabled GPU driver memory advice");
-	}
 	if (opts.sigma_en || opts.sigma_live_en) { optSimp(), createStreams(); }
 }
 

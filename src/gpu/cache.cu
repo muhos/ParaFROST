@@ -20,14 +20,11 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 #include <cassert>
 #include "cache.cuh"
 #include "logging.hpp"
-#ifdef USE_CUARENA
 #include <cuarena/allocator.cuh>
-#endif
 
 using namespace ParaFROST;
 
 void CACHER::destroy() {
-#ifdef USE_CUARENA
 	if (arena) {
 		for (free_cache_t::iterator i = free_cache.begin(); i != free_cache.end(); i++)
 			if (i->second) arena->deallocate(i->second);
@@ -39,7 +36,6 @@ void CACHER::destroy() {
 		arena = nullptr;
 		return;
 	}
-#endif
 	for (free_cache_t::iterator i = free_cache.begin(); i != free_cache.end(); i++) {
 		if (i->second) CACHEMEMCHECK(cudaFree(i->second));
 		i->second = NULL;
@@ -65,7 +61,6 @@ void* CACHER::allocate(size_t size) {
 	}
 	// no free blocks, allocate new one
 	else {
-	#ifdef USE_CUARENA
 		if (arena) {
 			try { p = arena->allocate<Byte>(size, cuArena::Region::Dynamic); }
 			catch (const cuArena::gpu_memory_error&) {
@@ -74,9 +69,6 @@ void* CACHER::allocate(size_t size) {
 			}
 		}
 		else cudaMalloc((void**)&p, size);
-	#else
-		cudaMalloc((void**)&p, size);
-	#endif
 		used += size;
 	}
 	assert(p);
@@ -104,12 +96,8 @@ void CACHER::deallocate(void* p, const size_t bound) {
 	if (size < bound) free_cache.insert(std::make_pair(size, p)); // cache free block
 	else { // deallocate free block
 		assert(p);
-	#ifdef USE_CUARENA
 		if (arena) arena->deallocate(p);
 		else CACHEMEMCHECK(cudaFree(p));
-	#else
-		CACHEMEMCHECK(cudaFree(p));
-	#endif
 		used -= size;
 	}
 }

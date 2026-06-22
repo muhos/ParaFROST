@@ -26,9 +26,7 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 #include "histogram.cuh"
 #include "vstate.hpp"
 #include "timer.cuh"
-#ifdef USE_CUARENA
 #include <cuarena/allocator.cuh>
-#endif
 
 namespace ParaFROST {
 	/*****************************************************/
@@ -66,31 +64,16 @@ namespace ParaFROST {
 		Byte	* d_stencil;
 		VSTATE	* d_vstate;
 		size_t	nscatters;
-		bool	device_cnf;
 		// trackers
 		cuTIMER cutimer;
 		float 	_compacttime;
 		int64	_tot, _free, cap, dcap, maxcap, penalty;
-		bool	isMemAdviseSafe;
 		// cuarena backend
-	#ifdef USE_CUARENA
 		cuArena::DeviceArena arena;
 		bool                 arena_ready;
-	#endif
 
 	public:
 
-		inline bool		hasUnifiedMem	(const size_t& min_cap, const char* name) {
-			const int64 used = cap + min_cap;
-			LOG2(2, " Allocating GPU unified memory for %s (used/free = %.3f/%lld MB)", name, double(used) / MBYTE, _free / MBYTE);
-			if (int64(min_cap) >= _free) { LOGWARNING("not enough memory for %s (current = %lld MB) -> skip GPU simplifier", name, used / MBYTE); return false; }
-			_free -= min_cap;
-			cap = used;
-			assert(_free >= 0);
-			assert(_tot >= _free);
-			assert(_tot > cap);
-			return true;
-		}
 		inline bool		hasDeviceMem	(const size_t& min_cap, const char* name,
 									     const cuArena::Region& type = cuArena::Region::Stable) {
 			const int64 used = dcap + min_cap;
@@ -121,27 +104,11 @@ namespace ParaFROST {
 			assert(dcap >= 0);
 		}
 		template <class POOL>
-		inline void		FREE			(POOL& pool) {
-			if (pool.mem) {
-				assert(pool.cap);
-				CHECK(cudaFree(pool.mem));
-				pool.mem = NULL;
-				cap -= pool.cap;
-				assert(cap >= 0);
-				_free += pool.cap;
-				pool.cap = 0;
-			}
-		}
-		template <class POOL>
 		inline void		DFREE			(POOL& pool, const bool& usearena = true) {
 			if (pool.mem) {
 				assert(pool.cap);
-			#ifdef USE_CUARENA
 				if (arena_ready && usearena) arena.deallocate(pool.mem);
 				else                           CHECK(cudaFree(pool.mem));
-			#else
-				CHECK(cudaFree(pool.mem));
-			#endif
 				pool.mem = NULL;
 				dcap -= pool.cap;
 				assert(dcap >= 0);
@@ -153,7 +120,6 @@ namespace ParaFROST {
 		// or raw cudaMalloc when the arena is unavailable. Freed via DFREE.
 		template <class POOL>
 		inline bool		allocDynamic	(POOL& pool, const size_t& min_cap, const char* name) {
-		#if defined(USE_CUARENA) && defined(USE_DEVICE_CNF)
 			if (arena_ready) {
 				if (!hasDeviceMem(min_cap, name, cuArena::Region::Dynamic)) return false;
 				try { pool.mem = (addr_t)arena.allocate<Byte>(min_cap, cuArena::Region::Dynamic); }
@@ -168,7 +134,6 @@ namespace ParaFROST {
 				pool.cap = min_cap;
 				return true;
 			}
-		#endif
 			if (!hasDeviceMem(min_cap, name)) return false;
 			CHECK(cudaMalloc((void**)&pool.mem, min_cap));
 			pool.cap = min_cap;
@@ -177,16 +142,11 @@ namespace ParaFROST {
 		// Frees a block obtained from allocDynamic, matching its build-config source.
 		template <class POOL>
 		inline void		freeDynamic		(POOL& pool) {
-		#if defined(USE_CUARENA) && defined(USE_DEVICE_CNF)
 			DFREE(pool, true);
-		#else
-			DFREE(pool, false);
-		#endif
 		}
 		// Pinned host block: arena CPU pool when available, else cudaMallocHost.
 		template <class POOL>
 		inline bool		pinnedAlloc		(POOL& pool, const size_t& min_cap) {
-		#ifdef USE_CUARENA
 			if (arena_ready && arena.cpu_capacity()) {
 				try { pool.mem = (addr_t)arena.allocate_pinned<Byte>(min_cap); }
 				catch (const cuArena::cpu_memory_error& e) {
@@ -195,7 +155,6 @@ namespace ParaFROST {
 				pool.cap = min_cap;
 				return true;
 			}
-		#endif
 			if (cudaMallocHost((void**)&pool.mem, min_cap) != cudaSuccess) return false;
 			pool.cap = min_cap;
 			return true;
@@ -203,19 +162,13 @@ namespace ParaFROST {
 		template <class POOL>
 		inline void		pinnedFree		(POOL& pool) {
 			if (!pool.mem) return;
-		#ifdef USE_CUARENA
 			if (arena_ready && arena.cpu_capacity()) arena.deallocate_pinned(pool.mem);
 			else CHECK(cudaFreeHost(pool.mem));
-		#else
-			CHECK(cudaFreeHost(pool.mem));
-		#endif
 			pool.mem = NULL;
 			pool.cap = 0;
 		}
 						cuMM			();
-	#ifdef USE_CUARENA
 		bool			initDeviceArena	(const size_t& numCls, const size_t& numLits, const size_t& resolvedCap, const bool& proofEnabled);
-	#endif
 		void			breakMirror		();
 		void			freePinned		();
 		void			freeFixed		();
@@ -235,10 +188,7 @@ namespace ParaFROST {
 		inline uint32*	cnfMem			() { return d_cnf_mem; }
 		inline CNF*		pinnedCNF		() { return pinned_cnf; }
 		inline VSTATE*	deviceVstate	() { return d_vstate; }
-		inline bool		isDeviceCNF		() const { return device_cnf; }
-	#ifdef USE_CUARENA
 		inline cuArena::DeviceArena* deviceArena () { return arena_ready ? &arena : nullptr; }
-	#endif
 		inline cuLits&	literals		() { return litsPool; }
 		void			reset			(const int64 _free) {
 			this->_free = _free - penalty;
@@ -250,37 +200,6 @@ namespace ParaFROST {
 		}
 		inline void		cacheCNFPtr		(const CNF* d_cnf, const cudaStream_t& _s = 0) {
 			CHECK(cudaMemcpyAsync(pinned_cnf, d_cnf, sizeof(CNF), cudaMemcpyDeviceToHost, _s));
-		}
-		inline void		prefetchCNF2D	(const cudaStream_t& _s = 0) {
-			#if !defined(_WIN32) && !defined(USE_DEVICE_CNF)
-			if (devProp.major > 5) {
-				LOGN2(2, " Prefetching CNF to global memory..");
-				cudaMemLocation loc{cudaMemLocationTypeDevice, MASTER_GPU};
-				CHECK(cudaMemAdvise(cnfPool.mem, cnfPool.cap, cudaMemAdviseSetPreferredLocation, loc));
-				CHECK(cudaMemPrefetchAsync(cnfPool.mem, cnfPool.cap, loc, 0, _s));
-				LOGDONE(2, 5);
-			}
-			#endif
-		}
-		inline void		prefetchCNF2H	(const cudaStream_t& _s = 0) {
-			#if !defined(_WIN32) && !defined(USE_DEVICE_CNF)
-			if (devProp.major > 5) {
-				LOGN2(2, " Prefetching CNF to system memory..");
-				cudaMemLocation loc{cudaMemLocationTypeHost, 0};
-				CHECK(cudaMemPrefetchAsync(cnfPool.mem, cnfPool.cap, loc, 0, _s));
-				LOGDONE(2, 5);
-			}
-			#endif
-		}
-		inline void		prefetchOT2H	(const cudaStream_t& _s = 0) {
-			#if !defined(_WIN32) && !defined(USE_DEVICE_CNF)
-			if (devProp.major > 5) {
-				LOGN2(2, " Prefetching OT to system memory..");
-				cudaMemLocation loc{cudaMemLocationTypeHost, 0};
-				CHECK(cudaMemPrefetchAsync(otPool.mem, otPool.cap, loc, 0, _s));
-				LOGDONE(2, 5);
-			}
-			#endif
 		}
 		void			cuMemSetAsync	(addr_t, const Byte&, const size_t&);
 		void	        resizeCNFAsync	(CNF*, const S_REF&, const uint32&);
@@ -294,7 +213,6 @@ namespace ParaFROST {
 		void			createMirror	(CNF*&, const size_t&, const size_t&);
 		void			mirrorCNF		(CNF*&);
 		void			compactCNF		(CNF*, CNF*);
-		bool			checkMemAdvice	();
 
 	};
 

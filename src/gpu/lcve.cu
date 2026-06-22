@@ -30,8 +30,6 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 using namespace ParaFROST;
 
-#if defined(USE_CUARENA) && defined(USE_DEVICE_CNF)
-
 __device__
 bool depFreeze_d(
 	const OL& ol, const CNF& cnf,
@@ -220,8 +218,6 @@ void mis_collect_k(const uint32 maxVar, const VSTATE* __restrict__ vstate, uint3
 	}
 }
 
-#endif
-
 __global__
 void assign_scores(
 	uint32* __restrict__ eligible,
@@ -281,19 +277,6 @@ void calcScores(VARS* vars, uint32* hist, OT* ot)
 	SYNCALL;
 }
 
-void mapFrozenAsync(VARS* vars, const uint32& size)
-{
-	assert(vars->varcore == vars->eligible); // an alies of eligible
-	grid_t nThreads = BLOCK1D;
-	OPTIMIZEBLOCKS(size, nThreads, 0);
-	// 'vars->scores' is an alies for frozen vars on the GPU side
-	mapfrozen_k << <nBlocks, nThreads >> > (vars->scores, vars->varcore, size);
-	if (gopts.sync_always) {
-		LASTERR("Mapping frozen failed");
-		SYNCALL;
-	}
-}
-
 void Solver::varReorder()
 {
 	LOGN2(2, " Finding eligible variables for LCVE..");
@@ -314,13 +297,6 @@ void Solver::varReorder()
 	vars->nUnits = 0;
 	SYNC(streams[2]);
 	if (gopts.profile_gpu) cutimer.stop(streams[3]), stats.sigma.time.vo += cutimer.gpuTime();
-	if (verbose == 4 && !cumm.isDeviceCNF()) {
-		LOG0(" Eligible variables:");
-		for (uint32 v = 0; v < inf.maxVar; v++) {
-			uint32 x = vars->eligible[v], p = V2L(x), n = NEG(p);
-			LOG1("  e[%d]->(v: %d, p: %d, n: %d, s: %d)", v, x, cuhist[p], cuhist[n], vars->scores[x]);
-		}
-	}
 }
 
 bool Solver::LCVE()
@@ -335,7 +311,6 @@ bool Solver::LCVE()
 	const uint32 nmax = opts.mu_neg << multiplier;
 
 	vars->numElected = 0;
-#if defined(USE_CUARENA) && defined(USE_DEVICE_CNF)
 	cuPool assumedPool;
 	bool* d_assumed = NULL;
 	const bool hasAssumptions = incremental && assumptions.size();
@@ -402,50 +377,12 @@ bool Solver::LCVE()
 	}
 	if (hasAssumptions) cumm.freeDynamic(assumedPool);
 	CHECK(cudaMemcpy(&vars->numElected, vars->electedSize, sizeof(uint32), cudaMemcpyDeviceToHost));
-#else
-	vars->elected->clear();
-	sp->stacktail = sp->tmpstack;
-	uint32* evars = vars->eligible;
-	uint32* eend = evars + inf.maxVar;
-	uint32*& tail = sp->stacktail;
-	LIT_ST* frozen = sp->frozen;
-	const VSTATE* states = sp->vstate;
-	OT& ot = *this->ot; // cache 'ot' reference on host
-	while (evars != eend) {
-		const uint32 cand = *evars++;
-		CHECKVAR(cand);
-		if (frozen[cand]) continue;
-		if (states[cand].state) continue;
-		if (iassumed(cand)) continue;
-		const uint32 p = V2L(cand), n = NEG(p);
-		const uint32 ps = cuhist[p], ns = cuhist[n];
-		assert(ot[p].size() >= ps);
-		assert(ot[n].size() >= ns);
-		if (!ps && !ns) continue;
-		if (ps > maxoccurs || ns > maxoccurs) break;
-		if (ps >= pmax && ns >= nmax) break;
-		if (depFreeze(ot[p], frozen, tail, cand, pmax, nmax) &&
-			depFreeze(ot[n], frozen, tail, cand, pmax, nmax))
-			vars->elected->_push(cand);
-	}
-	vars->numElected = vars->elected->size();
-	assert(verifyLCVE());
-#endif
 
 	if (vars->numElected) {
-#if defined(USE_CUARENA) && defined(USE_DEVICE_CNF)
 		uint32 mcv = 0;
 		CHECK(cudaMemcpy(&mcv, vars->electedData + vars->numElected - 1, sizeof(uint32), cudaMemcpyDeviceToHost));
-#else
-		const uint32 mcv = vars->elected->back();
-#endif
 		const uint32 pmcv = V2L(mcv);
 		LOG2(2, " Elected %d variables, with mcv: %d, pH: %d, nH: %d.", vars->numElected, mcv, cuhist[pmcv], cuhist[NEG(pmcv)]);
-	}
-
-	if (verbose > 3 && !cumm.isDeviceCNF()) {
-		LOGN0(" PLCVs ");
-		printVars(*vars->elected, vars->numElected, 'v');
 	}
 
 	mapFrozen(); // async. call
@@ -462,7 +399,6 @@ bool Solver::LCVE()
 inline void	Solver::mapFrozen()
 {
 	if (!gopts.hostKOpts.ve_fun_en) return;
-#if defined(USE_CUARENA) && defined(USE_DEVICE_CNF)
 	uint32 nFrozen = 0;
 	CHECK(cudaMemcpy(&nFrozen, vars->scores, sizeof(uint32), cudaMemcpyDeviceToHost));
 	if (!nFrozen) { vars->varcore = NULL; sp->stacktail = sp->tmpstack; return; }
@@ -479,50 +415,5 @@ inline void	Solver::mapFrozen()
 		SYNCALL;
 	}
 	if (gopts.profile_gpu) cutimer.stop(), stats.sigma.time.ve += cutimer.gpuTime();
-#else
-	const uint32 *frozen = sp->tmpstack;
-	const uint32 *end = sp->stacktail;
-	const uint32 nFrozen = uint32(end - frozen);
-	if (!nFrozen) { vars->varcore = NULL; return; }
-	assert(nFrozen <= inf.maxVar);
-	CHECK(cudaMemcpy(vars->scores, frozen, nFrozen * sizeof(uint32), cudaMemcpyHostToDevice));
-	if (gopts.profile_gpu) cutimer.start();
-	mapFrozenAsync(vars, nFrozen);
-	if (gopts.profile_gpu) cutimer.stop(), stats.sigma.time.ve += cutimer.gpuTime();
-#endif
 }
 
-inline bool Solver::depFreeze(OL& ol, LIT_ST* frozen, uint32*& tail, const uint32& cand, const uint32& pmax, const uint32& nmax)
-{
-	const int maxcsize = opts.lcve_clause_max;
-	uint32* first = tail;
-	CNF& cnf = *this->cnf; // cache 'cnf' reference on host
-	forall_occurs(ol, i) {
-		SCLAUSE& c = cnf[*i];
-		if (c.deleted()) continue;
-		if (c.size() > maxcsize) {
-			uint32* from = first;
-			while (from != tail)
-				frozen[*from++] = 0;
-			tail = first;
-			return false;
-		}
-		forall_clause(c, k) {
-			const uint32 v = ABS(*k);
-			CHECKVAR(v);
-			if (!frozen[v] && NEQUAL(v, cand)) {
-				frozen[v] = 1;
-				assert(tail < sp->tmpstack + inf.maxVar);
-				*tail++ = v;
-			}
-		}
-	}
-	return true;
-}
-
-inline bool	Solver::verifyLCVE() {
-	for (uint32 v = 0; v < vars->numElected; v++)
-		if (sp->frozen[vars->elected->at(v)])
-			return false;
-	return true;
-}
