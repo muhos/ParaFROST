@@ -29,7 +29,7 @@ BOOL_OPT opt_sub_en("sub", "enable subsumption elimination", true);
 BOOL_OPT opt_solve_en("solve", "proceed with solving after simplifications", true);
 BOOL_OPT opt_ve_en("ve", "enable bounded variable elimination (BVE)", true);
 BOOL_OPT opt_ve_plus_en("veextend", "enable subsumption elimination before variable elimination", true);
-BOOL_OPT opt_lcve_fast("lcvefast", "enable fast elections using Luby MIS (nondeterministic)", false);
+BOOL_OPT opt_lcve_fast("lcvefast", "enable fast elections using Luby MIS (nondeterministic)", true);
 
 INT_OPT opt_lcve_min_vars("electionsmin", "minimum elected variables to simplify", 2, INT32R(1, INT32_MAX));
 INT_OPT opt_lcve_max_occurs("electionsmax", "maximum occurrence list size to check in LCVE", 3e3, INT32R(1, INT32_MAX));

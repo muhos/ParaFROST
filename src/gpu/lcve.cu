@@ -77,8 +77,7 @@ void lcve_k(
 	const uint32  nmax,
 	const uint32  maxoccurs,
 	const int     maxcsize,
-	const Byte* __restrict__   d_assumed,
-	const bool    incremental)
+	const bool* __restrict__   d_assumed)
 {
 	uint32 frozenTail = 0;
 	uint32* frozenList = scores + 1; // scores[0] = count, scores[1..] = frozen vars
@@ -88,7 +87,7 @@ void lcve_k(
 		assert(cand >= 1 && cand <= maxVar);
 		if (d_vstate[cand].frozen) continue;
 		if (d_vstate[cand].state) continue;
-		if (incremental && d_assumed && d_assumed[cand]) continue;
+		if (d_assumed && d_assumed[cand]) continue;
 		const uint32 p = V2L(cand), n = NEG(p);
 		const uint32 ps = d_hist[p], ns = d_hist[n];
 		assert((*ot)[p].size() >= ps);
@@ -156,13 +155,14 @@ void mis_init_k(
 	uint32* __restrict__ rank, uint32* __restrict__ state,
 	const VSTATE* __restrict__ vstate, const uint32* __restrict__ d_hist,
 	const OT* __restrict__ ot, const CNF* __restrict__ cnf,
-	const uint32 pmax, const uint32 nmax, const uint32 maxoccurs, const int maxcsize)
+	const uint32 pmax, const uint32 nmax, const uint32 maxoccurs, const int maxcsize,
+	const bool* __restrict__ d_assumed)
 {
 	for_parallel_x(ei, maxVar) {
 		const uint32 v = eligible[ei];
 		rank[v] = ei;
 		uint32 st = MIS_NONE;
-		if (!vstate[v].state) {
+		if (!vstate[v].state && !(d_assumed && d_assumed[v])) {
 			const uint32 p = V2L(v), n = NEG(p);
 			const uint32 ps = d_hist[p], ns = d_hist[n];
 			if ((ps || ns) && ps <= maxoccurs && ns <= maxoccurs && !(ps >= pmax && ns >= nmax)
@@ -336,17 +336,38 @@ bool Solver::LCVE()
 
 	vars->numElected = 0;
 #if defined(USE_CUARENA) && defined(USE_DEVICE_CNF)
-	CHECK(cudaMemset(vars->electedSize, 0, sizeof(uint32))); // GPU-side clear of elected size
-	sp->stacktail = sp->tmpstack; // reset frozen list head
-	// copy vstate to device (frozen bits will be set by the kernel via the frozen field)
-	CHECK(cudaMemcpy(cumm.deviceVstate(), sp->vstate, (inf.maxVar + 1) * sizeof(VSTATE), cudaMemcpyHostToDevice));
-	CHECK(cudaMemset(vars->scores, 0, sizeof(uint32))); // frozen count = scores[0]
-	// parallel Luby MIS election (nondeterministic, valid maximal independent set)
-	if (opts.lcve_fast) {
+	cuPool assumedPool;
+	bool* d_assumed = NULL;
+	const bool hasAssumptions = incremental && assumptions.size();
+	size_t assumedBytes = 0;
+	if (hasAssumptions) {
+		assumedBytes = assumed.size() * sizeof(bool);
+		assert(assumed.size() > inf.maxVar);
+		if (!cumm.allocDynamic(assumedPool, assumedBytes, "Assumptions")) { vars->numElected = 0; return false; }
+		d_assumed = (bool*)assumedPool.mem;
+	}
+	cuPool mis;
+	const bool useMIS = opts.lcve_fast;
+	if (useMIS) {
 		const uint32 nvars = inf.maxVar + 1;
 		const size_t words = size_t(nvars) * 3 + 1; // rank + state + win + remaining
-		cuPool mis;
-		if (!cumm.allocDynamic(mis, words * sizeof(uint32), "MIS")) { vars->numElected = 0; return false; }
+		if (!cumm.allocDynamic(mis, words * sizeof(uint32), "MIS")) {
+			if (hasAssumptions) cumm.freeDynamic(assumedPool);
+			vars->numElected = 0;
+			return false;
+		}
+	}
+	CHECK(cudaMemsetAsync(vars->electedSize, 0, sizeof(uint32), streams[0])); // GPU-side clear of elected size
+	sp->stacktail = sp->tmpstack; // reset frozen list head
+	// copy vstate to device (frozen bits will be set by the kernel via the frozen field)
+	CHECK(cudaMemcpyAsync(cumm.deviceVstate(), sp->vstate, (inf.maxVar + 1) * sizeof(VSTATE), cudaMemcpyHostToDevice, streams[1]));
+	CHECK(cudaMemsetAsync(vars->scores, 0, sizeof(uint32), streams[2])); // frozen count = scores[0]
+	if (hasAssumptions)
+		CHECK(cudaMemcpyAsync(d_assumed, assumed.data(), assumedBytes, cudaMemcpyHostToDevice, streams[0]));
+	SYNC(streams[2]); SYNC(streams[1]); SYNC(streams[0]);
+	// parallel Luby MIS election (nondeterministic, valid maximal independent set)
+	if (useMIS) {
+		const uint32 nvars = inf.maxVar + 1;
 		uint32* rank  = (uint32*)mis.mem;
 		uint32* state = rank + nvars;
 		uint32* win   = state + nvars;
@@ -354,7 +375,8 @@ bool Solver::LCVE()
 		grid_t nThreads = BLOCK1D;
 		OPTIMIZEBLOCKS(inf.maxVar, nThreads, 0);
 		mis_init_k<<<nBlocks, nThreads>>>(vars->eligible, inf.maxVar, rank, state,
-			cumm.deviceVstate(), cuhist.d_hist, ot, cnf, pmax, nmax, maxoccurs, opts.lcve_clause_max);
+			cumm.deviceVstate(), cuhist.d_hist, ot, cnf, pmax, nmax, maxoccurs, opts.lcve_clause_max,
+			d_assumed);
 		LASTERR("MIS init failed");
 		uint32 rem = 0;
 		do {
@@ -374,11 +396,11 @@ bool Solver::LCVE()
 			vars->eligible, inf.maxVar, vars->elected, vars->scores,
 			cumm.deviceVstate(), cuhist.d_hist, ot, cnf,
 			pmax, nmax, maxoccurs, opts.lcve_clause_max,
-			nullptr, // d_assumed: incremental not yet supported in device-CNF path
-			false);
+			d_assumed);
 		LASTERR("LCVE kernel failed");
 		SYNCALL;
 	}
+	if (hasAssumptions) cumm.freeDynamic(assumedPool);
 	CHECK(cudaMemcpy(&vars->numElected, vars->electedSize, sizeof(uint32), cudaMemcpyDeviceToHost));
 #else
 	vars->elected->clear();
@@ -504,4 +526,3 @@ inline bool	Solver::verifyLCVE() {
 			return false;
 	return true;
 }
-
