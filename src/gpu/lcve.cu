@@ -103,6 +103,123 @@ void lcve_k(
 	scores[0] = frozenTail;
 }
 
+#define MIS_NONE      0u
+#define MIS_UNDECIDED 1u
+#define MIS_ELECTED   2u
+#define MIS_FROZEN    3u
+
+_PFROST_IN_D_
+bool mis_oversize(const OL& ol, const CNF& cnf, const int& maxcsize)
+{
+	for (const S_REF* i = ol.data(), *end = ol.end(); i != end; i++) {
+		const SCLAUSE& c = cnf[*i];
+		if (!c.deleted() && (int)c.size() > maxcsize) return true;
+	}
+	return false;
+}
+
+_PFROST_IN_D_
+bool mis_blocked(const OL& ol, const CNF& cnf, const uint32& cand, const uint32& r,
+	const uint32* __restrict__ rank, const uint32* __restrict__ state)
+{
+	for (const S_REF* i = ol.data(), *end = ol.end(); i != end; i++) {
+		const SCLAUSE& c = cnf[*i];
+		if (c.deleted()) continue;
+		for (const uint32* k = c.data(), *cend = c.end(); k != cend; k++) {
+			const uint32 u = ABS(*k);
+			if (u != cand && state[u] == MIS_UNDECIDED && rank[u] < r) return true;
+		}
+	}
+	return false;
+}
+
+_PFROST_IN_D_
+void mis_freeze(const OL& ol, const CNF& cnf, const uint32& cand,
+	VSTATE* __restrict__ vstate, uint32* __restrict__ state)
+{
+	for (const S_REF* i = ol.data(), *end = ol.end(); i != end; i++) {
+		const SCLAUSE& c = cnf[*i];
+		if (c.deleted()) continue;
+		for (const uint32* k = c.data(), *cend = c.end(); k != cend; k++) {
+			const uint32 u = ABS(*k);
+			if (u != cand) {
+				vstate[u].frozen = 1;
+				if (state[u] == MIS_UNDECIDED) state[u] = MIS_FROZEN;
+			}
+		}
+	}
+}
+
+__global__
+void mis_init_k(
+	const uint32* __restrict__ eligible, const uint32 maxVar,
+	uint32* __restrict__ rank, uint32* __restrict__ state,
+	const VSTATE* __restrict__ vstate, const uint32* __restrict__ d_hist,
+	const OT* __restrict__ ot, const CNF* __restrict__ cnf,
+	const uint32 pmax, const uint32 nmax, const uint32 maxoccurs, const int maxcsize)
+{
+	for_parallel_x(ei, maxVar) {
+		const uint32 v = eligible[ei];
+		rank[v] = ei;
+		uint32 st = MIS_NONE;
+		if (!vstate[v].state) {
+			const uint32 p = V2L(v), n = NEG(p);
+			const uint32 ps = d_hist[p], ns = d_hist[n];
+			if ((ps || ns) && ps <= maxoccurs && ns <= maxoccurs && !(ps >= pmax && ns >= nmax)
+				&& !mis_oversize((*ot)[p], *cnf, maxcsize)
+				&& !mis_oversize((*ot)[n], *cnf, maxcsize))
+				st = MIS_UNDECIDED;
+		}
+		state[v] = st;
+	}
+}
+
+__global__
+void mis_round_k(
+	const uint32* __restrict__ eligible, const uint32 maxVar,
+	const uint32* __restrict__ rank, const uint32* __restrict__ state,
+	uint32* __restrict__ win, uint32* __restrict__ remaining,
+	const OT* __restrict__ ot, const CNF* __restrict__ cnf)
+{
+	for_parallel_x(ei, maxVar) {
+		const uint32 v = eligible[ei];
+		if (state[v] == MIS_UNDECIDED) {
+			*remaining = 1;
+			const uint32 p = V2L(v), n = NEG(p);
+			win[v] = !(mis_blocked((*ot)[p], *cnf, v, ei, rank, state) ||
+			           mis_blocked((*ot)[n], *cnf, v, ei, rank, state));
+		}
+	}
+}
+
+__global__
+void mis_freeze_k(
+	const uint32* __restrict__ eligible, const uint32 maxVar,
+	const uint32* __restrict__ win, uint32* __restrict__ state,
+	VSTATE* __restrict__ vstate, cuVecU* __restrict__ elected,
+	const OT* __restrict__ ot, const CNF* __restrict__ cnf)
+{
+	for_parallel_x(ei, maxVar) {
+		const uint32 v = eligible[ei];
+		if (state[v] == MIS_UNDECIDED && win[v]) {
+			state[v] = MIS_ELECTED;
+			elected->insertAggr(v);
+			mis_freeze((*ot)[V2L(v)], *cnf, v, vstate, state);
+			mis_freeze((*ot)[NEG(V2L(v))], *cnf, v, vstate, state);
+		}
+	}
+}
+
+__global__
+void mis_collect_k(const uint32 maxVar, const VSTATE* __restrict__ vstate, uint32* __restrict__ scores)
+{
+	for_parallel_x(i, maxVar) {
+		const uint32 v = i + 1;
+		if (vstate[v].frozen)
+			scores[atomicAggInc(&scores[0]) + 1] = v;
+	}
+}
+
 #endif
 
 __global__
@@ -212,7 +329,7 @@ bool Solver::LCVE()
 	varReorder();
 
 	// extended LCVE
-	LOGN2(2, " Electing variables (p-mu: %d, n-mu: %d)..", opts.mu_pos << multiplier, opts.mu_neg << multiplier);
+	LOG2(2, " Electing variables (p-mu: %d, n-mu: %d)..", opts.mu_pos << multiplier, opts.mu_neg << multiplier);
 	const uint32 maxoccurs = opts.lcve_max_occurs;
 	const uint32 pmax = opts.mu_pos << multiplier;
 	const uint32 nmax = opts.mu_neg << multiplier;
@@ -222,26 +339,46 @@ bool Solver::LCVE()
 	CHECK(cudaMemset(vars->electedSize, 0, sizeof(uint32))); // GPU-side clear of elected size
 	sp->stacktail = sp->tmpstack; // reset frozen list head
 	// copy vstate to device (frozen bits will be set by the kernel via the frozen field)
-	CHECK(cudaMemcpy(cumm.deviceVstate(), sp->vstate,
-		(inf.maxVar + 1) * sizeof(VSTATE), cudaMemcpyHostToDevice));
-	CHECK(cudaMemset(vars->scores, 0, sizeof(uint32))); // GPU-side zero: keeps pages GPU-resident
-	lcve_k<<<1, 1>>>(
-		vars->eligible,
-		inf.maxVar,
-		vars->elected,
-		vars->scores,
-		cumm.deviceVstate(),
-		cuhist.d_hist,
-		ot,
-		cnf,
-		pmax,
-		nmax,
-		maxoccurs,
-		opts.lcve_clause_max,
-		nullptr, // d_assumed: incremental not yet supported in device-CNF path
-		false);
-	LASTERR("LCVE kernel failed");
-	SYNCALL;
+	CHECK(cudaMemcpy(cumm.deviceVstate(), sp->vstate, (inf.maxVar + 1) * sizeof(VSTATE), cudaMemcpyHostToDevice));
+	CHECK(cudaMemset(vars->scores, 0, sizeof(uint32))); // frozen count = scores[0]
+	// parallel Luby MIS election (nondeterministic, valid maximal independent set)
+	if (opts.lcve_fast) {
+		const uint32 nvars = inf.maxVar + 1;
+		const size_t words = size_t(nvars) * 3 + 1; // rank + state + win + remaining
+		cuPool mis;
+		if (!cumm.allocDynamic(mis, words * sizeof(uint32), "MIS")) { vars->numElected = 0; return false; }
+		uint32* rank  = (uint32*)mis.mem;
+		uint32* state = rank + nvars;
+		uint32* win   = state + nvars;
+		uint32* d_rem = win + nvars;
+		grid_t nThreads = BLOCK1D;
+		OPTIMIZEBLOCKS(inf.maxVar, nThreads, 0);
+		mis_init_k<<<nBlocks, nThreads>>>(vars->eligible, inf.maxVar, rank, state,
+			cumm.deviceVstate(), cuhist.d_hist, ot, cnf, pmax, nmax, maxoccurs, opts.lcve_clause_max);
+		LASTERR("MIS init failed");
+		uint32 rem = 0;
+		do {
+			CHECK(cudaMemset(d_rem, 0, sizeof(uint32)));
+			mis_round_k<<<nBlocks, nThreads>>>(vars->eligible, inf.maxVar, rank, state, win, d_rem, ot, cnf);
+			mis_freeze_k<<<nBlocks, nThreads>>>(vars->eligible, inf.maxVar, win, state, cumm.deviceVstate(), vars->elected, ot, cnf);
+			LASTERR("MIS round failed");
+			CHECK(cudaMemcpy(&rem, d_rem, sizeof(uint32), cudaMemcpyDeviceToHost));
+		} while (rem);
+		mis_collect_k<<<nBlocks, nThreads>>>(inf.maxVar, cumm.deviceVstate(), vars->scores);
+		LASTERR("MIS collect failed");
+		SYNCALL;
+		cumm.freeDynamic(mis);
+	}
+	else {
+		lcve_k<<<1, 1>>>(
+			vars->eligible, inf.maxVar, vars->elected, vars->scores,
+			cumm.deviceVstate(), cuhist.d_hist, ot, cnf,
+			pmax, nmax, maxoccurs, opts.lcve_clause_max,
+			nullptr, // d_assumed: incremental not yet supported in device-CNF path
+			false);
+		LASTERR("LCVE kernel failed");
+		SYNCALL;
+	}
 	CHECK(cudaMemcpy(&vars->numElected, vars->electedSize, sizeof(uint32), cudaMemcpyDeviceToHost));
 #else
 	vars->elected->clear();
@@ -281,9 +418,8 @@ bool Solver::LCVE()
 		const uint32 mcv = vars->elected->back();
 #endif
 		const uint32 pmcv = V2L(mcv);
-		LOGENDING(2, 5, "(%d elected, mcv: %d, pH: %d, nH: %d)", vars->numElected, mcv, cuhist[pmcv], cuhist[NEG(pmcv)]);
+		LOG2(2, " Elected %d variables, with mcv: %d, pH: %d, nH: %d.", vars->numElected, mcv, cuhist[pmcv], cuhist[NEG(pmcv)]);
 	}
-	else LOGDONE(2, 5);
 
 	if (verbose > 3 && !cumm.isDeviceCNF()) {
 		LOGN0(" PLCVs ");

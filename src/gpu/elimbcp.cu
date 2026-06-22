@@ -23,13 +23,14 @@ using namespace ParaFROST;
 
 #if defined(USE_CUARENA) && defined(USE_DEVICE_CNF)
 
+// Per-variable assignment: 0 = unset, 1 = true, 2 = false
 #define BCP_UNSET 0u
 #define BCP_TRUE  1u
 #define BCP_FALSE 2u
-
-#define BCP_CURR  0 // Current frontier size
-#define BCP_NEXT  1 // Next frontier size
-#define BCP_CONFL 2 // Conflict flag
+// Control slots
+#define BCP_CURR  0 // current frontier size
+#define BCP_NEXT  1 // next frontier size
+#define BCP_CONFL 2 // conflict flag
 #define BCP_LEVEL 3 // BFS level (device-side frontier ping-pong)
 
 _PFROST_IN_D_
@@ -85,25 +86,27 @@ void bcp_propagate_k(
 		const uint32 lsz = list.size();
 		for_parallel_x(j, lsz) {
 			const SCLAUSE& c = (*cnf)[list[j]];
-			if (c.deleted()) continue;
-			uint32 unit = 0; int nunset = 0; bool sat = false;
-			forall_clause_const(c, k) {
-				const uint32 ve = bcp_lit_val(state, *k);
-				if (ve == BCP_TRUE) { sat = true; break; }
-				if (ve == BCP_UNSET) { unit = *k; if (++nunset > 1) break; }
-			}
-			if (sat) continue;
-			if (!nunset) { ctrl[BCP_CONFL] = 1; continue; } // all falsified -> conflict
-			if (nunset == 1) {
-				const uint32 v = ABS(unit);
-				const uint32 desired = SIGN(unit) ? BCP_FALSE : BCP_TRUE;
-				const uint32 old = atomicCAS(&state[v], BCP_UNSET, desired);
-				if (old == BCP_UNSET) {
-					MARKFORCED(eliminated[v]);
-					trail->insertAggr(unit);
-					front_next[atomicAggInc(&ctrl[BCP_NEXT])] = FLIP(unit);
+			if (!c.deleted()) {
+				uint32 unit = 0; int nunset = 0; bool sat = false;
+				forall_clause_const(c, k) {
+					const uint32 ve = bcp_lit_val(state, *k);
+					if (ve == BCP_TRUE) { sat = true; break; }
+					if (ve == BCP_UNSET) { unit = *k; if (++nunset > 1) break; }
 				}
-				else if (old != desired) ctrl[BCP_CONFL] = 1;
+				if (!sat) {
+					if (!nunset) ctrl[BCP_CONFL] = 1; // all falsified -> conflict
+					else if (nunset == 1) {
+						const uint32 v = ABS(unit);
+						const uint32 desired = SIGN(unit) ? BCP_FALSE : BCP_TRUE;
+						const uint32 old = atomicCAS(&state[v], BCP_UNSET, desired);
+						if (old == BCP_UNSET) {
+							MARKFORCED(eliminated[v]);
+							trail->insertAggr(unit);
+							front_next[atomicAggInc(&ctrl[BCP_NEXT])] = FLIP(unit);
+						}
+						else if (old != desired) ctrl[BCP_CONFL] = 1;
+					}
+				}
 			}
 		}
 	}
@@ -124,65 +127,23 @@ void bcp_apply_k(CNF* __restrict__ cnfptr, const uint32* __restrict__ state)
 	for_parallel_x(i, cnf.size()) {
 		const S_REF r = cnf.ref(i);
 		SCLAUSE& c = cnf[r];
-		if (c.deleted() || (!c.original() && !c.learnt())) continue;
-		uint32* dst = c.data();
-		uint32 sig = 0; int newsz = 0; bool sat = false;
-		forall_clause(c, k) {
-			const uint32 lit = *k;
-			const uint32 ve = bcp_lit_val(state, lit);
-			if (ve == BCP_TRUE) { sat = true; break; }
-			if (ve == BCP_FALSE) continue; // drop falsified literal
-			*dst++ = lit, sig |= MAPHASH(lit), newsz++; // keep unset literal
+		if (!c.deleted() && (c.original() || c.learnt())) {
+			uint32* dst = c.data();
+			uint32 sig = 0; int newsz = 0; bool sat = false;
+			forall_clause(c, k) {
+				const uint32 lit = *k;
+				const uint32 ve = bcp_lit_val(state, lit);
+				if (ve == BCP_TRUE) { sat = true; break; }
+				if (ve == BCP_FALSE) continue; // drop falsified literal
+				*dst++ = lit, sig |= MAPHASH(lit), newsz++;
+			}
+			if (sat) c.markDeleted();
+			else { c.set_sig(sig); c.resize(newsz); }
 		}
-		if (sat) c.markDeleted();
-		else { c.set_sig(sig); c.resize(newsz); }
 	}
 }
 
-#ifdef BCP_DEBUG
-
-#ifndef BCP_DEBUG_MAX
-#define BCP_DEBUG_MAX 64 // cap printed clauses per literal
 #endif
-
-__device__
-void bcp_print_clause(const SCLAUSE& c, const S_REF r)
-{
-	printf("c [BCP-DBG]    ref %llu [%s sz=%d]:", (unsigned long long)r, c.deleted() ? "DEL" : "ok", c.size());
-	for (int k = 0; k < c.size(); k++) {
-		const uint32 l = c[k];
-		printf(" %d", SIGN(l) ? -(int)ABS(l) : (int)ABS(l));
-	}
-	printf("\n");
-}
-__device__
-void bcp_print_list(const CNF& cnf, const OL& list, const int signedv)
-{
-	printf("c [BCP-DBG]  lit %d occurs in %u clause(s)%s:\n", signedv, list.size(),
-		list.size() > BCP_DEBUG_MAX ? " (truncated)" : "");
-	const uint32 lim = list.size() < BCP_DEBUG_MAX ? list.size() : BCP_DEBUG_MAX;
-	for (uint32 j = 0; j < lim; j++) bcp_print_clause(cnf[list[j]], list[j]);
-}
-__global__
-void print_unit_clauses_k(
-	const CNF* __restrict__ cnf, const OT* __restrict__ ot,
-	const cuVecU* __restrict__ units, const uint32* __restrict__ unitsData,
-	const uint32 count, const int when)
-{
-	if (blockIdx.x || threadIdx.x) return;
-	printf("c [BCP-DBG] ===== %s propagation: %u unit(s) =====\n", when ? "AFTER" : "BEFORE", count);
-	for (uint32 i = 0; i < count; i++) {
-		const uint32 u = (*units)[i];
-		const uint32 v = ABS(u);
-		printf("c [BCP-DBG] unit %d (var %u):\n", SIGN(u) ? -(int)v : (int)v, v);
-		const uint32 p = V2L(v);
-		bcp_print_list(*cnf, (*ot)[p], (int)v);
-		bcp_print_list(*cnf, (*ot)[NEG(p)], -(int)v);
-	}
-}
-#endif
-
-#endif // defined(USE_CUARENA) && defined(USE_DEVICE_CNF)
 
 void Solver::createOTHost(HOT& hot)
 {
@@ -267,7 +228,7 @@ bool Solver::propFailed()
 #if defined(USE_CUARENA) && defined(USE_DEVICE_CNF)
 bool Solver::prop()
 {
-	if (!vars->nUnits) return true;
+	if (!vars->nUnits) return true; // nothing forced -> nothing to propagate
 	LOG2(2, " Propagating %d forced units on GPU..", vars->nUnits);
 	const uint32 nvars = inf.maxVar + 1;
 	const size_t words = size_t(nvars) * 3 + 8; // state + front_a + front_b + ctrl
@@ -279,25 +240,20 @@ bool Solver::prop()
 	uint32* d_ctrl  = front_b + nvars;
 	CHECK(cudaMemsetAsync(d_state, 0, nvars * sizeof(uint32)));
 	CHECK(cudaMemsetAsync(d_ctrl, 0, 8 * sizeof(uint32)));
-#ifdef BCP_DEBUG
-	print_unit_clauses_k<<<1, 1>>>(cnf, ot, vars->units, vars->unitsData, vars->nUnits, 0);
-	LASTERR("BCP debug (before) failed");
-	SYNCALL;
-#endif
-	// Seed the initial units into the state and frontier
 	{
 		grid_t nThreads = BLOCK1D;
 		OPTIMIZEBLOCKS(vars->nUnits, nThreads, 0);
 		bcp_seed_k<<<nBlocks, nThreads>>>(d_state, front_a, d_ctrl, vars->eliminated, vars->unitsData, vars->nUnits);
 		LASTERR("BCP seed failed");
 	}
-	// Propagate the units until no more are found or a conflict is detected
-	const dim3 blk2(32, 8); 
-	const dim3 grid2(64, 64);
+	// This acts like a BFS over the forced-unit closure, 
+	// where the frontier is the falsified literals.
+	const dim3 block2D(32, 8);          // x: scan a literal's occurrences, y: frontier literals
+	const dim3 grid2D(32, 64);
 	uint32 ctrl_host[3] = { 0, 0, 0 };
 	for (int batch = 1; ; batch = MIN(batch << 1, 64)) {
 		for (int b = 0; b < batch; b++) {
-			bcp_propagate_k<<<grid2, blk2>>>(cnf, ot, d_state, vars->eliminated, front_a, front_b, d_ctrl, vars->units);
+			bcp_propagate_k<<<grid2D, block2D>>>(cnf, ot, d_state, vars->eliminated, front_a, front_b, d_ctrl, vars->units);
 			bcp_advance_k<<<1, 1>>>(d_ctrl);
 		}
 		LASTERR("BCP propagate failed");
@@ -305,7 +261,7 @@ bool Solver::prop()
 		if (ctrl_host[BCP_CONFL] || !ctrl_host[BCP_CURR]) break;
 	}
 	if (ctrl_host[BCP_CONFL]) { cumm.freeDynamic(bcp); learnEmpty(); return false; }
-	// Delete satisfied, strengthen others
+	// Clean up CNF
 	{
 		grid_t nThreads = BLOCK1D;
 		OPTIMIZEBLOCKS(inf.numClauses, nThreads, 0);
@@ -313,12 +269,7 @@ bool Solver::prop()
 		LASTERR("BCP apply failed");
 		SYNCALL;
 	}
-#ifdef BCP_DEBUG
-	print_unit_clauses_k<<<1, 1>>>(cnf, ot, vars->units, vars->unitsData, vars->nUnits, 1);
-	LASTERR("BCP debug (after) failed");
-	SYNCALL;
-#endif
-	// Update solver state.
+	// Enqueue units on host to update solver state
 	uint32 ntrail = 0;
 	CHECK(cudaMemcpy(&ntrail, vars->unitsSize, sizeof(uint32), cudaMemcpyDeviceToHost));
 	assert(ntrail <= inf.maxVar);
@@ -327,8 +278,8 @@ bool Solver::prop()
 		for (uint32 i = 0; i < ntrail; i++) {
 			const uint32 unit = sp->tmpstack[i];
 			CHECKLIT(unit);
-			if (i < vars->nUnits) enqueueDevUnit(unit);
-			else                  enqueueUnit(unit);
+			if (i < vars->nUnits) enqueueDevUnit(unit); // BVE-origin: freeze
+			else                  enqueueUnit(unit);    // derived: learn
 		}
 		sp->propagated = trail.size(); // device already propagated these
 	}
@@ -337,9 +288,14 @@ bool Solver::prop()
 	LOGREDALL(this, 2, "BCP Reductions");
 	countAll();
 	inf.numClauses = inf.numClausesSurvived, inf.numLiterals = inf.numLiteralsSurvived;
-	createOTAsync(); // rebuild a consistent OT from the simplified CNF
-	CHECK(cudaMemset(vars->unitsSize, 0, sizeof(uint32))); // reset device units header
-	vars->nUnits = 0;
+	if (inf.numLiterals) {
+		flattened = false; // force flattenCNF to re-copy the post-BCP CNF
+		if (!reallocOT(streams[0])) { simpstate = OTALLOC_FAIL; return true; }
+	}
+	createOTAsync(false, streams[0]);
+	CHECK(cudaMemsetAsync(vars->unitsSize, 0, sizeof(uint32), streams[1])); // reset device units counter
+	vars->nUnits = 0; // histogram already rebuilt above; varReorder uses the fresh d_hist
+	SYNC(streams[0]); SYNC(streams[1]);
 	return true;
 }
 #else
@@ -379,6 +335,18 @@ bool Solver::prop()
 	}
 	cleanProped();
 	return true;
+}
+#endif
+
+#if defined(BCP_TEST_UNITS) && defined(USE_CUARENA) && defined(USE_DEVICE_CNF)
+void Solver::injectTestUnits(const uint32& want)
+{
+	if (!want) return;
+	inject_units_k<<<1, 1>>>(ot, vars->units, inf.maxVar, want);
+	LASTERR("inject test units failed");
+	SYNCALL;
+	CHECK(cudaMemcpy(&vars->nUnits, vars->unitsSize, sizeof(uint32), cudaMemcpyDeviceToHost));
+	LOG2(2, " [TEST] injected %u synthetic forced units before prop", vars->nUnits);
 }
 #endif
 

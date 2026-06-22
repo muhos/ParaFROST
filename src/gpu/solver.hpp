@@ -720,7 +720,6 @@ namespace ParaFROST {
 		inline int		getDeviceCount		()		{ return devCount; }
 		inline int		getSimplifierState	()		{ return simpstate; }
 		inline bool		isCompacted			()		{ return compacted; }
-		// Helpers
 		inline void		enqueueDevUnit		(const uint32& lit) {
 			CHECKLIT(lit);
 			assert(active(lit));
