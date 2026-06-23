@@ -48,7 +48,9 @@ void Solver::report()
 				LOG1(" %s - BCE                 : %s%-16.2f  ms%s", CREPORT, CREPORTVAL, stats.sigma.time.bce, CNORMAL);
 				LOG1(" %s - ERE                 : %s%-16.2f  ms%s", CREPORT, CREPORTVAL, stats.sigma.time.ere, CNORMAL);
 			}
-			LOG1(" %sDevice memory          : %s%-16.3f  MB%s", CREPORT, CREPORTVAL, ratio((double)(cumm.maxCapacity() + cacher.maxCapacity()), double(MBYTE)), CNORMAL);
+			LOG1(" %sDevice memory          : %s%-16.3f  MB%s", CREPORT, CREPORTVAL, ratio((double) stats.sigma.memory.device, double(MBYTE)), CNORMAL);
+			LOG1(" %sPinned memory          : %s%-16.3f  MB%s", CREPORT, CREPORTVAL, ratio((double) stats.sigma.memory.pinned, double(MBYTE)), CNORMAL);
+			LOG1(" %sPaged memory           : %s%-16.3f  MB%s", CREPORT, CREPORTVAL, ratio((double) stats.sigma.memory.paged, double(MBYTE)), CNORMAL);
 			LOG1(" %sSigmifications         : %s%-10d%s", CREPORT, CREPORTVAL, stats.sigma.calls, CNORMAL);
 			LOG1(" %s Forced units          : %s%-10d%s", CREPORT, CREPORTVAL, stats.units.forced, CNORMAL);
 			LOG1(" %s Removed variables     : %s%-16lld%s", CREPORT, CREPORTVAL, stats.sigma.all.variables + stats.units.forced, CNORMAL);

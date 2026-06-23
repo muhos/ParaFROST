@@ -32,7 +32,6 @@ void CACHER::destroy() {
 			if (i->first) arena->deallocate(i->first);
 		free_cache.clear();
 		alloc_cache.clear();
-		used = 0;
 		arena = nullptr;
 		return;
 	}
@@ -45,7 +44,6 @@ void CACHER::destroy() {
 	}
 	free_cache.clear();
 	alloc_cache.clear();
-	used = 0;
 }
 
 void* CACHER::allocate(size_t size) {
@@ -69,7 +67,6 @@ void* CACHER::allocate(size_t size) {
 			}
 		}
 		else cudaMalloc((void**)&p, size);
-		used += size;
 	}
 	assert(p);
 	alloc_cache.insert(std::make_pair(p, size)); // cache new block
@@ -98,6 +95,5 @@ void CACHER::deallocate(void* p, const size_t bound) {
 		assert(p);
 		if (arena) arena->deallocate(p);
 		else CACHEMEMCHECK(cudaFree(p));
-		used -= size;
 	}
 }

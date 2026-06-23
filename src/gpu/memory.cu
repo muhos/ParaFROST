@@ -93,7 +93,7 @@ cuMM::cuMM()
       d_cnf_mem(nullptr), d_stencil(nullptr), d_vstate(nullptr),
       nscatters(0),
       _compacttime(0.0f), _tot(0), _free(0),
-      cap(0), dcap(0), maxcap(0), penalty(0)
+      cap(0), dcap(0), penalty(0)
 {
     arena_ready = false;
 }
@@ -125,15 +125,14 @@ bool cuMM::initDeviceArena(const size_t& numCls, const size_t& numLits, const si
 	const size_t ot_dyn_cap  = HC_OTSIZE + inf.maxDualVars * HC_OLSIZE + numLits * HC_SREFSIZE;
 	const size_t dyn_est = arena.align_up(lits_dyn_cap) + 2 * arena.align_up(cnf_dyn_cap) + arena.align_up(ot_dyn_cap);
 	size_t dyn_cap = dyn_est;
-	size_t gpu_free = 0, gpu_tot = 0;
-	CHECK(cudaMemGetInfo(&gpu_free, &gpu_tot));
-	const size_t reserve  = size_t(penalty) + (256 * MBYTE);              // driver overhead + slack
+	const size_t gpu_free = getFreeMemory();
+	const size_t reserve  = size_t(penalty) + (256 * MBYTE);              // driver overhead
 	if (gpu_free > stable_cap + reserve) {
 		const size_t avail = gpu_free - stable_cap - reserve;
-		if (avail > dyn_cap) dyn_cap = avail;                            // grow to use leftover VRAM
+		if (avail > dyn_cap) dyn_cap = avail;                             // grow to use leftover VRAM
 	}
 	else
-		LOGWARNING("cuArena: tight VRAM (free %.3f MB, stable %.3f MB, reserve %.3f MB) -> using estimated dynamic %.3f MB",
+		LOGWARNING("cuArena: low VRAM (free %.3f MB, stable %.3f MB, reserve %.3f MB) -> using estimated dynamic %.3f MB",
 			double(gpu_free) / MBYTE, double(stable_cap) / MBYTE, double(reserve) / MBYTE, double(dyn_cap) / MBYTE);
 	const size_t total_cap = stable_cap + dyn_cap;
 	LOG2(2, " Creating cuArena device pool (stable %.3f MB, dynamic %.3f MB)..",
@@ -396,7 +395,6 @@ bool cuMM::resizeCNF(CNF*& cnf, const size_t& clsCap, const size_t& litsCap)
 		const S_REF data_cap = S_REF(dataBytes / SBUCKETSIZE);
 		initCNF_k<<<1, 1>>>(cnf, data_cap, uint32(clsCap));
 		LASTERR("CNF device init failed");
-		SYNC(0);
 		cacheCNFPtr(cnf);
 		SYNC(0);
 		d_cnf_mem = pinned_cnf->data().mem;
@@ -422,13 +420,9 @@ bool cuMM::resizeCNF(CNF*& cnf, const size_t& clsCap, const size_t& litsCap)
 		const S_REF data_cap = S_REF(dataBytes / SBUCKETSIZE);
 		initCNF_k<<<1, 1>>>(tmp_cnf, data_cap, uint32(clsCap));
 		LASTERR("CNF device reinit failed");
-		SYNC(0);
-		// Cache OLD cnf into pinned_cnf so compactCNF sees the correct old size.
-		// Get new cnf's data/refs pointers via a separate local copy.
 		cacheCNFPtr(cnf);
 		CNF new_cnf_hdr;
 		CHECK(cudaMemcpy(&new_cnf_hdr, tmp_cnf, sizeof(CNF), cudaMemcpyDeviceToHost));
-		SYNC(0);
 		d_cnf_mem = new_cnf_hdr.data().mem;
 		d_refs_mem = new_cnf_hdr.refsData();
 		compactCNF(cnf, tmp_cnf);
@@ -470,11 +464,8 @@ bool cuMM::resizeOTAsync(OT*& ot, const size_t& min_lits, const cudaStream_t& _s
 			}
 		}
 		ot = (OT*)otPool.mem;
-		LASTERR("Exclusively scanning histogram failed");
-		SYNC(_s);
 		initOT_k<<<1, 1>>>(ot, inf.maxDualVars);
 		LASTERR("OT device init failed");
-		SYNC(0);
 		OT ot_hdr;
 		CHECK(cudaMemcpy(&ot_hdr, ot, sizeof(OT), cudaMemcpyDeviceToHost));
 		d_occurs = ot_hdr.data();
@@ -526,50 +517,28 @@ void cuMM::mirrorCNF(CNF*& hcnf)
 	hcnf->fixPointer(); // replace device with host pointers
 }
 
-void cuMM::freeVars()
+void cuMM::freeDevice()
 {
-	LOGN2(2, " freeing up fixed device memory..");
+	LOGN2(2, " Freeing up device memory..");
 	DFREE(varsPool);
-	LOGDONE(2, 5);;
-}
-
-void cuMM::freeCNF()
-{
-	LOGN2(2, " freeing up CNF device memory..");
 	DFREE(cnfPool);
-	LOGDONE(2, 5);
-	d_cnf_mem = NULL, d_refs_mem = NULL;
-}
-
-void cuMM::freeOT()
-{
-	LOGN2(2, " freeing up OT device memory..");
 	DFREE(otPool);
-	LOGDONE(2, 5);
-}
-
-void cuMM::freeFixed()
-{
-	LOGN2(2, " freeing up histogram and auxiliary memory..");
-	if (auxPool.mem) {
-		DFREE(auxPool);
-		d_scatter = NULL, d_stencil = NULL;
-		nscatters = 0;
-	}
-	if (histPool.mem) {
-		DFREE(histPool);
-		d_segs = NULL, d_hist = NULL, d_vstate = NULL;
-	}
-	if (litsPool.mem) {
-		DFREE(litsPool);
-		litsPool.size = 0;
-	}
-    LOGDONE(2, 5);
+	DFREE(auxPool);
+	DFREE(histPool);
+	DFREE(litsPool);
+	d_cnf_mem = NULL, d_refs_mem = NULL;
+	d_occurs = NULL, d_scatter = NULL;
+	d_stencil = NULL, d_vstate = NULL;
+	d_segs = NULL, d_hist = NULL;
+	nscatters = 0;
+	litsPool.size = 0;
+	LOGENDING(2, 5, "(%.3f MB freed)", double(_free) / MBYTE);
 }
 
 void cuMM::freePinned()
 {
-	LOGN2(2, " freeing up pinned memory..");
+	LOGN2(2, " Freeing up pinned memory..");
+	const size_t pinned_cap = pinnedPool.cap;
 	if (pinnedPool.mem) {
 		if (arena_ready && arena.cpu_capacity()) arena.deallocate_pinned(pinnedPool.mem);
 		else CHECK(cudaFreeHost(pinnedPool.mem));
@@ -577,17 +546,18 @@ void cuMM::freePinned()
 		pinnedPool.cap = 0;
 		pinned_cnf = NULL;
 	}
-    LOGDONE(2, 5);
+    LOGENDING(2, 5, "(%.3f MB freed)", double(pinned_cap) / MBYTE);
 }
 
 void cuMM::breakMirror()
 {
-	LOGN2(2, " freeing up CNF host memory..");
+	LOGN2(2, " Freeing up CNF host memory..");
+	const size_t mirror_cap = hcnfPool.cap;
 	if (hcnfPool.mem) {
 		std::free(hcnfPool.mem);
 		hcnfPool.mem = NULL;
 		hcnfPool.cap = 0;
 	}
-    LOGDONE(2, 5);
+    LOGENDING(2, 5, "(%.3f MB freed)", double(mirror_cap) / MBYTE);
 }
 

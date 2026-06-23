@@ -785,7 +785,6 @@ namespace ParaFROST {
 		void			markEliminated		(const cudaStream_t&);
 		bool			reallocOT			(const cudaStream_t& stream = 0);
 		inline void		mapFrozen			();
-		inline void		cleanManaged        ();
 		inline void		initSimplifier      ();
 			   void		initSharedMem		();
 		//==========================================//

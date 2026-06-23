@@ -321,6 +321,7 @@ bool Solver::LCVE()
 		if (!cumm.allocDynamic(assumedPool, assumedBytes, "Assumptions")) { vars->numElected = 0; return false; }
 		d_assumed = (bool*)assumedPool.mem;
 	}
+	
 	cuPool mis;
 	const bool useMIS = opts.lcve_fast;
 	if (useMIS) {
@@ -340,7 +341,7 @@ bool Solver::LCVE()
 	if (hasAssumptions)
 		CHECK(cudaMemcpyAsync(d_assumed, assumed.data(), assumedBytes, cudaMemcpyHostToDevice, streams[0]));
 	SYNC(streams[2]); SYNC(streams[1]); SYNC(streams[0]);
-	// parallel Luby MIS election (nondeterministic, valid maximal independent set)
+
 	if (useMIS) {
 		const uint32 nvars = inf.maxVar + 1;
 		uint32* rank  = (uint32*)mis.mem;

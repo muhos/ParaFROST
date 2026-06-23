@@ -41,18 +41,15 @@ namespace ParaFROST {
 
 	// memory cache container
 	class CACHER {
-		size_t			used, maxcap;
 		free_cache_t    free_cache;
 		alloc_cache_t   alloc_cache;
 		cuArena::DeviceArena* arena;
 
 	public:
 
-		CACHER() : used(0), maxcap(0), arena(nullptr) { }
+						~CACHER() { destroy(); }
+						CACHER() : arena(nullptr) { }
 		inline void		setArena		(cuArena::DeviceArena* const a) { arena = a; }
-		~CACHER() { destroy(); }
-		inline size_t	maxCapacity		() const { return maxcap; }
-		inline void		updateMaxCap	() { if (maxcap < used) maxcap = used; }
 		inline void		insert			(void* p, const size_t size) {
 			assert(p);
 			assert(size);

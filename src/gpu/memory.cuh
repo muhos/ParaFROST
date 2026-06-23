@@ -67,13 +67,19 @@ namespace ParaFROST {
 		// trackers
 		cuTIMER cutimer;
 		float 	_compacttime;
-		int64	_tot, _free, cap, dcap, maxcap, penalty;
+		int64	_tot, _free, cap, dcap, penalty;
 		// cuarena backend
 		cuArena::DeviceArena arena;
 		bool                 arena_ready;
 
 	public:
 
+		inline size_t 	getFreeMemory	() {
+			if (arena_ready) return arena.gpu_available() + arena.gpu_stable_available();
+			size_t free = 0, tot = 0;
+			CHECK(cudaMemGetInfo(&free, &tot));
+			return free;
+		}
 		inline bool		hasDeviceMem	(const size_t& min_cap, const char* name,
 									     const cuArena::Region& type = cuArena::Region::Stable) {
 			const int64 used = dcap + min_cap;
@@ -167,33 +173,27 @@ namespace ParaFROST {
 			pool.mem = NULL;
 			pool.cap = 0;
 		}
+		inline cuArena::DeviceArena* deviceArena () { 
+			return arena_ready ? &arena : nullptr; 
+		}
 						cuMM			();
-		bool			initDeviceArena	(const size_t& numCls, const size_t& numLits, const size_t& resolvedCap, const bool& proofEnabled);
 		void			breakMirror		();
 		void			freePinned		();
-		void			freeFixed		();
-		void			freeVars		();
-		void			freeCNF			();
-		void			freeOT			();
-		inline void		updateMaxCap	() { if (maxcap < (cap + dcap)) maxcap = cap + dcap; }
+		void			freeDevice		();
+		bool			initDeviceArena	(const size_t& numCls, const size_t& numLits, const size_t& resolvedCap, const bool& proofEnabled);
 		inline bool		empty			() const { return cap == 0; }
-		inline int64	ucapacity		() const { return cap; }
-		inline int64	dcapacity		() const { return dcap; }
-		inline int64	maxCapacity		() const { return maxcap; }
 		inline size_t	scatterCap		() const { return nscatters * sizeof(S_REF); }
 		inline float 	compactTime		() const { return _compacttime; }
+		inline size_t	pagedUsed		() const { return hcnfPool.cap; }
 		inline S_REF*	refsMem			() { return d_refs_mem; }
 		inline S_REF*	scatter			() { return d_scatter; }
 		inline S_REF*	occurs			() { return d_occurs; }
 		inline uint32*	cnfMem			() { return d_cnf_mem; }
 		inline CNF*		pinnedCNF		() { return pinned_cnf; }
 		inline VSTATE*	deviceVstate	() { return d_vstate; }
-		inline cuArena::DeviceArena* deviceArena () { return arena_ready ? &arena : nullptr; }
 		inline cuLits&	literals		() { return litsPool; }
-		void			reset			(const int64 _free) {
-			this->_free = _free - penalty;
-		}
-		void			init			(const int64 _tot, const int64 _penalty) {
+		inline void		reset			() { _free = getFreeMemory(); }
+		inline void		init			(const int64 _tot, const int64 _penalty) {
 			penalty = _penalty;
 			this->_tot = _tot;
 			_free = _tot - penalty;

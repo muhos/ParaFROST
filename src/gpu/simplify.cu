@@ -40,18 +40,11 @@ inline void	Solver::updateNumPVs()
 	vars->numElected = remainedPVs;
 }
 
-inline void	Solver::cleanManaged() 
-{
-	if (vars != NULL) delete vars;
-	cumm.freeVars(), cumm.freeCNF(), cumm.freeOT();
-	vars = NULL, cnf = NULL, ot = NULL;
-}
-
-
 inline void	Solver::initSimplifier()
 {
-	cleanManaged();
-	cumm.freeFixed();
+	if (vars != NULL) delete vars;
+	cumm.freeDevice();
+	vars = NULL, cnf = NULL, ot = NULL;
 	cacher.destroy();
 	simpstate = AWAKEN_SUCC;
 	phase = multiplier = 0;
@@ -59,11 +52,7 @@ inline void	Solver::initSimplifier()
 	dataoff = csoff = 0;
 	flattened = compacted = false;
 	assert(hcnf == NULL);
-	if (stats.sigma.calls > 1) {
-		size_t free = 0, tot = 0;
-		CHECK(cudaMemGetInfo(&free, &tot));
-		cumm.reset(free);
-	}
+	if (stats.sigma.calls > 1) cumm.reset();
 }
 
 void Solver::simplify(const bool& skip_transfer_to_host)
@@ -102,8 +91,7 @@ void Solver::awaken()
 		numCls += maxAddedCls, numLits += maxAddedLits;
 	}
 	assert(inf.maxDualVars);
-	if (
-		!cumm.initDeviceArena(numCls, numLits, savedLits, opts.proof_en) ||
+	if (!cumm.initDeviceArena(numCls, numLits, savedLits, opts.proof_en) ||
 		!cumm.allocHist(cuhist, opts.proof_en) ||
 		!cumm.allocAux(numCls) ||
 		!cumm.allocVars(vars, savedLits) ||
@@ -226,8 +214,9 @@ void Solver::simplifying(const bool& skip_transfer_to_host)
 	}
 	assert(isPropagated());
 	cacheEliminated(streams[5]);             	// if ERE is enabled, this transfer would be already done
-	cumm.updateMaxCap(), cacher.updateMaxCap(); // for reporting GPU memory only
 	markEliminated(streams[5]);              	// must be executed before map()
+	const auto arena = cumm.deviceArena();
+	stats.sigma.memory.setMax(arena ? arena->gpu_peak_used() : size_t(0), arena ? arena->cpu_used() : size_t(0), cumm.pagedUsed());
 	if (skip_transfer_to_host) {
 		SYNCALL;
 		assert(!simpstate);
@@ -265,10 +254,11 @@ void Solver::freeSimp()
 {
 	SYNCALL;
 	cacher.destroy();
-	cumm.freeFixed();
 	cumm.freePinned();
-	cleanManaged();
 	destroyStreams();
+	if (vars != NULL) delete vars;
+	cumm.freeDevice();
+	vars = NULL, cnf = NULL, ot = NULL;
 	cumm.breakMirror(), hcnf = NULL;
 	if (opts.proof_en) 
 		cuproof.destroy();
