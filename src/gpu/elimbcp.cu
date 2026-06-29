@@ -175,7 +175,7 @@ bool Solver::prop()
 		CHECK(cudaMemcpy(ctrl_host, d_ctrl, 3 * sizeof(uint32), cudaMemcpyDeviceToHost));
 		if (ctrl_host[BCP_CONFL] || !ctrl_host[BCP_CURR]) break;
 	}
-	if (ctrl_host[BCP_CONFL]) { cumm.freeDynamic(bcp); learnEmpty(); return false; }
+	if (ctrl_host[BCP_CONFL]) { cumm.freeDevice(bcp); learnEmpty(); return false; }
 	// Clean up CNF
 	{
 		grid_t nThreads = BLOCK1D;
@@ -198,7 +198,7 @@ bool Solver::prop()
 		}
 		sp->propagated = trail.size(); // device already propagated these
 	}
-	cumm.freeDynamic(bcp);
+	cumm.freeDevice(bcp);
 	stats.units.forced += ntrail;
 	LOGREDALL(this, 2, "BCP Reductions");
 	countAll();

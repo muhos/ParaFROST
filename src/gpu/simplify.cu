@@ -52,7 +52,6 @@ inline void	Solver::initSimplifier()
 	dataoff = csoff = 0;
 	flattened = compacted = false;
 	assert(hcnf == NULL);
-	if (stats.sigma.calls > 1) cumm.reset();
 }
 
 void Solver::simplify(const bool& skip_transfer_to_host)
@@ -216,7 +215,7 @@ void Solver::simplifying(const bool& skip_transfer_to_host)
 	cacheEliminated(streams[5]);             	// if ERE is enabled, this transfer would be already done
 	markEliminated(streams[5]);              	// must be executed before map()
 	const auto arena = cumm.deviceArena();
-	stats.sigma.memory.setMax(arena ? arena->gpu_peak_used() : size_t(0), arena ? arena->cpu_used() : size_t(0), cumm.pagedUsed());
+	stats.sigma.memory.setMax(arena->gpu_peak_used(), arena->cpu_used(), cumm.pagedUsed());
 	if (skip_transfer_to_host) {
 		SYNCALL;
 		assert(!simpstate);

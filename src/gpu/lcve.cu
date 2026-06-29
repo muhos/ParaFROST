@@ -328,7 +328,7 @@ bool Solver::LCVE()
 		const uint32 nvars = inf.maxVar + 1;
 		const size_t words = size_t(nvars) * 3 + 1; // rank + state + win + remaining
 		if (!cumm.allocDynamic(mis, words * sizeof(uint32), "MIS")) {
-			if (hasAssumptions) cumm.freeDynamic(assumedPool);
+			if (hasAssumptions) cumm.freeDevice(assumedPool);
 			vars->numElected = 0;
 			return false;
 		}
@@ -365,7 +365,7 @@ bool Solver::LCVE()
 		mis_collect_k<<<nBlocks, nThreads>>>(inf.maxVar, cumm.deviceVstate(), vars->scores);
 		LASTERR("MIS collect failed");
 		SYNCALL;
-		cumm.freeDynamic(mis);
+		cumm.freeDevice(mis);
 	}
 	else {
 		lcve_k<<<1, 1>>>(
@@ -376,7 +376,7 @@ bool Solver::LCVE()
 		LASTERR("LCVE kernel failed");
 		SYNCALL;
 	}
-	if (hasAssumptions) cumm.freeDynamic(assumedPool);
+	if (hasAssumptions) cumm.freeDevice(assumedPool);
 	CHECK(cudaMemcpy(&vars->numElected, vars->electedSize, sizeof(uint32), cudaMemcpyDeviceToHost));
 
 	if (vars->numElected) {
