@@ -205,28 +205,22 @@ bool cuPROOF::alloc(const uint32& maxcap)
 	assert(min_cap);
 	if (devicePool.cap < min_cap) {
 		// device memory
-		cumm.DFREE(devicePool);
+		cumm.freeDevice(devicePool);
 		assert(devicePool.mem == NULL);
-		if (!cumm.hasDeviceMem(min_cap, "Proof")) return false;
-		CHECK(cudaMalloc((void**)&devicePool.mem, min_cap));
+		if (!cumm.allocDynamic(devicePool, min_cap, "Proof")) return false;
 		addr_t ea = devicePool.mem;
 		deviceStream = (cuVecB*)ea, ea += header_size;
 		header.alloc(ea, uint32(proof_cap)), ea += proof_cap;
 		CHECK(cudaMemcpyAsync(deviceStream, &header, header_size, cudaMemcpyHostToDevice));
 		assert(ea == devicePool.mem + min_cap);
-		devicePool.cap = min_cap;
 		// pinned host memory
-		if (hostPool.mem) {
-			CHECK(cudaFreeHost(hostPool.mem));
-			hostPool.mem = NULL;
-		}
-		CHECK(cudaMallocHost((void**)&hostPool.mem, min_cap));
+		cumm.freePinned(hostPool);
+		if (!cumm.allocPinned(hostPool, min_cap)) return false;
 		ea = hostPool.mem;
 		hostStream = (cuVecB*)ea, ea += header_size;
 		hostStream->alloc(ea, uint32(proof_cap)), ea += proof_cap;
 		assert(ea == hostPool.mem + min_cap);
-		hostPool.cap = min_cap;
-		SYNC(0); 
+		SYNC(0);
 		header.clear(true);
 	}
 	return true;
@@ -254,10 +248,7 @@ void cuPROOF::cacheProof(const cudaStream_t& _s)
 void cuPROOF::destroy()
 {
 	LOGN2(2, " Freeing up proof host-device memory..");
-	cumm.DFREE(devicePool);
-	if (hostPool.mem) {
-		CHECK(cudaFreeHost(hostPool.mem));
-		hostPool.mem = NULL, hostPool.cap = 0;
-	}
+	cumm.freeDevice(devicePool);
+	cumm.freePinned(hostPool);
 	LOGDONE(2, 5);
 }

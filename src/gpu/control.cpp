@@ -255,7 +255,9 @@ namespace ParaFROST {
 		maxGPUThreads = devProp.multiProcessorCount * devProp.maxThreadsPerMultiProcessor;
 		maxGPUSharedMem = devProp.sharedMemPerBlock - _shared_penalty;
 		if (!quiet_en) {
-			LOG1(" Available GPU: %d x %s%s @ %.2fGHz%s (compute cap: %d.%d)", devCount, CREPORTVAL, devProp.name, ratio((double)devProp.clockRate, 1e6), CNORMAL, devProp.major, devProp.minor);
+			int clockRate = 0;
+			CHECK(cudaDeviceGetAttribute(&clockRate, cudaDevAttrClockRate, MASTER_GPU));
+			LOG1(" Available GPU: %d x %s%s @ %.2fGHz%s (compute cap: %d.%d)", devCount, CREPORTVAL, devProp.name, ratio((double)clockRate, 1e6), CNORMAL, devProp.major, devProp.minor);
 			const int cores = SM2Cores(devProp.major, devProp.minor);
 			LOG1(" Available GPU Multiprocessors: %d MPs (%s cores/MP)", devProp.multiProcessorCount, (cores < 0 ? "unknown" : std::to_string(cores).c_str()));
 			LOG1(" Available Global memory: %zd GB", _free / GBYTE);
@@ -270,8 +272,11 @@ void ParaFROST::Solver::killSolver()
 	SYNCALL;
 	wrapup();
 	LOGHEADER(1, 5, "Exit");
+	LOGN2(1, "Shutting down solver..");
+	PRINT2(2, 5, "\n");
 	this->~Solver();
 	solver = NULL;
+	LOGDONE(1, 2);
 	if (!quiet_en) LOGRULER('-', RULELEN);
 	exit(EXIT_SUCCESS);
 }

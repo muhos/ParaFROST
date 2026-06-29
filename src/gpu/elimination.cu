@@ -82,14 +82,14 @@ namespace ParaFROST {
 		const uint32 cs_offset = cumm.pinnedCNF()->size();
 		const S_REF data_offset = cumm.pinnedCNF()->data().size;
 		size_t tb1 = 0, tb2 = 0;
-		cub::DeviceScan::ExclusiveScan(NULL, tb1, rpos, rpos, cub::Sum(), cs_offset, vars->numElected);
-		cub::DeviceScan::ExclusiveScan(NULL, tb2, rref, rref, cub::Sum(), data_offset, vars->numElected);
+		cub::DeviceScan::ExclusiveScan(NULL, tb1, rpos, rpos, cuda::std::plus<uint32>(), cs_offset, vars->numElected);
+		cub::DeviceScan::ExclusiveScan(NULL, tb2, rref, rref, cuda::std::plus<S_REF>(), data_offset, vars->numElected);
 		size_t tmpcap = tb1 + tb2;
 		addr_t ts1 = NULL, ts2 = NULL;
 		addr_t tmpmem = (addr_t)((tmpcap > cumm.scatterCap()) ? cacher.allocate(tmpcap) : cumm.scatter());
 		ts1 = tmpmem, ts2 = ts1 + tb1;
-		cub::DeviceScan::ExclusiveScan(ts1, tb1, rpos, rpos, cub::Sum(), cs_offset, vars->numElected, streams[0]);
-		cub::DeviceScan::ExclusiveScan(ts2, tb2, rref, rref, cub::Sum(), data_offset, vars->numElected, streams[1]);
+		cub::DeviceScan::ExclusiveScan(ts1, tb1, rpos, rpos, cuda::std::plus<uint32>(), cs_offset, vars->numElected, streams[0]);
+		cub::DeviceScan::ExclusiveScan(ts2, tb2, rref, rref, cuda::std::plus<S_REF>(), data_offset, vars->numElected, streams[1]);
 		LASTERR("BVE Phase-2 failed");
 		SYNC(streams[0]);
 		SYNC(streams[1]);

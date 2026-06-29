@@ -292,15 +292,14 @@ namespace ParaFROST {
 			assert(sp->stacktail - sp->tmpstack <= inf.maxVar);
 			uint32* start = sp->tmpstack, *tail = sp->stacktail;
 			while (start != tail)
-				sp->frozen[*start++] = 0;
+				sp->vstate[*start++].frozen = 0;
 			assert(verifyFrozen());
 		}
 		inline bool		verifyFrozen		() {
-			for (uint32 v = 0; v <= inf.maxVar; v++) {
-				if (sp->frozen[v]) {
+			for (uint32 v = 1; v <= inf.maxVar; v++) {
+				if (sp->vstate[v].frozen) {
 					LOG0("");
-					LOGERRORN("frozen(%d) is not melted", v);
-					printWatched(v);
+					LOGERRORN("vstate.frozen(%d) is not melted", v);
 					return false;
 				}
 			}
@@ -704,7 +703,6 @@ namespace ParaFROST {
 		inline int		getDeviceCount		()		{ return devCount; }
 		inline int		getSimplifierState	()		{ return simpstate; }
 		inline bool		isCompacted			()		{ return compacted; }
-		// Helpers
 		inline void		enqueueDevUnit		(const uint32& lit) {
 			CHECKLIT(lit);
 			assert(active(lit));
@@ -742,7 +740,6 @@ namespace ParaFROST {
 			}
 		}
 		inline void		updateNumPVs		();
-		inline bool		verifyLCVE			();
 		void			logReductions		();
 		uint32			updateNumElims		();
 		void			countCls			(const bool& host = 0);
@@ -768,7 +765,6 @@ namespace ParaFROST {
 		void			ERE                 ();
 		void			BCE                 ();
 		bool			prop                ();
-		bool			propFailed          ();
 		void			writeBackCNF		();
 		bool			reallocCNF			();
 		bool			reallocCNF			(const bool& realloc);
@@ -782,19 +778,13 @@ namespace ParaFROST {
 		void 			resetOTAsync		(const cudaStream_t& stream = 0);
 		void 			reduceOTAsync		(const bool& print = false, const cudaStream_t& stream = 0);
 		void			createOTAsync		(const bool& print = false, const cudaStream_t& stream = 0);
-		void			createOTHost		(HOT&);
 		void			cacheUnits          (const cudaStream_t&);
 		void			cacheNumUnits       (const cudaStream_t&);
 		void			cacheResolved       (const cudaStream_t&);
 		void			cacheEliminated     (const cudaStream_t&);
 		void			markEliminated		(const cudaStream_t&);
 		bool			reallocOT			(const cudaStream_t& stream = 0);
-		inline bool		depFreeze           (OL& ol, LIT_ST* frozen, uint32*& tail, const uint32& cand, const uint32& pmax, const uint32& nmax);
-		inline bool		propClause          (const LIT_ST*, const uint32&, SCLAUSE&);
-		inline bool		enqueueCached       (const cudaStream_t&);
 		inline void		mapFrozen			();
-		inline void		cleanProped         ();
-		inline void		cleanManaged        ();
 		inline void		initSimplifier      ();
 			   void		initSharedMem		();
 		//==========================================//

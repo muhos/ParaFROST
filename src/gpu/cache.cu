@@ -20,20 +20,20 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 #include <cassert>
 #include "cache.cuh"
 #include "logging.hpp"
+#include <cuarena/allocator.cuh>
 
 using namespace ParaFROST;
 
 void CACHER::destroy() {
-	for (free_cache_t::iterator i = free_cache.begin(); i != free_cache.end(); i++) {
-		if (i->second) CACHEMEMCHECK(cudaFree(i->second));
-		i->second = NULL;
-	}
-	for (alloc_cache_t::iterator i = alloc_cache.begin(); i != alloc_cache.end(); i++) {
-		if (i->first) CACHEMEMCHECK(cudaFree(i->first));
+	if (arena) {
+		for (free_cache_t::iterator i = free_cache.begin(); i != free_cache.end(); i++)
+			if (i->second) arena->deallocate(i->second);
+		for (alloc_cache_t::iterator i = alloc_cache.begin(); i != alloc_cache.end(); i++)
+			if (i->first) arena->deallocate(i->first);
 	}
 	free_cache.clear();
 	alloc_cache.clear();
-	used = 0;
+	arena = nullptr;
 }
 
 void* CACHER::allocate(size_t size) {
@@ -49,8 +49,12 @@ void* CACHER::allocate(size_t size) {
 	}
 	// no free blocks, allocate new one
 	else {
-		cudaMalloc((void**)&p, size);
-		used += size;
+		if (!arena) LOGERROR("cache allocator has no cuArena backend");
+		try { p = arena->allocate<Byte>(size, cuArena::Region::Dynamic); }
+		catch (const cuArena::gpu_memory_error&) {
+			arena->compact_gpu_dynamic(nullptr);
+			p = arena->allocate<Byte>(size, cuArena::Region::Dynamic);
+		}
 	}
 	assert(p);
 	alloc_cache.insert(std::make_pair(p, size)); // cache new block
@@ -77,7 +81,7 @@ void CACHER::deallocate(void* p, const size_t bound) {
 	if (size < bound) free_cache.insert(std::make_pair(size, p)); // cache free block
 	else { // deallocate free block
 		assert(p);
-		CACHEMEMCHECK(cudaFree(p));
-		used -= size;
+		if (!arena) LOGERROR("cache allocator has no cuArena backend");
+		arena->deallocate(p);
 	}
 }

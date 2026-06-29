@@ -91,6 +91,7 @@ CUOBJEXT  := cuda.o
 mainsrc   := main
 cusrc     := $(sort $(wildcard *.cu))
 allcppsrc := $(sort $(wildcard *.cpp))
+headers   := $(sort $(wildcard $(SRC_DIR)/*.cuh) $(wildcard $(SRC_DIR)/*.hpp))
 cppsrc    := $(filter-out $(mainsrc).cpp,$(allcppsrc))
 cuobj     := $(patsubst %.cu,%.$(CUOBJEXT),$(cusrc))
 cppobj    := $(patsubst %.cpp,%.$(CPPOBJEXT),$(cppsrc))
@@ -135,15 +136,15 @@ $(BIN): $(mainsrc).$(CPPOBJEXT) $(LIB) $(CUARENA_LIB)
 	@$(NVCC) $(ALL_LDFLAGS) -o $@ $(mainsrc).$(CPPOBJEXT) -L. $(LIB) $(EXTRALIB)
 	@$(DONE)
 
-$(mainsrc).$(CPPOBJEXT): $(mainsrc).cpp
+$(mainsrc).$(CPPOBJEXT): $(mainsrc).cpp $(headers)
 	@$(PROGRESS) $<
 	@$(NVCC) $(INCLUDES) $(ALL_CCFLAGS) -o $@ -c $<
 
-%.$(CUOBJEXT): %.cu
+%.$(CUOBJEXT): %.cu $(headers)
 	@$(PROGRESS) $<
 	@$(NVCC) $(INCLUDES) $(ALL_CCFLAGS) -o $@ -c $<
 
-%.$(CPPOBJEXT): %.cpp
+%.$(CPPOBJEXT): %.cpp $(headers)
 	@$(PROGRESS) $<
 	@$(NVCC) $(INCLUDES) $(ALL_CCFLAGS) -o $@ -c $<
 

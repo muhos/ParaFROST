@@ -482,7 +482,8 @@ if [[ $cextra != "" ]]; then CCFLAGS="$CCFLAGS $cextra"; fi
 
 first=$(printf "%s" "$NVCCFLAGS" | cut -d' ' -f1-5)
 second=$(printf "%s" "$NVCCFLAGS" | cut -d' ' -f6-8)
-rest=$(printf "%s" "$NVCCFLAGS" | cut -d' ' -f9-)
+third=$(printf "%s" "$NVCCFLAGS" | cut -d' ' -f9-11)
+rest=$(printf "%s" "$NVCCFLAGS" | cut -d' ' -f12-)
 
 log ""
 log "building with:"

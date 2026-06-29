@@ -32,7 +32,6 @@ using namespace ParaFROST;
 
 BOOL_OPT opt_sync_always_en("syncalways", "synchronize all device calls with the host (useful for debugging)", false);
 BOOL_OPT opt_profile_gpu_en("profilegpu", "profile simplifications", false);
-BOOL_OPT opt_unified_access_en("unifiedaccess", "enable unified access in transferring data to/from device", false);
 
 INT_OPT opt_ve_min_threads("veminthreads", 
 	"set the minimum x-threads allowed per block in BVE (the tuner may optimize it to a higher value)", 4, INT32R(2, 1024));
@@ -74,7 +73,6 @@ void GOPTION::init(const bool& opt_proof_en)
 	ere_min_blocks		= opt_ere_min_blocks;
 	sync_always			= opt_sync_always_en;
 	profile_gpu			= opt_profile_gpu_en;
-	unified_access		= opt_unified_access_en;
 
 	hostKOpts.proof_en			= opt_proof_en;
 	hostKOpts.ve_fun_en			= opt_ve_fun_en;

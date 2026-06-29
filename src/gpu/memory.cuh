@@ -24,10 +24,9 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 #include "constants.cuh"
 #include "variables.cuh"
 #include "histogram.cuh"
+#include "vstate.hpp"
 #include "timer.cuh"
-#ifdef USE_CUARENA
 #include <cuarena/allocator.cuh>
-#endif
 
 namespace ParaFROST {
 	/*****************************************************/
@@ -63,135 +62,107 @@ namespace ParaFROST {
 		S_REF	* d_refs_mem,	* d_scatter,	* d_segs,	* d_occurs;
 		uint32	* d_hist,		* d_cnf_mem;
 		Byte	* d_stencil;
+		VSTATE	* d_vstate;
 		size_t	nscatters;
 		// trackers
 		cuTIMER cutimer;
 		float 	_compacttime;
-		int64	_tot, _free, cap, dcap, maxcap, penalty;
-		bool	isMemAdviseSafe;
+		int64	cap, dcap, penalty;
 		// cuarena backend
-	#ifdef USE_CUARENA
 		cuArena::DeviceArena arena;
-		bool                 arena_ready;
-	#endif
 
 	public:
 
-		inline bool		hasUnifiedMem	(const size_t& min_cap, const char* name) {
-			const int64 used = cap + min_cap;
-			LOG2(2, " Allocating GPU unified memory for %s (used/free = %.3f/%lld MB)", name, double(used) / MBYTE, _free / MBYTE);
-			if (used >= _free) { LOGWARNING("not enough memory for %s (current = %lld MB) -> skip GPU simplifier", name, used / MBYTE); return false; }
-			_free -= used;
-			cap = used;
-			assert(_free >= 0);
-			assert(_tot >= _free);
-			assert(_tot > cap);
-			return true;
+		inline size_t 	getFreeMemory	() {
+			size_t free = 0, tot = 0;
+			CHECK(cudaMemGetInfo(&free, &tot));
+			return free;
 		}
-		inline bool		hasDeviceMem	(const size_t& min_cap, const char* name, 
+		inline bool		hasDeviceMem	(const size_t& min_cap, const char* name,
 									     const cuArena::Region& type = cuArena::Region::Stable) {
 			const int64 used = dcap + min_cap;
-			LOG2(2, " Allocating GPU-only memory for %s (used/free = %.2f/%.2f MB)", name, 
-				double(used) / MBYTE, 
-				double(type == cuArena::Region::Stable ? arena.gpu_stable_capacity() : arena.gpu_dynamic_capacity()) / MBYTE);
-			if (used >= _free) { LOGWARNING("not enough memory for %s (current = %lld MB) - skip GPU simplifier", name, used / MBYTE); return false; }
-			_free -= used;
+			const size_t avail = (type == cuArena::Region::Stable) ?
+				arena.gpu_stable_available() : arena.gpu_available();
+			LOG2(2, " Allocating GPU-only memory for %s (used/free = %.2f/%.2f MB)", name,
+				double(used) / MBYTE, double(avail) / MBYTE);
+			if (min_cap > avail) { LOGWARNING("not enough memory for %s (current = %lld MB) - skip GPU simplifier", name, used / MBYTE); return false; }
 			dcap = used;
-			assert(_free >= 0);
-			assert(_tot >= _free);
-			assert(_tot > dcap);
 			return true;
 		}
-		template <class POOL>
-		inline void		FREE			(POOL& pool) {
-			if (pool.mem) {
-				assert(pool.cap);
-				CHECK(cudaFree(pool.mem));
-				pool.mem = NULL;
-				cap -= pool.cap;
-				assert(cap >= 0);
-				_free += pool.cap;
-				pool.cap = 0;
-			}
+		// Roll back a reservation made by hasDeviceMem when the subsequent
+		// arena.allocate fails, so dcap stays consistent (no leak).
+		inline void		undoDeviceMem	(const size_t& min_cap) {
+			dcap  -= min_cap;
+			assert(dcap >= 0);
 		}
+		// Frees a single device pool back to the arena.
 		template <class POOL>
-		inline void		DFREE			(POOL& pool, const bool& usearena = true) {
+		inline void		freeDevice		(POOL& pool) {
 			if (pool.mem) {
 				assert(pool.cap);
-			#ifdef USE_CUARENA
-				if (arena_ready && usearena) arena.deallocate(pool.mem);
-				else                           CHECK(cudaFree(pool.mem));
-			#else
-				CHECK(cudaFree(pool.mem));
-			#endif
+				arena.deallocate(pool.mem);
 				pool.mem = NULL;
 				dcap -= pool.cap;
 				assert(dcap >= 0);
-				_free += pool.cap;
 				pool.cap = 0;
 			}
 		}
+		// Device dynamic block (e.g. proof stream): arena Dynamic with compact-and-retry.
+		// Freed via freeDevice.
+		template <class POOL>
+		inline bool		allocDynamic	(POOL& pool, const size_t& min_cap, const char* name) {
+			if (!hasDeviceMem(min_cap, name, cuArena::Region::Dynamic)) return false;
+			try { pool.mem = (addr_t)arena.allocate<Byte>(min_cap, cuArena::Region::Dynamic); }
+			catch (const cuArena::gpu_memory_error&) {
+				arena.compact_gpu_dynamic(nullptr);
+				try { pool.mem = (addr_t)arena.allocate<Byte>(min_cap, cuArena::Region::Dynamic); }
+				catch (const cuArena::gpu_memory_error& e2) {
+					LOGWARNING("cuArena: %s alloc failed after compact (%s)", name, e2.what());
+					undoDeviceMem(min_cap); return false;
+				}
+			}
+			pool.cap = min_cap;
+			return true;
+		}
+		// Pinned host block from the arena CPU pool.
+		template <class POOL>
+		inline bool		allocPinned		(POOL& pool, const size_t& min_cap) {
+			try { pool.mem = (addr_t)arena.allocate_pinned<Byte>(min_cap); }
+			catch (const cuArena::cpu_memory_error& e) {
+				LOGWARNING("cuArena: pinned block alloc failed (%s)", e.what()); return false;
+			}
+			pool.cap = min_cap;
+			return true;
+		}
+		template <class POOL>
+		inline void		freePinned		(POOL& pool) {
+			if (!pool.mem) return;
+			arena.deallocate_pinned(pool.mem);
+			pool.mem = NULL;
+			pool.cap = 0;
+		}
+		inline cuArena::DeviceArena* deviceArena () {
+			return &arena;
+		}
 						cuMM			();
-	#ifdef USE_CUARENA
-		bool			initDeviceArena	(const size_t& numCls, const size_t& numLits, const bool& proofEnabled);
-	#endif
 		void			breakMirror		();
 		void			freePinned		();
-		void			freeFixed		();
-		void			freeVars		();
-		void			freeCNF			();
-		void			freeOT			();
-		inline void		updateMaxCap	() { if (maxcap < (cap + dcap)) maxcap = cap + dcap; }
+		void			freeDevice		();
+		bool			initDeviceArena	(const size_t& numCls, const size_t& numLits, const size_t& resolvedCap, const bool& proofEnabled);
 		inline bool		empty			() const { return cap == 0; }
-		inline int64	ucapacity		() const { return cap; }
-		inline int64	dcapacity		() const { return dcap; }
-		inline int64	maxCapacity		() const { return maxcap; }
 		inline size_t	scatterCap		() const { return nscatters * sizeof(S_REF); }
 		inline float 	compactTime		() const { return _compacttime; }
+		inline size_t	pagedUsed		() const { return hcnfPool.cap; }
 		inline S_REF*	refsMem			() { return d_refs_mem; }
 		inline S_REF*	scatter			() { return d_scatter; }
 		inline S_REF*	occurs			() { return d_occurs; }
 		inline uint32*	cnfMem			() { return d_cnf_mem; }
 		inline CNF*		pinnedCNF		() { return pinned_cnf; }
+		inline VSTATE*	deviceVstate	() { return d_vstate; }
 		inline cuLits&	literals		() { return litsPool; }
-		void			reset			(const int64 _free) {
-			this->_free = _free - penalty;
-		}
-		void			init			(const int64 _tot, const int64 _penalty) {
-			penalty = _penalty;
-			this->_tot = _tot;
-			_free = _tot - penalty;
-		}
+		inline void		init			(const int64 _penalty) { penalty = _penalty; }
 		inline void		cacheCNFPtr		(const CNF* d_cnf, const cudaStream_t& _s = 0) {
 			CHECK(cudaMemcpyAsync(pinned_cnf, d_cnf, sizeof(CNF), cudaMemcpyDeviceToHost, _s));
-		}
-		inline void		prefetchCNF2D	(const cudaStream_t& _s = 0) {
-			#if !defined(_WIN32)
-			if (devProp.major > 5) {
-				LOGN2(2, " Prefetching CNF to global memory..");
-				CHECK(cudaMemAdvise(cnfPool.mem, cnfPool.cap, cudaMemAdviseSetPreferredLocation, MASTER_GPU));
-				CHECK(cudaMemPrefetchAsync(cnfPool.mem, cnfPool.cap, MASTER_GPU, _s));
-				LOGDONE(2, 5);
-			}
-			#endif	
-		}
-		inline void		prefetchCNF2H	(const cudaStream_t& _s = 0) {
-			#if !defined(_WIN32)
-			if (devProp.major > 5) {
-				LOGN2(2, " Prefetching CNF to system memory..");
-				CHECK(cudaMemPrefetchAsync(cnfPool.mem, cnfPool.cap, cudaCpuDeviceId, _s));
-				LOGDONE(2, 5);
-			}
-			#endif	
-		}
-		inline void		prefetchOT2H	(const cudaStream_t& _s = 0) {
-			#if !defined(_WIN32)
-			if (devProp.major > 5) {
-				LOGN2(2, " Prefetching OT to system memory..");
-				CHECK(cudaMemPrefetchAsync(otPool.mem, otPool.cap, cudaCpuDeviceId, _s));
-				LOGDONE(2, 5);
-			}
-			#endif	
 		}
 		void			cuMemSetAsync	(addr_t, const Byte&, const size_t&);
 		void	        resizeCNFAsync	(CNF*, const S_REF&, const uint32&);
@@ -205,7 +176,6 @@ namespace ParaFROST {
 		void			createMirror	(CNF*&, const size_t&, const size_t&);
 		void			mirrorCNF		(CNF*&);
 		void			compactCNF		(CNF*, CNF*);
-		bool			checkMemAdvice	();
 
 	};
 

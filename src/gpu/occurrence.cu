@@ -72,12 +72,6 @@ namespace ParaFROST {
 		if (print || gopts.sync_always) {
 			LASTERR("Occurrence table reduction failed");
 			SYNCALL;
-			if (print) {
-				LOGRULER('=', 30);
-				LOG0("\toccurrence table");
-				ot->print();
-				LOGRULER('=', 30);
-			}
 		}
 		if (gopts.profile_gpu) cutimer.stop(), stats.sigma.time.rot += cutimer.gpuTime();
 	}
@@ -92,7 +86,6 @@ namespace ParaFROST {
 		if (gopts.sync_always) {
 			LASTERR("Occurrence table reset failed");
 			SYNCALL;
-			assert(ot->accViolation(inf.maxVar));
 		}
 	}
 
@@ -107,16 +100,8 @@ namespace ParaFROST {
 		OPTIMIZEBLOCKS(inf.numClauses, nThreads, 0);
 		create_ot_k << <nBlocks, nThreads, 0, stream >> > (cnf, ot);
 		if (print || gopts.sync_always) {
-			LOG2(2, "");
 			LASTERR("Occurrence table creation failed");
 			SYNCALL;
-			assert(ot->accViolation(inf.maxVar));
-			if (print) {
-				LOGRULER('=', 30);
-				LOG0("\toccurrence table");
-				ot->print();
-				LOGRULER('=', 30);
-			}
 		}
 		LOGDONE(2, 5);
 		if (gopts.profile_gpu) cutimer.stop(), stats.sigma.time.cot += cutimer.gpuTime();

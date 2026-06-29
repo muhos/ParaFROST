@@ -23,9 +23,10 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 using namespace ParaFROST;
 
-uint32 Solver::updateNumElims() 
+uint32 Solver::updateNumElims()
 {
-	const uint32 remainedPVs = *vars->electedSize;
+	uint32 remainedPVs = 0;
+	CHECK(cudaMemcpy(&remainedPVs, vars->electedSize, sizeof(uint32), cudaMemcpyDeviceToHost));
 	assert(remainedPVs <= vars->numElected);
 	inf.currDeletedVars = vars->numElected - remainedPVs;
 	return remainedPVs;
@@ -39,18 +40,11 @@ inline void	Solver::updateNumPVs()
 	vars->numElected = remainedPVs;
 }
 
-inline void	Solver::cleanManaged() 
-{
-	if (vars != NULL) delete vars;
-	cumm.freeVars(), cumm.freeCNF(), cumm.freeOT();
-	vars = NULL, cnf = NULL, ot = NULL;
-}
-
-
 inline void	Solver::initSimplifier()
 {
-	cleanManaged();
-	cumm.freeFixed();
+	if (vars != NULL) delete vars;
+	cumm.freeDevice();
+	vars = NULL, cnf = NULL, ot = NULL;
 	cacher.destroy();
 	simpstate = AWAKEN_SUCC;
 	phase = multiplier = 0;
@@ -58,11 +52,6 @@ inline void	Solver::initSimplifier()
 	dataoff = csoff = 0;
 	flattened = compacted = false;
 	assert(hcnf == NULL);
-	if (stats.sigma.calls > 1) {
-		size_t free = 0, tot = 0;
-		CHECK(cudaMemGetInfo(&free, &tot));
-		cumm.reset(free);
-	}
 }
 
 void Solver::simplify(const bool& skip_transfer_to_host)
@@ -101,29 +90,18 @@ void Solver::awaken()
 		numCls += maxAddedCls, numLits += maxAddedLits;
 	}
 	assert(inf.maxDualVars);
-	if (
-	#ifdef USE_CUARENA
-		!cumm.initDeviceArena(numCls, numLits, opts.proof_en) ||
-	#endif
+	if (!cumm.initDeviceArena(numCls, numLits, savedLits, opts.proof_en) ||
 		!cumm.allocHist(cuhist, opts.proof_en) ||
 		!cumm.allocAux(numCls) ||
 		!cumm.allocVars(vars, savedLits) ||
 		!cumm.allocPinned(vars, cuhist) ||
 		!cumm.resizeCNF(cnf, numCls, numLits)) { simpstate = CNFALLOC_FAIL; return; }
+	cacher.setArena(cumm.deviceArena());
 	olist_cmp.init(cnf), compact_cmp.init(cnf);
 	printStats(1, '-', CGREEN0);
 	inf.numClauses = inf.numLiterals = 0;
 	wt.clear(true);
-	if (gopts.unified_access) {
-		LOGN2(2, " Extracting clauses directly to device..");
-		if (gopts.profile_gpu) cutimer.start();
-		extractCNF(cnf, orgs), orgs.clear(true);
-		extractCNF(cnf, learnts), learnts.clear(true);
-		cm.destroy();
-		assert(inf.numClauses == cnf->size());
-		if (gopts.profile_gpu) cutimer.stop(), stats.sigma.time.io += cutimer.gpuTime();
-	}
-	else {
+	{
 		LOGN2(2, " Extracting clauses heterogeneously to device..");
 		if (gopts.profile_gpu) cutimer.start(streams[0]);
 		cumm.createMirror(hcnf, maxClauses(), maxLiterals());
@@ -235,8 +213,9 @@ void Solver::simplifying(const bool& skip_transfer_to_host)
 	}
 	assert(isPropagated());
 	cacheEliminated(streams[5]);             	// if ERE is enabled, this transfer would be already done
-	cumm.updateMaxCap(), cacher.updateMaxCap(); // for reporting GPU memory only
 	markEliminated(streams[5]);              	// must be executed before map()
+	const auto arena = cumm.deviceArena();
+	stats.sigma.memory.setMax(arena->gpu_peak_used(), arena->cpu_used(), cumm.pagedUsed());
 	if (skip_transfer_to_host) {
 		SYNCALL;
 		assert(!simpstate);
@@ -274,10 +253,11 @@ void Solver::freeSimp()
 {
 	SYNCALL;
 	cacher.destroy();
-	cumm.freeFixed();
 	cumm.freePinned();
-	cleanManaged();
 	destroyStreams();
+	if (vars != NULL) delete vars;
+	cumm.freeDevice();
+	vars = NULL, cnf = NULL, ot = NULL;
 	cumm.breakMirror(), hcnf = NULL;
 	if (opts.proof_en) 
 		cuproof.destroy();

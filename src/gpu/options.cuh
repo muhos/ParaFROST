@@ -47,7 +47,6 @@ namespace ParaFROST {
 
 		void init(const bool& opt_proof_en);
 
-		bool unified_access;
 		bool profile_gpu;
 		bool sync_always;
 

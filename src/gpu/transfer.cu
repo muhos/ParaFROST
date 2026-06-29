@@ -29,21 +29,14 @@ void Solver::newBeginning()
 	assert(orgs.empty());
 	assert(learnts.empty());
 	assert(inf.numClauses <= hcnf->size());
-	if (gopts.unified_access) assert(hcnf == NULL), hcnf = cnf;
 	assert(!hcnf->empty());
 	cm.init(hcnf->data().size);
-	if (!gopts.unified_access) {
-		SYNC(streams[0]); SYNC(streams[1]); // sync CNF caching
-		if (gopts.profile_gpu) cutimer.stop(streams[1]), stats.sigma.time.io += cutimer.gpuTime();
-	}
+	SYNC(streams[0]); SYNC(streams[1]); // sync CNF caching
+	if (gopts.profile_gpu) cutimer.stop(streams[1]), stats.sigma.time.io += cutimer.gpuTime();
 	cacheResolved(streams[2]);
 	writeBackCNF();
 	SYNCALL;
-	if (gopts.unified_access) {
-		hcnf = NULL;
-		if (gopts.profile_gpu) cutimer.stop(), stats.sigma.time.io += cutimer.gpuTime();
-	}
-	else cumm.breakMirror(), hcnf = NULL;
+	cumm.breakMirror(), hcnf = NULL;
 }
 
 void Solver::markEliminated(const cudaStream_t& _s)
@@ -66,11 +59,10 @@ void Solver::markEliminated(const cudaStream_t& _s)
 #endif
 }
 
-void Solver::cacheUnits(const cudaStream_t& stream) 
+void Solver::cacheUnits(const cudaStream_t& stream)
 {
 	SYNC(stream);
-	if ((vars->nUnits = vars->tmpUnits.size()))
-		CHECK(cudaMemcpyAsync(vars->cachedUnits, vars->unitsData, vars->nUnits * sizeof(uint32), cudaMemcpyDeviceToHost, stream));
+	vars->nUnits = vars->tmpUnits.size();
 	if (gopts.sync_always) SYNC(stream);
 }
 

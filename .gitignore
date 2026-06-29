@@ -10,6 +10,7 @@ src/cpu/Makefile
 src/gpu/Makefile
 src_backup
 build
+benchmarks
 .vscode
 *.cnf
 *.txt

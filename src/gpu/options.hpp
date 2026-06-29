@@ -106,6 +106,7 @@ namespace ParaFROST {
 		bool	solve_en;
 		bool	aggr_cnf_sort;
 		bool	ve_en, ve_plus_en;
+		bool	lcve_fast;
 		bool	sigma_en, sigma_live_en, sigma_sleep_en;
 		//------------------------------------------//
 		int		nstreams;

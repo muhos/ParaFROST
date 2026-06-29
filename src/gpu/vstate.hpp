@@ -24,8 +24,8 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 namespace ParaFROST {
 
 	struct VSTATE {
-		Byte state : 3, dlcount : 2, subsume : 1, probe : 1;
-		VSTATE() : state(0), dlcount(0), subsume(0), probe(0) {}
+		Byte state : 3, dlcount : 2, subsume : 1, probe : 1, frozen : 1;
+		VSTATE() : state(0), dlcount(0), subsume(0), probe(0), frozen(0) {}
 	};
 }
 

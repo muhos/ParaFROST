@@ -20,6 +20,7 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 #define __STATS_
 
 #include "datatypes.hpp"
+#include "constants.hpp"
 #include <cassert>
 #include <cstring>
 
@@ -32,6 +33,12 @@ namespace ParaFROST {
 		struct {
 			float vo, ve, sub, bce, ere, cot, rot, sot, sig, gc, io;
 		} time;
+		struct {
+			size_t device, pinned, paged;
+			void setMax(const size_t& d, const size_t& p, const size_t& pg) {
+				device = MAX(device, d), pinned = MAX(pinned, p), paged = MAX(paged, pg);
+			}
+		} memory;
 	};
 
 	struct STATS {

@@ -104,13 +104,7 @@ void Solver::initialize(const bool& banner)
 		LOGWARNING("not enough GPU memory (free = %zd MB): skip simplifier", _gfree / MBYTE);
 		opts.sigma_en = opts.sigma_live_en = false;
 	}
-	else cumm.init(_gfree, _gpenalty);
-	if (cumm.checkMemAdvice()) {
-        LOG2(2, " Enabled GPU driver memory advice");
-	}
-	else {
-        LOG2(2, " Disabled GPU driver memory advice");
-	}
+	else cumm.init(_gpenalty);
 	if (opts.sigma_en || opts.sigma_live_en) { optSimp(), createStreams(); }
 }
 
