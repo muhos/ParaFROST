@@ -66,11 +66,32 @@ void Solver::map(const bool& sigmified)
 	assert(trail.size() == sp->propagated);
 	stats.mappings++;
 	int64 memBefore = sysMemUsed();
+	// Filter out root-assigned assumptions first.
+	assert(iconflict.empty());
+	if (assumptions.size()) {
+		uint32 kept = 0;
+		for (int i = 0; i < assumptions.size(); i++) {
+			const uint32 a = assumptions[i];
+			CHECKLIT(a);
+			const LIT_ST val = sp->value[a]; // root values only (DL() == 0)
+			if (UNASSIGNED(val))
+				assumptions[kept++] = a;
+			else {
+				assumed[ABS(a)] = false;
+				if (!val) {
+					LOG2(2, " Assumption %d is falsified on top level before mapping", l2i(a));
+					ianalyze(FLIP(a));
+					cnfstate = UNSAT;
+				}
+			}
+		}
+		assumptions.resize(kept);
+		if (cnfstate == UNSAT) return; // solver state untouched; solve ends
+	}
 	vmap.initiate(sp);
 	// map model literals
 	vmap.mapOrgs(model.lits);
 	// map assumptions & frozen
-	assert(iconflict.empty());
 	if (assumptions.size()) {
 		// unfreeze unmapped
 		forall_clause(assumptions, k) {

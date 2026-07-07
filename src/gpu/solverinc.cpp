@@ -42,13 +42,18 @@ void Solver::iallocspace()
 {
 	// Safe guard in case isolve is called without iadd()
 	resetextended();
-	if (sp->size() == inf.maxVar + 1) return;
+	if (sp->size() == inf.maxVar + 1) {
+		// The incremental parser skips model.init and iadd() may have
+		// reallocated vorg, rebind it before any witness saving occurs.
+		if (vorg.size() == inf.maxVar + 1) model.init(vorg);
+		return;
+	}
 	LOGN2(2, " Allocating fixed memory for %d variables..", inf.maxVar);
 	const size_t newsize = size_t(inf.maxVar) + 1;
 	assert(inf.orgVars == inf.maxVar);
 	assert(vorg.size() == newsize);
 	assert(V2L(newsize) == inf.maxDualVars);
-	assert(model.lits.size() == newsize);
+	assert(model.lits.size() == size_t(model.maxVar) + 1); // external space
 	inf.orgCls = orgs.size();
 	vorg[0] = 0;
 	model.lits[0] = 0;
@@ -73,14 +78,32 @@ void Solver::isolve(const Lits_t& assumptions)
 	iallocspace();
 	iunassume();
 	assert(IS_UNSOLVED(cnfstate));
+	bool trivially_sat = false;
 	if (BCP()) {
 		LOG2(2, " Incremental formula has a contradiction on top level");
 		learnEmpty();
 	}
 	else if (!stats.clauses.original) {
 		assert(orgs.empty());
-		LOG2(2, " Formula is already SATISFIABLE by elimination");
+		// Even with no clauses left, assumptions must be respected:
+		// an assumption falsified on the top level proves UNSAT.
+		iassume(assumptions);
 		cnfstate = SAT;
+		forall_clause(this->assumptions, k) {
+			const uint32 a = *k;
+			CHECKLIT(a);
+			const LIT_ST val = sp->value[a];
+			if (!UNASSIGNED(val) && !val) {
+				LOG2(2, " Assumption %d is falsified on top level", l2i(a));
+				ianalyze(FLIP(a));
+				cnfstate = UNSAT;
+				break;
+			}
+		}
+		if (cnfstate == SAT) {
+			trivially_sat = true;
+			LOG2(2, " Formula is already SATISFIABLE by elimination");
+		}
 	}
 	else {
 		initLimits();
@@ -92,7 +115,22 @@ void Solver::isolve(const Lits_t& assumptions)
 			while (IS_UNSOLVED(cnfstate) && !interrupted()) {
 				LOGDL(this, 3);
 				if (BCP()) analyze();
-				else if (!inf.unassigned) cnfstate = SAT;
+				else if (!inf.unassigned) {
+					// A complete assignment may still falsify a pending
+					// assumption that idecide() has not reached yet.
+					uint32 failed = 0;
+					forall_clause(this->assumptions, k) {
+						const uint32 a = *k;
+						CHECKLIT(a);
+						if (!sp->value[a]) { failed = a; break; }
+					}
+					if (!failed) cnfstate = SAT;
+					else {
+						LOG2(3, " Assumption %d is falsified by the complete assignment", l2i(failed));
+						ianalyze(FLIP(failed));
+						cnfstate = UNSAT;
+					}
+				}
 				else if (canReduce()) reduce();
 				else if (canRestart()) restart();
 				else if (canRephase()) rephase();
@@ -105,4 +143,12 @@ void Solver::isolve(const Lits_t& assumptions)
 	}
 	timer.stop(), stats.time.solve += timer.cpuTime();
 	wrapup();
+	if (trivially_sat && model.extended) {
+		// Model must agree with the assumed phases.
+		forall_clause_const(assumptions, k) {
+			const uint32 a = *k;
+			CHECKLIT(a);
+			model.value[ABS(a)] = !SIGN(a);
+		}
+	}
 }

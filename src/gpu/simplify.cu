@@ -195,8 +195,10 @@ void Solver::simplifying(const bool& skip_transfer_to_host)
 	last.shrink.removed = stats.shrunken;
 	if (ereCls > inf.numClauses) stats.sigma.ere.removed += ereCls - inf.numClauses;
 	if (inf.maxFrozen > sp->simplified) stats.units.forced += inf.maxFrozen - sp->simplified;
-	if (!inf.unassigned || !inf.numClauses) { 
+	if (!inf.unassigned || !inf.numClauses) {
 		LOG2(2, "  All clauses removed, thus CNF is satisfiable");
+		cacheResolved(streams[2]); // witnesses of eliminated variables must reach the model before return.
+		SYNC(streams[2]);
 		stats.clauses.original = 0;
 		stats.clauses.learnt = 0;
 		stats.literals.original = 0;

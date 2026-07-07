@@ -45,8 +45,13 @@ inline bool verifyMarkings(Vec<LIT_ST>& marks, Lits_t& clause) {
 uint32 Solver::iadd() {
     resetextended();
     inf.unassigned++;
-    const uint32 v = inf.orgVars = ++inf.maxVar;
-    LOG2(3, "  adding new variable %d (%d unassigned)..", v, inf.unassigned);
+    // Internal and external variable spaces diverge once mapping shrinks
+    // the internal one; a fresh variable needs an index in each. Reusing
+    // the internal index externally would invalidate extended models.
+    const uint32 v = inf.orgVars = ++inf.maxVar;          // internal
+    const uint32 e = model.maxVar ? model.maxVar + 1 : v; // external
+    assert(e >= v);
+    LOG2(3, "  adding new variable %d (internal %d, %d unassigned)..", e, v, inf.unassigned);
     const uint32 lit = V2L(v);
     inf.maxDualVars = lit + 2;
     if (sp == NULL) {
@@ -59,15 +64,15 @@ uint32 Solver::iadd() {
     wt.expand(lit + 2);
     bumps.expand(v + 1, 0);
     activity.expand(v + 1, 0.0);
-    model.maxVar = v;
-    model.lits.expand(v + 1);
-    model.lits[v] = lit;
+    model.maxVar = e;
+    model.lits.expand(e + 1);
+    model.lits[e] = lit;
     vorg.expand(v + 1);
-    vorg[v] = v;
+    vorg[v] = e;
     vmtf.init(v);
     vmtf.update(v, (bumps[v] = ++bumped));
     vsids.insert(v);
-    return v;
+    return e;
 }
 
 bool Solver::iclause(Lits_t& c, Lits_t& org) {
@@ -85,27 +90,29 @@ bool Solver::iclause(Lits_t& c, Lits_t& org) {
         const uint32 orglit = *k;
         assert(orglit > 1 && orglit < NOVAR);
         const uint32 orgvar = ABS(orglit);
-        const LIT_ST sign = SIGN(orglit);
-        LIT_ST marker = l2marker(orglit);
+        // Duplicate/tautology marking must use the MAPPED literal.
+        uint32 mlit = imap(orgvar);
+        CHECKLIT(mlit);
+        if (SIGN(orglit)) mlit = FLIP(mlit); // compose signs (map may carry a negation)
+        const uint32 mvar = ABS(mlit);
+        const LIT_ST msign = SIGN(mlit);
+        LIT_ST marker = l2marker(mlit);
         if (UNASSIGNED(marker)) {
-            assert(sign >= 0);
-            markLit(orglit);
-            uint32 mlit = imap(orgvar);
-            CHECKLIT(mlit);
-            uint32 mvar = ABS(mlit);
-            mlit = V2DEC(mvar, sign);
-            PRINT2(3, 5, "%d  ", SIGN(mlit) ? -int(mvar) : int(mvar));
+            markLit(mlit);
+            PRINT2(3, 5, "%d  ", msign ? -int(mvar) : int(mvar));
             LIT_ST val = sp->value[mlit];
             if (UNASSIGNED(val))
                 c.push(mlit);
             else if (val)
                 satisfied = true; // satisfied unit
-        } else if (NEQUAL(marker, sign))
+        } else if (NEQUAL(marker, msign))
             satisfied = true; // tautology
     }
     PRINT2(3, 5, ")\n");
     forall_clause(org, k) {
-        unmarkLit(*k);
+        const uint32 mlit = imap(ABS(*k));
+        CHECKLIT(mlit);
+        sp->marks[ABS(mlit)] = UNDEFINED;
     }
     if (satisfied) {
         if (opts.proof_en) proof.deleteClause(org);
@@ -158,8 +165,9 @@ bool Solver::ifailed(const uint32& v)
 	CHECKLIT(mlit);
 	const int size = iconflict.size();
 	assert(size);
+	const uint32 mvar = ABS(mlit);
 	for (int i = 0; i < size; i++) {
-		if (ABS(mlit) == v)
+		if (ABS(iconflict[i]) == mvar)
 			return true;
 	}
 	return false;
@@ -213,7 +221,6 @@ void Solver::iassume(const Lits_t& assumptions)
 {
     assert(sp);
 	assert(inf.maxVar);
-	assert(stats.clauses.original);
     resetextended();
 	const int assumed = assumptions.size();
 	if (!assumed) return;
@@ -259,6 +266,9 @@ void Solver::iunassume()
 	LOGDONE(2, 5);
 	LOGN2(2, " Resetting MDM %d skipping rounds..", last.mdm.skip_rounds);
 	last.mdm.skip_rounds = 0;
+	LOGDONE(2, 5);
+	LOGN2(2, " Resetting rephase type %d..", last.rephase.type);
+	last.rephase.type = 0;
 	LOGDONE(2, 5);
 }
 

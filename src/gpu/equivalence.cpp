@@ -187,6 +187,18 @@ bool Solver::decompose()
 					model.saveBinary(p, FLIP(other));
 				}
 			}
+			// Redirect external (original) variables too.
+			for (uint32 o = 1; o <= model.maxVar; o++) {
+				const uint32 mlit = model.lits[o];
+				if (!mlit) continue;
+				CHECKLIT(mlit);
+				const uint32 sub = smallests[mlit]; // zero: not part of any SCC
+				if (sub && NEQUAL(sub, mlit)) {
+					CHECKLIT(sub);
+					LOG2(4, " external %d redirected from %d to %d", o, l2i(mlit), l2i(sub));
+					model.lits[o] = sub;
+				}
+			}
 		}
 	}
 	free(smallests), smallests = NULL;

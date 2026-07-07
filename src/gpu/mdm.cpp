@@ -119,6 +119,12 @@ inline bool Solver::depFreeze(WL& ws, const uint32& cand)
 bool Solver::canMMD()
 {
 	if (!opts.mdm_rounds) return false;
+	// Assumptions-first invariant: every assumption occupies one of the
+	// first decision levels (placed by idecide).
+	if (DL() < assumptions.size()) {
+		LOG2(3, " Skipping MDM until all %d assumptions are decided..", assumptions.size());
+		return false;
+	}
 	if (last.mdm.skip_rounds) {
 		LOG2(3, " Skipping MDM until %d assumptions are propagated..", last.mdm.skip_rounds);
 		return false;
@@ -136,6 +142,10 @@ bool Solver::canMMD()
 void Solver::MDMInit()
 {
 	if (!last.mdm.rounds) return;
+	if (DL() < assumptions.size()) {
+		LOG2(3, " Skipping initial MDM until all %d assumptions are decided..", assumptions.size());
+		return;
+	}
 	if (last.mdm.skip_rounds) {
 		LOG2(3, " Skipping MDM until %d assumptions are propagated..", last.mdm.skip_rounds);
 		return;

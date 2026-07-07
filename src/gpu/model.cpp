@@ -33,8 +33,11 @@ void MODEL::printClause(const Lits_t& clause, const bool& printvalues)
 		for (int i = 0; i < clause.size(); i++) {
 			const uint32 orgvar = ABS(clause[i]);
 			CHECKVAR(orgvar);
-			const uint32 mlit = V2DEC(vorg[orgvar], SIGN(clause[i]));
-			PRINT("%-8d", orgvalues[mlit]);
+			// 'lits' maps an original variable to its current internal literal
+			// ('vorg' is the inverse map and must not be indexed by original variables).
+			const uint32 m = (orgvar < lits.size()) ? lits[orgvar] : 0;
+			if (m) { PRINT("%-8d", orgvalues[SIGN(clause[i]) ? FLIP(m) : m]); }
+			else   { PRINT("%-8d", UNDEFINED); }
 		}
 		PRINT(")%s\n", CNORMAL);
 		LOGN1("\t\t\t%s extended values(", CLOGGING);
@@ -201,11 +204,9 @@ void MODEL::verify(const string& path) {
 			if (sign) LOGERROR("number of clauses in header is negative");
 			if (orgClauses == 0) LOGERROR("zero number of clauses in header");
 			LOG2(1, "  found header %s%d %d%s", CREPORTVAL, orgVars, orgClauses, CNORMAL);
-			if (orgVars > maxVar) {
-				LOGERRORN("variables in header inconsistent with model variables");
-				verified = false;
-				break;
-			}
+			if (orgVars > maxVar)
+				LOG2(1, "  header declares %s%d%s variables but only %s%d%s occur; the extra ones are unconstrained",
+					CREPORTVAL, orgVars, CNORMAL, CREPORTVAL, maxVar, CNORMAL);
 			marks.resize(orgVars + 1, UNDEFINED);
 		}
 		else if (!verify(str)) { verified = false; break; }
@@ -253,7 +254,7 @@ bool MODEL::verify(char*& str)
 	if (!clauseSAT) {
 		forall_clause(org, k) {
 			const uint32 lit = *k;
-			if (satisfied(lit)) {
+			if (ABS(lit) <= maxVar && satisfied(lit)) {
 				saved = lit;
 				clauseSAT = true;
 				break;

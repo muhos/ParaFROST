@@ -149,7 +149,8 @@ bool Solver::walkschedule()
 		}
 		CINFO& info = cinfo[scheduled];
 		if (!satisfied) {
-			if (assuming && !notassumed) return false;
+			// falsified only by assumed literals, so walk is useless.
+			if (assuming && notassumed) return false;
 			info.unsatidx = unsatclauses.size();
 			unsatclauses.push(scheduled);
 		}
@@ -400,7 +401,7 @@ inline void Solver::saveTrail(const LIT_ST* values, const bool& keep)
 		const uint32 lit = *k;
 		LIT_ST val = values[lit];
 		assert(val >= 0);
-		sp->psaved[ABS(lit)] = val;
+		sp->psaved[ABS(lit)] = SIGN(lit) ? val : !val;
 	}
 	if (keep) {
 		uint32* s = t, * end = tracker.trail.end();

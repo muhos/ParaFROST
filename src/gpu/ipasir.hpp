@@ -38,12 +38,12 @@ namespace ParaFROST {
         }
         inline uint32 import(const int& lit) {
             const uint32 v = abs(lit);
-            while (v > inf.maxVar) iadd();
+            while (v > model.maxVar) iadd(); // external space bound
             return V2DEC(v, (lit < 0));
         }
         inline uint32 uimport(const uint32_t& lit) {
             const uint32 v = ABS(lit);
-            while (v > inf.maxVar) iadd();
+            while (v > model.maxVar) iadd(); // external space bound
             return lit;
         }
 

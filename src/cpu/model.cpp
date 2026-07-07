@@ -180,11 +180,9 @@ void MODEL::verify(const string& path) {
 			if (sign) PFLOGE("number of clauses in header is negative");
 			if (orgClauses == 0) PFLOGE("zero number of clauses in header");
 			PFLOG2(1, "  found header %s%d %d%s", CREPORTVAL, orgVars, orgClauses, CNORMAL);
-			if (orgVars != maxVar) {
-				PFLOGEN("variables in header inconsistent with model variables");
-				verified = false;
-				break;
-			}
+			if (orgVars > maxVar)
+				PFLOG2(1, "  header declares %s%d%s variables but only %s%d%s occur; the extra ones are unconstrained",
+					CREPORTVAL, orgVars, CNORMAL, CREPORTVAL, maxVar, CNORMAL);
 			marks.resize(orgVars + 1, UNDEFINED);
 		}
 		else if (!verify(str)) { verified = false; break; }
@@ -237,7 +235,7 @@ bool MODEL::verify(char*& str)
 	if (!clauseSAT) {
 		forall_clause(org, k) {
 			const uint32 lit = *k;
-			if (satisfied(lit)) {
+			if (ABS(lit) <= maxVar && satisfied(lit)) {
 				saved = lit;
 				clauseSAT = true;
 				break;
