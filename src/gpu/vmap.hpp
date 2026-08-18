@@ -104,6 +104,7 @@ namespace ParaFROST {
 					to->pbest[mVar] = sp->pbest[v];
 					to->psaved[mVar] = sp->psaved[v];
 					to->ptarget[mVar] = sp->ptarget[v];
+					to->pforced[mVar] = sp->pforced[v];
 					to->marks[mVar] = sp->marks[v];
 					to->vstate[mVar] = sp->vstate[v];
 				}

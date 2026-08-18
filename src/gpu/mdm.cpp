@@ -170,7 +170,8 @@ void Solver::MDMInit()
 		uint32 cand = eligible[i];
 		CHECKVAR(cand);
 		if (sp->frozen[cand] || sp->vstate[cand].state || iassumed(cand)) continue;
-		const LIT_ST pol = sp->psaved[cand];
+		LIT_ST pol = sp->pforced[cand];
+		if (UNASSIGNED(pol)) pol = sp->psaved[cand];
 		assert(pol >= 0);
 		const uint32 dec = V2DEC(cand, pol);
 		if (valid(wt[dec]) && depFreeze(wt[dec], cand)) {

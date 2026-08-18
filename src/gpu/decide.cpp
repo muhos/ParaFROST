@@ -53,8 +53,8 @@ uint32 Solver::nextVMFQ()
 uint32 Solver::makeAssign(const uint32& v, const bool& tphase) 
 {
 	CHECKVAR(v);
-	LIT_ST pol = UNDEFINED;
-	if (tphase) pol = sp->ptarget[v];
+	LIT_ST pol = sp->pforced[v];
+	if (UNASSIGNED(pol) && tphase) pol = sp->ptarget[v];
 	if (UNASSIGNED(pol)) pol = sp->psaved[v];
 	assert(pol >= 0);
 	return V2DEC(v, pol);

@@ -242,6 +242,29 @@ void Solver::iassume(const Lits_t& assumptions)
 	}
 }
 
+void Solver::iphase(const uint32& elit)
+{
+	assert(sp);
+	assert(elit > 1);
+	// elit lives in the external space.
+	const uint32 v = ABS(elit);
+	if (!model.maxVar || v > model.maxVar) return;
+	if (ieliminated(v)) return;
+	uint32 mlit = imap(v);
+	if (!mlit) return;
+	CHECKLIT(mlit);
+	if (SIGN(elit)) mlit = FLIP(mlit); // compose signs (map may carry a negation)
+	const uint32 mvar = ABS(mlit);
+	if (mvar > inf.maxVar) return;
+	sp->pforced[mvar] = SIGN(mlit);
+}
+
+void Solver::iunphase()
+{
+	assert(sp);
+	memset(sp->pforced, UNDEFINED, sp->size());
+}
+
 void Solver::iunassume()
 {
     assert(sp);

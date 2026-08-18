@@ -36,6 +36,8 @@ void ipasir_add(void* s, int l) { IPASIR(s)->add(l); }
 void ipasir_assume(void* s, int l) { IPASIR(s)->assume(l); }
 int ipasir_val(void* s, int l) { return IPASIR(s)->val(l); }
 int ipasir_failed(void* s, int l) { return IPASIR(s)->failed(l); }
+void ipasir_phase(void* s, int l) { IPASIR(s)->phase(l); }
+void ipasir_unphase(void* s) { IPASIR(s)->unphase(); }
 void ipasir_set_terminate(void* s, void* state, int (*callback)(void* state)) { IPASIR(s)->setTermCallback(state, callback); }
 void ipasir_set_learn(void* s, void* state, int max_length, void (*learn)(void* state, int* clause)) { IPASIR(s)->setLearnCallback(state, max_length, learn); }
 

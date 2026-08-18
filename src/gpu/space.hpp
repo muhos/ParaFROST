@@ -42,7 +42,7 @@ namespace ParaFROST {
 			assert(_mem == NULL);
 			const size_t vec8Bytes = calcBytes<C_REF>(size, 2);
 			const size_t vec4Bytes = calcBytes<uint32>(size, 2);
-			const size_t vec1Bytes = calcBytes<LIT_ST>(size, 9);
+			const size_t vec1Bytes = calcBytes<LIT_ST>(size, 10);
 			_sz = size;
 			_cap = vec1Bytes + vec4Bytes + vec8Bytes;
 			pfralloc(_mem, align_up(_cap, 64));
@@ -58,7 +58,8 @@ namespace ParaFROST {
 			psaved  = seen   + _sz;
 			ptarget = psaved + _sz;
 			pbest   = ptarget+ _sz;
-			marks   = pbest  + _sz;
+			pforced = pbest  + _sz;
+			marks   = pforced+ _sz;
 			vstate  = (VSTATE*)(marks + _sz);
 			assert(_mem + _cap == addr_t(vstate) + _sz);
 		}
@@ -73,7 +74,7 @@ namespace ParaFROST {
 		C_REF* source;
 		VSTATE* vstate;
 		LIT_ST* seen, * frozen, * marks;
-		LIT_ST* value, * psaved, * ptarget, * pbest;
+		LIT_ST* value, * psaved, * ptarget, * pbest, * pforced;
 		// scalers
 		int learntLBD;
 		int reasonsize, resolventsize;
@@ -93,6 +94,7 @@ namespace ParaFROST {
 			memset(marks, UNDEFINED, _sz);
 			memset(ptarget, UNDEFINED, _sz);
 			memset(pbest, UNDEFINED, _sz);
+			memset(pforced, UNDEFINED, _sz);
 			memset(psaved, pol, _sz);
 			forall_space(v) {
 				level[v] = UNDEFINED;
@@ -115,6 +117,7 @@ namespace ParaFROST {
 			LIT_ST *old_psaved = psaved;
 			LIT_ST *old_ptarget= ptarget;
 			LIT_ST *old_pbest  = pbest;
+			LIT_ST *old_pforced= pforced;
 			LIT_ST *old_marks  = marks;
 			VSTATE *old_vstate = vstate;
 			allocate(size);
@@ -130,6 +133,7 @@ namespace ParaFROST {
 				memcpy(psaved,  old_psaved, old_sz * sizeof(LIT_ST));
 				memcpy(ptarget, old_ptarget,old_sz * sizeof(LIT_ST));
 				memcpy(pbest,   old_pbest,  old_sz * sizeof(LIT_ST));
+				memcpy(pforced, old_pforced,old_sz * sizeof(LIT_ST));
 				memcpy(marks,   old_marks,  old_sz * sizeof(LIT_ST));
 				memcpy(vstate,  old_vstate, old_sz * sizeof(VSTATE));
 			}
@@ -140,6 +144,7 @@ namespace ParaFROST {
 				marks[v]  = UNDEFINED;
 				ptarget[v]= UNDEFINED;
 				pbest[v]  = UNDEFINED;
+				pforced[v]= UNDEFINED;
 				vstate[v] = VSTATE();
 			}
 			// Sentinel

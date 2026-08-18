@@ -77,6 +77,9 @@ namespace ParaFROST {
         int failed(const int& lit) {
             return ifailed(import(lit));
         }
+        void phase(const int& lit) {
+            iphase(import(lit));
+        }
         // Unsigned integer based.
         void uadd(const uint32_t& lit) {
             nomodel = true;
@@ -90,6 +93,12 @@ namespace ParaFROST {
         void uassume(const uint32_t& lit) {
             nomodel = true;
             eassumptions.push(uimport(lit));
+        }
+        void uphase(const uint32_t& lit) {
+            iphase(uimport(lit));
+        }
+        void unphase() {
+            iunphase();
         }
         int uval(const uint32_t& lit) {
             if (nomodel) return 0;
@@ -149,6 +158,16 @@ int ipasir_val(void* solver, int lit);
 // of the conflicting clause that proved the formula
 // to be UNSATISFIABLE. Return 1 if so, 0 otherwise.
 int ipasir_failed(void* solver, int lit);
+
+// Force the decision phase of the given literal, so its
+// variable is tried with that polarity first when decided.
+// The forced phase outlives solve calls until it is reset.
+// Non-standard IPASIR extension.
+void ipasir_phase(void* solver, int lit);
+
+// Reset all decision phases forced by ipasir_phase.
+// Non-standard IPASIR extension.
+void ipasir_unphase(void* solver);
 
 // Set a callback function used to indicate a termination 
 // signal to the solver.

@@ -826,6 +826,8 @@ namespace ParaFROST {
 		void			ianalyze            (const uint32&);
 		bool			iclause             (Lits_t&, Lits_t&);
 		void			iassume             (const Lits_t&);
+		void			iphase              (const uint32& elit);
+		void			iunphase            ();
 		void			isolve              (const Lits_t&);
 		bool		    ifailed             (const uint32& v);
 		void		    ifreeze             (const uint32& v);
