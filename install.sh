@@ -328,7 +328,7 @@ log ""
 mkdir -p $builddir/bin $builddir/lib $builddir/include
 
 cd $srcdir
-if [ $quiet = 0 ]; then make; else make >> $logfile; fi
+if [ $quiet = 0 ]; then make -j8; else make -j8 >> $logfile; fi
 cd ../../
 
 if [ ! -f $srcdir/$binary ] || [ ! -f $srcdir/$library ]; then
@@ -514,7 +514,7 @@ log ""
 mkdir -p $builddir/bin $builddir/lib $builddir/include
 
 cd $srcdir
-if [ $quiet = 0 ]; then make; else make >> $logfile; fi
+if [ $quiet = 0 ]; then make -j8; else make -j8 >> $logfile; fi
 cd ../../
 
 if [ ! -f $srcdir/$binary ] || [ ! -f $srcdir/$library ]; then
