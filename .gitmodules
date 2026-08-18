@@ -1,0 +1,3 @@
+[submodule "cuarena"]
+	path = dep/cuarena
+	url = https://github.com/muhos/cuArena.git

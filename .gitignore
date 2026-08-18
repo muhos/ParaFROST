@@ -11,6 +11,7 @@ src/gpu/Makefile
 src_backup
 build
 benchmarks
+.DS_Store
 .vscode
 *.cnf
 *.txt

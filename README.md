@@ -33,7 +33,7 @@ To install either the CPU or the GPU solvers, use the `install.sh` script which 
        --standard=<n>        compile with <17 | 20> c++ standard
        --gextra="flags"      pass extra "flags" to the GPU compiler (nvcc)
        --cextra="flags"      pass extra "flags" to the CPU compiler (g++)
-       --cuarena=<path>      path to cuArena root (default: dep/cuarena; NONE to disable)
+       --cuarena=<path>      path to cuArena root (required for GPU; default: dep/cuarena)
 
 
 ### GPU solver
@@ -54,31 +54,32 @@ The `parafrost` binary, the library `libparafrost.a`, and the main include file 
 
 #### cuArena device pool backend
 
-The GPU solver can optionally use [cuArena](https://github.com/muhos/cuArena) as its GPU memory backend. cuArena pre-allocates a single contiguous GPU pool at startup and services all subsequent allocations entirely in host-side C++ with no `cudaMalloc` call per allocation. For ParaFROST this eliminates driver overhead during inprocessing, where the simplifier repeatedly allocates and frees buffers across many simplifying rounds.
+The GPU solver uses [cuArena](https://github.com/muhos/cuArena) as its GPU memory backend, and **cuArena is a required dependency** of the GPU build; there is no `cudaMalloc` fallback. cuArena pre-allocates a single contiguous GPU pool at startup and services all subsequent allocations entirely in host-side C++ with no `cudaMalloc` call per allocation. For ParaFROST this eliminates driver overhead during inprocessing, where the simplifier repeatedly allocates and frees buffers across many simplifying rounds.
 
 The pool is split into two regions:
 - **Stable**: long-term data that persists across simplification rounds; never moved by compaction.
 - **Dynamic**: the temporary buffers, which grow and shrink each phase. Defragmentation is supported and performed automatically when needed.
 
-To enable it, clone cuArena into `dep/cuarena` (the default search path) before building:
+cuArena is included as a git submodule at `dep/cuarena` (the default search path), and building it needs CMake, so make sure `cmake` is installed as well. Clone the repository with its submodules:
 
 ```bash
-mkdir -p dep
-git clone https://github.com/muhos/cuArena.git dep/cuarena
+git clone --recurse-submodules https://github.com/muhos/ParaFROST.git
+```
+
+If the repository was cloned without `--recurse-submodules`, fetch the submodule before building:
+
+```bash
+git submodule update --init --recursive
 ./install.sh -g
 ```
 
-If cuArena is found and CMake is available, the install script automatically builds it and links it in (`-DUSE_CUARENA`). To point to a different location:
+The install script builds cuArena and links it in automatically. To build against a cuArena checkout elsewhere instead of the submodule:
 
 ```bash
 ./install.sh -g --cuarena=/path/to/cuarena
 ```
 
-To build without cuArena even if the directory exists:
-
-```bash
-./install.sh -g --cuarena=NONE
-```
+The CPU solver does not use cuArena and can be built without it (`./install.sh -c`).
 
 ### CPU solver
 To build a CPU-only version of the solver, run `./install.sh -c`.<br>

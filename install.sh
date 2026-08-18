@@ -35,7 +35,7 @@ $ch	--clean=<target>      remove old installation of <cpu | gpu | all> solvers
 $ch	--standard=<n>        compile with <17 | 20> c++ standard
 $ch	--gextra="flags"      pass extra "flags" to the GPU compiler (nvcc)
 $ch --cextra="flags"      pass extra "flags" to the CPU compiler (g++)
-$ch	--cuarena=<path>      path to cuarena root (default: dep/cuarena; NONE to disable)
+$ch	--cuarena=<path>      path to cuarena root (required for gpu; default: dep/cuarena)
 EOF
 printf "+%${lineWidth}s+\n" |tr ' ' '-'
 exit 0
@@ -371,27 +371,28 @@ NVCCVER="nvcc $NVCCVERSHORT"
 
 log "$NVCCVERSHORT."
 
-# resolve cuarena device pool backend
-CUARENA_RESOLVED="NONE"
-if [[ "$cuarena_dir" != "NONE" ]]; then
-  if [ -d "$cuarena_dir" ] && [ -f "$cuarena_dir/CMakeLists.txt" ]; then
-    CUARENA_RESOLVED=$(realpath "$cuarena_dir")
-    if ! command -v cmake &> /dev/null; then
-      log ""
-      log "cuarena found at '$CUARENA_RESOLVED' but cmake is not available"
-      log " disabling device pool backend (install cmake to enable it)"
-      CUARENA_RESOLVED="NONE"
-    else
-      log ""
-      log "found cuarena at '$CUARENA_RESOLVED'"
-      log " enabling device pool backend (-DUSE_CUARENA)"
-    fi
-  else
-    log ""
-    log "cuarena not found at '$cuarena_dir'; device pool backend disabled."
-    log " Use '--cuarena=<path>' or place cuarena at 'dep/cuarena'"
-  fi
+# resolve cuarena device pool backend (required by the GPU solver)
+if [[ "$cuarena_dir" = "NONE" ]]; then
+	log ""
+	log "cuarena cannot be disabled; it is the GPU memory backend of the solver"
+	error "cuarena is required to build the GPU solver"
 fi
+if [ ! -d "$cuarena_dir" ] || [ ! -f "$cuarena_dir/CMakeLists.txt" ]; then
+	log ""
+	log "cuarena not found at '$cuarena_dir'"
+	log " fetch it via 'git submodule update --init --recursive'"
+	log " or pass its location via '--cuarena=<path>'"
+	error "cuarena is required to build the GPU solver"
+fi
+CUARENA_RESOLVED=$(realpath "$cuarena_dir")
+if ! command -v cmake &> /dev/null; then
+	log ""
+	log "cuarena found at '$CUARENA_RESOLVED' but cmake is not available"
+	error "cmake is required to build cuarena"
+fi
+log ""
+log "found cuarena at '$CUARENA_RESOLVED'"
+log " building the device pool backend"
 
 # try to find GPU family
 log ""
@@ -461,7 +462,6 @@ fi
 [ $statistics = 1 ] && NVCCFLAGS="$NVCCFLAGS -DSTATISTICS"
 [ $ncolors = 1 ] && NVCCFLAGS="$NVCCFLAGS -DNCOLORS"
 [ $extshared = 1 ] && NVCCFLAGS="$NVCCFLAGS -DEXTSHMEM"
-[ "$CUARENA_RESOLVED" != "NONE" ] && NVCCFLAGS="$NVCCFLAGS -DUSE_CUARENA"
 
 NVCCFLAGS="$ARCH $NVCCFLAGS"
 
