@@ -58,7 +58,8 @@ namespace ParaFROST {
 		LOGN2(2, "  configuring phase 1 with ");
 		grid_t nThreads = BLVE1;
 		OPTIMIZESHARED(nThreads, SH_MAX_BVE_OUT1 * sizeof(uint32));
-		OPTIMIZEBLOCKSELIM(vars->numElected, nThreads, smemSize, gopts.ve);
+		OPTIMIZEBLOCKSELIM(vars->numElected, nThreads, SMEM_OF(nThreads), gopts.ve);
+		const size_t smemSize = SMEM_OF(nThreads); // nThreads is final only now
 		LOGENDING(2, 5, "(%d/%d ths, %d bls) and %zd KB shared memory", nThreads, BLVE1, nBlocks, smemSize / KBYTE);
 #if VE_DBG
 		if (in) in_ve_k_1 << <1, 1, smemSize >> > (cnf, ot, vars->elected, vars->eliminated, vars->units, vars->resolved, proof, vars->varcore, ucnt, max_cnts, type, max_types, rpos, max_poss, rref, max_refs);
@@ -112,7 +113,8 @@ namespace ParaFROST {
 		LOGN2(2, "  configuring phase 3 with ");
 		grid_t nThreads = BLVE2;
 		OPTIMIZESHARED(nThreads, SH_MAX_BVE_OUT2 * sizeof(uint32));
-		OPTIMIZEBLOCKSELIM(vars->numElected, nThreads, smemSize, gopts.ve);
+		OPTIMIZEBLOCKSELIM(vars->numElected, nThreads, SMEM_OF(nThreads), gopts.ve);
+		const size_t smemSize = SMEM_OF(nThreads); // nThreads is final only now
 		LOGENDING(2, 5, "(%d/%d ths, %d bls) and %zd KB shared memory", nThreads, BLVE2, nBlocks, smemSize / KBYTE);
 #if VE_DBG
 		ve_k_2 << <1, 1, smemSize >> > (cnf, ot, vars->elected, vars->eliminated, vars->eligible, vars->units, vars->resolved, proof, ucnt, type, rpos, rref);
@@ -161,7 +163,8 @@ namespace ParaFROST {
 		LOGN2(2, "  configuring SUB kernel with ");
 		grid_t nThreads = BLSUB;
 		OPTIMIZESHARED(nThreads, SH_MAX_SUB_IN * sizeof(uint32));
-		OPTIMIZEBLOCKSELIM(vars->numElected, nThreads, smemSize, gopts.sub);
+		OPTIMIZEBLOCKSELIM(vars->numElected, nThreads, SMEM_OF(nThreads), gopts.sub);
+		const size_t smemSize = SMEM_OF(nThreads); // nThreads is final only now
 		LOGENDING(2, 5, "(%d/%d ths, %d bls) and %zd KB shared memory",
 			nThreads, BLSUB, nBlocks, smemSize / KBYTE);
 #if SS_DBG
@@ -203,8 +206,9 @@ namespace ParaFROST {
 		SYNCALL;
 		dim3 grid2D(1, 1, 1);
 		LOGN2(2, "  configuring ERE kernel with ");
-		OPTIMIZESHARED(block2D.y, SH_MAX_ERE_OUT * sizeof(uint32));
-		OPTIMIZEBLOCKSERE(vars->numElected, block2D, smemSize, gopts.ere);
+		OPTIMIZESHARED(block2D.y, gopts.hostKOpts.ere_clause_max * sizeof(uint32));
+		OPTIMIZEBLOCKSERE(vars->numElected, block2D, SMEM_OF(block2D.y), gopts.ere);
+		const size_t smemSize = SMEM_OF(block2D.y); // block2D.y is final only now
 		grid2D.y = nBlocks;
 		LOGENDING(2, 5, "((x: %d/%d, y: %d/%d) ths, (x: %d, y: %d/%d) bls) and %zd KB shared memory",
 			block2D.x, devProp.warpSize, block2D.y, gopts.ere_min_threads, 

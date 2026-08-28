@@ -141,8 +141,7 @@ namespace ParaFROST {
 		assert(NTHREADS);                                                                        \
 		const uint32 warp     = (uint32)devProp.warpSize;                                        \
 		const uint32 blockCap = (uint32)MIN(devProp.maxThreadsPerBlock, 1024);                   \
-		const size_t maxSmem  = (devProp.sharedMemPerBlockOptin ?                                \
-								devProp.sharedMemPerBlockOptin : devProp.sharedMemPerBlock);     \
+		const size_t maxSmem  = maxGPUSharedMem;                                                 \
 		const uint32 SMs      = (uint32)devProp.multiProcessorCount;                             \
 		const uint32 minThr   = (uint32)warp;                                                    \
 		(NTHREADS) = MIN((uint32)(NTHREADS), blockCap);                                          \
@@ -165,8 +164,7 @@ namespace ParaFROST {
 		const grid_t MINTHREADS = MINOPTS ## _min_threads;                                         \
 		const uint32 warp     = (uint32)devProp.warpSize;                                          \
 		const uint32 blockCap = (uint32)MIN(devProp.maxThreadsPerBlock, 1024);                     \
-		const size_t maxSmem  = (devProp.sharedMemPerBlockOptin ?                                  \
-								devProp.sharedMemPerBlockOptin : devProp.sharedMemPerBlock);       \
+		const size_t maxSmem  = maxGPUSharedMem;                                                   \
 		const uint32 SMs      = (uint32)devProp.multiProcessorCount;                               \
 		const uint32 minThr   = (uint32)MAX(MINTHREADS, warp);                                     \
 		(NTHREADS) = MIN((uint32)(NTHREADS), blockCap);                                            \
@@ -190,10 +188,9 @@ namespace ParaFROST {
 		const grid_t MINTHREADS = MINOPTS ## _min_threads;                                         \
 		const uint32 warp     = (uint32)devProp.warpSize;                                          \
 		const uint32 blockCap = (uint32)MIN(devProp.maxThreadsPerBlock, 1024);                     \
-		const size_t maxSmem  = (devProp.sharedMemPerBlockOptin ?                                  \
-								devProp.sharedMemPerBlockOptin : devProp.sharedMemPerBlock);       \
+		const size_t maxSmem  = maxGPUSharedMem;                                                   \
 		const uint32 SMs      = (uint32)devProp.multiProcessorCount;                               \
-		const grid_t minThreads = (grid_t)MAX(MINTHREADS, warp);                                   \
+		const grid_t minThreads = (grid_t)MINTHREADS;                                              \
 		grid_t realBlocks;                                                                         \
 		LOOP_SHRINK_YX_TO_FIT((BLOCK2D), (SMEM), blockCap, maxSmem, warp);                         \
 		const grid_t targetBlocks = (grid_t)SMs * 8;                                               \
@@ -226,7 +223,9 @@ namespace ParaFROST {
             assert(MINCAP);                                  	\
             assert(NTHREADS);                                	\
             assert(maxGPUSharedMem);                         	\
-            const size_t smemSize = (NTHREADS) * (MINCAP);   	\
+            const size_t smemUnit = (MINCAP);                	\
+
+	#define SMEM_OF(NTHREADS)	((size_t)(NTHREADS) * smemUnit)
 
 }
 

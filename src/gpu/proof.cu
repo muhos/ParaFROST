@@ -113,6 +113,7 @@ uint32 cuPROOF::count(const uint32* literals, const uint32& numLits)
 	LOGN2(2, " Counting proof bytes..");
 	OPTIMIZEBLOCKS2(numLits, BLOCK1D);
 	OPTIMIZESHARED(blockSize, sizeof(uint32));
+	const size_t smemSize = SMEM_OF(blockSize);
 	SYNCALL; // sync any pending kernels or transfers
 	if (gopts.profile_gpu) cutimer.start();
 	cnt_proof << <nBlocks, blockSize, smemSize >> > (literals, numLits);

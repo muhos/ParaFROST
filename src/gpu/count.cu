@@ -112,6 +112,7 @@ namespace ParaFROST {
 		if (!cnf_sz) { inf.numClausesSurvived = 0; return; }
 		OPTIMIZEBLOCKS2(cnf_sz, BLOCK1D);
 		OPTIMIZESHARED(blockSize, sizeof(uint32));
+		const size_t smemSize = SMEM_OF(blockSize);
 		cnt_cls << <nBlocks, blockSize, smemSize >> > (cnf);
 		CHECK(cudaMemcpyFromSymbol(hostCBlocks, devCBlocks, nBlocks * sizeof(uint32)));
 		inf.numClausesSurvived = seqreduceBlocks(hostCBlocks, nBlocks);
@@ -123,6 +124,7 @@ namespace ParaFROST {
 		if (!cnf_sz) { inf.numLiteralsSurvived = 0; return; }
 		OPTIMIZEBLOCKS2(cnf_sz, BLOCK1D);
 		OPTIMIZESHARED(blockSize, sizeof(uint32));
+		const size_t smemSize = SMEM_OF(blockSize);
 		cnt_lits << <nBlocks, blockSize, smemSize >> > (cnf);
 		CHECK(cudaMemcpyFromSymbol(hostLBlocks, devLBlocks, nBlocks * sizeof(uint32)));
 		inf.numLiteralsSurvived = seqreduceBlocks(hostLBlocks, nBlocks);
@@ -134,6 +136,7 @@ namespace ParaFROST {
 		if (!cnf_sz) { inf.numClausesSurvived = 0, inf.numLiteralsSurvived = 0; return; }
 		OPTIMIZEBLOCKS2(cnf_sz, BLOCK1D);
 		OPTIMIZESHARED(blockSize, sizeof(uint32) * 2);
+		const size_t smemSize = SMEM_OF(blockSize);
 		cnt_cls_lits << <nBlocks, blockSize, smemSize >> > (cnf);
 		CHECK(cudaMemcpyFromSymbol(hostCBlocks, devCBlocks, nBlocks * sizeof(uint32)));
 		CHECK(cudaMemcpyFromSymbol(hostLBlocks, devLBlocks, nBlocks * sizeof(uint32)));
