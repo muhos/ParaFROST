@@ -150,6 +150,11 @@ void Solver::simplifying(const bool& skip_transfer_to_host)
 	timer.start();
 	awaken();
 	if (simpstate == CNFALLOC_FAIL || simpstate == AWAKEN_FAIL) {
+		if (hcnf != NULL) {
+			cacheCNF(streams[0], streams[1]);
+			newBeginning();
+			rebuildWT(opts.sigma_priorbins);
+		}
 		recycle();
 		return;
 	}
