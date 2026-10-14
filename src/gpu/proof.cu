@@ -216,7 +216,10 @@ bool cuPROOF::alloc(const uint32& maxcap)
 		assert(ea == devicePool.mem + min_cap);
 		// pinned host memory
 		cumm.freePinned(hostPool);
-		if (!cumm.allocPinned(hostPool, min_cap)) return false;
+		if (!cumm.allocPinned(hostPool, min_cap)) {
+			hostStream = nullptr;
+			return false;
+		}
 		ea = hostPool.mem;
 		hostStream = (cuVecB*)ea, ea += header_size;
 		hostStream->alloc(ea, uint32(proof_cap)), ea += proof_cap;

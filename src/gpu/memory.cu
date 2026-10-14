@@ -152,8 +152,10 @@ bool cuMM::initDeviceArena(const size_t& numCls, const size_t& numLits, const si
 	size_t cpu_cap = arena.align_up(pinned_cap) + arena.alignment();
 	if (proofEnabled) {
 		// Proof stream host mirror: matches the device proof (<= numLits*sizeof(uint32)).
-		// Generous fixed reserve; the device proof OOMs first, so this never fails alone.
-		const size_t proof_pinned = HC_VECSIZE + 2 * numLits * HC_VARSIZE;
+		// Live inprocessing accumulates learnt clauses during CDCL search;
+		// provide headroom beyond initial literal count to prevent CPU pool exhaustion.
+		const size_t max_expected_lits = std::max(size_t(numLits * 4), size_t(32 * MBYTE / HC_VARSIZE));
+		const size_t proof_pinned = HC_VECSIZE + 2 * max_expected_lits * HC_VARSIZE;
 		cpu_cap += arena.align_up(proof_pinned) + arena.alignment();
 	}
 	if (!arena.create_cpu_pool(cpu_cap, cuArena::CPUMemoryType::Pinned)) {
